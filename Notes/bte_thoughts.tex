@@ -1,0 +1,98 @@
+\documentclass{beamer}
+%Information to be included in the title page:
+\title{Scalable numerical solutions for Boltzmann's Equation}
+\author{Milinda Fernando, George Biros}
+\institute{Oden Institute, University of Texas at Austin }
+\date{2021}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}{Boltzmann's Equation}
+    Let $f(t,\vec{x}, \vec{v})$ be PDF, describing particle distribution. 
+    \begin{equation}
+        f(t,\vec{x}, \vec{v}) : [0\times T] \times \mathcal{R}^3 \times \mathcal{R}^3 \rightarrow \mathcal{R}^{+}
+    \end{equation}
+The source free Boltzmann's equation is given by, 
+\begin{equation}
+    \partial_t f + \vec{v} \cdot \nabla_{\vec{x}} f = 0
+\end{equation}
+\textbullet~ Note: Source free BE indicates that no new particles are generated, or collision free system. 
+\end{frame}
+
+\begin{frame}{Using the PDF $f$}
+    \textbullet~ How to find probability at time $t$, for a given $V\subset \mathcal{R}^3$, $\Omega \subset \mathcal{R}^3$ ? 
+    \begin{equation}
+        Pr_t(V,\Omega) = \int_{V} \int_{\Omega} f(t,\vec{x},\vec{v}) dx dv
+    \end{equation}   
+\end{frame}
+
+\begin{frame}{Boltzmann Eq. with collission}
+    Change to the PDF $f$ described with another 2 PDF that describe the new particles gained through collisions and loss of existing particles from the collisions. 
+    \begin{itemize}
+        \item $G=G(t,\vec{x},\vec{v})$ : Particles gained from collisions
+        \item $L=L(t,\vec{x},\vec{v})$ : Particles loss from collisions
+    \end{itemize}
+Then, 
+\begin{equation}
+    \partial_t f + \vec{v} \cdot \nabla_{\vec{x}} f = G-L
+\end{equation}
+\textbullet~ Note: Different collision physics will result different source distributions $G$ and $L$.
+\end{frame}
+
+\begin{frame}{Binary elastic collisions}
+    \begin{itemize}
+        \item Consider only binary collisions
+        \item Elasticity assumption $\rightarrow$ Kinetic energy ($KE$) is conserved. 
+    \end{itemize}
+    Let $(v,v_*)$ be velocities before the collision, and $(v^\prime, v_{*}^\prime)$ velocities after the collision. Assuming the same mass, we can write, 
+    \begin{align}
+        v + v_* &= v^\prime + v_{*}^\prime \\
+        |v|^2  + |v_*|^2 &= |v^\prime|^2  + |v_{*}^\prime|^2
+    \end{align}
+    \textbullet~ we have 6 unknowns but only 4 equations, hence the other is determined by the $\omega \in S^2$ the scattering angle. 
+\end{frame}
+
+\begin{frame}{Binary elastic collisions}
+    We can show the quadraple $(v,v_*, v^\prime,v_*^\prime)$ solves the momentum and KE conservation eq. with $\omega \in S^2$. 
+    \begin{align}
+        v^\prime  &= v - ((v-v_*)\cdot \omega)\omega \\
+        v_*^\prime  &= v_* + ((v-v_*)\cdot \omega)\omega 
+    \end{align} 
+The following lemma holds for the BEC, 
+\begin{itemize}
+    \item $|v-v^\prime| = |v_* - v_*^\prime|$
+    \item $|(v-v_*)\cdot omega| = |(v^\prime-v_*^\prime)\cdot omega| $
+    \item $v = v^\prime - ((v^\prime-v_*^\prime)\cdot \omega)\omega$
+    \item $v_* = v_*^\prime + ((v^\prime-v_*^\prime)\cdot \omega)\omega$
+    \item $J$ of $(v,v_*) \rightarrow (v^\prime,v_*^\prime)$ is $1$.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Binary elastic collision, $G,L$ derivation}
+    \begin{itemize}
+        \item What is the probability of creating a new particle with velocity $\vec v$ ?
+        \item What is the probability of loosing an existing partial with velocity $\vec v$ ? 
+        \item What is the probability of $v,v_*,\omega$ will collide ? \textcolor{orange}{$B(u,v,\omega)$ collision kernel another PDF}. 
+    \end{itemize}
+We assume that collision of two particle is an independent event, \em{molecular chaos assumption}.
+\begin{equation}
+    G(t,\vec x, \vec v) = \int_{R^3} \int_{S^2} B(\omega, \vec{v^\prime}, \vec{v_*^\prime}) f(t,\vec x, \vec{v^\prime} ) f(t,\vec x, \vec{ v_*^\prime} ) d\omega dv
+\end{equation}
+\begin{equation}
+    L(t,\vec x, \vec v) = \int_{R^3} \int_{S^2} B(\omega, \vec{v}, \vec{v_*}) f(t,\vec x, \vec{v} ) f(t,\vec x, \vec{ v_*} ) d\omega dv
+\end{equation}
+\end{frame}
+
+\begin{frame}{Binary elastic collision, $G,L$ derivation}
+    More assumptions, 
+    \begin{itemize}
+        \item Assuming that $B(u,v,\omega)$, is dependent only on $|u-v|$ and/or $|(u-v)\cdot w|$, 
+        \item Then the Boltzmann eq. becomes Galilean invariant, and the $G,L$ kernels can be combined together with the geometric equalities with kernel $B$.
+    \end{itemize}
+\end{frame}
+
+\input{bte_PG.tex}
+
+\end{document}

@@ -1,0 +1,189 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{color}
+\input{premble.tex}
+
+\title{Scalable deterministic numerical methods for the Boltzmann equation}
+\author{Milinda Fernando and Geroge Biros}
+%\date{February 2014}
+
+\begin{document}
+
+\begin{titlepage}
+\maketitle
+\end{titlepage}
+
+\section{Boltzmann Equation summary}
+The Boltzmann equation is a nonlinear integro-differential equation that describes the evolution of the particle density function $f : \R^3 \times \R^3 \times \R \rightarrow \R^{+}_0$. Independent variables for the above density function denotes, time ($t$), position vector ($x$), and the velocity ($v$). For a fixed time $t$, $f(x,v,t)dx dv$ represent the number of particles for the phase space volume element $dxdv$. 
+
+We can write the Boltzmann equation in the absence of external force field can be written as below. 
+\begin{equation}
+    \partial_t f + v\cdot \nabla_x f = \frac{1}{\epsilon}Q(f,f) \text{ for } x,v \in \R^3 \label{eq:be}
+\end{equation}
+In the presence of external force field (e.g., electromagnetic field) $L(x,t) : \R^3 \times \R \rightarrow \R$, the full Boltzmann equations can be written as, 
+\begin{equation}
+    \partial_t f + v\cdot \nabla_x f  + \textcolor{blue}{L \cdot \nabla_v f} = \frac{1}{\epsilon}Q(f,f) \text{ for } x,v \in \R^3 \label{eq:be_full}
+\end{equation}
+
+The $\epsilon$ is known as the Knudsen number (dimensionless number, $\epsilon > 0$), $Q$ is the collision operator. 
+
+\textbf{Note}: Unless stated otherwise, $v^\prime,v_*^\prime$ denotes the pre-collision velocities and $v,v_*$ denotes the post-collision velocities of a binary collision.
+
+The collision operator (i.e., capture the physics of the collisions) can be broken up to two main parts, 
+\begin{enumerate}
+    \item Gain term ($Q^+(f,f)$) : For a fixed $(t,x)$ how many particles created with velocity $v$.
+    \item Loss term ($Q^-(f,f)$) : For a fixed $(t,x)$ how many particles are lost with velocity $v$.
+\end{enumerate} which are defined as follows. 
+
+\begin{align}
+    Q^{+}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\theta) f(v^\prime)f(v_*^\prime) d\omega dv_* \\
+    Q^{-}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\theta) f(v)f(v_*) d\omega dv_* 
+\end{align}
+
+The collision operator then defined as, 
+\begin{equation}
+    \begin{split}
+        Q(f,f) = Q^{+}(f,f) - Q^{-}(f,f) = \\ \int_{\R^3}\int_{S^2} B(|v-v_*|,\theta)(f(v^\prime)f(v_*^\prime) - f(v)f(v_*) ) d\omega dv_*    
+    \end{split}
+\end{equation}
+
+\textbf{Pre and post collision velocities}: By using the conservation of momentum and conservation of kinetic energy, we can derive the how pre and post collision velocities related. For binary elastic (?) collisions we can write (I think for inelastic collisions this is not valid, since we don't have KE conservation equation), 
+\begin{align}
+    v^\prime  &= \frac{1}{2} (v + v_* + |v-v_*| \omega) \\
+    v_*^\prime  &= \frac{1}{2} (v + v_* - |v-v_*| \omega)
+\end{align} where $\omega$ is a unit vector, $\omega \in S^2$. Note that, for binary elastic collisions, $|v-v_*| = |v^\prime-v_*^\prime|$.
+
+In general $B : \R^3 \times \R^3 \times S^2 \rightarrow \R_{0}^+$ represents the probability of $v,v_*$ collide with a scattering direction $\omega$. The angle $\theta$, is the angle between the post collision relative vector and the pre-collision relative vector. Therefore, we can write, 
+\begin{equation}
+    cos\theta = \frac{\omega \cdot (v-v_*)}{|v-v_*|}
+\end{equation}
+There are several models for $B$, the collision kernel,
+\begin{itemize}
+    \item Maxwellian gas : $B(|v-v_*|,cos\theta) = const.$
+    \item Hard sphere gas : $B(|v-v_*|,cos\theta) = const.|v-v_*|$
+    \item Variable hard sphere (VHS) gas : $B(|v-v_*|,cos\theta) = const. |v-v_*|^\alpha$
+\end{itemize}
+
+\section{Splitting the Boltzmann}
+\label{sec:split}
+
+\section{Collision Operator}
+\label{sec:collision_operator}
+The term $v\cdot \nabla_x f$ makes the distribution $f(v)$ at fixed $(t,x)$ coupled with $f(v)$ defined in neighboring $x$. In operator splitting methods, Boltzmann equation is split in to ``transport'' and ``collision'' part. First we are going to focus on the collision part, given by, 
+\begin{equation}
+    \partial_t f = \frac{1}{\epsilon}C(f,f) \label{eq:col_op}
+\end{equation}
+Note that without the transport term, for fixed $(t,v)$, for $x\neq x_*$ $f(x)$ and $f(x_*)$ can be evolved independently decoupled way. \emph{This allows, spatially subdivision based parallelization algorithms for the Boltzmann equation.}
+
+\subsection{Properties of the collision operator}
+\label{subsec:collision_op_properties}
+For a given $\R^d$ velocity space, 
+\begin{theorem}
+    The Boltzmann collision operator conserves few of it moments, namely, mass, momentum, and energy.
+    \begin{align}
+        \int_{\R^d} Q(f,f) dv  = 0 \\
+        \int_{\R^d} Q(f,f) v dv  = 0 \\
+        \int_{\R^d} Q(f,f) |v|^2dv  = 0 \\
+    \end{align}
+\end{theorem}
+
+The solution for (\ref{eq:col_op}) evolves towards steady state, defined as the Maxwellian, which is given by, 
+\begin{equation}
+    f_{\infty}(v) = \frac{\rho}{(2\pi T)^{d/2}} \exp{-\frac{|V-v|^2}{2T}}
+\end{equation} where, the Maxwellian depends on the quantities computed from the initial distribution. 
+
+\begin{itemize}
+    \item \textbf{Density} : $\rho = \int_{\R^d} f(v) dv$ 
+    \item \textbf{Mean/Bulk velocity}: $V=\frac{1}{\rho} \int_{\R^d} v f(v) dv$ 
+    \item \textbf{Temperature}: $T= \frac{1}{3\rho} \int_{\R^d} |V-v|^2 f(v) dv$
+\end{itemize}
+
+\section{0D space collision operator for electron-neutral collisions}
+\label{sec:electron_neutral_pc}
+Let $f_e(v,t)$ be the electron density and $f_o(v,t)=\delta(v)$ for all $(t,x)$. Then the evolution of the $f_e$ can be written as, 
+\begin{equation}
+    \partial_t f_e(v,t) = C(f_e,f_0)
+\end{equation}
+Let $(v^\prime,v_*^\prime) \rightarrow (v,v_*)$ be the pre and post collision velocities. The assumption $f_o(v,t)=\delta(v)$, implies neutral particles are mostly centered at velocity $0$. We can write the pre collision velocities as, $v^\prime=v^\prime(v,\omega)$. 
+
+With these assumptions, the generic collision operator, for fixed time $t$ can be simplified for follows. 
+\begin{align}
+    C(f_e,f_0) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega)(f_e(v^\prime)f_0(v_*^\prime) - f_e(v)f_0(v_*) ) d\omega dv_*
+\end{align}
+Change of the integral order (assumes that the integral is finite) with properties of the Dirac's delta function, we can write, 
+\begin{align}
+    C(f_e,f_0) &= \int_{S^2} B(|v|,\omega)(f_e(v^\prime) - f_e(v)) d\omega
+\end{align}
+
+Then we can write the final evolution equation as, 
+\begin{equation}
+    \partial_t f_e(v,t) = \int_{S^2} B(|v|,\omega)(f_e(v^\prime,t) - f_e(v,t)) d\omega
+\end{equation}
+
+Since we know the above evolution will reach the Maxwellian at $t\rightarrow \infty$, we approximate $f_e(v,t)$ as follows, where $M(v)$ denotes the Maxwellian, 
+\begin{equation}
+    f_e(v,t) = M(v)[1 + h(v,t)] \label{eq:maxwelian}
+\end{equation}
+The idea is that when $t\rightarrow \infty$ the time dependent, $h(v,t)\rightarrow 0$.
+Assuming that $\phi(v)$ is our test function with required properties. We can write the variational form for the above as, 
+\begin{equation}
+    \frac{\partial}{\partial t} \int_{\R^3} f_e(v,t) \phi(v) dv = \int_{\R^3} \int_{S^2} B(|v|,\omega)(f_e(v^\prime,t) - f_e(v,t)) \phi(v) d\omega dv \label{eq:0d_wf}
+\end{equation}
+
+Let $P_i(v)$ be orthonormal polynomial basis with the weighted inner product in the velocity space (I think this is where the Hermite polynomials comes into the picture, since their weight function is Gaussian),
+\begin{align}
+    \int_{V} M(v)P_i(v)P_j(v) &= \delta_{ij}
+\end{align}
+Assuming finite dimensional expansion for fixed time $t$, on $h(v,t)$, we can write, 
+\begin{equation}
+    h(v,t) \approxeq \bar{h}(v,t) = \sum_{j=1}^{N_v} h_j(t) P_j(v)
+\end{equation}
+
+Substituting (\ref{eq:maxwelian}) to (\ref{eq:0d_wf}) we can write, 
+\begin{align}
+    \partial_t \int_{\R^3} M(v)h(v,t)\phi(v) dv &=  \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) \phi(v) B(|v|,\omega) d\omega dv\\
+    &+\int_{\R^3} \int_{S^2} (M(v^\prime)h(v^\prime,t) - M(v)h(v,t)) B(|v|,\omega) \phi(v) d\omega dv
+\end{align}
+For the above, By substituting, basis expansion for $h(v,t)$ we can write, 
+\begin{align}
+    \partial_t \int_{\R^3} M(v)\sum_{j=1}^{N_v} h_j(t) P_j(v) \phi(v) dv &= \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) \phi(v) B(|v|,\omega) d\omega dv\\
+    &+\int_{\R^3} \int_{S^2} M(v^\prime)\sum_{j=1}^{N_v} h_j(t) P_j(v^\prime) B(|v|,\omega) \phi(v) d\omega dv\\
+    &-\int_{\R^3} \int_{S^2} M(v)\sum_{j=1}^{N_v} h_j(t) P_j(v) B(|v|,\omega) \phi(v) d\omega dv
+\end{align}
+By choosing $\phi(v) = P_i(v)$, we can further simplify, 
+\begin{align}
+    \partial_t{h_i} = M_i  - \sum_{j=1}^{N_v} L_{ij} h_j(t)
+\end{align} where, 
+\begin{equation}
+    M_i = \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) P_i(v) B(|v|,\omega) d\omega dv
+\end{equation}
+\begin{equation}
+    L_{ij} = \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv
+\end{equation}
+
+\section{Time discretization}
+\label{sec:time_discretization}
+
+\begin{itemize}
+    \item How to ensure non-negativity of $f_e$ ? 
+    \item Implicit or Explicit ? 
+\end{itemize}
+
+
+%For a fixed time $t$, RHS of the weak form can be simplified as follows.
+
+
+% \section{Revision: Collocation basis functions}
+
+% \begin{definition}
+%     Let $v\in [a,b] \subset \R$, then collocation basis function $B_i(v)$, 
+%     \begin{equation}
+%         B_i(v) = \sum_{j=0}^{N_v-1} \sqrt{w_i} P_j
+%     \end{equation}
+% \end{definition}
+
+
+
+\end{document}

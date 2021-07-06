@@ -236,7 +236,7 @@ Then the above integral can be approximated as,
     L_{ij} = \sum_{r=1}^{(N_v+1)^3} w_r Q(v_r)
 \end{equation} where, 
 \begin{align}
-    Q(v_r) = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} &w_p (M(v^\prime(V_r,\theta_p,\phi_q)) P_i(v_r)P_j(v^\prime(V_r,\theta_p,\phi_q))  -\\& M(v_r) P_i(v_r) P_j(v_r) )  B(|v_r|,\theta_p,\phi_k) \nonumber
+    Q(v_r) = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} &w_p (M(v^\prime(V_r,\theta_p,\phi_q)) P_i(v_r)P_j(v^\prime(V_r,\theta_p,\phi_q))  -\\& M(v_r) P_i(v_r) P_j(v_r) ) \sin\theta_p B(|v_r|,\theta_p,\phi_k) \nonumber
 \end{align}
 
 %Therefore the cost of computing the $L$ matrix would be $\mathbb{O}()$

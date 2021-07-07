@@ -12,7 +12,7 @@ class BasisType(enum.Enum):
     """
     HERMITE_E_POLY=0
     HERMITE_POLY=1
-    MAXWELIAN_POLY=2
+    MAXWELLIAN_POLY=2
     SPHERICAL_HARMONIC=3
     LEGENDRE=4
 

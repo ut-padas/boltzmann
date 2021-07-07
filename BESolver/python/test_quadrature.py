@@ -1,4 +1,3 @@
-from numpy.polynomial import hermite
 import basis
 import spec as sp
 import numpy as np
@@ -49,4 +48,36 @@ for ek in range(p_order+1):
 
 print(M)
 
+#1d
+# se= sp.SpectralExpansion(1,1,hermiteE)
+# M=se.compute_mass_matrix(is_diagonal=True)
+# print(M)
 
+# M=se.compute_mass_matrix(is_diagonal=False)
+# print(M)
+
+# se= sp.SpectralExpansion(2,1,hermiteE)
+# M=se.compute_mass_matrix(is_diagonal=True)
+# print(M)
+
+# M=se.compute_mass_matrix(is_diagonal=False)
+# print(M)
+
+# se= sp.SpectralExpansion(3,1,hermiteE)
+# M=se.compute_mass_matrix(is_diagonal=True)
+# print(M)
+
+# M=se.compute_mass_matrix(is_diagonal=False)
+# print(M)
+
+
+import collision_operator
+import binary_collisions 
+
+electron_ar_elastic = binary_collisions.ElectronNeutralCollisionElastic_X0D_V3D()
+electron_ar_inelastic = binary_collisions.ElectronNeutralCollisionKind1_X0D_V3D()
+
+cOp = collision_operator.CollisionOpElectronNeutral3D(1,hermiteE)
+
+cOp.assemble_collision_mat(electron_ar_elastic)
+cOp.assemble_collision_mat(electron_ar_inelastic)

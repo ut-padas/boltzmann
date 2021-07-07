@@ -3,6 +3,7 @@
 
 """
 import numpy as np
+from numpy.lib.twodim_base import diag
 import basis 
 
 class SpectralExpansion:
@@ -25,7 +26,7 @@ class SpectralExpansion:
         self._basis_1d = list()
         
         for deg in range(self._p+1):
-            self._basis_1d.append(self._basis_p(deg,self._domain,self._window))
+            self._basis_1d.append(self._basis_p.Pn(deg,self._domain,self._window))
     
     def basis_eval3d(self,x,y,z,deg_p):
         """
@@ -51,7 +52,7 @@ class SpectralExpansion:
         assert(self._dim == len(deg_p))
         return self._basis_1d[deg_p](x)
 
-    def create_coefficient_vec(self,dtype=float):
+    def create_vec(self,dtype=float):
         num_c = (self._p +1)**self._dim
         return np.zeros((num_c,1),dtype=dtype)
 
@@ -74,13 +75,81 @@ class SpectralExpansion:
         Compute the mass matrix w.r.t the basis polynomials
         if the chosen basis is orthogonal set is_diagonal to True. 
         """
-        pass
-        # M=None
-        # if(self._dim==3):
-                        
-        #     if(is_diagonal):
+        num_p = self._p +1
+        [qx_1d,qw_1d] = self._basis_p.Gauss_Pn(num_p)
+        # note : r_id, c_id defined inside the loops on purpose (loops become pure nested), assuming it will allow
+        # more agressive optimizations from the python
+        if(is_diagonal):
+            mm_diag = self.create_vec()
+            if(self._dim == 3):
+                for pk in range(num_p):
+                    for pj in range(num_p):
+                        for pi in range(num_p):
+                            # quadrature loop. 
+                            for qk,qz in enumerate(qx_1d):
+                                for qj,qy in enumerate(qx_1d):
+                                    for qi,qx in enumerate(qx_1d):
+                                        r_id = pk * (num_p**2) + pj * num_p + pi
+                                        mm_diag[r_id]+= (qw_1d[qk] * qw_1d[qj] * qw_1d[qi] ) * ( self._basis_1d[pk](qz) * self._basis_1d[pj](qy) * self._basis_1d[pi](qx) )**2
+            elif(self._dim == 2):
+                for pj in range(num_p):
+                    for pi in range(num_p):
+                        # quadrature loop. 
+                        for qj,qy in enumerate(qx_1d):
+                            for qi,qx in enumerate(qx_1d):
+                                r_id = pj * num_p + pi
+                                mm_diag[r_id]+= (qw_1d[qj] * qw_1d[qi] ) * (self._basis_1d[pj](qy) * self._basis_1d[pi](qx))**2
+            elif(self._dim == 1):
+                for pi in range(num_p):
+                    # quadrature loop. 
+                    for qi,qx in enumerate(qx_1d):
+                        mm_diag[pi]+= (qw_1d[qi] ) * (self._basis_1d[pi](qx))**2
 
+            return mm_diag
             
+        else:
+            mm = self.create_mat()
+            if(self._dim == 3):
+                # loop over polynomials i
+                for pk in range(num_p):
+                    for pj in range(num_p):
+                        for pi in range(num_p):
+                            # loop over polynomials j
+                            for tk in range(num_p):
+                                for tj in range(num_p):
+                                    for ti in range(num_p):
+                                        # quadrature loop. 
+                                        for qk,qz in enumerate(qx_1d):
+                                            for qj,qy in enumerate(qx_1d):
+                                                for qi,qx in enumerate(qx_1d):
+                                                    r_id = pk * (num_p**2) + pj * num_p + pi
+                                                    c_id = tk * (num_p**2) + tj * num_p + ti
+                                                    mm[r_id,c_id]+= (qw_1d[qk] * qw_1d[qj] * qw_1d[qi] ) * ( self._basis_1d[pk](qz) * self._basis_1d[pj](qy) * self._basis_1d[pi](qx) ) * ( self._basis_1d[tk](qz) * self._basis_1d[tj](qy) * self._basis_1d[ti](qx) )
+            elif(self._dim == 2):
+                # loop over polynomials i
+                for pj in range(num_p):
+                    for pi in range(num_p):
+                        # loop over polynomials j
+                        for tj in range(num_p):
+                            for ti in range(num_p):
+                                # quadrature loop. 
+                                for qj,qy in enumerate(qx_1d):
+                                    for qi,qx in enumerate(qx_1d):
+                                        r_id = pj * num_p + pi
+                                        c_id = tj * num_p + ti
+                                        mm[r_id,c_id]+= (qw_1d[qj] * qw_1d[qi] ) * ( self._basis_1d[pj](qy) * self._basis_1d[pi](qx) ) * ( self._basis_1d[tj](qy) * self._basis_1d[ti](qx))
+            elif(self._dim == 1):
+                # loop over polynomials i
+                for pi in range(num_p):
+                    # loop over polynomials j
+                    for ti in range(num_p):
+                        # quadrature loop. 
+                        for qi,qx in enumerate(qx_1d):
+                            mm[pi,ti]+= (qw_1d[qi] ) * (self._basis_1d[pi](qx) ) * (self._basis_1d[ti](qx))
+            
+            return mm
+
+
 
 
 

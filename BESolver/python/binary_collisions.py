@@ -65,7 +65,7 @@ class BinaryElasticCollission3D(BinaryCollision):
         """
         theta = omega[0]
         phi   = omega[1]
-        v_omega = np.array(np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta))
+        v_omega = np.array([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)])
         w_rel_l2 =np.linalg.norm(w1-w2,2)
         v1 = 0.5 * (w1-w2 + w_rel_l2 * v_omega)
         v2 = 0.5 * (w1-w2 - w_rel_l2 * v_omega)
@@ -80,11 +80,64 @@ class BinaryElasticCollission3D(BinaryCollision):
         """
         theta = omega[0]
         phi   = omega[1]
-        v_omega = np.array(np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta))
+        v_omega = np.array([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)])
         v_rel_l2 =np.linalg.norm(v1-v2,2)
         w1 = 0.5 * (v1-v2 + v_rel_l2 * v_omega)
         w2 = 0.5 * (v1-v2 - v_rel_l2 * v_omega)
         return [w1,w2]
+
+    def cross_section(self,v_re,omega):
+        """
+        computes the differential cross section for a collision, 
+        v_re- relative velocity after collission
+        omega- solid angle describing the scattering angle. 
+        returns a scalar. 
+        """
+        hds_const = 1.0
+        return hds_const * np.linalg.norm(v_re,2)
+
+class ElectronNeutralCollisionElastic_X0D_V3D(BinaryCollision):
+    """
+    Electron Neutral particle collision elastic, 0D space and 3D in velocity space,
+    assumes neutral particles stay stationary and electrons bounces back from 
+    neutral particles. 
+    """
+    def __init__(self):
+        super().__init__()
+    
+    def pre_vel_to_post_vel(self,w1,w2,omega):
+        return [-w1,np.zeros(3)]
+    
+    def post_vel_to_pre_vel(self,v1,v2,omega):
+        return [-v1,np.zeros(3)]
+
+    def cross_section(self,v_re,omega):
+        """
+        computes the differential cross section for a collision, 
+        v_re- relative velocity after collission
+        omega- solid angle describing the scattering angle. 
+        returns a scalar. 
+        """
+        hds_const = 1.0
+        return hds_const * np.linalg.norm(v_re,2)
+
+
+class ElectronNeutralCollisionKind1_X0D_V3D(BinaryCollision):
+    """
+    Electron Neutral particle collision inelastic, 0D space and 3D in velocity space,
+    assumes neutral particles stay stationary and electrons bounces back from
+    neutral particles with some energy loss. 
+    """
+    def __init__(self):
+        super().__init__()
+        self._vel_loss_fac = 0.8
+    
+    def pre_vel_to_post_vel(self,w1,w2,omega):
+        return [-self._vel_loss_fac*w1,np.zeros(3)]
+    
+    def post_vel_to_pre_vel(self,v1,v2,omega):
+        inv_loss = 1/self._vel_loss_fac
+        return [-inv_loss*v1 , np.zeros(3)]
 
     def cross_section(self,v_re,omega):
         """

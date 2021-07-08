@@ -149,28 +149,3 @@ class SpectralExpansion:
             
             return mm
 
-
-
-
-
-    
-
-
-        
-
-
-
-
-
-
-        
-
-        
-        
-
-        
-    
-
-        
-
-

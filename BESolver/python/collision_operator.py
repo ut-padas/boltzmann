@@ -59,11 +59,8 @@ class CollisionOpElectronNeutral3D(SpecWeakFormCollissionOp):
         #print(theta_q)
         phi_q = np.linspace(0,2*np.pi,2*(num_p))
         
-        # maxwellian projected on to the basis and the integration. 
-        # M_i = \int_{R^3} \int_{S^2} (M(v\prime) - M(v) P_i(v) ) B(|v|,\omega) d\omega dv
-        Mi = self._spec.create_vec()
         # Lij collision integral as written on the nodes. 
-        # L_{ij} = \int_{R^3} \int_{S^2} (M(v\prime)P_i(v)P_j(v^\prime) - M(v) P_i(v)P_j(v)) B(|v|,\omega) d\omega dv
+        # L_{ij} = \int_{R^3} \int_{S^2} (w(v\prime)P_i(v)P_j(v^\prime) - w(v) P_i(v)P_j(v)) B(|v|,\omega) d\omega dv
         L_ij =self._spec.create_mat()
 
         
@@ -86,18 +83,6 @@ class CollisionOpElectronNeutral3D(SpecWeakFormCollissionOp):
 
         qr = (np.pi/num_p) * qr 
 
-        # loop for 3d polynomial
-        for pk in range(num_p):
-            for pj in range(num_p):
-                for pi in range(num_p):
-                    # GH quadrature loop
-                    for qk,vz in enumerate(ghx):
-                        for qj,vy in enumerate(ghx):
-                            for qi,vx in enumerate(ghx):
-                                r_id      = pk * num_p * num_p + pj * num_p + pi
-                                quad_id   = qk * num_p * num_p + qj * num_p + qi
-                                Mi[r_id] += (ghw[qi] * ghw[qj] * ghw[qk]) * self._spec.basis_eval3d(vx,vy,vz,(pi,pj,pk)) * qr[quad_id]
-        
         ## computation of Lij
         # Pi(x)
         for pk in range(num_p):
@@ -121,7 +106,7 @@ class CollisionOpElectronNeutral3D(SpecWeakFormCollissionOp):
         
         #print("Mi  = \n %s" %Mi)
         #print("Lij = \n %s" %L_ij)
-        return [Mi,L_ij]
+        return L_ij
 
 
                                             

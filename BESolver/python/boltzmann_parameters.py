@@ -18,6 +18,7 @@ class BoltzmannEquationParameters:
         self.POLY_ORDER         = 3
         self.VELOCITY_SPACE_DIM = 3
         self.POSITION_SPACE_DIM = 0
+        self.TIME_STEP_SIZE     = 0.001
         
         # physical parameters. 
         self.UNITS                      =  pint.UnitRegistry()
@@ -41,13 +42,22 @@ class BoltzmannEquationParameters:
 #     v_l2 = np.linalg.norm(v,2)
 #     return N/((np.sqrt(np.pi)*vth)**3) * np.exp(-(v_l2/vth)**2)
 
-def maxwellian_normalized(v):
+def maxwellian_normalized(v_abs):
     """
     Normalized Maxwellian without 
     any properties of the application parameters. 
+    v_abs - norm(v), scalar
+
+    The steady state maxwellian depends on, 
+    mass of the particle, k_B, steady state temperature, and the number density
+    M(vp) = A exp(-m * vp**2/ 2 * k_B * T)
+
+    For the computations we can use the normalized maxwellian and use 
+    v =  \sqrt(m/(k_B * T)) vp go to application specific maxwellian. 
+
     """
-    v_l2 = np.linalg.norm(v,2)
-    return np.exp(-0.5*(v_l2**2))
+    #v_l2 = np.linalg.norm(v,2)
+    return np.exp(-0.5*(v_abs**2))
 
 
 

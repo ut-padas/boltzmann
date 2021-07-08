@@ -44,10 +44,11 @@ if not os.path.exists('plots'):
     print("creating folder `plots`, output will be written into it")
     os.makedirs('plots')
 
-for t_step in range(10):
+for t_step in range(20):
     t = t_step*dt
     print("time %f" %(t))
     output_fname = f"plots/fv_step_%04d"%t_step
+    #visualize_utils.plot_spec_coefficients(h_vec)
     #print(output_fname)
     visualize_utils.plot_density_distribution_z_slice(spec,h_vec,plot_domain,80,z_val=0.1,weight_func=boltzmann_parameters.maxwellian_normalized,file_name=output_fname)
     h_vec = np.matmul(Lij_inv,h_vec)

@@ -57,3 +57,10 @@ def plot_density_distribution_z_slice(spec, coeff, domain, sample_points,z_val=0
         plt.show()
 
     plt.close()
+
+
+def plot_spec_coefficients(coeff,file_name=None):
+    plt.plot(coeff)
+    plt.xlabel('coefficient id')
+    plt.ylabel('coefficient value')
+    plt.show()

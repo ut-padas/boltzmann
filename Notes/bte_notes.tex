@@ -100,8 +100,12 @@ Similarly, mass or charge density of species ``a'' can be defined as,
 
 \section{Maxwell-Boltzmann distribution (Maxwellian)}
 \label{sec:maxwellian}
-A particularly important velocity distribution function is the Maxwell-Boltzmann distribution, or Maxwellian. It describes the spread of velocities for a gas which is in thermal equilibrium. Maxwellian in $d$ dimensional velocity space can be written as, 
+A particularly important velocity distribution function is the Maxwell-Boltzmann distribution, or Maxwellian. It describes the spread of velocities for a gas which is in thermal equilibrium. Maxwellian in $d$ dimensional velocity space can be written as,
 
+\begin{equation}
+    M(v) = A \exp(-\frac{mv^2}{2k_BT})
+\end{equation}
+using the number density equation, we can derive the coefficient $A$ as follows, 
 \begin{equation}
 M(v) = \frac{n}{(\sqrt{\pi}v_{th})^d} \exp{(-(\frac{v}{v_{th}})^2)}    
 \end{equation} where, $v_{th}$ defined as, 
@@ -177,35 +181,32 @@ Assuming that $\phi(v)$ is our test function with required properties. We can wr
     \frac{\partial}{\partial t} \int_{\R^3} f_e(v,t) \phi(v) dv = \int_{\R^3} \int_{S^2} B(|v|,\omega)(f_e(v^\prime,t) - f_e(v,t)) \phi(v) d\omega dv \label{eq:0d_wf}
 \end{equation}
 
-Let $P_i(v)$ be orthonormal polynomial basis with the weighted inner product in the velocity space (I think this is where the Hermite polynomials comes into the picture, since their weight function is Gaussian),
+Let $P_i(v)$ be orthonormal polynomial basis with the weighted inner product in the velocity space, where $w(v)$ denotes tha weight function. 
 \begin{align}
-    \int_{V} M(v)P_i(v)P_j(v) dv &= \delta_{ij}
+    \int_{V} w(v)P_i(v)P_j(v) dv &= k_i\delta_{ij}
 \end{align}
-Assuming finite dimensional expansion for fixed time $t$, on $h(v,t)$, we can write, 
+
+Assuming finite dimensional expansion for fixed time $t$, on $f(v,t)$, we can write, 
 \begin{equation}
-    h(v,t) \approxeq \bar{h}(v,t) = \sum_{j=0}^{N_v} h_j(t) P_j(v)
+    f(v,t) \approxeq \bar{f}(v,t) = w(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \label{eq:basis_expansion}
 \end{equation}
 
-Substituting (\ref{eq:maxwelian}) to (\ref{eq:0d_wf}) we can write, 
+% Substituting (\ref{eq:basis_expansion}) to (\ref{eq:0d_wf}) we can write, 
+% \begin{align}
+%     \partial_t \int_{\R^3} w(v)h(v,t)\phi(v) dv &=  \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) \phi(v) B(|v|,\omega) d\omega dv\\
+%     &+\int_{\R^3} \int_{S^2} (M(v^\prime)h(v^\prime,t) - M(v)h(v,t)) B(|v|,\omega) \phi(v) d\omega dv
+% \end{align}
+For the above, By substituting, basis expansion for $f(v,t)$ we can write, 
 \begin{align}
-    \partial_t \int_{\R^3} M(v)h(v,t)\phi(v) dv &=  \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) \phi(v) B(|v|,\omega) d\omega dv\\
-    &+\int_{\R^3} \int_{S^2} (M(v^\prime)h(v^\prime,t) - M(v)h(v,t)) B(|v|,\omega) \phi(v) d\omega dv
-\end{align}
-For the above, By substituting, basis expansion for $h(v,t)$ we can write, 
-\begin{align}
-    \partial_t \int_{\R^3} M(v)\sum_{j=0}^{N_v} h_j(t) P_j(v) \phi(v) dv &= \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) \phi(v) B(|v|,\omega) d\omega dv\\
-    &+\int_{\R^3} \int_{S^2} M(v^\prime)\sum_{j=0}^{N_v} h_j(t) P_j(v^\prime) B(|v|,\omega) \phi(v) d\omega dv\\
-    &-\int_{\R^3} \int_{S^2} M(v)\sum_{j=0}^{N_v} h_j(t) P_j(v) B(|v|,\omega) \phi(v) d\omega dv
+    \partial_t \int_{\R^3} w(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \phi(v) dv &= \int_{\R^3} \int_{S^2} w(v^\prime)\sum_{j=0}^{N_v} f_j(t) P_j(v^\prime) B(|v|,\omega) \phi(v) d\omega dv \nonumber \\
+    &-\int_{\R^3} \int_{S^2} w(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) B(|v|,\omega) \phi(v) d\omega dv
 \end{align}
 By choosing $\phi(v) = P_i(v)$, we can further simplify, 
 \begin{align}
-    \partial_t{h_i} = M_i  - \sum_{j=0}^{N_v} L_{ij} h_j(t)
+    \text{diag}(k_i)\partial_t{f_i} = \sum_{j=0}^{N_v} L_{ij} f_j(t)
 \end{align} where, 
 \begin{equation}
-    M_i = \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) P_i(v) B(|v|,\omega) d\omega dv
-\end{equation}
-\begin{equation}
-    L_{ij} = \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv
+    L_{ij} = \int_{\R^3} \int_{S^2} (w(v^\prime) P_i(v)P_j(v^\prime)  - w(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv
 \end{equation}
 
 

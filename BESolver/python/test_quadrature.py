@@ -73,11 +73,20 @@ print(M)
 
 import collision_operator
 import binary_collisions 
+import boltzmann_parameters
+import visualize_utils
 
 electron_ar_elastic = binary_collisions.ElectronNeutralCollisionElastic_X0D_V3D()
-electron_ar_inelastic = binary_collisions.ElectronNeutralCollisionKind1_X0D_V3D()
+#electron_ar_inelastic = binary_collisions.ElectronNeutralCollisionKind1_X0D_V3D()
 
-cOp = collision_operator.CollisionOpElectronNeutral3D(1,hermiteE)
+cOp = collision_operator.CollisionOpElectronNeutral3D(3,hermiteE)
 
-cOp.assemble_collision_mat(electron_ar_elastic)
-cOp.assemble_collision_mat(electron_ar_inelastic)
+#cOp.assemble_collision_mat(electron_ar_elastic)
+#cOp.assemble_collision_mat(electron_ar_inelastic)
+
+spec = cOp.get_spectral_structure()
+maxwelian1 = lambda x : boltzmann_parameters.gaussian(x,mu=None,sigma=1)
+c_vec = spec.compute_coefficients(maxwelian1, mm_diag=None)
+print(c_vec)
+plot_domain = np.array([[-5,5],[-5,5]])
+visualize_utils.plot_density_distribution_z_slice(spec,c_vec,plot_domain,50,z_val=0.0,weight_func=hermiteE.Wx(),file_name=None)

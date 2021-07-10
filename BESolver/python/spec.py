@@ -149,3 +149,61 @@ class SpectralExpansion:
             
             return mm
 
+    def compute_coefficients(self,func,mm_diag=None):
+        """
+        computes basis coefficients for a given function,
+        for basis orthogonal w.r.t. weight function w(x)
+        f(x) = w(x) \sum_i c_i P_i(x)
+        """
+
+        if (mm_diag is None):
+            mm_diag=self.compute_mass_matrix(is_diagonal=True)
+        
+        num_p = self._p + 1
+        [qx_1d,qw_1d] = self._basis_p.Gauss_Pn(num_p)
+        poly_weight   = self._basis_p.Wx()
+
+        coeff = np.zeros(num_p**self._dim)
+
+        if(self._dim == 3):
+            for pk in range(num_p):
+                for pj in range(num_p):
+                    for pi in range(num_p):
+                        # quadrature loop. 
+                        for qk,qz in enumerate(qx_1d):
+                            for qj,qy in enumerate(qx_1d):
+                                for qi,qx in enumerate(qx_1d):
+                                    r_id  = pk * num_p * num_p + pj * num_p + pi
+                                    q_abs = np.sqrt(qz**2 + qy**2 + qx**2)
+                                    f_val = func(np.array([qx,qy,qz])) / poly_weight(q_abs)
+                                    coeff[r_id]+= qw_1d[qk] * qw_1d[qj] * qw_1d[qi] * f_val * self.basis_eval3d(qx,qy,qz,(pi,pj,pk))
+
+                        coeff[pk * num_p * num_p + pj * num_p + pi]/=mm_diag[pk * num_p * num_p + pj * num_p + pi]
+
+        elif (self._dim==2):
+            for pj in range(num_p):
+                for pi in range(num_p):
+                    # quadrature loop. 
+                    for qj,qy in enumerate(qx_1d):
+                        for qi,qx in enumerate(qx_1d):
+                            r_id = pj * num_p + pi
+                            q_abs = np.sqrt(qy**2 + qx**2)
+                            f_val = func(np.array([qx,qy])) / poly_weight(q_abs)
+                            coeff[r_id]+= qw_1d[qj] * qw_1d[qi] * func (np.array[qx,qy]) * self.basis_eval2d(qx,qy,(pi,pj))
+
+                    coeff[pj * num_p + pi]/=mm_diag[pj * num_p + pi]
+
+        elif (self._dim==1):
+            for pi in range(num_p):
+                # quadrature loop. 
+                for qi,qx in enumerate(qx_1d):
+                    r_id = pi
+                    q_abs = np.abs(qx)
+                    f_val = func(np.array([qx])) / poly_weight(q_abs)
+                    coeff[r_id]+= qw_1d[qi] * func (np.array[qx]) * self.basis_eval1d(qx,(pi))
+
+                coeff[pi]/=mm_diag[pi]
+        
+        return coeff
+
+

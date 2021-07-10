@@ -22,7 +22,7 @@ class BoltzmannEquationParameters:
         
         # physical parameters. 
         self.UNITS                      =  pint.UnitRegistry()
-        self.STEADY_STATE_TEMPERATURE   =  100 * self.UNITS.kelvin
+        self.STEADY_STATE_TEMPERATURE   =  1000 * self.UNITS.kelvin
         self.BOLTSMANN_CONSTANT         =  scipy.constants.Boltzmann  * self.UNITS.meter**2 * self.UNITS.kilogram / (self.UNITS.second**2 * self.UNITS.kelvin)
         self.ELECTRON_MASS              =  scipy.constants.electron_mass * self.UNITS.kilogram
 
@@ -60,15 +60,13 @@ def maxwellian_normalized(v_abs):
     return np.exp(-0.5*(v_abs**2))
 
 
-
-
-
-        
-      
-
-    
-
-
-
-
-    
+def gaussian(v,mu=None,sigma=1.0):
+    """
+    Gaussian distribution function for d dim
+    v  = np.array (dim,)
+    mu = None, then mu=0 will be used. 
+    sigma =1.0 standard deviation
+    """
+    if mu is None:
+        mu = np.zeros(v.shape)
+    return ( 1.0/(sigma * np.sqrt(2 * np.pi)) ) * np.exp(-0.5 * np.linalg.norm((v-mu),2)**2/(sigma**2))

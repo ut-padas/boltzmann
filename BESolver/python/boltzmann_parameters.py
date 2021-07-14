@@ -18,7 +18,7 @@ class BoltzmannEquationParameters:
         self.POLY_ORDER         = 3
         self.VELOCITY_SPACE_DIM = 3
         self.POSITION_SPACE_DIM = 0
-        self.TIME_STEP_SIZE     = 0.001
+        self.TIME_STEP_SIZE     = 0.2
         
         # physical parameters. 
         self.UNITS                      =  pint.UnitRegistry()

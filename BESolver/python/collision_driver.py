@@ -34,11 +34,13 @@ mm_diag = spec.compute_mass_matrix(is_diagonal=True)
 Lij = spec.create_mat()
 # compute the spectral PG approximation of the collision integral
 Lij = cf.assemble_collision_mat(binary_collisions.ElectronNeutralCollisionElastic_X0D_V3D(),maxwellian=hermite_e.Wx())
-dt  = 0.1# PARS.TIME_STEP_SIZE
-print(Lij)
-#print(np.allclose(np.zeros(Lij.shape),Lij))
-Lij = -dt * Lij
-np.fill_diagonal(Lij, Lij.diagonal() + mm_diag)
+dt  = PARS.TIME_STEP_SIZE
+[rows , cols] = Lij.shape
+Lij = dt * Lij
+for r in range(rows):
+    Lij[r,r] = Lij[r,r]/mm_diag[r]
+
+Lij = np.eye(rows) - Lij
 Lij_inv = np.linalg.inv(Lij)
 
 import os
@@ -50,12 +52,13 @@ for t_step in range(30):
     t = t_step*dt
     print("time %f" %(t))
     output_fname = f"plots/fv_step_%04d"%t_step
-    #visualize_utils.plot_spec_coefficients(h_vec)
+    cf_name      = f"plots/fv_c_step_%04d"%t_step
+    visualize_utils.plot_spec_coefficients(h_vec,file_name=cf_name)
     #print(output_fname)
     print(h_vec)
     visualize_utils.plot_density_distribution_z_slice(spec,h_vec,plot_domain,50,z_val=0.1,weight_func=boltzmann_parameters.maxwellian_normalized,file_name=output_fname)
-    h_vec = np.matmul(Lij_inv,np.multiply(mm_diag,h_vec))
-
+    #h_vec = np.matmul(Lij_inv,np.multiply(mm_diag,h_vec))
+    h_vec = np.matmul(Lij_inv,h_vec)
 
 
 

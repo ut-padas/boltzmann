@@ -77,7 +77,7 @@ class CollisionOpElectronNeutral3D(SpecWeakFormCollissionOp):
                                 for phi in phi_q:
                                     for theta_i, theta in enumerate(theta_q):
                                         j_id      = tk * num_p * num_p + tj * num_p + ti
-                                        quad_id  = qk * num_q_pts_on_v * num_q_pts_on_v + qj * num_q_pts_on_v + qi
+                                        quad_id   = qk * num_q_pts_on_v * num_q_pts_on_v + qj * num_q_pts_on_v + qi
                                         # velocity at quadrature point. 
                                         v         = np.array([vx,vy,vz])
                                         v_abs     = np.linalg.norm(v,2)
@@ -85,11 +85,13 @@ class CollisionOpElectronNeutral3D(SpecWeakFormCollissionOp):
                                         omega     = (theta,phi)
 
                                         # prior velocity, this determined by the collision type 
-                                        vp          = v_abs * np.array([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+                                        #v_abs * np.array([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+                                        vp          = collision.post_vel_to_pre_vel(v,0,omega)[0] 
                                         
                                         # maxwellian value for v, and vp
                                         w_vp        = maxwellian(np.linalg.norm(vp,2))
                                         w_v         = maxwellian(np.linalg.norm(v,2))
+                                        #print("w_v %f and w_vp %f" %(w_v,w_vp))
 
                                         #print(f'v = %s and vp =%s '%(v,vp))
                                         qr[j_id,quad_id] += spherical_quadrature_fac * glw[theta_i] * ( w_vp * self._spec.basis_eval3d(vp[0],vp[1],vp[2],(ti,tj,tk)) - w_v * self._spec.basis_eval3d(v[0],v[1],v[2],(ti,tj,tk))) * collision.cross_section(v,omega)

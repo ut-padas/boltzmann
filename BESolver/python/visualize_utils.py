@@ -63,4 +63,9 @@ def plot_spec_coefficients(coeff,file_name=None):
     plt.plot(coeff)
     plt.xlabel('coefficient id')
     plt.ylabel('coefficient value')
-    plt.show()
+    
+    if file_name is not None:
+        plt.savefig(file_name)
+    else:
+        plt.show()
+    plt.close()

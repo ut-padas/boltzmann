@@ -110,14 +110,14 @@ class ElectronNeutralCollisionElastic_X0D_V3D(BinaryCollision):
         phi   = omega[1]
         w1_abs =np.linalg.norm(w1,2)
         v_omega = np.array([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)])
-        return [w1 - w1_abs*v_omega ,np.zeros(3)]
+        return [w1_abs*v_omega ,np.zeros(3)]
         
     def post_vel_to_pre_vel(self,v1,v2,omega):
         theta = omega[0]
         phi   = omega[1]
         v1_abs =np.linalg.norm(v1,2)
         v_omega = np.array([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)])
-        return [v1 + v1_abs*v_omega ,np.zeros(3)]
+        return [v1_abs*v_omega ,np.zeros(3)]
 
     def cross_section(self,v_re,omega):
         """

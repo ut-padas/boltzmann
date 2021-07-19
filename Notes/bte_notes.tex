@@ -188,7 +188,7 @@ Let $P_i(v)$ be orthonormal polynomial basis with the weighted inner product in 
 
 Assuming finite dimensional expansion for fixed time $t$, on $f(v,t)$, we can write, 
 \begin{equation}
-    f(v,t) \approxeq \bar{f}(v,t) = w(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \label{eq:basis_expansion}
+    f(v,t) \approxeq \bar{f}(v,t) = M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \label{eq:basis_expansion}
 \end{equation}
 
 % Substituting (\ref{eq:basis_expansion}) to (\ref{eq:0d_wf}) we can write, 
@@ -198,16 +198,31 @@ Assuming finite dimensional expansion for fixed time $t$, on $f(v,t)$, we can wr
 % \end{align}
 For the above, By substituting, basis expansion for $f(v,t)$ we can write, 
 \begin{align}
-    \partial_t \int_{\R^3} w(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \phi(v) dv &= \int_{\R^3} \int_{S^2} w(v^\prime)\sum_{j=0}^{N_v} f_j(t) P_j(v^\prime) B(|v|,\omega) \phi(v) d\omega dv \nonumber \\
-    &-\int_{\R^3} \int_{S^2} w(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) B(|v|,\omega) \phi(v) d\omega dv
+    \partial_t \int_{\R^3} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \phi(v) dv &= \int_{\R^3} \int_{S^2} M(v^\prime)\sum_{j=0}^{N_v} f_j(t) P_j(v^\prime) B(|v|,\omega) \phi(v) d\omega dv \nonumber \\
+    &-\int_{\R^3} \int_{S^2} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) B(|v|,\omega) \phi(v) d\omega dv
 \end{align}
 By choosing $\phi(v) = P_i(v)$, we can further simplify, 
 \begin{align}
-    \text{diag}(k_i)\partial_t{f_i} = \sum_{j=0}^{N_v} L_{ij} f_j(t)
+    \text{diag}(k_i^\prime)\partial_t{f_i} = \sum_{j=0}^{N_v} L_{ij} f_j(t)
 \end{align} where, 
 \begin{equation}
-    L_{ij} = \int_{\R^3} \int_{S^2} (w(v^\prime) P_i(v)P_j(v^\prime)  - w(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv
+    L_{ij} = \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv
 \end{equation}
+\begin{equation}
+    k_{i}^\prime = \int_{\R^3} M(v) P_i(v)^2 dv
+\end{equation}
+
+\subsection{Hermite Polynomials}
+Let $H_k (x)$ be the sequence of Hermite polynomials, defined on $(\infty,infty)$ and are orthogonal with respect to the weight function $w(x) = \exp(-x^2/2)$. More precisely we can write, 
+\begin{equation}
+    \int_{-\infty}^{\infty} w(x) H_i(x) H_j(x) dx = \sqrt{2\pi} n! \delta_{ij}
+\end{equation}where the polynomials can be generated using, 
+\begin{equation}
+    H_k(x) = (-1)^k \exp(x^2/2) \frac{d^k}{dx^k} \exp(-x^2/2)
+\end{equation}. The corresponding Gauss-Hermite quadrature can be defined as, 
+\begin{equation}
+    \int_{-\infty}^{\infty} w(x) f(x) \approx \sum_{q=1}^{n} w_i f(x_i)
+\end{equation} where, $x_i$ are the roots of $H_n(x)$, and $w_i$ are the corresponding weights for the Gaussian quadrature. 
 
 
 \subsection{Discretization of the integrals}
@@ -228,17 +243,29 @@ Let $M_s$ denotes the number of $\theta_i$ chosen such that, $cos\theta_i,w_i$ a
     I(g) = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} w_p g(\theta_p,\phi_q) \label{eq:sphere_quadrature}
 \end{equation}
 
-\textbf{Integral over velocity space ($\R^3$)}: Note that, when $|v|\rightarrow \infty$, $M(v)\rightarrow 0$, hence the integrand decays exponentially. Let's choose, bounded domain $V$, such that $V\subset \R^3$, such that, integral $\int_{\R^3\setminus V} M(v) \square dv < \epsilon$, where $\epsilon >0$. 
+% \textbf{Integral over velocity space ($\R^3$)}: Note that, when $|v|\rightarrow \infty$, $M(v)\rightarrow 0$, hence the integrand decays exponentially. Let's choose, bounded domain $V$, such that $V\subset \R^3$, such that, integral $\int_{\R^3\setminus V} M(v) \square dv < \epsilon$, where $\epsilon >0$. 
 
-Using the cartesian product on 1D basis functions, let's construct the basis functions in 3D. If we have $(N_v +1)$ coefficients in 1D, then we will have $(N_v+1)^3$ coefficients in 3D. Weights and quadrature points can be constructed the similar way for the domain $V$.  
-
-Then the above integral can be approximated as, 
-\begin{equation}
-    L_{ij} = \sum_{r=1}^{(N_v+1)^3} w_r Q(v_r)
-\end{equation} where, 
+\textbf{Integral over velocity space ($\R^3$)}: Let $x_r,w_r$ be the quadrature points, and weights in $\R^3$. For each velocity quadrature point and selected polynomial $P_j$, we can write the spherical quadrature as follows.  
 \begin{align}
-    Q(v_r) = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} &w_p (M(v^\prime(V_r,\theta_p,\phi_q)) P_i(v_r)P_j(v^\prime(V_r,\theta_p,\phi_q))  -\\& M(v_r) P_i(v_r) P_j(v_r) ) \sin\theta_p B(|v_r|,\theta_p,\phi_k) \nonumber
+    Q(v_r)^{j} = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} &w_p (M(v^\prime(V_r,\theta_p,\phi_q))P_j(v^\prime(V_r,\theta_p,\phi_q))  -\\& M(v_r) P_j(v_r) ) \sin\theta_p B(|v_r|,\theta_p,\phi_k) \nonumber
 \end{align}
+Each $L_{ij}$ matrix entry can be computed as,  
+\begin{equation}
+    L_{ij} = \sum_{r} w_r Q(v_r)^{j}/w(v_r)
+\end{equation}
+
+
+
+
+% Using the cartesian product on 1D basis functions, let's construct the basis functions in 3D. If we have $(N_v +1)$ coefficients in 1D, then we will have $(N_v+1)^3$ coefficients in 3D. Weights and quadrature points can be constructed the similar way for the domain $V$.  
+
+% Then the above integral can be approximated as, 
+% \begin{equation}
+%     L_{ij} = \sum_{r=1}^{(N_v+1)^3} w_r Q(v_r)
+% \end{equation} where, 
+% \begin{align}
+%     Q(v_r) = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} &w_p (M(v^\prime(V_r,\theta_p,\phi_q)) P_i(v_r)P_j(v^\prime(V_r,\theta_p,\phi_q))  -\\& M(v_r) P_i(v_r) P_j(v_r) ) \sin\theta_p B(|v_r|,\theta_p,\phi_k) \nonumber
+% \end{align}
 
 %Therefore the cost of computing the $L$ matrix would be $\mathbb{O}()$
 
@@ -249,16 +276,13 @@ Then the above integral can be approximated as,
     
 % \end{definition}
 
+% \section{Time discretization}
+% \label{sec:time_discretization}
 
-
-
-\section{Time discretization}
-\label{sec:time_discretization}
-
-\begin{itemize}
-    \item How to ensure non-negativity of $f_e$ ? 
-    \item Implicit or Explicit ? 
-\end{itemize}
+% \begin{itemize}
+%     \item How to ensure non-negativity of $f_e$ ? 
+%     \item Implicit or Explicit ? 
+% \end{itemize}
 
 \bibliographystyle{plain}
 \bibliography{bte_notes.bib}

@@ -2,8 +2,6 @@
 @package : Spectral based, Petrov-Galerkin discretization of the collission integral
 """
 import abc
-from re import U
-
 import basis
 import spec as sp
 import binary_collisions

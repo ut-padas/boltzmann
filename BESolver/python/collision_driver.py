@@ -55,7 +55,7 @@ for t_step in range(30):
     cf_name      = f"plots/fv_c_step_%04d"%t_step
     visualize_utils.plot_spec_coefficients(h_vec,file_name=cf_name)
     #print(output_fname)
-    print(h_vec)
+    #print(h_vec)
     visualize_utils.plot_density_distribution_z_slice(spec,h_vec,plot_domain,50,z_val=0.1,weight_func=boltzmann_parameters.maxwellian_normalized,file_name=output_fname)
     #h_vec = np.matmul(Lij_inv,np.multiply(mm_diag,h_vec))
     h_vec = np.matmul(Lij_inv,h_vec)

@@ -15,10 +15,21 @@ class BoltzmannEquationParameters:
     Boltzmann Solver
     """
     def __init__(self):
-        self.POLY_ORDER         = 3
-        self.VELOCITY_SPACE_DIM = 3
-        self.POSITION_SPACE_DIM = 0
-        self.TIME_STEP_SIZE     = 0.2
+        self.VEL_SPACE_POLY_ORDER  = 2
+        self.VELOCITY_SPACE_DIM    = 3
+        self.TIME_STEP_SIZE        = 0.01
+
+        # Position space parameters. 
+        self.X_SPACE_DIM           = 3
+        self.X_GRID_MIN            = np.array([-1,-1,-1])
+        self.X_GRID_MAX            = np.array([1,1,1])
+        self.X_GRID_RES            = np.array([0.1,0.1,0.1])
+        self.X_DERIV_ORDER         = 2
+
+        self.TOTAL_TIME            = 10
+        self.IO_STEP_FREQ          = 10
+        self.IO_FILE_NAME_PREFIX   = f'bplots/u_sol_%04d.png'
+        
         
         # physical parameters. 
         self.UNITS                      =  pint.UnitRegistry()

@@ -206,4 +206,63 @@ class SpectralExpansion:
         
         return coeff
 
+    def compute_vandermonde_at_quadrature(self,q_order=None):
+        """
+        Basis vandermonde evaluated at the quadrature points
+        This is useful to compute basis expansions evaluated at quadrature points
+        Vq[f] gives the f (expansion) evaluated at the quadrature points. 
+        number of rows = number of quadrature points, 
+        number of cols = number of basis functions to eval at each row (i.e. quadrature point)
+        """
+        if q_order is None:
+            q_order = self._p
+        
+        num_p = self._p + 1
+        num_q = q_order + 1
+        
+        [qx_1d,qw_1d] = self._basis_p.Gauss_Pn(num_q)
+        weight_func  = self._basis_p.Wx()
+
+        # number of quadrature points. 
+        Vq_1d = np.zeros((num_q, num_p))
+        for qi,qx in enumerate(qx_1d):
+            for pi in range(num_p):
+                r_id = qi
+                c_id = pi
+                Vq_1d[r_id,c_id] = self._basis_1d[pi](qx)
+
+        # Vq_2d = np.zeros((num_q**2, num_p**2))
+        # Vq_3d = np.zeros((num_q**3, num_p**3))
+
+        # for qj,qy in enumerate(qx_1d):
+        #     for qi,qx in enumerate(qx_1d):
+        #         for pj in range(num_p):
+        #             for pi in range(num_p):
+        #                 r_id = qj * num_q + qi
+        #                 c_id = pj * num_p + pi
+        #                 Vq_2d[r_id,c_id] = self._basis_1d[pj](qy) * self._basis_1d[pi](qx)
+
+        # for qk,qz in enumerate(qx_1d):
+        #     for qj,qy in enumerate(qx_1d):
+        #         for qi,qx in enumerate(qx_1d):
+        #             for pk in range(num_p):
+        #                 for pj in range(num_p):
+        #                     for pi in range(num_p):
+        #                         r_id = qk * (num_q**2) + qj * num_q + qi
+        #                         c_id = pk * (num_p**2) + pj * num_p + pi
+        #                         Vq_3d[r_id,c_id] = self._basis_1d[pk](qz) * self._basis_1d[pj](qy) * self._basis_1d[pi](qx)
+
+        Vq=Vq_1d
+        #print(Vq)
+        if (self._dim==2):
+            Vq = np.kron(Vq_1d,Vq_1d)
+        elif (self._dim==3):
+            Vq = np.kron(Vq_1d,Vq_1d)
+            #print(np.allclose(Vq,Vq_2d))
+            Vq = np.kron(Vq,Vq_1d)
+            #print(np.allclose(Vq,Vq_3d))
+
+        return Vq
+        
+
 

@@ -428,7 +428,7 @@ class BoltzmannOperator_3V_3X():
                     for i in range(u.shape[0]):
                         v[i,j,k,:] = np.matmul(self._col_op_invLij,up[i,j,k,:])
 
-            self._current_time += self._current_dt
+            self._current_time += 2*self._current_dt
             self._current_step +=1
             return v
 

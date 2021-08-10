@@ -6,14 +6,14 @@
 \input{premble.tex}
 
 \title{Scalable deterministic numerical methods for the Boltzmann equation}
-\author{Milinda Fernando and Geroge Biros}
+%\author{Milinda Fernando and Geroge Biros}
 %\date{February 2014}
 
 \begin{document}
 
-\begin{titlepage}
+%\begin{titlepage}
 \maketitle
-\end{titlepage}
+%\end{titlepage}
 
 \section{Boltzmann Equation summary}
 The Boltzmann equation is a nonlinear integro-differential equation that describes the evolution of the particle density function $f : \R^3 \times \R^3 \times \R \rightarrow \R^{+}_0$. Independent variables for the above density function denotes, time ($t$), position vector ($x$), and the velocity ($v$). For a fixed time $t$, $f(x,v,t)dx dv$ represent the number of particles for the phase space volume element $dxdv$. 
@@ -24,78 +24,112 @@ We can write the Boltzmann equation in the absence of external force field can b
 \end{equation}
 In the presence of external force field (e.g., electromagnetic field) $L(x,t) : \R^3 \times \R \rightarrow \R$, the full Boltzmann equations can be written as, 
 \begin{equation}
-    \partial_t f + v\cdot \nabla_x f  + \textcolor{blue}{L \cdot \nabla_v f} = \frac{1}{\epsilon}Q(f,f) \text{ for } x,v \in \R^3 \label{eq:be_full}
+    \partial_t f + v\cdot \nabla_x f  + L \cdot \nabla_v f = \frac{1}{\epsilon}Q(f,f) \text{ for } x,v \in \R^3 \label{eq:be_full}
 \end{equation}
 
 The $\epsilon$ is known as the Knudsen number (dimensionless number, $\epsilon > 0$), $Q$ is the collision operator. 
 
-\textbf{Note}: Unless stated otherwise, $v^\prime,v_*^\prime$ denotes the pre-collision velocities and $v,v_*$ denotes the post-collision velocities of a binary collision.
+\textbf{Note}: Unless stated otherwise, $v^\prime,v_*^\prime$ denotes the post-collision velocities and $v,v_*$ denotes the pre-collision velocities of a binary collision.
 
 The collision operator (i.e., capture the physics of the collisions) can be broken up to two main parts, 
 \begin{enumerate}
-    \item Gain term ($Q^+(f,f)$) : For a fixed $(t,x)$ how many particles created with velocity $v$.
-    \item Loss term ($Q^-(f,f)$) : For a fixed $(t,x)$ how many particles are lost with velocity $v$.
+    \item Gain term ($C^+(f,f)$) : For a fixed $(t,x)$ how many particles created with velocity $v$.
+    \item Loss term ($C^-(f,f)$) : For a fixed $(t,x)$ how many particles are lost with velocity $v$.
 \end{enumerate} which are defined as follows. 
 
 \begin{align}
-    Q^{+}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v^\prime)f(v_*^\prime) d\omega dv_* \\
-    Q^{-}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v)f(v_*) d\omega dv_* 
+    C^{+}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v^\prime)f(v_*^\prime) d\omega dv_* \\
+    C^{-}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v)f(v_*) d\omega dv_* 
 \end{align}
 
 The collision operator then defined as, 
 \begin{equation}
     \begin{split}
-        Q(f,f) = Q^{+}(f,f) - Q^{-}(f,f) = \\ \int_{\R^3}\int_{S^2} B(|v-v_*|,\theta)(f(v^\prime)f(v_*^\prime) - f(v)f(v_*) ) d\omega dv_*    
+        C(f,f) = C^{+}(f,f) - C^{-}(f,f) %= \\ \int_{\R^3}\int_{S^2} B(|v-v_*|,\theta)(f(v^\prime)f(v_*^\prime) - f(v)f(v_*) ) d\omega dv_*    
     \end{split}
 \end{equation}
 
-\textbf{Pre and post collision velocities}: By using the conservation of momentum and conservation of kinetic energy, we can derive the how pre and post collision velocities related. For binary elastic (?) collisions we can write (I think for inelastic collisions this is not valid, since we don't have KE conservation equation), 
-\begin{align}
-    v^\prime  &= \frac{1}{2} (v + v_* + |v-v_*| \omega) \\
-    v_*^\prime  &= \frac{1}{2} (v + v_* - |v-v_*| \omega)
-\end{align} where $\omega$ is a unit vector, $\omega \in S^2$. Note that, for binary elastic collisions, $|v-v_*| = |v^\prime-v_*^\prime|$.
+\section{Electron - Ar collisions}
+\label{sec:col_op_torch}
 
-In general $B : \R^3 \times \R^3 \times S^2 \rightarrow \R_{0}^+$ represents the probability of $v,v_*$ collide with a scattering direction $\omega$. The angle $\theta$, is the angle between the post collision relative vector and the pre-collision relative vector. Therefore, we can write, 
+Assuming, Ar species are modeled by $\delta(0)$ distribution, and using the hard sphere collision kernel approximation, the above collusion operator simplifies, to 
 \begin{equation}
-    cos\theta = \frac{\omega \cdot (v-v_*)}{|v-v_*|}
+    C(f) = \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega
 \end{equation}
-There are several models for $B$, the collision kernel,
+
+\subsection{Total and differential cross section}
+
+For a given total cross section value, the differential cross section, can be computed as follows\cite{vahedi1995monte}, where $E= \frac{1}{2}mv^2$
+\begin{equation}
+    \sigma(E,\chi) = \frac{\sigma(\chi)}{4\pi (1 + E \sin^2(\chi/2))\ln(1+E)} 
+\end{equation}
+
+The scattering velocity direction is computed based on using following notations. Assumes vector coordinates w.r.t. basis $\hat{e_i},\hat{e_j}$ and $\hat{e_k}$.
+
 \begin{itemize}
-    \item Maxwellian gas : $B(|v-v_*|,cos\theta) = const.$
-    \item Hard sphere gas : $B(|v-v_*|,cos\theta) = const.|v-v_*|$
-    \item Variable hard sphere (VHS) gas : $B(|v-v_*|,cos\theta) = const. |v-v_*|^\alpha$
+    \item $v_0$, $\hat{v_0}$ : pre-collision velocity, unit vector along $v_0$
+    \item $v_1$, $\hat{v_1}$ : scattered (post-collision) velocity, unit vector along $\boldmath{v_1}$
+    \item $\chi$ : scattering angle, i.e., the angle between vectors, $\hat{v_1}$ and  $\hat{v_0}$
+    \item $\phi$ : angle between $v_1$ projection to $v_0 \times(v_0 \times e_i)$, $v_0 \times e_i$ plane, and vector $v_0 \times(v_0 \times e_i)$
+    \item $\theta$ : angle between $\hat{v_0}$ and $\hat{e_i}$, i.e., $cos\theta = \hat{v_0} \cdot \hat{e_i}$
 \end{itemize}
+For deterministic solver, $\theta$ can be computed from $v_0$ and $\chi,\phi$ taken as the solid angle. 
 
-\section{Macroscopic variables}
-\label{sec:plasma_macroscopic_vars}
+The scattered velocity can be decomposed along the orthonormal basis vectors, $\hat{E_0}=\hat{v_{0}}$, $\hat{E_1}= \cfrac{\hat{v_0}\times e_i}{\sin\theta}$, and $\hat{E_2}= \hat{v_0}\times \hat{E_1}$. Therefore, the scattered direction unit vector can be written, 
 
-For more details refer chapter 2 of \cite{howard}. In Summary, macroscopic variables (things that we can measure) can be obtain through the plasma species distribution function. 
+\begin{equation}
+    \hat{v_1} = \cos\chi \hat{E_0} + \sin\chi sin\phi \hat{E_1} + \sin\chi cos\phi \hat{E_2} \label{eq:scatter}
+\end{equation}
 
-Let $f_a(x,v,t)$ be the distribution function for species $a$. 
-\begin{definition}{Number density}
-    \begin{equation}
-        n_a(x,t) = \int_{\R^3} f_a(x,v,t) dv 
-    \end{equation}
-Similarly, mass or charge density of species ``a'' can be defined as, 
+We can see that, $\hat{v_1}\cdot \hat{v_1}=1$, and $\hat{v_1} \cdot \hat{v_0}= cos\chi$.
+
+\subsection{G0 : $e + Ar \rightarrow e + Ar$ collision operator}
+\begin{equation}
+    C_{G0}(f) = \int_{\chi} \int_{\phi} (f(v_1) - f(v_0)) \norm{v_0} \sigma_{G0}(\norm{v_0},\omega) \sin\chi d\phi d\chi
+\end{equation}
+
+Let $E_0 = 1/2 m \norm{v_0}^2_2$ , $E_1 = 1/2 m \norm{v_1}^2_2$, for inelastic collisions the energy lost, modeled based on \cite{vahedi1995monte}, (relative energy loss)
+\begin{equation}
+    \Delta E = \frac{2m(1-cos\chi)}{M}
+\end{equation} where, $m,M$ denotes the mass of the electron and the Argon atom. Therefore the magnitude of the scattered velocity, can be written as, 
+\begin{equation}
+    \norm{v_1} = \norm{v_0} \sqrt{1- \frac{2m(1-cos\chi)}{M}}
+\end{equation}
+
+\subsection{G1 : $e + Ar \rightarrow e + Ar^*$ collision operator}
+\begin{equation}
+    C_{G1}(f) = \int_{\chi} \int_{\phi} (f(v_1) - f(v_0)) \norm{v_0} \sigma_{G1}(\norm{v_0},\omega) \sin\chi d\phi d\chi
+\end{equation}
+
+Let $E_{exc}$ be the energy threshold to trigger an excitation reaction, then we can write, 
 \begin{align}
-    \rho_{a,M}(x,t)   &= m_a \int_{\R^3} f_a(x,v,t) dv \\
-    \rho_{a,Q}(x,t) &= q_a \int_{\R^3} f_a(x,v,t) dv 
-\end{align} where, $m_a,q_a$ denotes mass and charge of a particle of species $a$. 
-\end{definition}
+    \frac{1}{2} m v_0 ^2  - E_{exc} &= \frac{1}{2} m v_1 ^2 \\
+    \norm{v_1} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{2E_{exc}}{m}}
+\end{align}
 
-\begin{definition}{Probability density}
-    The probability density of finding a particle on a unit volume centered at $x$, on a unit volume of velocity space centered at $v$ is given by, 
-    \begin{equation}
-        \hat{f}_a(x,v,t) = \frac{f_a(x,v,t)}{n_a(x,t)}
-    \end{equation}
-\end{definition}
+The normally we use excitation threshold of $E_{exc}=11.5eV$.
 
-\begin{definition}{Average velocity}
-    The first velocity moment, denoted as average velocity ($\hat{v}(x,t)$, note $\hat{v}$ depends on $x,t$ coordinates, while $v$ is a independent coordinate for the distribution function.) defined as, 
-    \begin{equation}
-        \hat{v}_a(x,t) = \frac{1}{n_a(x,t)} \int_{R^3} v f(x,v,t) dv
-    \end{equation}
-\end{definition}
+\subsection{G2 : $e + Ar \rightarrow e + Ar^+ + e$ collision operator}
+\begin{itemize}
+    \item $v_1$ : velocity of the scattered electron
+    \item $v_2$ : velocity of the elected electron from Ar. 
+\end{itemize}
+\begin{equation}
+    C_{G2}(f) = \int_{\chi} \int_{\phi} (f(v_1) + f(v_2) - f(v_0)) \norm{v_0} \sigma_{G2}(\norm{v_0},\omega) \sin\chi d\phi d\chi
+\end{equation}
+
+Let $E_{ion}$ be the energy threshold for the ionization reaction, then as in \cite{vahedi1995monte} we split the $E_0-E_{ion}$ equally among scattered and the ejected electron. i.e., $E_1 = 0.5 (E_0-E_{ion})$, $E_2 = 0.5 (E_0-E_{ion})$.
+
+\begin{align}
+    \norm{v_1} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{E_{ion}}{m}}\\
+    \norm{v_2} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{E_{ion}}{m}}
+\end{align}
+$\hat{v_1}$ derived as in (\ref{eq:scatter}) and $\hat{v_2}$ derived based on the momentum conservation, assuming the momentum change in the Ar atom is negligible. 
+\begin{align}
+    m v_0 + M v &= Mv + m v_1 + m v_2  \\
+    \hat{v_2} &= \frac{v_0 - v_1}{\norm{v_0 - v_1}}
+\end{align}
+
 
 
 \section{Maxwell-Boltzmann distribution (Maxwellian)}

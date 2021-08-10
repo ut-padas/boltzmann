@@ -1,0 +1,16 @@
+\textbf{Pre and post collision velocities}: By using the conservation of momentum and conservation of kinetic energy, we can derive the how pre and post collision velocities related. For binary elastic (?) collisions we can write (I think for inelastic collisions this is not valid, since we don't have KE conservation equation), 
+\begin{align}
+    v^\prime  &= \frac{1}{2} (v + v_* + |v-v_*| \omega) \\
+    v_*^\prime  &= \frac{1}{2} (v + v_* - |v-v_*| \omega)
+\end{align} where $\omega$ is a unit vector, $\omega \in S^2$. Note that, for binary elastic collisions, $|v-v_*| = |v^\prime-v_*^\prime|$.
+
+In general $B : \R^3 \times \R^3 \times S^2 \rightarrow \R_{0}^+$ represents the probability of $v,v_*$ collide with a scattering direction $\omega$. The angle $\theta$, is the angle between the post collision relative vector and the pre-collision relative vector. Therefore, we can write, 
+\begin{equation}
+    cos\theta = \frac{\omega \cdot (v-v_*)}{|v-v_*|}
+\end{equation}
+There are several models for $B$, the collision kernel,
+\begin{itemize}
+    \item Maxwellian gas : $B(|v-v_*|,cos\theta) = const.$
+    \item Hard sphere gas : $B(|v-v_*|,cos\theta) = const.|v-v_*|$
+    \item Variable hard sphere (VHS) gas : $B(|v-v_*|,cos\theta) = const. |v-v_*|^\alpha$
+\end{itemize}

@@ -52,7 +52,7 @@ The collision operator then defined as,
 \section{Electron - Ar collisions}
 \label{sec:col_op_torch}
 
-Assuming, that the neutral Ar atoms have $\delta(0)$ distribution in the velocity space, the above collusion operator simplifies to,
+Assuming, that the neutral Ar atoms have $\delta(0)$ distribution in the velocity space and collision kernel $B$ approximation from experimental data, the above collusion operator simplifies to,
 \begin{equation}
     C(f) = \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega
 \end{equation}
@@ -113,7 +113,7 @@ Let $E_{exc}$ be the energy threshold to trigger an excitation reaction, then we
     C_{G2}(f) = \int_{\chi} \int_{\phi} (f(v_1) + f(v_2) - f(v_0)) \norm{v_0} \sigma_{G2}(\norm{v_0},\omega) \sin\chi d\phi d\chi
 \end{equation}
 
-Let $E_{ion}$ be the energy threshold for the ionization reaction, then as in \cite{vahedi1995monte} we split the $E_0-E_{ion}$ equally among scattered and the ejected electron. i.e., $E_1 = 0.5 (E_0-E_{ion})$, $E_2 = 0.5 (E_0-E_{ion})$.
+Let $E_{ion}$ be the energy threshold for the ionization reaction, then as in \cite{vahedi1995monte} we split the $E_0-E_{ion}$ equally among scattered and the ejected electron. i.e., $E_1 = 0.5 (E_0-E_{ion})$, $E_2 = 0.5 (E_0-E_{ion})$. Therefore, we can derive the velocity magnitudes of the scattered and ejected electrons as follows. 
 \begin{align}
     \norm{v_1} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{E_{ion}}{m}}\\
     \norm{v_2} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{E_{ion}}{m}}

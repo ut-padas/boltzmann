@@ -5,6 +5,8 @@
 import numpy as np
 import enum
 import abc
+import maxpoly
+import lagpoly
 
 class BasisType(enum.Enum):
     """
@@ -15,6 +17,7 @@ class BasisType(enum.Enum):
     MAXWELLIAN_POLY=2
     SPHERICAL_HARMONIC=3
     LEGENDRE=4
+    LAGUERRE=5
 
 
 class Basis(abc.ABC):
@@ -106,6 +109,52 @@ class Legendre(Basis):
         """
         I = lambda x: 1
         return I
+        
+class Maxwell(Basis):
+    def __init__(self):
+        self._basis_type = BasisType.MAXWELLIAN_POLY
+
+    def Pn(self,deg,domain=None,window=None):
+        """
+        returns 1d Maxwell polynomial the specified degree 
+        """
+        return maxpoly.basis(deg)
+    
+    def Gauss_Pn(self,deg):
+        """
+        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
+        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
+        """
+        return maxpoly.maxpolygauss(deg)
+
+    def Wx(self):
+        """
+        Weight function w.r.t. the polynomials are orthogonal
+        """
+        return maxpoly.maxpolyweight
+        
+class Laguerre(Basis):
+    def __init__(self):
+        self._basis_type = BasisType.LAGUERRE
+
+    def Pn(self,deg,domain=None,window=None):
+        """
+        returns 1d associated (k=1/2) Laguerre polynomial the specified degree 
+        """
+        return lagpoly.basis(deg)
+    
+    def Gauss_Pn(self,deg):
+        """
+        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
+        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
+        """
+        return lagpoly.lagpolygauss(deg)
+
+    def Wx(self):
+        """
+        Weight function w.r.t. the polynomials are orthogonal
+        """
+        return lagpoly.lagpolyweight
 
 
 

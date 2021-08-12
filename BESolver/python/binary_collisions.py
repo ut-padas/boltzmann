@@ -46,6 +46,39 @@ class BinaryCollision(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def pre_vel_to_post_vel_sph(self,w1,w2,omega):
+        """
+        compute post collision velocity from pre collission velocity
+        in spherical coordinates, 
+        w1,w2 -denotes the pre collision velocity,
+        omega - scattering angle (\theta,\phi)
+        returns [v1,v2] post collision velocity
+        """
+        pass
+
+    @abc.abstractmethod
+    def post_vel_to_pre_vel_sph(self,v1,v2,omega):
+        """
+        compute pre collision velocity from post collission velocity
+        in spherical coordinates, 
+        v1,v2 - denotes the post collision velocity
+        omega - scattering angle (\theta,\phi)
+        returns [w1,w2] pre collision velocity
+        """
+        pass
+    
+    @abc.abstractmethod
+    def cross_section_sph(self,v_re,omega):
+        """
+        computes the differential cross section for a collision
+        in spherical coordinates, 
+        v_re- relative velocity after collission
+        omega- solid angle describing the scattering angle. 
+        returns a scalar. 
+        """
+        pass
+
 
 
 class BinaryElasticCollission3D(BinaryCollision):
@@ -120,6 +153,24 @@ class ElectronNeutralCollisionElastic_X0D_V3D(BinaryCollision):
         return [v1_abs*v_omega ,np.zeros(3)]
 
     def cross_section(self,v_re,omega):
+        """
+        computes the differential cross section for a collision, 
+        v_re- relative velocity after collission
+        omega- solid angle describing the scattering angle. 
+        returns a scalar. 
+        """
+        hds_const = 1#np.cos(omega[0])#1.0
+        return hds_const #* np.linalg.norm(v_re,2)
+    
+    def pre_vel_to_post_vel_sph(self,w1,w2,omega):
+        # todo: double-check that
+        return [np.array([w1[0], omega[0], omega[1]]), np.zeros(3)]
+        
+    def post_vel_to_pre_vel_sph(self,v1,v2,omega):
+        # todo: double-check that
+        return [np.array([v1[0], omega[0], omega[1]]), np.zeros(3)]
+
+    def cross_section_sph(self,v_re,omega):
         """
         computes the differential cross section for a collision, 
         v_re- relative velocity after collission

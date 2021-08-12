@@ -18,6 +18,9 @@ class BoltzmannEquationParameters:
         self.VEL_SPACE_POLY_ORDER  = 2
         self.VELOCITY_SPACE_DIM    = 3
         self.TIME_STEP_SIZE        = 0.01
+        self.SPH_HARM_LM           = [[0,0], [1,0]]
+        self.NUM_Q_PTS_ON_V          = 5
+        self.NUM_Q_PTS_ON_SPHERE     = 5
 
         # Position space parameters. 
         self.X_SPACE_DIM           = 3

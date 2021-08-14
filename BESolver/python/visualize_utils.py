@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.lib import meshgrid
 from numpy.ma import soften_mask
+import spec_spherical
 
 def plot_density_distribution_iso(f,domain,sample_points):
     """
@@ -69,3 +70,48 @@ def plot_spec_coefficients(coeff,file_name=None):
     else:
         plt.show()
     plt.close()
+
+
+def plot_f_zslice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , r_max,  r_res, phi_res,fname):
+
+    phi_pts = np.linspace(0, 2*np.pi , int((2*np.pi)/phi_res))
+    r_pts   = np.linspace(0, r_max   , int((r_max)/r_res))
+    R,P     = np.meshgrid(r_pts,phi_pts)
+    
+    f_val   = np.zeros(( len(r_pts),  len(phi_pts) ))
+
+    num_p   = spec._p + 1
+    sh_lm   = spec._sph_harm_lm
+    num_sh  = len(sh_lm) 
+
+    for r_i,r in enumerate(r_pts):
+        for phi_i, phi in enumerate(phi_pts):
+            for pi in range(num_p):
+                for lm_i, lm in enumerate(sh_lm):
+                    rid = pi*num_sh + lm_i
+                    f_val[r_i, phi_i] += cf[rid] * maxwellian(r) * spec.basis_eval_full(r, np.pi/2, phi,pi,lm[0],lm[1]) 
+
+
+    #plt.imshow(f_val)
+    #plt.show()
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    # Express the mesh in the cartesian system.
+    X, Y = R*np.cos(P), R*np.sin(P)
+    #print(X.shape)
+    #print(f_val.shape)
+    f_val=np.transpose(f_val)
+    # Plot the surface.
+    ax.plot_surface(X, Y, f_val, cmap=plt.cm.YlGnBu_r)
+
+    # Tweak the limits and add latex math labels.
+    # ax.set_zlim(0, 1)
+    # ax.set_xlabel(r'$\phi_\mathrm{real}$')
+    # ax.set_ylabel(r'$\phi_\mathrm{im}$')
+    # ax.set_zlabel(r'$V(\phi)$')
+    #plt.show()
+    plt.savefig(fname)
+    plt.close()
+

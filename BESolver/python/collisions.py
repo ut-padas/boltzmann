@@ -23,12 +23,11 @@ E_AR_IONIZATION_eV  = 11.55
 E_AR_EXCITATION_eV  = 15.76
 ELECTRON_VOLT       = scipy.constants.electron_volt
 
-MAXWELLIAN_TEMP_K   = 5000
-MAXWELLIAN_N        = 1e3
 BOLTZMANN_CONST     = scipy.constants.Boltzmann
+TEMP_K_CRITICAL     = ELECTRON_VOLT/BOLTZMANN_CONST
+MAXWELLIAN_TEMP_K   = TEMP_K_CRITICAL
+MAXWELLIAN_N        = 1e15
 ELECTRON_THEMAL_VEL = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
-
-#print(ELECTRON_THEMAL_VEL)
 
 class Collisions(abc.ABC):
 
@@ -79,16 +78,27 @@ class Collisions(abc.ABC):
         return self._total_cs_interp1d(energy)
 
     @staticmethod
+    def diff_cs_to_total_cs_ratio(energy,scattering_angle):
+        return (energy)/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) )
+
+    @staticmethod
     def differential_cross_section(total_cross_section : float, energy : float, scattering_angle: float ) -> float:
         """
         computes the differential cross section from total cross section. 
         """
-        return total_cross_section/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) )
+        #print(total_cross_section,energy," diff/total : ", (energy)/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) ))
+        return (energy*total_cross_section)/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) )
 
     @abc.abstractmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
         pass
-
+    
+    """
+    Gives the minimum evergy threshold for the event in ev
+    """
+    @abc.abstractmethod
+    def min_energy_threshold():
+        pass
 
 """
 e + Ar -> e + Ar
@@ -103,11 +113,13 @@ class eAr_G0(Collisions):
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
 
         v1_dir   = Collisions.compute_scattering_direction(v0,polar_angle, azimuthal_angle)
-        vel_fac  = np.linalg.norm(v0,2) #* np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+        vel_fac  = np.linalg.norm(v0,2) * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         v1       = vel_fac  * v1_dir
         return v1 
 
-
+    @staticmethod
+    def min_energy_threshold():
+        return 0.0
     
 
 """
@@ -122,10 +134,14 @@ class eAr_G1(Collisions):
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
         v1_dir   = Collisions.compute_scattering_direction(v0,polar_angle, azimuthal_angle)
-        vel_fac  = np.sqrt(np.linalg(v0,2) **2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        assert (np.linalg.norm(v0,2) **2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON)) > 0 , "collision G1 invalid velocity specified: %f "%v0
+        vel_fac  = np.sqrt(np.linalg.norm(v0,2) **2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
         v1       =  vel_fac  * v1_dir
         return v1
 
+    @staticmethod
+    def min_energy_threshold():
+        return E_AR_EXCITATION_eV
 
 """
 e + Ar -> e + Ar^+
@@ -139,8 +155,9 @@ class eAr_G2(Collisions):
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
         v1_dir   = Collisions.compute_scattering_direction(v0,polar_angle, azimuthal_angle)
-
-        v1_fac   = np.sqrt(0.5 * np.linalg(v0,2)**2    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        
+        assert (0.5 * np.linalg.norm(v0,2)**2    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)) > 0 , "collision G2 invalid velocity specified: %f "%v0
+        v1_fac   = np.sqrt(0.5 * np.linalg.norm(v0,2)**2    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
         v2_fac   = v1_fac
 
         v1       =  v1_fac  * v1_dir
@@ -149,4 +166,7 @@ class eAr_G2(Collisions):
 
         return v1,v2
 
+    @staticmethod
+    def min_energy_threshold():
+        return E_AR_IONIZATION_eV
 

@@ -10,11 +10,13 @@ import pint
 
 class BEVelocitySpace():
 
-    VELOCITY_SPACE_POLY_ORDER  = 0
+    VELOCITY_SPACE_POLY_ORDER  = 2
     VELOCITY_SPACE_DIM         = 3
     VELOCITY_SPACE_DT          = 0.01  
     IO_FILE_NAME_PREFIX        = f'plots/f_sol_%04d.png'
-    SPH_HARM_LM                = [[0,0], [1,0]]
+    IO_STEP_FREQ               = 500
+    SPH_HARM_LM                = [[0,0], [1,0],[2,0], [3,0], [4,0]]
+    #SPH_HARM_LM                = [[0,0], [1,0]]
     NUM_Q_PTS_ON_V             = 5
     NUM_Q_PTS_ON_SPHERE        = 5
 

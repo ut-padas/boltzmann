@@ -11,6 +11,7 @@ import collisions
 import parameters as params
 import visualize_utils
 import ets 
+import os
 
 # instance of the collision operator
 cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
@@ -18,7 +19,8 @@ spec  = colOpSp.SPEC_SPHERICAL
 
 # # solution coefficients
 h_vec = spec.create_vec()
-h_vec = np.ones((h_vec.shape))
+#h_vec = np.random.rand(len(h_vec))
+h_vec  = np.ones_like(h_vec)
 plot_domain = np.array([[-5,5],[-5,5]])
 
 #maxwellian = basis.Maxwell().Wx()
@@ -38,14 +40,22 @@ M  = spec.compute_maxwellian_mm(maxwellian)
 print("Mass matrix w.r.t. Maxwellian\n")
 print(M)
 
-L  = cf.assemble_mat(col_g0,maxwellian)
+L_g0  = cf.assemble_mat(col_g0,maxwellian)
+L_g1  = cf.assemble_mat(col_g1,maxwellian)
+L_g2  = cf.assemble_mat(col_g2,maxwellian)
 
+L     = L_g0 + L_g1 + L_g2
 print("Collision Op: \n")
 print(L)
 
 invML = np.matmul(np.linalg.inv(M) , L)
 print("M^-1 L : \n")
 print(invML)
+
+
+if not os.path.exists('plots'):
+    print("creating folder `plots`, output will be written into it")
+    os.makedirs('plots')
 
 
 def col_op_rhs(u,t):
@@ -55,24 +65,27 @@ ts = ets.ExplicitODEIntegrator(ets.TSType.FORWARD_EULER)
 ts.set_ts_size(params.BEVelocitySpace.VELOCITY_SPACE_DT)
 ts.set_rhs_func(col_op_rhs)
 
-while ts.current_ts()[1] < 10:
+while ts.current_ts()[0] < 1000:
     ts_info = ts.current_ts()
-    # if ts_info[1] % params.BEVelocitySpace.IO_STEP_FREQ == 0:
-    #     print("time stepper current time ",ts_info[0])
-    #     plt.title("T=%.2f"%ts_info[0])
-    #     plt.imshow(u[:,:,z_slice_index,0])
-    #     plt.colorbar()
-    #     fname = IO_FILE_NAME_PREFIX %ts_info[1]
-    #     #print(fname)
-    #     plt.savefig(fname)
-    #     plt.close()
+    if ts_info[1] % params.BEVelocitySpace.IO_STEP_FREQ == 0:
+        print("time stepper current time ",ts_info[0])
+        print(h_vec)
+        fname = params.BEVelocitySpace.IO_FILE_NAME_PREFIX %ts_info[1]
+        visualize_utils.plot_f_zslice(h_vec,maxwellian,spec,5,1e-1,1e-1,fname)
+        # plt.title("T=%.2f"%ts_info[0])
+        # plt.imshow(u[:,:,z_slice_index,0])
+        # plt.colorbar()
+        # fname = IO_FILE_NAME_PREFIX %ts_info[1]
+        # #print(fname)
+        # plt.savefig(fname)
+        # plt.close()
         
     
     #v= np.zeros(u.shape)
-    print(h_vec)
+    
     h_vec = ts.evolve(h_vec)
-    
-    
+
+
 
 
 

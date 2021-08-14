@@ -1,0 +1,143 @@
+LXCat, www.lxcat.net
+Generated on 03 Jun 2021. All rights reserved.
+
+RECOMMENDED REFERENCE FORMAT
+- Hayashi database, www.lxcat.net, retrieved on June 3, 2021.
+
+CROSS SECTION DATA FORMAT
+In downloaded files, each collision process is defined by a block consisting of
+1st line
+Keyword in capitals indicating the type of the collision. Possible collision types are elastic, effective, excitation,
+ionization, or attachment (capital letters required, key words are case sensitive), where "elastic" is used to denote
+the elastic momentum transfer cross section and where "effective" denotes the total momentum transfer cross section (sum
+of elastic momentum transfer and total inelastic cross sections).  The latter is useful for solving the Boltzmann
+equation in the 2-term approximation.
+2nd line
+Name of the target particle species. This name is a character string, freely chosen by the user, e.g. "Ar". Optionally
+for excitation processes, the name of the corresponding excited state can be specified on the same line, separated from
+the first name either by arrow "->" (dash + greater than) or by double-head arrow "<->" (less than + dash +
+greater than), e.g. "Ar -> Ar*" and "Ar <-> Ar*", respectively. In the later case BOLSIG+ will automatically
+define the inverse superelastic process, constructing the superelastic cross-section by detailed balancing, and
+considering the indicated excited state as the target. In this case, the ratio of statistical weights must be input in
+the 3rd line (see below).
+3rd line
+For elastic and effective collisions, the ratio of the electron mass to the target particle mass. For excitation or
+ionization collisions, the electron energy loss (nominally the threshold energy) in eV. For attachment, the 3rd line is
+missing. In case of an excitation process where an excited state has been indicated on the 2nd line using double-head
+arrow "<->", the 3rd line must specify also ratio of the statistical weights of the final state to the initial state
+as the second parameter in 3rd line this is needed by BOLSIG+ to calculate the de-excitation cross-section. The
+statistical weight ratio, if given, will also be used by the automatic superelastics option in BOLSIG+. If this ratio is
+not provided then BOLSIG+ will assume it unity.
+from 4th line (optionally)
+User comments and reference information, maximum 100 lines. The only constraint on format is that these comment lines
+must not start with a number.
+Finally
+Table of the cross section as a function of energy. The table starts and ends by a line of dashes "------" (at least 5),
+and has otherwise two numbers per line: the energy in eV and the cross section in m2.
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+DATABASE:         Hayashi database
+PERMLINK:         www.lxcat.net/Hayashi
+DESCRIPTION:      These data sets were derived by comparing calculated swarm parameters, using as input the cross
+                  sections sets in this database, with measurements.
+CONTACT:          leanne.pitchford@@laplace.univ-tlse.fr
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+************************************************************************************************************************
+
+COMMENT: M. Hayashi (2003) quotBibliography of electron and photon cross sections
+         with atoms and molecules published in the 20th century - argonquot, report
+         NIFS-DAT-72 of the National Institute for Fusion Science of
+         Japan. See Fig 1 and data tables at end of the report. Available on line at
+         http://www.nifs.ac.jp/report/nifs-data072.html.
+
+********************************************************** Ar **********************************************************
+
+EXCITATION
+Ar -> Ar*(11.55eV)
+ 1.155000e+1
+SPECIES: e / Ar
+PROCESS: E + Ar -> E + Ar*(11.55eV), Excitation
+PARAM.:  E = 11.55 eV, complete set
+UPDATED: 2014-02-15 08:27:42
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.155000e+1	0.000000e+0
+ 1.160000e+1	5.430000e-23
+ 1.161000e+1	6.430000e-23
+ 1.162000e+1	6.930000e-23
+ 1.163000e+1	7.040000e-23
+ 1.164000e+1	6.990000e-23
+ 1.165000e+1	6.230000e-23
+ 1.166000e+1	6.330000e-23
+ 1.167000e+1	6.630000e-23
+ 1.168000e+1	6.650000e-23
+ 1.169000e+1	6.330000e-23
+ 1.170000e+1	6.030000e-23
+ 1.171000e+1	5.730000e-23
+ 1.172000e+1	5.770000e-23
+ 1.173000e+1	5.860000e-23
+ 1.175000e+1	7.140000e-23
+ 1.177000e+1	8.150000e-23
+ 1.180000e+1	8.320000e-23
+ 1.181000e+1	8.400000e-23
+ 1.184000e+1	1.200000e-22
+ 1.188000e+1	6.810000e-23
+ 1.190000e+1	6.260000e-23
+ 1.194000e+1	6.440000e-23
+ 1.200000e+1	7.040000e-23
+ 1.210000e+1	8.890000e-23
+ 1.220000e+1	1.050000e-22
+ 1.240000e+1	1.500000e-22
+ 1.260000e+1	1.910000e-22
+ 1.270000e+1	2.040000e-22
+ 1.274000e+1	2.080000e-22
+ 1.276000e+1	2.100000e-22
+ 1.280000e+1	2.080000e-22
+ 1.286000e+1	1.960000e-22
+ 1.290000e+1	1.840000e-22
+ 1.291000e+1	1.830000e-22
+ 1.294000e+1	1.860000e-22
+ 1.300000e+1	2.220000e-22
+ 1.305000e+1	4.050000e-22
+ 1.308000e+1	2.670000e-22
+ 1.310000e+1	2.130000e-22
+ 1.313000e+1	1.840000e-22
+ 1.316000e+1	2.140000e-22
+ 1.319000e+1	2.620000e-22
+ 1.321000e+1	3.080000e-22
+ 1.323000e+1	2.210000e-22
+ 1.324000e+1	2.090000e-22
+ 1.328000e+1	1.970000e-22
+ 1.330000e+1	1.940000e-22
+ 1.333000e+1	1.910000e-22
+ 1.336000e+1	1.970000e-22
+ 1.338000e+1	2.060000e-22
+ 1.340000e+1	2.130000e-22
+ 1.344000e+1	2.200000e-22
+ 1.348000e+1	2.610000e-22
+ 1.350000e+1	2.450000e-22
+ 1.352000e+1	2.370000e-22
+ 1.360000e+1	2.510000e-22
+ 1.400000e+1	2.650000e-22
+ 1.500000e+1	3.690000e-22
+ 1.600000e+1	4.660000e-22
+ 1.700000e+1	5.000000e-22
+ 1.800000e+1	4.950000e-22
+ 1.900000e+1	4.820000e-22
+ 2.000000e+1	4.640000e-22
+ 2.200000e+1	4.180000e-22
+ 2.500000e+1	3.470000e-22
+ 3.000000e+1	2.530000e-22
+ 3.500000e+1	1.800000e-22
+ 4.000000e+1	1.320000e-22
+ 5.000000e+1	6.940000e-23
+ 6.000000e+1	3.750000e-23
+ 7.000000e+1	2.220000e-23
+ 8.000000e+1	1.410000e-23
+ 1.000000e+2	6.520000e-24
+ 1.500000e+2	1.700000e-24
+ 1.750000e+2	1.000000e-24
+ 2.000000e+2	0.000000e+0
+-----------------------------
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

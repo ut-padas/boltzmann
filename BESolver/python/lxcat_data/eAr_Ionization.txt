@@ -1,0 +1,113 @@
+LXCat, www.lxcat.net
+Generated on 03 Jun 2021. All rights reserved.
+
+RECOMMENDED REFERENCE FORMAT
+- Hayashi database, www.lxcat.net, retrieved on June 3, 2021.
+
+CROSS SECTION DATA FORMAT
+In downloaded files, each collision process is defined by a block consisting of
+1st line
+Keyword in capitals indicating the type of the collision. Possible collision types are elastic, effective, excitation,
+ionization, or attachment (capital letters required, key words are case sensitive), where "elastic" is used to denote
+the elastic momentum transfer cross section and where "effective" denotes the total momentum transfer cross section (sum
+of elastic momentum transfer and total inelastic cross sections).  The latter is useful for solving the Boltzmann
+equation in the 2-term approximation.
+2nd line
+Name of the target particle species. This name is a character string, freely chosen by the user, e.g. "Ar". Optionally
+for excitation processes, the name of the corresponding excited state can be specified on the same line, separated from
+the first name either by arrow "->" (dash + greater than) or by double-head arrow "<->" (less than + dash +
+greater than), e.g. "Ar -> Ar*" and "Ar <-> Ar*", respectively. In the later case BOLSIG+ will automatically
+define the inverse superelastic process, constructing the superelastic cross-section by detailed balancing, and
+considering the indicated excited state as the target. In this case, the ratio of statistical weights must be input in
+the 3rd line (see below).
+3rd line
+For elastic and effective collisions, the ratio of the electron mass to the target particle mass. For excitation or
+ionization collisions, the electron energy loss (nominally the threshold energy) in eV. For attachment, the 3rd line is
+missing. In case of an excitation process where an excited state has been indicated on the 2nd line using double-head
+arrow "<->", the 3rd line must specify also ratio of the statistical weights of the final state to the initial state
+as the second parameter in 3rd line this is needed by BOLSIG+ to calculate the de-excitation cross-section. The
+statistical weight ratio, if given, will also be used by the automatic superelastics option in BOLSIG+. If this ratio is
+not provided then BOLSIG+ will assume it unity.
+from 4th line (optionally)
+User comments and reference information, maximum 100 lines. The only constraint on format is that these comment lines
+must not start with a number.
+Finally
+Table of the cross section as a function of energy. The table starts and ends by a line of dashes "------" (at least 5),
+and has otherwise two numbers per line: the energy in eV and the cross section in m2.
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+DATABASE:         Hayashi database
+PERMLINK:         www.lxcat.net/Hayashi
+DESCRIPTION:      These data sets were derived by comparing calculated swarm parameters, using as input the cross
+                  sections sets in this database, with measurements.
+CONTACT:          leanne.pitchford@@laplace.univ-tlse.fr
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+************************************************************************************************************************
+
+COMMENT: M. Hayashi (2003) quotBibliography of electron and photon cross sections
+         with atoms and molecules published in the 20th century - argonquot, report
+         NIFS-DAT-72 of the National Institute for Fusion Science of
+         Japan. See Fig 1 and data tables at end of the report. Available on line at
+         http://www.nifs.ac.jp/report/nifs-data072.html.
+
+********************************************************** Ar **********************************************************
+
+IONIZATION
+Ar -> Ar^+
+ 1.576000e+1
+SPECIES: e / Ar
+PROCESS: E + Ar -> E + E + Ar+, Ionization
+PARAM.:  E = 15.76 eV, complete set
+UPDATED: 2014-02-15 08:34:02
+COLUMNS: Energy (eV) | Cross section (m2)
+-----------------------------
+ 1.576000e+1	0.000000e+0
+ 1.600000e+1	2.020000e-22
+ 1.700000e+1	1.340000e-21
+ 1.800000e+1	2.940000e-21
+ 1.900000e+1	4.600000e-21
+ 2.000000e+1	6.270000e-21
+ 2.100000e+1	7.870000e-21
+ 2.200000e+1	9.330000e-21
+ 2.300000e+1	1.060000e-20
+ 2.400000e+1	1.180000e-20
+ 2.500000e+1	1.300000e-20
+ 2.600000e+1	1.410000e-20
+ 2.800000e+1	1.600000e-20
+ 3.000000e+1	1.800000e-20
+ 3.200000e+1	1.960000e-20
+ 3.400000e+1	2.110000e-20
+ 3.600000e+1	2.240000e-20
+ 3.800000e+1	2.330000e-20
+ 4.000000e+1	2.390000e-20
+ 4.250000e+1	2.450000e-20
+ 4.500000e+1	2.490000e-20
+ 5.000000e+1	2.530000e-20
+ 5.500000e+1	2.600000e-20
+ 6.000000e+1	2.660000e-20
+ 6.500000e+1	2.730000e-20
+ 7.000000e+1	2.770000e-20
+ 7.500000e+1	2.820000e-20
+ 8.000000e+1	2.840000e-20
+ 8.500000e+1	2.850000e-20
+ 9.000000e+1	2.860000e-20
+ 1.000000e+2	2.850000e-20
+ 1.200000e+2	2.810000e-20
+ 1.300000e+2	2.760000e-20
+ 1.500000e+2	2.680000e-20
+ 1.600000e+2	2.620000e-20
+ 1.800000e+2	2.520000e-20
+ 2.000000e+2	2.390000e-20
+ 2.500000e+2	2.170000e-20
+ 3.000000e+2	1.980000e-20
+ 3.500000e+2	1.810000e-20
+ 4.000000e+2	1.680000e-20
+ 5.000000e+2	1.460000e-20
+ 6.000000e+2	1.300000e-20
+ 7.000000e+2	1.160000e-20
+ 8.000000e+2	1.060000e-20
+ 1.000000e+3	9.160000e-21
+ 1.000000e+4	0.000000e+0
+-----------------------------
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

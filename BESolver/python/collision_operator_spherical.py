@@ -1,111 +1,120 @@
 """
 @package : Spectral based, Petrov-Galerkin discretization of the collission integral
 """
-import abc
-from re import U
 
+import abc
 import basis
 import spec_spherical as sp
-import binary_collisions
+import collisions
 import scipy.constants
-import pint
-import boltzmann_parameters as bp
 import numpy as np
 import maxpoly
+import parameters as params
+import utils
 
-class SpecWeakFormCollissionOpSpherical(abc.ABC):
 
-    def __init__(self,p_order,sph_harm_lm,num_q_pts_on_v,num_q_pts_on_sphere):
-        self._p = p_order # number of polynomials in radial direction
-        self._sph_harm_lm = sph_harm_lm # (l,m) index pairs of shperical harmonics to use
-        self._num_q_pts_on_v = num_q_pts_on_v
-        self._num_q_pts_on_sphere = num_q_pts_on_sphere
+class CollissionOp(abc.ABC):
+
+    def __init__(self,dim,p_order):
+        self._dim = dim
+        self._p = p_order
         pass
 
     @abc.abstractmethod
-    def assemble_collision_mat(self,collision):
+    def assemble_mat(collision,maxwellian):
         pass
 
+#SPEC_HERMITE_E = sp.SpectralExpansion(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VEL_SPACE_POLY_ORDER, basis.BasisType.HERMITE_E_POLY)
+SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
 
-class CollisionOpElectronNeutral3DSpherical(SpecWeakFormCollissionOpSpherical):
+class CollisionOpSP():
     """
-    Collission operator for electron-neutral. Density function 
-    for the neutral assumed to be delta function for all times. 
+    3D- velocity space, collision operator for species s-collisions
+    with background heavy particles, where heavy particles obey the
+    direc delta distribution function. 
     """
+    def __init__(self,dim,p_order) -> None:
+        self._dim  = dim
+        self._p    = p_order
+        self._spec = SPEC_SPHERICAL
 
-    def __init__(self,p_order,sph_harm_lm,num_q_pts_on_v,num_q_pts_on_sphere,basis_p):
-        """
-        p_order - polynomial order of the approximation
-        basis_p - which basis to use for the expansion
-        """
-        super().__init__(p_order,sph_harm_lm,num_q_pts_on_v,num_q_pts_on_sphere)
-        self._basis_p    = basis_p
-        self._spec       = sp.SpectralExpansionSpherical(p_order, basis_p, sph_harm_lm)
-
-    def get_spectral_structure(self):
-        """
-        Returns the underlying spectral data structure object. 
-        """
-        return self._spec
-
-    def assemble_collision_mat(self,collision,maxwellian):
+    @staticmethod
+    def assemble_mat(collision : collisions.Collisions , maxwellian):
         """
         Compute the spectral PG discretization for specified Collision. 
         """
-        assert (self._p == self._spec._p)
-        num_p = self._spec._p +1
-        num_q_pts_on_v      = self._num_q_pts_on_v
-        num_q_pts_on_sphere = self._num_q_pts_on_sphere
+        spec  = SPEC_SPHERICAL
+        num_p = spec._p +1
+        num_q_pts_on_v      = params.BEVelocitySpace.NUM_Q_PTS_ON_V
+        num_q_pts_on_sphere = params.BEVelocitySpace.NUM_Q_PTS_ON_SPHERE
+        sph_harm_lm            = params.BEVelocitySpace.SPH_HARM_LM 
 
-        num_sph_harm = len(self._sph_harm_lm)
-        
-        [gmx,gmw] = maxpoly.maxpolygauss(num_q_pts_on_v)
+        num_sph_harm = len(sph_harm_lm)
+        [gmx,gmw]    = maxpoly.maxpolygauss(num_q_pts_on_v)
+        weight_func  = maxpoly.maxpolyweight
         
         legendre = basis.Legendre()
         [glx,glw] = legendre.Gauss_Pn(num_q_pts_on_sphere)
         theta_q = np.arccos(glx)
         phi_q = np.linspace(0,2*np.pi,2*(num_q_pts_on_sphere))
 
-        L_ij =self._spec.create_mat()
+        L_ij =spec.create_mat()
         spherical_quadrature_fac = (np.pi/num_q_pts_on_sphere)
         qr = np.zeros([num_p, num_sph_harm, num_sph_harm, len(gmx)])
 
-        for qi,v_abs in enumerate(gmx): # loop over quadrature points
-            for pj in range(num_p): # loop over polynomial term
-                for lm1_idx,lm1 in enumerate(self._sph_harm_lm): # loop over first spherical harmonics term 
-                    for lm2_idx,lm2 in enumerate(self._sph_harm_lm): # loop over second spherical harmonics term 
-                        # first integration over sphere
-                        for phi in phi_q:
-                            for theta_i, theta in enumerate(theta_q):
-                                #second integration over sphere
-                                for v_phi in phi_q:
-                                    for v_theta_i, v_theta in enumerate(theta_q):
-                                        # velocity at quadrature point. 
-                                        v = [v_abs, v_theta, v_phi]
-                                        # solid angle for spherical quadrature points. 
-                                        omega = (theta,phi)
+        # pi = p
+        # pj = k
+        # lm1 = lm
+        # lm2 = qs
 
-                                        # prior velocity, this determined by the collision type 
-                                        vp = collision.post_vel_to_pre_vel_sph(v,0,omega)[0]
+        V_TH     = 1#collisions.ELECTRON_THEMAL_VEL
+        ELE_VOLT = collisions.ELECTRON_VOLT
 
+        for pj in range(num_p): # k
+            for lm2_idx,lm2 in enumerate(sph_harm_lm): # qs
+                for lm1_idx,lm1 in enumerate(sph_harm_lm): # lm
+                    for qi,v_abs in enumerate(gmx): # loop over quadrature points radial
+                        # S2 from R^3 integral
+                        for v_phi in phi_q:
+                            for v_theta_i, v_theta in enumerate(theta_q):
+                                v_in = np.array( utils.spherical_to_cartesian(v_abs * V_TH, v_theta, v_phi) )
+                                energy_in_ev = (0.5*collisions.MASS_ELECTRON * (v_abs * V_TH)**2) / ELE_VOLT   
+                                total_cs     = collision.total_cross_section(energy_in_ev)
+                                #print("incident velocity : ",v_in, " speed: ",np.linalg.norm(v_in,2), "sp: ",[v_abs,v_theta,v_phi])
+                                # S2 for the scattering angles. 
+                                for phi in phi_q:
+                                    for theta_i, theta in enumerate(theta_q):
+                                        diff_cs      = np.linalg.norm(v_in,2) * collision.differential_cross_section(total_cs,energy_in_ev/ELE_VOLT,theta)
+                                        #print(diff_cs)
+                                        v_sc1        = collision.compute_scattering_velocity(v_in,theta,phi)
+                                        v_sc         = utils.cartesian_to_spherical(v_sc1[0], v_sc1[1], v_sc1[2])
+                                        # scale back to the thermal velocity
+                                        v_sc[0]      = v_sc[0]/V_TH
+                                        mr  = maxwellian(v_abs) / maxwellian(v_sc[0])
+                                        #print("scattered velocity: ",v_sc1," speed: ",np.linalg.norm(v_sc1,2)," v_sc: ",v_sc)
+                                        #print(total_cs,diff_cs,energy_in_ev,v_in)
                                         # ratio of maxwellian values for v, and vp (this is kinda ugly)
                                         # ~exp(-vp^2)/exp(-v^2) = exp(-(vp^2-v^2)) = exp(-(vp-v)*(vp+v)) = exp(-(sqrt((vp-v)*(vp+v)))^2)
-                                        mr = np.real(maxwellian(np.sqrt(complex((vp[0]-v[0])*(vp[0]+v[0])))))
+                                        qr[pj, lm2_idx, lm1_idx, qi] += ((spherical_quadrature_fac**2) * glw[theta_i] * glw[v_theta_i] \
+                                                                        * spec.basis_eval_spherical(v_theta, v_phi, lm2[0], lm2[1]) \
+                                                                        * diff_cs\
+                                                                        * (mr*spec.basis_eval_full(v_sc[0], v_sc[1], v_sc[2], pj, lm1[0], lm1[1])  -   spec.basis_eval_full(v_abs,v_theta, v_phi, pj, lm1[0], lm1[1])))
 
-                                        qr[pj, lm1_idx, lm2_idx, qi] += spherical_quadrature_fac**2 * glw[theta_i] * glw[v_theta_i] \
-                                            * self._spec.basis_eval_spherical(v[1], v[2], lm2[0], lm2[1]) \
-                                            * collision.cross_section_sph(v, omega) \
-                                            * (mr*self._spec.basis_eval_full(vp[0], vp[1], vp[2], pj, lm1[0], lm1[1])
-                                                - self._spec.basis_eval_full(v[0], v[1], v[2], pj, lm1[0], lm1[1]))
-        
-        for pj in range(num_p):
-            for pi in range(num_p):
-                for lm1_idx,lm1 in enumerate(self._sph_harm_lm):
-                    for lm2_idx,lm2 in enumerate(self._sph_harm_lm):
+        # for pj in range(num_p): # k
+        #     for lm2_idx,lm2 in enumerate(sph_harm_lm): # qs
+        #         for lm1_idx,lm1 in enumerate(sph_harm_lm): # lm                                                                        
+        #             print("k: ",pj," qs : ",lm2," lm: ",lm1," value : ",qr[pj,lm2_idx,lm1_idx,:])
+        for pi in range(num_p):
+            for lm2_idx,lm2 in enumerate(sph_harm_lm):
+                for pj in range(num_p):
+                    for lm1_idx,lm1 in enumerate(sph_harm_lm):
                         for qi,v_abs in enumerate(gmx):
-                            i_id = pi*num_sph_harm + lm1_idx
-                            j_id = pj*num_sph_harm + lm2_idx
-                            L_ij[i_id,j_id] += gmw[qi] * qr[pj, lm1_idx, lm2_idx, qi]  \
-                                * self._spec.basis_eval_radial(v_abs, pi)
+                            i_id = pi*num_sph_harm + lm2_idx
+                            j_id = pj*num_sph_harm + lm1_idx
+                            w_factor = ((v_abs**2 ) * maxwellian(v_abs)) / weight_func(v_abs)
+                            L_ij[i_id,j_id] += w_factor * gmw[qi] * qr[pj, lm2_idx, lm1_idx, qi]  \
+                                * spec.basis_eval_radial(v_abs, pi)
 
         return L_ij
+
+    

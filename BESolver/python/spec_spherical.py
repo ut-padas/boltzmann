@@ -3,7 +3,6 @@
 
 """
 import numpy as np
-from numpy.lib.twodim_base import diag
 import basis 
 from scipy.special import sph_harm
 import maxpoly # to perform integration over [0, +inf)
@@ -38,13 +37,16 @@ class SpectralExpansionSpherical:
             Y = np.sqrt(2) * (-1)**m * Y.imag
         elif m > 0:
             Y = np.sqrt(2) * (-1)**m * Y.real
-        return Y
+        else:
+            Y=Y.real
+
+        return Y 
     
-    def basis_eval_full(self,r,phi,theta,k,l,m):
+    def basis_eval_full(self,r,theta,phi,k,l,m):
         """
         Evaluates 
         """
-        return self._basis_1d[k](r) * self._sph_harm_real(l, m, phi, theta)
+        return self._basis_1d[k](r) * self._sph_harm_real(l, m, theta, phi)
     
     def basis_eval_radial(self,r,k):
         """
@@ -52,11 +54,11 @@ class SpectralExpansionSpherical:
         """
         return self._basis_1d[k](r)
     
-    def basis_eval_spherical(self,phi,theta,l,m):
+    def basis_eval_spherical(self, theta, phi,l,m):
         """
         Evaluates 
         """
-        return self._sph_harm_real(l, m, phi, theta)
+        return self._sph_harm_real(l, m, theta, phi)
 
     def create_vec(self,dtype=float):
         num_c = (self._p +1)*len(self._sph_harm_lm)
@@ -83,9 +85,7 @@ class SpectralExpansionSpherical:
         Given we always use spherical harmonics we will integrate them exactly
         """
         num_p = self._p+1
-
         num_sph_harm = len(self._sph_harm_lm)
-        
         [gx, gw] = self._basis_p.Gauss_Pn(num_p)
         
         # note : r_id, c_id defined inside the loops on purpose (loops become pure nested), assuming it will allow
@@ -97,8 +97,7 @@ class SpectralExpansionSpherical:
                     # quadrature loop. 
                     for qi,v_abs in enumerate(gx): # loop over quadrature points
                         r_id = pi*num_sph_harm + yi
-                        mm_diag[r_id] += gw[qi] \
-                            * self.basis_eval_radial(v_abs, pi)**2
+                        mm_diag[r_id] += gw[qi] * (self.basis_eval_radial(v_abs, pi)**2)
             return mm_diag
             
         else:
@@ -113,10 +112,39 @@ class SpectralExpansionSpherical:
                             for qi,v_abs in enumerate(gx): # loop over quadrature points
                                 r_id = pi*num_sph_harm + yi
                                 c_id = pj*num_sph_harm + yj
-                                mm[r_id,c_id]+= gw[qi] \
-                                    * self.basis_eval_radial(v_abs, pi) \
-                                    * self.basis_eval_radial(v_abs, pj)
+                                # this is only true for spherical harmonic basis. 
+                                if (yi is not yj):
+                                    continue
+                                mm[r_id,c_id]+= gw[qi] * self.basis_eval_radial(v_abs, pi) * self.basis_eval_radial(v_abs, pj)
             return mm
+
+    def compute_maxwellian_mm(self,maxwellian):
+        """
+        computs the the mass matrix w.r.t specified maxwellian
+        for generic maxwellian mm might not be diagonal. 
+        """
+        num_p = self._p+1
+        num_sph_harm = len(self._sph_harm_lm)
+        [gx, gw] = self._basis_p.Gauss_Pn(num_p)
+        w_func   =self._basis_p.Wx()
+        mm = self.create_mat()
+        # loop over polynomials i
+        for yi in range(num_sph_harm): # todo: optimize this out
+            for pi in range(num_p):
+                # loop over polynomials j
+                for yj in range(num_sph_harm): # todo: optimize this out
+                    for pj in range(num_p):
+                        # quadrature loop. 
+                        for qi,v_abs in enumerate(gx): # loop over quadrature points
+                            r_id = pi*num_sph_harm + yi
+                            c_id = pj*num_sph_harm + yj
+                            # this is only true for spherical harmonic basis. 
+                            if (yi is not yj):
+                                continue
+                            mr = (v_abs**2) * maxwellian(v_abs)/w_func(v_abs)
+                            mm[r_id,c_id]+= gw[qi] * mr * self.basis_eval_radial(v_abs, pi) * self.basis_eval_radial(v_abs, pj)
+        
+        return mm
 
     # todo
     # def compute_coefficients(self,func,mm_diag=None):

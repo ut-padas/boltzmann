@@ -6,8 +6,8 @@ import scipy.special
 # organized as [a00, a10, a11, a20, a21, a22, ... ], that is 
 # coefficients of n-degree polynomial are given by max_poly_coeffs[n*(n+1)/2]
 
-lagpoly_nmax = 20 # max degree allowed
-lagpoly_data = np.genfromtxt('/home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/lagpoly_upto20.dat',delimiter=',');
+lagpoly_nmax    = 20 # max degree allowed
+lagpoly_data    = np.genfromtxt('polynomials/lagpoly_upto20.dat',delimiter=',')
 lagpoly_coeffs  = lagpoly_data[:,0]
 lagpoly_nodes   = lagpoly_data[:,1]
 lagpoly_weights = lagpoly_data[:,2]

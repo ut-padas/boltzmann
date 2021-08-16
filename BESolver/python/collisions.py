@@ -8,6 +8,7 @@ for a given binary collision
     - cross section calculation
 """
 import abc
+from math import cos
 from operator import contains
 import numpy as np
 from numpy.linalg.linalg import norm
@@ -171,3 +172,37 @@ class eAr_G2(Collisions):
     def min_energy_threshold():
         return E_AR_IONIZATION_eV
 
+"""
+Simple test collision class to test
+the collision operator computation
+"""
+class eAr_TestCollision(Collisions):
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def total_cross_section(self, energy)->float:
+        #print("c")
+        return 1.0
+    
+    @staticmethod
+    def differential_cross_section(total_cross_section : float, energy : float, scattering_angle: float ) -> float:
+        """
+        computes the differential cross section from total cross section. 
+        """
+        #print(total_cross_section,energy," diff/total : ", (energy)/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) ))
+        v0 = np.sqrt(2*energy/MASS_ELECTRON)
+        return (v0 * np.cos(scattering_angle))/AR_NEUTRAL_N
+
+
+    @staticmethod
+    def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
+        v1_dir   = Collisions.compute_scattering_direction(v0,polar_angle, azimuthal_angle)
+        vel_fac  = np.linalg.norm(v0,2) 
+        v1       =  vel_fac  * v1_dir
+
+        return v1
+
+    @staticmethod
+    def min_energy_threshold():
+        return 0.0

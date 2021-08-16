@@ -23,7 +23,7 @@ h_vec = spec.create_vec()
 h_vec  = np.ones_like(h_vec)
 #h_vec[0] = 1
 #h_vec[1] = 1
-plot_domain = np.array([[-5,5],[-5,5]])
+plot_domain = np.array([[-3,3],[-3,3]])
 
 #maxwellian = basis.Maxwell().Wx()
 print("""===========================Parameters ======================""")
@@ -67,15 +67,16 @@ ts = ets.ExplicitODEIntegrator(ets.TSType.RK4)
 ts.set_ts_size(params.BEVelocitySpace.VELOCITY_SPACE_DT)
 ts.set_rhs_func(col_op_rhs)
 
-X= np.linspace(-4,4,80)
-Y= np.linspace(-4,4,80)
+X= np.linspace(-3,3,80)
+Y= np.linspace(-3,3,80)
 
+im_count=0
 while ts.current_ts()[0] < 1000:
     ts_info = ts.current_ts()
     if ts_info[1] % params.BEVelocitySpace.IO_STEP_FREQ == 0:
         print("time stepper current time ",ts_info[0])
         print(h_vec)
-        fname = params.BEVelocitySpace.IO_FILE_NAME_PREFIX %ts_info[1]
+        fname = params.BEVelocitySpace.IO_FILE_NAME_PREFIX % im_count
         visualize_utils.plot_f_z_slice(h_vec,maxwellian,spec,X,Y,fname,0.0)
         # plt.title("T=%.2f"%ts_info[0])
         # plt.imshow(u[:,:,z_slice_index,0])
@@ -84,6 +85,7 @@ while ts.current_ts()[0] < 1000:
         # #print(fname)
         # plt.savefig(fname)
         # plt.close()
+        im_count+=1
         
     
     #v= np.zeros(u.shape)

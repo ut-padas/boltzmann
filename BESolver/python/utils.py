@@ -35,11 +35,10 @@ def gaussian(v,mu=None,sigma=1.0):
 
 def cartesian_to_spherical(vx,vy,vz):
     v_abs = np.sqrt(vx**2 + vy**2 + vz**2)
-    if np.allclose(v_abs,0):
-        print("zero vector- dected")
-        return [0,0,0]
+    if np.allclose(v_abs,0.0):
+        return [0.0,0.0,0.0]
     
-    if np.allclose(vx,0):
+    if np.allclose(vx,0.0):
         return [v_abs, np.arccos(vz/v_abs), np.pi/2]
         
     return [v_abs, np.arccos(vz/v_abs), np.arctan(vy/vx)]

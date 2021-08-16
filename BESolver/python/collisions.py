@@ -26,6 +26,7 @@ ELECTRON_VOLT       = scipy.constants.electron_volt
 BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_CRITICAL     = ELECTRON_VOLT/BOLTZMANN_CONST
 MAXWELLIAN_TEMP_K   = TEMP_K_CRITICAL
+AR_NEUTRAL_N        = 1e12
 MAXWELLIAN_N        = 1e15
 ELECTRON_THEMAL_VEL = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
 
@@ -58,7 +59,7 @@ class Collisions(abc.ABC):
         # theta computation
         theta = np.arccos(np.dot(E0,ei))
         # the below is a special case where v0 is along the ei in that case choose E1 = ej, E2 = ek
-        if np.allclose(theta,0):
+        if np.allclose(theta,0.0) or np.allclose(theta,np.pi):
             E1 = np.array([0.0,1.0,0.0])
             E2 = np.array([0.0,0.0,1.0])
         else:

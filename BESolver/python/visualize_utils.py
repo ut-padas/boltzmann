@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from numpy.lib import meshgrid
 from numpy.ma import soften_mask
 import spec_spherical
+import utils
 
 def plot_density_distribution_iso(f,domain,sample_points):
     """
@@ -72,7 +73,7 @@ def plot_spec_coefficients(coeff,file_name=None):
     plt.close()
 
 
-def plot_f_zslice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , r_max,  r_res, phi_res,fname):
+def plot_f_theta_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , r_max,  r_res, phi_res,fname,theta=np.pi/2):
 
     phi_pts = np.linspace(0, 2*np.pi , int((2*np.pi)/phi_res))
     r_pts   = np.linspace(0, r_max   , int((r_max)/r_res))
@@ -89,7 +90,7 @@ def plot_f_zslice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherica
             for pi in range(num_p):
                 for lm_i, lm in enumerate(sh_lm):
                     rid = pi*num_sh + lm_i
-                    f_val[r_i, phi_i] += cf[rid] * maxwellian(r) * spec.basis_eval_full(r, np.pi/2, phi,pi,lm[0],lm[1]) 
+                    f_val[r_i, phi_i] += cf[rid] * maxwellian(r) * spec.basis_eval_full(r, theta, phi,pi,lm[0],lm[1]) 
 
 
     #plt.imshow(f_val)
@@ -111,6 +112,49 @@ def plot_f_zslice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherica
     # ax.set_xlabel(r'$\phi_\mathrm{real}$')
     # ax.set_ylabel(r'$\phi_\mathrm{im}$')
     # ax.set_zlabel(r'$V(\phi)$')
+    #plt.show()
+    plt.savefig(fname)
+    plt.close()
+
+
+def plot_f_z_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , X , Y, fname,z_val=0.0):
+
+    spherical_pts=list()
+
+    for y in Y:
+        for x in X:
+            spherical_pts.append(utils.cartesian_to_spherical(x,y,z_val))
+
+    num_pts = len(X)*len(Y)
+    f_val   = np.zeros(num_pts)
+
+    num_p   = spec._p + 1
+    sh_lm   = spec._sph_harm_lm
+    num_sh  = len(sh_lm) 
+
+    for pt_i,pt in enumerate(spherical_pts):
+        for pi in range(num_p):
+            for lm_i, lm in enumerate(sh_lm):
+                rid = pi*num_sh + lm_i
+                f_val[pt_i] += cf[rid] * maxwellian(pt[0]) * spec.basis_eval_full(pt[0], pt[1], pt[2], pi, lm[0], lm[1])
+
+    f_val=f_val.reshape((len(Y),len(X)))
+    plt.imshow(f_val)
+    plt.colorbar()
+    # plt.show()
+
+    # X,Y = np.meshgrid(X,Y)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(projection='3d')
+    # ax.plot_surface(X, Y, f_val, cmap=plt.cm.YlGnBu_r)
+
+    # # Tweak the limits and add latex math labels.
+    # # ax.set_zlim(0, 1)
+    # ax.set_xlabel(r'$X$')
+    # ax.set_ylabel(r'$Y$')
+    # ax.set_ylabel(r'$\phi_\mathrm{im}$')
+    # ax.set_zlabel(r'$V(\phi)$')
+    #plt.colorbar()
     #plt.show()
     plt.savefig(fname)
     plt.close()

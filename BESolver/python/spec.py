@@ -266,3 +266,33 @@ class SpectralExpansion:
         
 
 
+    def compute_maxwellian_mm(self,maxwellian):
+        """
+        computs the the mass matrix w.r.t specified maxwellian
+        for generic maxwellian mm might not be diagonal. 
+        """
+        num_p = self._p+1
+        [qx_1d, qw_1d] = self._basis_p.Gauss_Pn(num_p)
+        w_func   = self._basis_p.Wx()
+        mm = self.create_mat()
+
+        assert self._dim ==3 , "not implemented for dim %d " %self._dim
+
+        for pk in range(num_p):
+            for pj in range(num_p):
+                for pi in range(num_p):
+                    # loop over polynomials j
+                    for tk in range(num_p):
+                        for tj in range(num_p):
+                            for ti in range(num_p):
+                                # quadrature loop. 
+                                for qk,qz in enumerate(qx_1d):
+                                    for qj,qy in enumerate(qx_1d):
+                                        for qi,qx in enumerate(qx_1d):
+                                            r_id  = pk * (num_p**2) + pj * num_p + pi
+                                            c_id  = tk * (num_p**2) + tj * num_p + ti
+                                            v_abs = np.sqrt(qx**2 + qy**2 + qz**2) 
+                                            Mv    = maxwellian(v_abs)
+                                            w_fac = Mv/(w_func(v_abs))
+                                            mm[r_id,c_id]+= ( w_fac * qw_1d[qk] * qw_1d[qj] * qw_1d[qi] ) * ( self._basis_1d[pk](qz) * self._basis_1d[pj](qy) * self._basis_1d[pi](qx) ) * ( self._basis_1d[tk](qz) * self._basis_1d[tj](qy) * self._basis_1d[ti](qx) )
+        return mm

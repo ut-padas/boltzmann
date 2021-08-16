@@ -70,6 +70,7 @@ class CollisionOpSP():
         V_TH         = collisions.ELECTRON_THEMAL_VEL
         ELE_VOLT     = collisions.ELECTRON_VOLT
         MAXWELLIAN_N = collisions.MAXWELLIAN_N
+        AR_NEUTRAL_N = collisions.AR_NEUTRAL_N
 
         for qi,v_abs in enumerate(gmx): # loop over quadrature points radial
             # \int_S^2 from R^3 integral
@@ -96,7 +97,7 @@ class CollisionOpSP():
                                 for pj in range(num_p): # k
                                     for lm2_idx,lm2 in enumerate(sph_harm_lm): # qs
                                         for lm1_idx,lm1 in enumerate(sph_harm_lm): #lm
-                                            qr[pj, lm2_idx, lm1_idx, qi] += (MAXWELLIAN_N*(spherical_quadrature_fac**2) * glw[theta_i] * glw[v_theta_i] \
+                                            qr[pj, lm2_idx, lm1_idx, qi] += (AR_NEUTRAL_N*(spherical_quadrature_fac**2) * glw[theta_i] * glw[v_theta_i] \
                                                                         * spec.basis_eval_spherical(v_theta, v_phi, lm2[0], lm2[1]) \
                                                                         * diff_cs\
                                                                         * (mr*spec.basis_eval_full(v_sc[0], v_sc[1], v_sc[2], pj, lm1[0], lm1[1])  -   spec.basis_eval_full(v_abs,v_theta, v_phi, pj, lm1[0], lm1[1])))

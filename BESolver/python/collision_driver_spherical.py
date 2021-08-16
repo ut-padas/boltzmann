@@ -21,6 +21,8 @@ spec  = colOpSp.SPEC_SPHERICAL
 h_vec = spec.create_vec()
 #h_vec = np.random.rand(len(h_vec))
 h_vec  = np.ones_like(h_vec)
+#h_vec[0] = 1
+#h_vec[1] = 1
 plot_domain = np.array([[-5,5],[-5,5]])
 
 #maxwellian = basis.Maxwell().Wx()
@@ -61,9 +63,12 @@ if not os.path.exists('plots'):
 def col_op_rhs(u,t):
     return np.dot(invML,u)
 
-ts = ets.ExplicitODEIntegrator(ets.TSType.FORWARD_EULER)
+ts = ets.ExplicitODEIntegrator(ets.TSType.RK4)
 ts.set_ts_size(params.BEVelocitySpace.VELOCITY_SPACE_DT)
 ts.set_rhs_func(col_op_rhs)
+
+X= np.linspace(-4,4,80)
+Y= np.linspace(-4,4,80)
 
 while ts.current_ts()[0] < 1000:
     ts_info = ts.current_ts()
@@ -71,7 +76,7 @@ while ts.current_ts()[0] < 1000:
         print("time stepper current time ",ts_info[0])
         print(h_vec)
         fname = params.BEVelocitySpace.IO_FILE_NAME_PREFIX %ts_info[1]
-        visualize_utils.plot_f_zslice(h_vec,maxwellian,spec,5,1e-1,1e-1,fname)
+        visualize_utils.plot_f_z_slice(h_vec,maxwellian,spec,X,Y,fname,0.0)
         # plt.title("T=%.2f"%ts_info[0])
         # plt.imshow(u[:,:,z_slice_index,0])
         # plt.colorbar()

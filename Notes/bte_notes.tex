@@ -60,7 +60,7 @@ Assuming, that the neutral Ar atoms have $\delta(0)$ distribution in the velocit
 \subsection{Total and differential cross section}
 For a given total cross section value, the differential cross section, can be computed as follows\cite{vahedi1995monte}, where $\varepsilon= \frac{1}{2}mv^2$
 \begin{equation}
-    \sigma(\varepsilon,\chi) = \frac{\sigma(\chi)}{4\pi (1 + \varepsilon \sin^2(\chi/2))\ln(1+\varepsilon)} 
+    \sigma(\varepsilon,\chi) = \frac{\sigma(\chi)\varepsilon}{4\pi (1 + \varepsilon \sin^2(\chi/2))\ln(1+\varepsilon)} 
 \end{equation}
 
 \subsection{Post-collision velocity}
@@ -253,34 +253,34 @@ Let $H_k (x)$ be the sequence of Hermite polynomials, defined on $(\infty,infty)
 \end{equation} where, $x_i$ are the roots of $H_n(x)$, and $w_i$ are the corresponding weights for the Gaussian quadrature. 
 
 
-\subsection{Discretization of the integrals}
-\label{subsec:discretization_integrals}
-To perform discretization of the integrals in the velocity space we need to assume a finite bounded domain for the velocity space. 
+% \subsection{Discretization of the integrals}
+% \label{subsec:discretization_integrals}
+% To perform discretization of the integrals in the velocity space we need to assume a finite bounded domain for the velocity space. 
 
-\textbf{Note}: The integrand will decay exponentially with increasing values of $v$, due to the $M(v)$. Hence, assume velocity integral is evaluated on the bounded subspace $V\subset \R^3$.
+% \textbf{Note}: The integrand will decay exponentially with increasing values of $v$, due to the $M(v)$. Hence, assume velocity integral is evaluated on the bounded subspace $V\subset \R^3$.
 
-\textbf{Integral over $S^2$}: 
-\begin{align}
-    I(g) &= \int_{S^2} g(\omega) d\omega\\
-    I(g) &= \int_{0}^{2\pi} \int_{0}^{\pi} g(\theta,\phi) \sin\theta d\theta d\phi 
-\end{align}
+% \textbf{Integral over $S^2$}: 
+% \begin{align}
+%     I(g) &= \int_{S^2} g(\omega) d\omega\\
+%     I(g) &= \int_{0}^{2\pi} \int_{0}^{\pi} g(\theta,\phi) \sin\theta d\theta d\phi 
+% \end{align}
 
-Let $M_s$ denotes the number of $\theta_i$ chosen such that, $cos\theta_i,w_i$ are the Gauss-Legendre nodes and weights on $[-1,1]$. $\phi_j = \frac{j\pi}{m}$  are evenly spaced in $[0,2\pi]$. Then the above quadrature accurate up to polynomials order of $2M_s-1$.
+% Let $M_s$ denotes the number of $\theta_i$ chosen such that, $cos\theta_i,w_i$ are the Gauss-Legendre nodes and weights on $[-1,1]$. $\phi_j = \frac{j\pi}{m}$  are evenly spaced in $[0,2\pi]$. Then the above quadrature accurate up to polynomials order of $2M_s-1$.
 
-\begin{equation}
-    I(g) = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} w_p g(\theta_p,\phi_q) \label{eq:sphere_quadrature}
-\end{equation}
+% \begin{equation}
+%     I(g) = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} w_p g(\theta_p,\phi_q) \label{eq:sphere_quadrature}
+% \end{equation}
 
-% \textbf{Integral over velocity space ($\R^3$)}: Note that, when $|v|\rightarrow \infty$, $M(v)\rightarrow 0$, hence the integrand decays exponentially. Let's choose, bounded domain $V$, such that $V\subset \R^3$, such that, integral $\int_{\R^3\setminus V} M(v) \square dv < \epsilon$, where $\epsilon >0$. 
+% % \textbf{Integral over velocity space ($\R^3$)}: Note that, when $|v|\rightarrow \infty$, $M(v)\rightarrow 0$, hence the integrand decays exponentially. Let's choose, bounded domain $V$, such that $V\subset \R^3$, such that, integral $\int_{\R^3\setminus V} M(v) \square dv < \epsilon$, where $\epsilon >0$. 
 
-\textbf{Integral over velocity space ($\R^3$)}: Let $x_r,w_r$ be the quadrature points, and weights in $\R^3$. For each velocity quadrature point and selected polynomial $P_j$, we can write the spherical quadrature as follows.  
-\begin{align}
-    Q(v_r)^{j} = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} &w_p (M(v^\prime(V_r,\theta_p,\phi_q))P_j(v^\prime(V_r,\theta_p,\phi_q))  -\\& M(v_r) P_j(v_r) ) \sin\theta_p B(|v_r|,\theta_p,\phi_k) \nonumber
-\end{align}
-Each $L_{ij}$ matrix entry can be computed as,  
-\begin{equation}
-    L_{ij} = \sum_{r} w_r Q(v_r)^{j}/w(v_r)
-\end{equation}
+% \textbf{Integral over velocity space ($\R^3$)}: Let $x_r,w_r$ be the quadrature points, and weights in $\R^3$. For each velocity quadrature point and selected polynomial $P_j$, we can write the spherical quadrature as follows.  
+% \begin{align}
+%     Q(v_r)^{j} = \frac{\pi}{m} \sum_{q=1}^{2M_s} \sum_{p=1}^{M_s} &w_p (M(v^\prime(V_r,\theta_p,\phi_q))P_j(v^\prime(V_r,\theta_p,\phi_q))  -\\& M(v_r) P_j(v_r) ) \sin\theta_p B(|v_r|,\theta_p,\phi_k) \nonumber
+% \end{align}
+% Each $L_{ij}$ matrix entry can be computed as,  
+% \begin{equation}
+%     L_{ij} = \sum_{r} w_r Q(v_r)^{j}/w(v_r)
+% \end{equation}
 
 
 

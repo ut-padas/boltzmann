@@ -27,8 +27,8 @@ ELECTRON_VOLT       = scipy.constants.electron_volt
 BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_CRITICAL     = ELECTRON_VOLT/BOLTZMANN_CONST
 MAXWELLIAN_TEMP_K   = TEMP_K_CRITICAL
-AR_NEUTRAL_N        = 1e12
-MAXWELLIAN_N        = 1e15
+AR_NEUTRAL_N        = 3.22e22 # 1/m^3
+MAXWELLIAN_N        = 3.22e22 # 1/m^3
 ELECTRON_THEMAL_VEL = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
 
 class Collisions(abc.ABC):

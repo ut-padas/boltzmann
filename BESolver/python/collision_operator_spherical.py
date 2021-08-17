@@ -93,7 +93,7 @@ class CollisionOpSP():
                                 v_sc         = utils.cartesian_to_spherical(v_sc1[0], v_sc1[1], v_sc1[2])
                                 # scale back to the thermal velocity
                                 v_sc[0]      = v_sc[0]/V_TH
-                                mr  = maxwellian(v_abs) / maxwellian(v_sc[0])
+                                mr  = maxwellian(v_sc[0]) / maxwellian(v_abs)
                                 for pj in range(num_p): # k
                                     for lm2_idx,lm2 in enumerate(sph_harm_lm): # qs
                                         for lm1_idx,lm1 in enumerate(sph_harm_lm): #lm
@@ -113,7 +113,7 @@ class CollisionOpSP():
                         for qi,v_abs in enumerate(gmx):
                             i_id = pi*num_sph_harm + lm2_idx
                             j_id = pj*num_sph_harm + lm1_idx
-                            w_factor = ((v_abs**2 ) * maxwellian(v_abs)) / weight_func(v_abs)
+                            w_factor = ((v_abs**2 ) * maxwellian(v_abs) * (V_TH**3)) / weight_func(v_abs)
                             L_ij[i_id,j_id] += w_factor * gmw[qi] * qr[pj, lm2_idx, lm1_idx, qi]  \
                                 * spec.basis_eval_radial(v_abs, pi)
 

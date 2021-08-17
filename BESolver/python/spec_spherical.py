@@ -38,7 +38,7 @@ class SpectralExpansionSpherical:
         elif m > 0:
             Y = np.sqrt(2) * (-1)**m * Y.real
         else:
-            Y=Y.real
+            Y = Y.real
 
         return Y 
     
@@ -118,7 +118,7 @@ class SpectralExpansionSpherical:
                                 mm[r_id,c_id]+= gw[qi] * self.basis_eval_radial(v_abs, pi) * self.basis_eval_radial(v_abs, pj)
             return mm
 
-    def compute_maxwellian_mm(self,maxwellian):
+    def compute_maxwellian_mm(self,maxwellian,v_th):
         """
         computs the the mass matrix w.r.t specified maxwellian
         for generic maxwellian mm might not be diagonal. 
@@ -141,7 +141,7 @@ class SpectralExpansionSpherical:
                             # this is only true for spherical harmonic basis. 
                             if (yi is not yj):
                                 continue
-                            mr = (v_abs**2) * maxwellian(v_abs)/w_func(v_abs)
+                            mr = ((v_abs**2) * maxwellian(v_abs) * (v_th**3))/w_func(v_abs)
                             mm[r_id,c_id]+= gw[qi] * mr * self.basis_eval_radial(v_abs, pi) * self.basis_eval_radial(v_abs, pj)
         
         return mm

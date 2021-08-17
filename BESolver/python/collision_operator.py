@@ -66,27 +66,27 @@ class CollisionOp3D():
         MAXWELLIAN_N = collisions.MAXWELLIAN_N
         AR_NEUTRAL_N = collisions.AR_NEUTRAL_N
 
-        for qk,vz in enumerate(ghx):
-            for qj,vy in enumerate(ghx):
-                for qi,vx in enumerate(ghx):
-                    v_in = np.array([vx*V_TH, vy*V_TH, vz*V_TH])
-                    energy_in_ev = (0.5*collisions.MASS_ELECTRON * (np.linalg.norm(v_in))**2) / ELE_VOLT
-                    if (energy_in_ev < collision.min_energy_threshold()):
-                        print("skipping energy : ", energy_in_ev," for v: ",v_in)
-                        continue
-                    total_cs     = collision.total_cross_section(energy_in_ev)
-                    for pk in range(num_p):
-                        for pj in range(num_p):
-                            for pi in range(num_p):
-                                # Pj
-                                for tk in range(num_p):
-                                    for tj in range(num_p):
-                                        for ti in range(num_p):
-                                            i_id       = pk * num_p * num_p + pj * num_p + pi
-                                            j_id       = tk * num_p * num_p + tj * num_p + ti
-                                            Mv         = maxwellian(np.sqrt(vx**2 + vy**2 + vz**2))
-                                            wf_inv     = (Mv/weight_func(np.sqrt(vx**2 + vy**2 + vz**2)))
-                                            L_ij[i_id,j_id] -= ((ghw[qi] * ghw[qj] * ghw[qk]) * wf_inv * spec.basis_eval3d(vx,vy,vz,(pi,pj,pk))*spec.basis_eval3d(vx,vy,vz,(ti,tj,tk))*total_cs*AR_NEUTRAL_N) 
+        # for qk,vz in enumerate(ghx):
+        #     for qj,vy in enumerate(ghx):
+        #         for qi,vx in enumerate(ghx):
+        #             v_in = np.array([vx*V_TH, vy*V_TH, vz*V_TH])
+        #             energy_in_ev = (0.5*collisions.MASS_ELECTRON * (np.linalg.norm(v_in))**2) / ELE_VOLT
+        #             if (energy_in_ev < collision.min_energy_threshold()):
+        #                 print("skipping energy : ", energy_in_ev," for v: ",v_in)
+        #                 continue
+        #             total_cs     = collision.total_cross_section(energy_in_ev)
+        #             for pk in range(num_p):
+        #                 for pj in range(num_p):
+        #                     for pi in range(num_p):
+        #                         # Pj
+        #                         for tk in range(num_p):
+        #                             for tj in range(num_p):
+        #                                 for ti in range(num_p):
+        #                                     i_id       = pk * num_p * num_p + pj * num_p + pi
+        #                                     j_id       = tk * num_p * num_p + tj * num_p + ti
+        #                                     Mv         = maxwellian(np.sqrt(vx**2 + vy**2 + vz**2))
+        #                                     wf_inv     = (Mv/weight_func(np.sqrt(vx**2 + vy**2 + vz**2)))
+        #                                     L_ij[i_id,j_id] -= ((ghw[qi] * ghw[qj] * ghw[qk]) * wf_inv * spec.basis_eval3d(vx,vy,vz,(pi,pj,pk))*spec.basis_eval3d(vx,vy,vz,(ti,tj,tk))*total_cs*AR_NEUTRAL_N) 
         
         
         # v'= v'(v_g,\chi,\phi)
@@ -130,6 +130,6 @@ class CollisionOp3D():
                                                     Pj_v       = spec.basis_eval3d(vx,vy,vz,(ti,tj,tk))
                                                     Mvs        = maxwellian(vs_th_abs)
                                                     wf_inv     = (1.0/weight_func(np.sqrt(vx**2 + vy**2 + vz**2)))
-                                                    L_ij[i_id,j_id] += (ghw[qi] * ghw[qj] * ghw[qk] * spherical_quadrature_fac * glw[theta_i] * AR_NEUTRAL_N * diff_cs * wf_inv * (Mvs*Pi_v * Pj_vs - Mv*Pi_v * Pj_v) )
+                                                    L_ij[i_id,j_id] += ( (V_TH**3) * ghw[qi] * ghw[qj] * ghw[qk] * spherical_quadrature_fac * glw[theta_i] * AR_NEUTRAL_N * diff_cs * wf_inv * (Mvs*Pi_v * Pj_vs - Mv*Pi_v * Pj_v) )
         
         return L_ij

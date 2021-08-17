@@ -36,7 +36,7 @@ col_g0 = collisions.eAr_G0()
 col_g1 = collisions.eAr_G1()
 col_g2 = collisions.eAr_G2()
 
-M  = spec.compute_maxwellian_mm(maxwellian)
+M  = spec.compute_maxwellian_mm(maxwellian, collisions.ELECTRON_THEMAL_VEL)
 
 print("Mass matrix w.r.t. Maxwellian\n")
 print(M)

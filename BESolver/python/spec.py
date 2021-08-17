@@ -266,7 +266,7 @@ class SpectralExpansion:
         
 
 
-    def compute_maxwellian_mm(self,maxwellian):
+    def compute_maxwellian_mm(self,maxwellian,v_th):
         """
         computs the the mass matrix w.r.t specified maxwellian
         for generic maxwellian mm might not be diagonal. 
@@ -293,6 +293,6 @@ class SpectralExpansion:
                                             c_id  = tk * (num_p**2) + tj * num_p + ti
                                             v_abs = np.sqrt(qx**2 + qy**2 + qz**2) 
                                             Mv    = maxwellian(v_abs)
-                                            w_fac = Mv/(w_func(v_abs))
+                                            w_fac = ( (v_th**3) * Mv)/(w_func(v_abs))
                                             mm[r_id,c_id]+= ( w_fac * qw_1d[qk] * qw_1d[qj] * qw_1d[qi] ) * ( self._basis_1d[pk](qz) * self._basis_1d[pj](qy) * self._basis_1d[pi](qx) ) * ( self._basis_1d[tk](qz) * self._basis_1d[tj](qy) * self._basis_1d[ti](qx) )
         return mm

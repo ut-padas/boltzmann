@@ -47,9 +47,9 @@ print(M)
 
 L_g0  = cf.assemble_mat(col_g0,maxwellian)
 L_g1  = cf.assemble_mat(col_g1,maxwellian)
-#L_g2  = cf.assemble_mat(col_g2,maxwellian)
+L_g2  = cf.assemble_mat(col_g2,maxwellian)
 
-L     = L_g0 + L_g1 #+ L_g2
+L     = L_g0 + L_g1 + L_g2
 print("Collision Op: \n")
 print(L)
 

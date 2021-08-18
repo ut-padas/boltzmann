@@ -16,12 +16,11 @@ import cross_section
 from scipy import interpolate
 import scipy.constants
 
-
 MASS_ELECTRON       = scipy.constants.m_e
 MASS_ARGON          = 6.6335209E-26 
 MASS_R_EARGON       = MASS_ELECTRON/MASS_ARGON
-E_AR_IONIZATION_eV  = 11.55
-E_AR_EXCITATION_eV  = 15.76
+E_AR_IONIZATION_eV  = 15.76
+E_AR_EXCITATION_eV  = 11.55
 ELECTRON_VOLT       = scipy.constants.electron_volt
 
 BOLTZMANN_CONST     = scipy.constants.Boltzmann
@@ -102,6 +101,13 @@ class Collisions(abc.ABC):
     def min_energy_threshold():
         pass
 
+
+class CollisionType():
+    EAR_G0=0
+    EAR_G1=1
+    EAR_G2=2
+
+
 """
 e + Ar -> e + Ar
 """
@@ -110,6 +116,7 @@ class eAr_G0(Collisions):
     def __init__(self) -> None:
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Elastic.txt")
+        self._type=CollisionType.EAR_G0
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -132,6 +139,7 @@ class eAr_G1(Collisions):
     def __init__(self) -> None:
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Excitation.txt")
+        self._type=CollisionType.EAR_G1
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -153,6 +161,7 @@ class eAr_G2(Collisions):
     def __init__(self) -> None:
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Ionization.txt")
+        self._type=CollisionType.EAR_G2
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -180,6 +189,7 @@ class eAr_TestCollision(Collisions):
 
     def __init__(self) -> None:
         super().__init__()
+        self._type=-1
 
     def total_cross_section(self, energy)->float:
         #print("c")

@@ -80,7 +80,7 @@ class CollisionOp3D():
                     v_in[2]   = vz * V_TH
                     energy_in_ev = (0.5*collisions.MASS_ELECTRON * (np.linalg.norm(v_in,2))**2) / ELE_VOLT
                     if (energy_in_ev <= collision.min_energy_threshold()):
-                        print("skipping energy (eV) : ", energy_in_ev," for v: ",v_in," ms^-1")
+                        print("skipping energy : ", energy_in_ev," for v: ",v_in," Eth : ", collision.min_energy_threshold()," col type: ",collision._type)
                         continue
                     total_cs     = collision.total_cross_section(energy_in_ev)
                     # spherical quadrature
@@ -90,23 +90,48 @@ class CollisionOp3D():
                             # solid angle for spherical quadrature points. 
                             #print(v_in)
                             vs      = collision.compute_scattering_velocity(v_in,theta,phi)
-                            vs_th   = vs/V_TH
-                            vs_th_abs = np.linalg.norm(vs_th,2)
-                            for pk in range(num_p):
-                                for pj in range(num_p):
-                                    for pi in range(num_p):
-                                        Pi_v = spec.basis_eval3d(vx,vy,vz,(pi,pj,pk))
-                                        Mv   = maxwellian(np.sqrt(vx**2 + vy**2 + vz**2))
-                                        # Pj
-                                        for tk in range(num_p):
-                                            for tj in range(num_p):
-                                                for ti in range(num_p):
-                                                    i_id       = pk * num_p * num_p + pj * num_p + pi
-                                                    j_id       = tk * num_p * num_p + tj * num_p + ti
-                                                    Pj_vs      = spec.basis_eval3d(vs_th[0],vs_th[1],vs_th[2],(ti,tj,tk))
-                                                    Pj_v       = spec.basis_eval3d(vx,vy,vz,(ti,tj,tk))
-                                                    Mvs        = maxwellian(vs_th_abs)
-                                                    wf_inv     = (1.0/weight_func(np.sqrt(vx**2 + vy**2 + vz**2)))
-                                                    L_ij[i_id,j_id] += ( (V_TH**3) * ghw[qi] * ghw[qj] * ghw[qk] * spherical_quadrature_fac * glw[theta_i] * AR_NEUTRAL_N * diff_cs * wf_inv * (Mvs*Pi_v * Pj_vs - Mv*Pi_v * Pj_v) )
+                            if(collision._type == collisions.CollisionType.EAR_G2):
+                                vs1_th   = vs[0]/V_TH
+                                vs2_th   = vs[1]/V_TH
+                                vs1_th_abs = np.linalg.norm(vs1_th,2)
+                                vs2_th_abs = np.linalg.norm(vs2_th,2)
+
+                                for pk in range(num_p):
+                                    for pj in range(num_p):
+                                        for pi in range(num_p):
+                                            Pi_v = spec.basis_eval3d(vx,vy,vz,(pi,pj,pk))
+                                            Mv   = maxwellian(np.sqrt(vx**2 + vy**2 + vz**2))
+                                            # Pj
+                                            for tk in range(num_p):
+                                                for tj in range(num_p):
+                                                    for ti in range(num_p):
+                                                        i_id       = pk * num_p * num_p + pj * num_p + pi
+                                                        j_id       = tk * num_p * num_p + tj * num_p + ti
+                                                        Pj_vs1     = spec.basis_eval3d(vs1_th[0],vs1_th[1],vs1_th[2],(ti,tj,tk))
+                                                        Pj_vs2     = spec.basis_eval3d(vs2_th[0],vs2_th[1],vs2_th[2],(ti,tj,tk))
+                                                        Pj_v       = spec.basis_eval3d(vx,vy,vz,(ti,tj,tk))
+                                                        Mvs1        = maxwellian(vs1_th_abs)
+                                                        Mvs2        = maxwellian(vs2_th_abs)
+                                                        wf_inv     = (1.0/weight_func(np.sqrt(vx**2 + vy**2 + vz**2)))
+                                                        L_ij[i_id,j_id] += ( (V_TH**3) * ghw[qi] * ghw[qj] * ghw[qk] * spherical_quadrature_fac * glw[theta_i] * AR_NEUTRAL_N * diff_cs * wf_inv * ( Mvs2 * Pi_v * Pj_vs2 + Mvs1 * Pi_v * Pj_vs1 - Mv * Pi_v * Pj_v) )
+                            else:
+                                vs_th   = vs/V_TH
+                                vs_th_abs = np.linalg.norm(vs_th,2)
+                                for pk in range(num_p):
+                                    for pj in range(num_p):
+                                        for pi in range(num_p):
+                                            Pi_v = spec.basis_eval3d(vx,vy,vz,(pi,pj,pk))
+                                            Mv   = maxwellian(np.sqrt(vx**2 + vy**2 + vz**2))
+                                            # Pj
+                                            for tk in range(num_p):
+                                                for tj in range(num_p):
+                                                    for ti in range(num_p):
+                                                        i_id       = pk * num_p * num_p + pj * num_p + pi
+                                                        j_id       = tk * num_p * num_p + tj * num_p + ti
+                                                        Pj_vs      = spec.basis_eval3d(vs_th[0],vs_th[1],vs_th[2],(ti,tj,tk))
+                                                        Pj_v       = spec.basis_eval3d(vx,vy,vz,(ti,tj,tk))
+                                                        Mvs        = maxwellian(vs_th_abs)
+                                                        wf_inv     = (1.0/weight_func(np.sqrt(vx**2 + vy**2 + vz**2)))
+                                                        L_ij[i_id,j_id] += ( (V_TH**3) * ghw[qi] * ghw[qj] * ghw[qk] * spherical_quadrature_fac * glw[theta_i] * AR_NEUTRAL_N * diff_cs * wf_inv * (Mvs*Pi_v * Pj_vs - Mv*Pi_v * Pj_v) )
         
         return L_ij

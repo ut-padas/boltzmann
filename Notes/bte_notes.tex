@@ -4,9 +4,17 @@
 \usepackage{amssymb}
 \usepackage{color}
 \input{premble.tex}
+\newcommand{\myint}[2]{\int\limits_{#1}^{#2}}
+\newcommand{\diff}[1]{\, d#1}
+\newcommand{\vect}[1]{\mathbf{#1}}
+\usepackage{mleftright}
+\newcommand{\of}[1]{\mleft( #1 \mright)}
+\newcommand{\ddt}[1]{\partial_t #1}
+\newcommand{\vth}{v_\textrm{th}}
+\newcommand{\reals}{\mathbb{R}}
 
 \title{Scalable deterministic numerical methods for the Boltzmann equation}
-%\author{Milinda Fernando and Geroge Biros}
+%\author{Milinda Fernando}
 %\date{February 2014}
 
 \begin{document}
@@ -52,15 +60,15 @@ The collision operator then defined as,
 \section{Electron - Ar collisions}
 \label{sec:col_op_torch}
 
-Assuming, that the neutral Ar atoms have $\delta(0)$ distribution in the velocity space and collision kernel $B$ approximation from experimental data, the above collusion operator simplifies to,
+Assuming, that the neutral Ar atoms have $n_0\delta(0)$ distribution in the velocity space, where $n_0$ denotes the Ar density, and collision kernel $B$ approximation from experimental data, the above collusion operator simplifies to,
 \begin{equation}
-    C(f) = \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega
+    C(f) = n_0 \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega
 \end{equation}
 
 \subsection{Total and differential cross section}
 For a given total cross section value, the differential cross section, can be computed as follows\cite{vahedi1995monte}, where $\varepsilon= \frac{1}{2}mv^2$
 \begin{equation}
-    \sigma(\varepsilon,\chi) = \frac{\sigma(\chi)\varepsilon}{4\pi (1 + \varepsilon \sin^2(\chi/2))\ln(1+\varepsilon)} 
+    \sigma(\varepsilon,\chi) = \frac{\sigma(\varepsilon)\varepsilon}{4\pi (1 + \varepsilon \sin^2(\chi/2))\ln(1+\varepsilon)} 
 \end{equation}
 
 \subsection{Post-collision velocity}
@@ -83,26 +91,26 @@ We can see that, $\hat{v_1}\cdot \hat{v_1}=1$, and $\hat{v_1} \cdot \hat{v_0}= \
 
 \subsection{G0 : $e + Ar \rightarrow e + Ar$ collision operator}
 \begin{equation}
-    C_{G0}(f) = \int_{\chi} \int_{\phi} (f(v_1) - f(v_0)) \norm{v_0} \sigma_{G0}(\norm{v_0},\omega) \sin\chi d\phi d\chi
+    C_{G0}(f) = n_0 \int_{\chi} \int_{\phi} (f(v_1) - f(v_0)) \norm{v_0} \sigma_{G0}(\norm{v_0},\omega) \sin\chi d\phi d\chi
 \end{equation}
 
 Let $\varepsilon_0 = 1/2 m \norm{v_0}^2_2$ , $\varepsilon_1 = 1/2 m \norm{v_1}^2_2$, for inelastic collisions the energy lost, modeled based on \cite{vahedi1995monte}, (relative energy loss)
 \begin{equation}
     \Delta \varepsilon = \frac{2m(1-cos\chi)}{M}
-\end{equation} where, $m,M$ denotes the mass of the electron and the Argon atom. Therefore the magnitude of the scattered velocity, can be written as, 
+\end{equation} where, $m,M$ denotes the mass of the electron and the argon atom. Therefore the magnitude of the scattered velocity, can be written as, 
 \begin{equation}
     \norm{v_1} = \norm{v_0} \sqrt{1- \frac{2m(1-cos\chi)}{M}}
 \end{equation} where the direction of $v_1$ is specified by $\hat{v_1}$ in (\ref{eq:scatter}).
 
 \subsection{G1 : $e + Ar \rightarrow e + Ar^*$ collision operator}
 \begin{equation}
-    C_{G1}(f) = \int_{\chi} \int_{\phi} (f(v_1) - f(v_0)) \norm{v_0} \sigma_{G1}(\norm{v_0},\omega) \sin\chi d\phi d\chi
+    C_{G1}(f) = n_0 \int_{\chi} \int_{\phi} (f(v_1) - f(v_0)) \norm{v_0} \sigma_{G1}(\norm{v_0},\omega) \sin\chi d\phi d\chi
 \end{equation}
-Let $E_{exc}$ be the energy threshold to trigger an excitation reaction, then we can write, 
+Let $\varepsilon_{exc}$ be the energy threshold to trigger an excitation reaction, then we can write, 
 \begin{align}
-    \frac{1}{2} m v_0 ^2  - E_{exc} &= \frac{1}{2} m v_1 ^2 \\
-    \norm{v_1} &= \sqrt{\norm{v_0}^2 - \frac{2E_{exc}}{m}}
-\end{align} where the direction of $v_1$ is specified by $\hat{v_1}$ in (\ref{eq:scatter}). Note that, we use excitation threshold of $E_{exc}=11.5eV$.
+    \frac{1}{2} m v_0 ^2  - \varepsilon_{exc} &= \frac{1}{2} m v_1 ^2 \\
+    \norm{v_1} &= \sqrt{\norm{v_0}^2 - \frac{2\varepsilon_{exc}}{m}}
+\end{align} where the direction of $v_1$ is specified by $\hat{v_1}$ in (\ref{eq:scatter}). Note that, we use excitation threshold of $\varepsilon_{exc}=11.5eV$.
 
 \subsection{G2 : $e + Ar \rightarrow e + Ar^+ + e$ collision operator}
 \begin{itemize}
@@ -110,13 +118,13 @@ Let $E_{exc}$ be the energy threshold to trigger an excitation reaction, then we
     \item $v_2$ : velocity of the ejected electron from Ar. 
 \end{itemize}
 \begin{equation}
-    C_{G2}(f) = \int_{\chi} \int_{\phi} (f(v_1) + f(v_2) - f(v_0)) \norm{v_0} \sigma_{G2}(\norm{v_0},\omega) \sin\chi d\phi d\chi
+    C_{G2}(f) = n_0 \int_{\chi} \int_{\phi} (f(v_1) + f(v_2) - f(v_0)) \norm{v_0} \sigma_{G2}(\norm{v_0},\omega) \sin\chi d\phi d\chi
 \end{equation}
 
-Let $E_{ion}$ be the energy threshold for the ionization reaction, then as in \cite{vahedi1995monte} we split the $E_0-E_{ion}$ equally among scattered and the ejected electron. i.e., $E_1 = 0.5 (E_0-E_{ion})$, $E_2 = 0.5 (E_0-E_{ion})$. Therefore, we can derive the velocity magnitudes of the scattered and ejected electrons as follows. 
+Let $\varepsilon_{ion}$ be the energy threshold for the ionization reaction, then as in \cite{vahedi1995monte} we split the $\varepsilon_0-\varepsilon_{ion}$ equally among scattered and the ejected electron. i.e., $\varepsilon_1 = 0.5 (\varepsilon_0-\varepsilon_{ion})$, $\varepsilon_2 = 0.5 (\varepsilon_0-\varepsilon_{ion})$. Therefore, we can derive the velocity magnitudes of the scattered and ejected electrons as follows. 
 \begin{align}
-    \norm{v_1} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{E_{ion}}{m}}\\
-    \norm{v_2} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{E_{ion}}{m}}
+    \norm{v_1} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{\varepsilon_{ion}}{m}}\\
+    \norm{v_2} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{\varepsilon_{ion}}{m}}
 \end{align}
 The direction of $v_1$ is given by $\hat{v_1}$ as in (\ref{eq:scatter}) and the direction of the $v_2$ derived based on the momentum conservation, assuming the momentum change in the Ar atom is negligible. 
 \begin{align}
@@ -152,19 +160,19 @@ The term $v\cdot \nabla_x f$ makes the distribution $f(v)$ at fixed $(t,x)$ coup
 \begin{equation}
     \partial_t f = \frac{1}{\epsilon}C(f,f) \label{eq:col_op}
 \end{equation}
-Note that without the transport term, for fixed $(t,v)$, for $x\neq x_*$ $f(x)$ and $f(x_*)$ can be evolved independently decoupled way. \emph{This allows, spatially subdivision based parallelization algorithms for the Boltzmann equation.}
+% Note that without the transport term, for fixed $(t,v)$, for $x\neq x_*$ $f(x)$ and $f(x_*)$ can be evolved independently decoupled way. \emph{This allows, spatially subdivision based parallelization algorithms for the Boltzmann equation.}
 
-\subsection{Properties of the collision operator}
-\label{subsec:collision_op_properties}
-For a given $\R^d$ velocity space,
-\begin{theorem}
-    The Boltzmann collision operator conserves few of it moments, namely, mass, momentum, and energy.
-    \begin{align}
-        \int_{\R^d} Q(f,f) dv  = 0 \\
-        \int_{\R^d} Q(f,f) v dv  = 0 \\
-        \int_{\R^d} Q(f,f) |v|^2dv  = 0 \\
-    \end{align}
-\end{theorem}
+% \subsection{Properties of the collision operator}
+% \label{subsec:collision_op_properties}
+% For a given $\R^d$ velocity space,
+% \begin{theorem}
+%     The Boltzmann collision operator conserves few of it moments, namely, mass, momentum, and energy.
+%     \begin{align}
+%         \int_{\R^d} Q(f,f) dv  = 0 \\
+%         \int_{\R^d} Q(f,f) v dv  = 0 \\
+%         \int_{\R^d} Q(f,f) |v|^2dv  = 0 \\
+%     \end{align}
+% \end{theorem}
 
 % The solution for (\ref{eq:col_op}) evolves towards steady state, defined as the Maxwellian, which is given by, 
 % \begin{equation}
@@ -226,8 +234,8 @@ Assuming finite dimensional expansion for fixed time $t$, on $f(v,t)$, we can wr
 % \end{align}
 For the above, By substituting, basis expansion for $f(v,t)$ we can write, 
 \begin{align}
-    \partial_t \int_{\R^3} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \phi(v) dv &= \int_{\R^3} \int_{S^2} M(v^\prime)\sum_{j=0}^{N_v} f_j(t) P_j(v^\prime) B(|v|,\omega) \phi(v) d\omega dv \nonumber \\
-    &-\int_{\R^3} \int_{S^2} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) B(|v|,\omega) \phi(v) d\omega dv
+    \partial_t \int_{\R^3} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \phi(v) dv &= \\\int_{\R^3} \int_{S^2} M(v^\prime)\sum_{j=0}^{N_v} f_j(t) P_j(v^\prime) & B(|v|,\omega) \phi(v) d\omega dv \nonumber \\
+    -\int_{\R^3} \int_{S^2} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) &B(|v|,\omega) \phi(v) d\omega dv
 \end{align}
 By choosing $\phi(v) = P_i(v)$, we can further simplify, 
 \begin{align}
@@ -311,6 +319,119 @@ Let $H_k (x)$ be the sequence of Hermite polynomials, defined on $(\infty,infty)
 %     \item How to ensure non-negativity of $f_e$ ? 
 %     \item Implicit or Explicit ? 
 % \end{itemize}
+
+\section{Maxwellian polynomials with spherical coordinates}
+
+For the electron-Boltzmann equation, the generalized weak form of the collision operator can be written as follows (note: velocity should be normalized by the thermal velocity).
+\begin{equation}
+    L_{ij} = n_0 \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv \label{eq:cOp}
+\end{equation}
+
+\begin{equation}
+    M_{ij} = \int_{\R^3} M(v) P_i(v)P_j(v) dv
+\end{equation}
+
+In spherical coordinates, the above becomes, 
+
+\begin{align*}
+    {L}_{k,l,m}^{p,q,s} &=n_0
+    \myint{0}{+\infty} 
+    v^2
+    P^p \of{\frac{v}{\vth}} 
+    \myint{S^2}{}
+    \myint{S^2}{}
+    B\of{v,\omega} Y^{qs}\of{v_\theta, v_\phi} 
+     \times
+    \\
+    & \times
+    \left(
+    M\of{v^\prime} P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime}
+    -
+    M\of{v} P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi}
+    \right)
+    \diff{\omega}
+    \diff{v_\omega}
+    \diff{v} 
+\end{align*}
+
+\begin{align*}
+    {M}_{k,l,m}^{p,q,s} &=
+    \myint{0}{+\infty} 
+    v^2
+    M\of{v} P^p \of{\frac{v}{\vth}}  P_k \of{\frac{v}{\vth}} \delta^{qs}_{lm}
+    \diff{v} 
+\end{align*}
+
+\subsection{Tensorized computation of ${L}_{k,l,m}^{p,q,s}$}
+
+\begin{align*}
+    {L}_{k,l,m}^{p,q,s} &= {L^{+}}_{k,l,m}^{p,q,s} - {L^{-}}_{k,l,m}^{p,q,s}
+\end{align*} where, 
+\begin{align*}
+    {L^{+}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
+                               \int_{S^2(v_\theta,v_\phi)}
+                               \int_{S^2(\chi,\gamma)} & 
+                               v^2 M(v^\prime) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime} |v|\sigma(|v|,\chi) d\omega d\omega_v dv \\
+    {L^{-}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
+                              \int_{S^2(v_\theta,v_\phi)}
+                              \int_{S^2(\chi,\gamma)} & 
+                              v^2 M(v) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi} |v|\sigma(|v|,\chi) d\omega d\omega_v dv
+\end{align*}
+
+The list of tensors that can be precomputed
+\begin{itemize}
+    \item $V_r$ - quadrature points on the radial direction (incident velocities)
+    \item $W_r$ - quadrature weights on the radial direction
+    \item $V_\theta$ - quadrature points on the polar direction 
+    \item $W_\theta$ - quadrature weights for theta
+    \item $V_\phi$ - quadrature points on the azimuthal direction 
+    \item $S_\chi$ - quadrature points on the scattering angle
+    \item $S_\gamma$ - quadrature points on the azimuthal angle (for scattering direction)
+    \item $W_\chi$ - quadrature weights
+    \item $\sigma_{r\chi}$ - differential cross section tensor (rank 2)
+    \item $Y_{lm}^{\theta\phi}$ - $lm$-mode spherical harmonic function evaluated at $(V_\theta, V_\phi)$. The sparse version (i.e., for given $l$ mode not selecting all the $m$ modes) , but generally can be considered as rank 4 tensor. 
+    \item $M_r$ - Maxwellian times $v_r$ evaluated at $V_r$
+    \item $P_{kr}$     - $k^{th}$ Maxwell polynomial evaluated at the $V_r$ $r^{th}$ location.
+\end{itemize}
+Notation : Same index up-down denotes contraction, $\otimes$ for kronecker product, same level index, same index (i.e., up-up, down down) denotes the element-wise multiplication. 
+The total cross section $\sigma_r$, can be written as, 
+\begin{align}
+    \sigma_r &= \frac{\pi}{|S\chi|} \sigma_{r,\chi} W^\chi
+\end{align}
+
+The weighted spherical harmonic tensor, 
+\begin{align}
+    \tilde{Y}^{qsr}_{\theta\phi} = \mleft({Y}^{qs}_{\theta\phi} W_\theta \frac{\pi}{|V\chi|} \mright) 
+\end{align}
+
+Then we can write, 
+\begin{align}
+    {L^{-}}_{k,l,m}^{p,q,s} &= ((P^p_r W_r \sigma_r) (P^r_k M^r) ) \otimes Y_{lm}^{\theta\phi} \tilde{Y}^{qs}_{\theta\phi} \\
+    {L^{-}}_{k,l,m}^{p,q,s} &= ((P^p_r W_r \sigma_r) (P^r_k M^r) ) \otimes \delta^{qs}\delta_{lm} %Y_{lm}^{\theta\phi} \tilde{Y}^{qs}_{\theta\phi} 
+\end{align}
+
+
+More additional tensors that we need to compute the $L^{+}$ component. 
+
+\begin{itemize}
+    \item $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$ : Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity (i.e., in G2 ejected electron). This is a rank 8 tensor where it might be too expensive to compute. For cases $G0$, $G1$ we can compute $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime} = {S^r}_{r^\prime} \otimes S^{\theta\phi\chi\gamma}_{\theta^\prime \phi^\prime}$ since radial component only depends on energy, while for reactions like $G2$ it's depends on both energy and direction (i.e., for momentum conservation).
+    \item ${Y^\prime}_{lm}^{\theta\phi}$ - lm spherical harmonic mode evaluated at the differed particle velocity direction
+    \item $P^{r\theta\phi\chi}_{k\gamma}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
+    \item $M^{r\theta\phi\chi}_{\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+    \item $Y^{r\theta\phi\chi\gamma}_{lm}$ - $lm$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+\end{itemize}
+
+For the general case, of the differed particle, (i.e., differed particle all velocity components are functions of $r,\theta,\phi,\chi,\gamma$) we can write the following. Note, $A$ is obtained for contraction on the $\gamma$ azimuthal of angle of the scattered particle, $B$ is obtained with contraction on the polar angle of the scattering direction, $C$ is obtained contraction on $(\theta,\phi)$ for the velocity space angular directions, and finally $L^{+}$ obtained using radical direction contraction. 
+
+\begin{align}
+    A^{r\theta\phi\chi}_{klm}  & =  ( P^{r\theta\phi\chi}_{k\gamma} M^{r\theta\phi\chi}_{\gamma} ) Y^{r\theta\phi\chi\gamma}_{lm} \\
+    B^{r\theta\phi}_{klm}      & = \frac{\pi}{|S_\gamma|} \sigma^{r\chi} (W_\chi A^{r\theta\phi}_{\chi klm}) \\
+    C^{rqs}_{klm}              & = \tilde{Y}^{qs}_{\theta\phi} B^{r\theta\phi}_{klm} \\
+    {L^{+}}_{k,l,m}^{p,q,s}     & = {P^p}_r C^{rqs}_{klm}
+\end{align}
+
+ 
+
 
 \bibliographystyle{plain}
 \bibliography{bte_notes.bib}

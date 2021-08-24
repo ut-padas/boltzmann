@@ -160,7 +160,7 @@ Q(f,f) &= \int_{R^3}\int_{S^2} B(|v-v_*|,\omega)
 \end{align*}
 \item \textbf{Main challenge}: 6+1 dimensions
 \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
-\item \textbf{So far}: homogeneous case
+\item \textbf{So far}: spatially homogeneous case $f = f(\vect{v}, t)$ to ensure efficiency of velocity-space discretization
 \begin{align*}
 \partial_t f = Q(f,f)
 \end{align*}
@@ -173,37 +173,72 @@ Q(f,f) &= \int_{R^3}\int_{S^2} B(|v-v_*|,\omega)
 \frametitle{Petrov-Galerkin approach}
 %
 \small
-\begin{align*}
+\begin{itemize}
+
+\item Weak formulation:
+$
+\displaystyle
+\quad
 \partial_t f = Q(f,f)
 \quad \rightarrow \quad
 \partial_t \myint{R^3}{} f \phi\of{\vect{v}} \ud \vect{v} =
 \myint{R^3}{} Q(f,f) \phi\of{\vect{v}} \ud \vect{v}
-\end{align*}
+$
 
+\item Solution as a perturbed Maxwellian:
 \begin{align*}
 f\of{\vect{v}} = M\of{v} h\of{\vect{v},t}
-, \quad
+, \quad\quad
 M\of{v} = \frac{n}{\left( \vth \sqrt{\pi} \right)^3} e^{-\left(\frac{v}{\vth}\right)^2}
 , \quad
 \vth = \sqrt{\frac{2kT}{m}}
 \end{align*}
+
+\item Expansion in basis functions:
 \begin{align*}
 h\of{\vect{v},t} =
-\sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi}
-\end{align*}
-\begin{align*}
-\myint{0}{+\infty} \frac{4}{\sqrt{\pi}} x^2 e^{-x^2} P_k\of{x} P_{k^\prime}\of{x} \ud x = \delta_{kk^\prime}
-\end{align*}
-\begin{align*}
-\myint{0}{+\infty} \frac{4}{\sqrt{\pi}} x^2 e^{-x^2} L_k\of{x^2} L_{k^\prime}\of{x^2} \ud x &= \delta_{kk^\prime}
+\sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi},
+\quad
+\quad
+\phi\of{\vect{v}} = \Phi_p\of{\frac{v}{\vth}} Y_{qs}\of{v_\theta, v_\phi}
 \end{align*}
 
+\item Resulting system of ODEs:
 \begin{align*}
-h\of{\vect{v},t} &\approx
-\sum_{k,l,m} h_{k,l,m} \of{t} P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi}
+\sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  L_{p,q,s}^{k,l,m} h_{k,l,m}\of{t}
+\end{align*}
+\end{itemize}
+%
+\end{frame}
+
+%===============================================================================
+\begin{frame}
+\frametitle{Investigation of different bases}
+%
+\begin{itemize}
+\item Choice of basis functions in radial direction
+\end{itemize}
+\small
+\begin{align*}
+\textrm{Assoc. Laguerre poly:}
+& \quad \Phi_n\of{v} = L_n\of{v^2}, &&
+\quad 
+\myint{0}{+\infty} v^2 e^{-v^2} L_n\of{v^2} L_{n^\prime}\of{v^2} \ud v \sim \delta_{nn^\prime}
 \\
-h\of{\vect{v},t} &\approx
-\sum_{k,l,m} h_{k,l,m} \of{t} L_k\of{\frac{v^2}{\vth^2}} Y_{lm}\of{v_\theta, v_\phi}
+\textrm{Maxwell (speed) poly:}
+& \quad \Phi_n\of{v} = P_n\of{v}, &&
+\quad 
+\myint{0}{+\infty} v^2 e^{-v^2} P_n\of{v} P_{n^\prime}\of{v} \ud v \sim \delta_{nn^\prime}
+\\
+\textrm{Chebyshev poly:}
+& \quad \Phi_n\of{v} = C_n\of{v}, &&
+\quad 
+\myint{-1}{1} \left(1-v^2\right)^{-\frac12} C_n\of{v} C_{n^\prime}\of{v} \ud v \sim \delta_{nn^\prime}
+\\
+\textrm{Linear interp:}
+& \quad \Phi_n\of{v} = N_n\of{v}, &&
+\quad 
+N_n\of{v} = 1 - \frac{|x-x_n|}{\Delta x},\quad x_{n-1} < x < x_{n+1}
 \end{align*}
 
 %\begin{columns}
@@ -231,9 +266,34 @@ h\of{\vect{v},t} &\approx
 \begin{frame}
 \frametitle{Investigation of different bases}
 %
-\begin{center}
-   \includegraphics[height=2.in]{figures/bolsig_visual_lin.png}
-\end{center}
+\begin{columns}[T]
+\begin{column}{0.3\linewidth}
+\begin{itemize}
+\item Bolsig+ \cite{?} data for Ar 
+\item Included reactions:
+\hspace{-0.5in}
+\begin{itemize}
+\item Elastic: $e + \text{Ar} \rightarrow e + \text{Ar}$
+\item Excitation: $e + \text{Ar} \rightarrow e + \text{Ar}^*$
+\item Ionization: $e + \text{Ar} \rightarrow e + \text{Ar}^+ + e$
+\end{itemize}
+\item Electric field $E/N$:
+\begin{itemize}
+\item $1\times 10^{-26}\, \text{V} \cdot \text{m}^2$
+\item $1\times 10^{-24}\, \text{V} \cdot \text{m}^2$
+\item $7\times 10^{-24}\, \text{V} \cdot \text{m}^2$
+\item $1\times 10^{-23}\, \text{V} \cdot \text{m}^2$
+\item $6\times 10^{-19}\, \text{V} \cdot \text{m}^2$
+\end{itemize}
+\end{itemize}
+\end{column}
+\begin{column}{0.7\linewidth}
+  \vspace{-0.35in}
+  \begin{center}
+   \includegraphics[width=\textwidth]{figures/bolsig_visual_lin.png}
+  \end{center}
+\end{column}
+\end{columns}
 %
 \end{frame}
 
@@ -241,9 +301,33 @@ h\of{\vect{v},t} &\approx
 \begin{frame}
 \frametitle{Investigation of different bases}
 %
-\begin{center}
-   \includegraphics[height=2.in]{figures/bolsig_visual.png}
-\end{center}
+\begin{columns}[T]
+\begin{column}{0.3\linewidth}
+\begin{itemize}
+\item Bolsig+ \cite{?} data for Ar 
+\item Included reactions:
+\begin{itemize}
+\item Elastic: $e + \text{Ar} \rightarrow e + \text{Ar}$
+\item Excitation: $e + \text{Ar} \rightarrow e + \text{Ar}^*$
+\item Ionization: $e + \text{Ar} \rightarrow e + \text{Ar}^+ + e$
+\end{itemize}
+\item Electric field $E/N$:
+\begin{itemize}
+\item $1\times 10^{-26}\, \text{V} \cdot \text{m}^2$
+\item $1\times 10^{-24}\, \text{V} \cdot \text{m}^2$
+\item $7\times 10^{-24}\, \text{V} \cdot \text{m}^2$
+\item $1\times 10^{-23}\, \text{V} \cdot \text{m}^2$
+\item $6\times 10^{-19}\, \text{V} \cdot \text{m}^2$
+\end{itemize}
+\end{itemize}
+\end{column}
+\begin{column}{0.7\linewidth}
+  \vspace{-0.35in}
+  \begin{center}
+   \includegraphics[width=\textwidth]{figures/bolsig_visual.png}
+  \end{center}
+\end{column}
+\end{columns}
 %
 \end{frame}
 
@@ -251,9 +335,32 @@ h\of{\vect{v},t} &\approx
 \begin{frame}
 \frametitle{Investigation of different bases}
 %
-\begin{center}
-   \includegraphics[height=2.in]{figures/bolsig_convergence.png}
-\end{center}
+\begin{columns}[T]
+\begin{column}{0.3\linewidth}
+\begin{itemize}
+\item Error measures
+\begin{align*}
+L_\infty &= \max | f - f_{\text{app}} |
+\\
+L_2 &= \sqrt{\int | f - f_{\text{app}} |^2 \ud v}
+\\
+\epsilon_\text{el} &= | k_\text{el} - k_\text{el}^\text{app}|
+\\
+\epsilon_\text{ex} &= | k_\text{ex} - k_\text{ex}^\text{app}|
+\\
+\epsilon_\text{io} &= | k_\text{io} - k_\text{io}^\text{app}|
+\end{align*}
+where
+$k = \gamma \int \varepsilon \sigma f \ud \varepsilon$
+\end{itemize}
+\end{column}
+\begin{column}{0.7\linewidth}
+  \vspace{-0.35in}
+  \begin{center}
+   \includegraphics[width=\textwidth]{figures/bolsig_convergence.png}
+  \end{center}
+\end{column}
+\end{columns}
 %
 \end{frame}
 

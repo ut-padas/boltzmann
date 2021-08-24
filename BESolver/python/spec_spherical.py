@@ -146,6 +146,70 @@ class SpectralExpansionSpherical:
         
         return mm
 
+    def Vq_r(self, v_r, scale=1):
+        """
+        compute the basis Vandermonde for the all the basis function
+        for the specified quadrature points.  
+        """
+        num_p        = self._p+1
+        num_q_v_r    = len(v_r)
+
+        _shape = tuple([num_p]) + v_r.shape
+        Vq = np.zeros(_shape)
+
+        for i in range(num_p):
+            Vq[i] = scale * self.basis_eval_radial(v_r,i)
+        
+        return Vq
+
+    def Vq_sph_mg(self, v_theta, v_phi, scale=1):
+        """
+        compute the basis Vandermonde for the all the basis function
+        for the specified quadrature points.  
+        """
+
+        num_sph_harm = len(self._sph_harm_lm)
+        num_q_v_theta   = len(v_theta)
+        num_q_v_phi     = len(v_phi)
+
+        [Vt,Vp]      = np.meshgrid(v_theta, v_phi,indexing='ij')
+
+        Vq = np.zeros((num_sph_harm,num_q_v_theta,num_q_v_phi))
+
+        for lm_i, lm in enumerate(self._sph_harm_lm):
+            Vq[lm_i] = scale * self.basis_eval_spherical(Vt,Vp,lm[0],lm[1])
+        
+        return Vq
+
+    def Vq_sph(self, v_theta, v_phi, scale=1):
+        """
+        compute the basis Vandermonde for the all the basis function
+        for the specified quadrature points.  
+        """
+
+        num_sph_harm = len(self._sph_harm_lm)
+        assert v_theta.shape == v_phi.shape, "invalid shapes, use mesh grid to get matching shapes"
+        _shape = tuple([num_sph_harm]) + v_theta.shape
+        Vq = np.zeros(_shape)
+
+        for lm_i, lm in enumerate(self._sph_harm_lm):
+            Vq[lm_i] = scale * self.basis_eval_spherical(v_theta,v_phi,lm[0],lm[1])
+        
+        return Vq
+
+    def Vq_full(self, v_r, v_theta, v_phi, scale=1):
+        """
+        compute the basis Vandermonde for the all the basis function
+        for the specified quadrature points.  
+        """
+
+        V_r_q   = self.Vq_r(v_r,1.0)
+        V_sph_q = self.Vq_sph(v_theta,v_phi,1.0)
+        Vq= np.kron(V_r_q,V_sph_q)
+        
+        return Vq
+
+
     # todo
     # def compute_coefficients(self,func,mm_diag=None):
     #     """

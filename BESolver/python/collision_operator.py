@@ -40,13 +40,23 @@ class CollisionOp3D():
         self._spec = SPEC_HERMITE_E
 
     @staticmethod
-    def assemble_mat(collision : collisions.Collisions , maxwellian):
+    def assemble_mat(collision : collisions.Collisions , maxwellian,qv_pts=None, qs_pts=None):
         spec          = SPEC_HERMITE_E
         dim           = spec._dim
         num_p         = spec._p + 1
-        num_q_v       = params.BEVelocitySpace().NUM_Q_PTS_ON_V
-        num_q_s       = params.BEVelocitySpace().NUM_Q_PTS_ON_SPHERE
 
+        if qv_pts is None:
+            num_q_v      = params.BEVelocitySpace.NUM_Q_PTS_ON_V
+        else:
+            num_q_v      = qv_pts
+        
+        if qs_pts is None:
+            num_q_s = params.BEVelocitySpace.NUM_Q_PTS_ON_SPHERE
+        else:
+            num_q_s = qs_pts
+        
+        print("collision operator for %d num_qv= %d num_qs=%d " %(collision._type,num_q_v,num_q_s))
+        
         [ghx,ghw]     = spec._basis_p.Gauss_Pn(num_q_v)
         weight_func   = spec._basis_p.Wx()
 

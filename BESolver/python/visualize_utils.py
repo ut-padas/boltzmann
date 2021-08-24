@@ -117,7 +117,7 @@ def plot_f_theta_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSph
     plt.close()
 
 
-def plot_f_z_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , X , Y, fname,z_val=0.0):
+def plot_f_z_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , X , Y, fname,z_val=0.0,title=""):
 
     spherical_pts=list()
 
@@ -139,14 +139,16 @@ def plot_f_z_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpheric
                 f_val[pt_i] += cf[rid] * maxwellian(pt[0]) * spec.basis_eval_full(pt[0], pt[1], pt[2], pi, lm[0], lm[1])
 
     f_val=f_val.reshape((len(Y),len(X)))
-    plt.imshow(f_val)
-    plt.colorbar()
+    #plt.title(title)
+    #plt.imshow(f_val)
+    #plt.colorbar()
     # plt.show()
 
-    # X,Y = np.meshgrid(X,Y)
-    # fig = plt.figure()
-    # ax = fig.add_subplot(projection='3d')
-    # ax.plot_surface(X, Y, f_val, cmap=plt.cm.YlGnBu_r)
+    X,Y = np.meshgrid(X,Y)
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.plot_surface(X, Y, f_val, cmap=plt.cm.YlGnBu_r)
+    ax.set_title(title)
 
     # # Tweak the limits and add latex math labels.
     # # ax.set_zlim(0, 1)

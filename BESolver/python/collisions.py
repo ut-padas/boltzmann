@@ -27,7 +27,7 @@ BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_1EV          = ELECTRON_VOLT/BOLTZMANN_CONST
 MAXWELLIAN_TEMP_K   = 1*TEMP_K_1EV
 AR_NEUTRAL_N        = 3.22e22 # 1/m^3
-MAXWELLIAN_N        = 1.00e12 # 1/m^3
+MAXWELLIAN_N        = 1.00e30 # 1/m^3
 ELECTRON_THEMAL_VEL = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
 
 class Collisions(abc.ABC):
@@ -263,8 +263,10 @@ class eAr_G1(Collisions):
     @staticmethod
     def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        vel_fac  = np.sqrt(vr**2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
-        vs[0]    = vel_fac
+        check1   = vr**2 > (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
+        vel_fac  = np.sqrt(vr[check1]**2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        vs[0][np.logical_not(check1)]=0
+        vs[0][check1] = vel_fac
         return vs
 
     @staticmethod
@@ -297,8 +299,8 @@ class eAr_G2(Collisions):
 
     @staticmethod
     def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        pass
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        check_1  = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
         v1_fac   = np.sqrt(0.5 * (vr**2)    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
         v2_fac   = v1_fac
 

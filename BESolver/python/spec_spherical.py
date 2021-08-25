@@ -141,7 +141,7 @@ class SpectralExpansionSpherical:
                             # this is only true for spherical harmonic basis. 
                             if (yi is not yj):
                                 continue
-                            mr = ((v_abs**2) * maxwellian(v_abs) * (v_th**3))/w_func(v_abs)
+                            mr = 1#((v_abs**2) * maxwellian(v_abs) * (v_th**3))/w_func(v_abs)
                             mm[r_id,c_id]+= gw[qi] * mr * self.basis_eval_radial(v_abs, pi) * self.basis_eval_radial(v_abs, pj)
         
         return mm

@@ -95,7 +95,8 @@ def Lp_v1(collision: collisions.Collisions, maxwellian):
     Sd    = g.compute_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
     Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
     Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
-    Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
+    #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
+    Mp_r  = np.exp((Sd[0]/V_TH)**2 - (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
     
     num_p  = spec_sp._p+1
     num_sh = len(spec_sp._sph_harm_lm)
@@ -128,55 +129,78 @@ def Lp_v1(collision: collisions.Collisions, maxwellian):
     return D_pqs_klm
 
 
+t1 = time.time()
+L_loop = Lp_l(g0,maxwellian) - Lm_l(g0,maxwellian)
+t2 = time.time()
+print("loop based (s) : %.10f" %(t2-t1))
+
+t1 = time.time()
+L_np   = Lp(g0,maxwellian) - Lm(g0,maxwellian)
+t2 = time.time()
+print("np(tensor) based (s) : %.10f" %(t2-t1))
+print("np(tensor) based |L_np| : %.10f" %(np.linalg.norm(L_np)))
+print("loop based |L_loop|     : %.10f" %(np.linalg.norm(L_loop)))
+print("loop based |L_np - L_loop|       : %.10f" %(np.linalg.norm(L_loop-L_np)))
+print("Relative diff (L_np - L_loop)/|L_loop|: ")
+print((L_np-L_loop)/np.linalg.norm(L_loop))
+
+
 # t1 = time.time()
 # Lm1 = Lm_l(g0,maxwellian)
 # t2 = time.time()
+# print("\nloop: \n")
+# print(Lm1)
 # print("loop based : %.10f" %(t2-t1))
 # t1 = time.time()
 # Lm2 = Lm(g0,maxwellian)
 # t2 = time.time()
 # print("np based : %.10f" %(t2-t1))
-# print(Lm1)
+# print("\nnp tensor format \n")
 # print(Lm2)
-# print(np.allclose((Lm2-Lm1)/np.max(Lm1),0))
+# print("diff : Lm2-Lm1)/np.linalg.norm(Lm1)")
+# print((Lm2-Lm1)/np.linalg.norm(Lm1))
 
 # t1 = time.time()
 # Lp1 = Lp_l(g0,maxwellian)
 # t2 = time.time()
+# print("\nloop: \n")
 # print(Lp1)
-# print("loop based : %.10f" %(t2-t1))
+# print("loop based (s) : %.10f" %(t2-t1))
 
 # t1 = time.time()
 # Lp2 = Lp(g0,maxwellian)
 # t2 = time.time()
-# print("np based : %.10f" %(t2-t1))
-# print((Lp2-Lp1)/np.max(Lp1))
+# print("\nnp tensor format \n")
+# print(Lp2)
+# print("np based (s) : %.10f" %(t2-t1))
+# print("diff : (Lp2-Lp1)/np.linalg.norm(Lp1)")
+# print((Lp2-Lp1)/np.linalg.norm(Lp1))
 
-params.BEVelocitySpace.NUM_Q_VR                   = 2
-params.BEVelocitySpace.NUM_Q_VT                   = 10
-params.BEVelocitySpace.NUM_Q_VP                   = 10
-params.BEVelocitySpace.NUM_Q_CHI                  = 2
-params.BEVelocitySpace.NUM_Q_PHI                  = 10
+# params.BEVelocitySpace.NUM_Q_VR                   = 10
+# params.BEVelocitySpace.NUM_Q_VT                   = 5
+# params.BEVelocitySpace.NUM_Q_VP                   = 2
+# params.BEVelocitySpace.NUM_Q_CHI                  = 2
+# params.BEVelocitySpace.NUM_Q_PHI                  = 5
 
-L0=Lp(g0,maxwellian)
-for i in range(20):
-    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
-    #params.BEVelocitySpace.NUM_Q_VT                   = 2 * params.BEVelocitySpace.NUM_Q_VT
-    #params.BEVelocitySpace.NUM_Q_VP                   = 2 * params.BEVelocitySpace.NUM_Q_VP
-    params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
-    #params.BEVelocitySpace.NUM_Q_PHI                  = 2 * params.BEVelocitySpace.NUM_Q_PHI
+# L0=Lp(g0,maxwellian)
+# for i in range(20):
+#     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+#     params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
+#     #params.BEVelocitySpace.NUM_Q_VT                   = 2 * params.BEVelocitySpace.NUM_Q_VT
+#     #params.BEVelocitySpace.NUM_Q_VP                   = 2 * params.BEVelocitySpace.NUM_Q_VP
+#     params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
+#     #params.BEVelocitySpace.NUM_Q_PHI                  = 2 * params.BEVelocitySpace.NUM_Q_PHI
 
-    L1=Lp(g0,maxwellian)
-    print("L0")
-    print(L0)
+#     L1=Lp(g0,maxwellian)
+#     print("L0")
+#     print(L0)
 
-    print("L1")
-    print(L1)
-    print("(L1-L0)/L0")
-    print((L1-L0)/L0)
+#     print("L1")
+#     print(L1)
+#     print("(L1-L0)/np.linalg.norm(L0,ord='fro')")
+#     print((L1-L0)/np.linalg.norm(L0,ord='fro'))
 
-    L0=L1
+#     L0=L1
 
     
 

@@ -209,7 +209,8 @@ class CollisionOpSP():
         total_cs_q = AR_NEUTRAL_N * g.total_cross_section(energy_ev)
         
         P_kr = spec_sp.Vq_r(gmx)
-        M_r  = maxwellian(gmx) * ( (gmx*V_TH)**3) * ((V_TH)/weight_func(gmx))
+        #M_r  = maxwellian(gmx) * ( (gmx*V_TH)**3) * ((V_TH)/weight_func(gmx))
+        M_r  = gmx* V_TH
         
         C_r  = M_r * (total_cs_q)
         Wg = gmw.reshape(-1,len(gmw))
@@ -297,7 +298,8 @@ class CollisionOpSP():
         
         Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
         Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
-        Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
+        #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
+        Mp_r  = np.exp((Sd[0]/V_TH)**2 - (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
         
         num_p  = spec_sp._p+1
         num_sh = len(spec_sp._sph_harm_lm)
@@ -400,7 +402,8 @@ class CollisionOpSP():
             m_in         = maxwellian(v_abs)
             energy_in_ev = (0.5*collisions.MASS_ELECTRON * (v_abs * V_TH)**2) / ELE_VOLT
             total_cs     = AR_NEUTRAL_N* g.total_cross_section(energy_in_ev)
-            w_factor = (((v_abs * V_TH)**3) * m_in * (V_TH)) / weight_func(v_abs)
+            #w_factor = (((v_abs * V_TH)**3) * m_in * (V_TH)) / weight_func(v_abs)
+            w_factor = (v_abs*V_TH)
             for pi in range(num_p):
                 for lm2_idx,lm2 in enumerate(sph_harm_lm):
                     for pj in range(num_p):
@@ -480,8 +483,9 @@ class CollisionOpSP():
                         for phi_i, phi in enumerate(Phi_q):
                             vs   = collision.compute_scattering_velocity_sp(v_abs*V_TH,v_theta,v_phi,theta,phi)
                             #print(vs)
-                            m_sc = maxwellian(vs[0]/V_TH)
-                            w_factor = (((v_abs*V_TH)**3 ) * m_sc * (V_TH)) / weight_func(v_abs)
+                            #m_sc = maxwellian(vs[0]/V_TH)
+                            #w_factor = (((v_abs*V_TH)**3 ) * m_sc * (V_TH)) / weight_func(v_abs)
+                            w_factor = np.exp((vs[0]/V_TH)**2 - (v_abs)**2) * (v_abs * V_TH)
                             #print("w_factor : ", w_factor)
                             for pi in range(num_p):
                                 for lm2_idx,lm2 in enumerate(sph_harm_lm):

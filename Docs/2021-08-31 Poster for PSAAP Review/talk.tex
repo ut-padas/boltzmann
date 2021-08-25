@@ -110,7 +110,7 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
   }
   {\color{burntorange} \tiny
     % -- define role, meeting event, location, etc
-    PSAAP III Annual Review $\cdot$ August 31, 2021
+    PSAAP III Annual Review $\cdot$ August 30-31, 2021
     % --
   }
 }
@@ -148,25 +148,67 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 \frametitle{Boltzmann equation}
 %
 \begin{itemize}
-\item Density function $f = f(\vect{x}, \vect{v}, t)$
+\item \textbf{Importance:} details of EDF $f_e = f_e(\vect{x}, \vect{v}, t)$ define transport and kinetic properties
+\item Evolution of EDF satisfies the Boltzmann equation
 \small
 \begin{align*}
-\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  + \vect{L} \cdot \nabla_{\vect{v }}f = Q(f,f)
+\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = \sum_{a} Q_a(f_e)
 \end{align*}
-where, for example, for binary reactions
+where for a given collision type $a=$ elastic, excitation, ionization, etc
 \begin{align*}
-Q(f,f) &= \int_{R^3}\int_{S^2} B(|v-v_*|,\omega) 
-\left( f(v^\prime)f(v_*^\prime) - f(v)f(v_*) \right) d\omega dv_*
+Q_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{scat. cross sec.}} 
+\left( f_e(v^\prime) - f_e(v) \right) \ud \omega 
 \end{align*}
 \item \textbf{Main challenge}: 6+1 dimensions
 \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
-\item \textbf{So far}: spatially homogeneous case $f = f(\vect{v}, t)$ to ensure efficiency of velocity-space discretization
+\item \textbf{Currently}: spatially homogeneous case $f = f(\vect{v}, t)$ to investigate efficient velocity-space discretizations
 \begin{align*}
 \partial_t f = Q(f,f)
 \end{align*}
 \end{itemize}
 %
 \end{frame}
+%
+%\begin{frame}
+%\frametitle{Boltzmann equation}
+%%
+%Boltzmann equation for electron-heavy neutral collisions can be modeled by, 
+%\begin{itemize}
+%\item Electron density function $f_e = f_e(\vect{x}, \vect{v}, t)$
+%\end{itemize}
+%\small
+%\begin{align*}
+%\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = Q(f_e)
+%\end{align*}
+%where, for example, for a given collision $a$
+%\begin{align*}
+%Q_a(f_e) &= n_0\int_{S^2} v \sigma_a(v,\omega) 
+%\left( f(v^\prime) - f(v) \right) d\omega \text{ where } Q(f_e) = \sum_{a} Q_a(f_e)
+%\end{align*}
+%% \item \textbf{Main challenge}: 6+1 dimensions
+%% \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
+%% \item \textbf{So far}: spatially homogeneous case $f = f(\vect{v}, t)$ to ensure efficiency of velocity-space discretization
+%% \begin{align*}
+%% \partial_t f = Q(f,f)
+%% \end{align*}
+%% \end{itemize}
+%%
+%\end{frame}
+%
+%\begin{frame}{Challenges}
+%  \begin{itemize}
+%  \item \textbf{Dimensionality}  : Boltzmann equation is a 7d problem. 
+%  \item \textbf{Numerical methods} : Numerical method to use ? What basis expansions are best to use ?
+%  \item \textbf{Collision integral} : 5d integral evaluation. 
+%  \item \textbf{HPC challenges} : Parallelization, performance portability ... 
+%  %\item \textbf{Parallelization} : Efficient parallelization of the problem (i.e., partitioning challenges) specially in adaptive discretization environment. 
+%  \end{itemize}
+%  \ \\ \ \\ \ \\
+%\textbf{Currently working}: Solving the collision operator, i.e., 
+%\begin{align*}
+%\partial_t f_e = Q(f_e)
+%\end{align*}
+%\end{frame}
 
 %===============================================================================
 \begin{frame}
@@ -182,25 +224,26 @@ $
 \partial_t f = Q(f,f)
 \quad \rightarrow \quad
 \partial_t \myint{R^3}{} f \phi\of{\vect{v}} \ud \vect{v} =
-\myint{R^3}{} Q(f,f) \phi\of{\vect{v}} \ud \vect{v}
+\myint{R^3}{} Q(f) \phi\of{\vect{v}} \ud \vect{v}
 $
 
 \item Solution as a perturbed Maxwellian:
 \begin{align*}
 f\of{\vect{v}} = M\of{v} h\of{\vect{v},t}
 , \quad\quad
-M\of{v} = \frac{n}{\left( \vth \sqrt{\pi} \right)^3} e^{-\left(\frac{v}{\vth}\right)^2}
-, \quad
-\vth = \sqrt{\frac{2kT}{m}}
+%M\of{v} = \frac{n}{\left( \vth \sqrt{\pi} \right)^3} e^{-\left(\frac{v}{\vth}\right)^2}
+M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}
+%, \quad
+%\vth = \sqrt{\frac{2kT}{m}}
 \end{align*}
 
 \item Expansion in basis functions:
 \begin{align*}
 h\of{\vect{v},t} =
-\sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi},
+\sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{v} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}},
 \quad
 \quad
-\phi\of{\vect{v}} = \Phi_p\of{\frac{v}{\vth}} Y_{qs}\of{v_\theta, v_\phi}
+\phi\of{\vect{v}} = \Phi_p\of{v} Y_{qs}\of{v_\theta, v_\phi}
 \end{align*}
 
 \item Resulting system of ODEs:
@@ -304,7 +347,7 @@ N_n\of{v} = 1 - \frac{|x-x_n|}{\Delta x},\quad x_{n-1} < x < x_{n+1}
 \begin{columns}[T]
 \begin{column}{0.3\linewidth}
 \begin{itemize}
-\item Bolsig+ \cite{?} data for Ar 
+\item Bolsig+ data for Ar 
 \item Included reactions:
 \begin{itemize}
 \item Elastic: $e + \text{Ar} \rightarrow e + \text{Ar}$
@@ -339,19 +382,18 @@ N_n\of{v} = 1 - \frac{|x-x_n|}{\Delta x},\quad x_{n-1} < x < x_{n+1}
 \begin{column}{0.3\linewidth}
 \begin{itemize}
 \item Error measures
-\begin{align*}
-L_\infty &= \max | f - f_{\text{app}} |
-\\
-L_2 &= \sqrt{\int | f - f_{\text{app}} |^2 \ud v}
-\\
-\epsilon_\text{el} &= | k_\text{el} - k_\text{el}^\text{app}|
-\\
-\epsilon_\text{ex} &= | k_\text{ex} - k_\text{ex}^\text{app}|
-\\
-\epsilon_\text{io} &= | k_\text{io} - k_\text{io}^\text{app}|
-\end{align*}
-where
-$k = \gamma \int \varepsilon \sigma f \ud \varepsilon$
+\begin{itemize}
+\item EDF $f$ itself: $L_\infty$, $L_2$
+\item Reaction rate
+$k_a = \gamma \int \varepsilon \sigma_a f \ud \varepsilon$
+where 
+\\$a=$ elastic, excitation, collision
+\end{itemize}
+\item Takeaways:
+\begin{itemize}
+\item No obvious choice
+\item Needs further investigation
+\end{itemize}
 \end{itemize}
 \end{column}
 \begin{column}{0.7\linewidth}
@@ -379,3 +421,4 @@ $k = \gamma \int \varepsilon \sigma f \ud \varepsilon$
 
 %===============================================================================
 \end{document}
+

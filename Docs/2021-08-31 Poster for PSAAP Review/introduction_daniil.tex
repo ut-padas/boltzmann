@@ -1,0 +1,111 @@
+\documentclass[mathserif, aspectratio=169]{beamer}
+\usetheme{odenpecos}
+\setbeamertemplate{itemize/enumerate body begin}{\fontsize{8.8}{9}\selectfont}
+\setbeamertemplate{itemize/enumerate subbody begin}{\fontsize{7.5}{8}\selectfont}
+\setbeamertemplate{itemize/enumerate subsubbody begin}{\fontsize{7.5}{8}\selectfont}
+
+% default search path for figures
+\graphicspath{{./shared_figures/}{./figures/}}
+
+\newcommand{\zapspace}{\topsep=0pt\partopsep=0pt\itemsep=0pt\parskip=0pt}
+
+\usepackage{multicol}
+\usepackage{pict2e}
+\usepackage{esdiff}
+\usepackage{multimedia}
+\usepackage{verbatim}
+\usepackage{mhchem}
+
+\usepackage[percent]{overpic}
+\usepackage[absolute,overlay]{textpos}
+
+\newcommand{\overbar}[1]{\mkern 1.5mu\overline{\mkern-1.5mu#1\mkern-1.5mu}\mkern 1.5mu}
+\newcommand{\pp}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\dd}[2]{\frac{d #1}{d #2}}
+\newcommand{\DD}[2]{\frac{D #1}{D #2}}
+\newcommand{\mm}{\mathbf{minmod}}
+\def\etal{{\it et al~}}
+\newcommand{\be}{\begin{eqnarray}}
+\newcommand{\ee}{\end{eqnarray}}
+\newcommand{\mbb}[1]{\mathbb{#1}} % math blackboard bold
+\newcommand{\mcal}[1]{\mathcal{#1}} % math blackboard bold
+\newcommand{\mbf}[1]{\mathbf{#1}} % math bold face (for vectors)
+\newcommand{\sbf}[1]{\boldsymbol{#1}} % bold face for symbols
+\newcommand{\jump}[1]{\llbracket #1 \rrbracket} % jump operator
+\newcommand{\avg}[1]{\langle #1 \rangle} % average operator
+\newcommand{\rarrow}{\rightarrow}
+\newcommand{\Rarrow}{\Rightarrow}
+\newcommand{\LRarrow}{\Leftrightarrow}
+\newcommand{\vvvert}{|\kern-1pt|\kern-1pt|}
+\newcommand{\enorm}[1]{\vvvert #1 \vvvert}
+\newcommand{\nutil}{\tilde{\nu}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\Cov}{\mathrm{Cov}}
+
+
+\definecolor{MyDarkGreen}{rgb}{0,0.45,0.08}
+\newcommand{\myred}[1]{{\color{red} #1}}
+\newcommand{\myblue}[1]{{\color{blue} #1}}
+\newcommand{\mygreen}[1]{{\color{MyDarkGreen} #1}}
+
+\newcommand{\sa}{\nu_{\mathrm{sa}}}
+\newcommand{\tep}{\tilde{\epsilon}}
+\newcommand{\Ssd}{\mathcal{S}} % source term due to slow derivative
+\newcommand{\ud}{\,\mathrm{d}}
+
+\newcommand{\Mach}[1]{\ensuremath{\mbox{Ma}_{#1}}}
+\newcommand{\Reynolds}{\ensuremath{\mathit{Re}}}
+\newcommand{\DensityRat}{\ensuremath{\mathit{DR}}}
+\newcommand{\BlowRat}{\ensuremath{\mbox{BR}}}
+\newcommand{\VelRat}{\ensuremath{\mathit{VR}}}
+\newcommand{\Tau}{\ensuremath{\mathrm{T}}}
+
+\newcommand{\wall}     {\ensuremath{\mathrm{w}}}   % wall subindex
+\newcommand{\awall}    {\ensuremath{\mathrm{aw}}}  % adiabatic wall subindex
+
+\newcommand{\commentout}[1]{}
+
+\newcommand{\vect}[1]{\boldsymbol{#1}}
+\usepackage{mleftright}
+\newcommand{\of}[1]{\mleft( #1 \mright)}
+\newcommand{\vth}{v_{\textrm{th}}}
+\newcommand{\reals}{\mathbb{R}}
+\newcommand{\myint}[2]{\int\limits_{#1}^{#2}}
+
+\DeclareMathOperator{\variance}{Var}
+
+\begin{document}
+% disable nav
+\setbeamertemplate{navigation symbols}{}
+
+%===============================================================================
+\begin{frame}
+\frametitle{Daniil Bochkov}
+\begin{itemize}
+%\item BS ('12) and MS ('14) in Applied Math and Phys, Moscow Institute of Physics and Technology
+%\begin{itemize}
+%\item Electromagnetic simulations in geophysics
+%\item Modeling of porous flow of polymer solutions
+%\end{itemize}
+\item PHD in Mechanical Engineering, University of California Santa Barbara, Sep 2020
+\begin{itemize}
+\item Numerical Methods for PDEs and Moving Boundary Problems (Level-Set Methods)
+\begin{itemize}
+\item Self-assembly of free-surface block copolymers and polymer nanocomposites
+\item Shape optimization for Directed Self-Assembly
+\item Multialloy solidification, Epitaxial growth, Biofilm growth, Biomolecule electrostatics
+\end{itemize}
+\end{itemize}
+\item Joined UT Austin in Nov 2020 
+\begin{itemize}
+\item Characterization of model inadequacy in the context of block copolymer self-assembly
+\end{itemize}
+\item Joined PSAAP in Jul 2021, Team: Algorithms
+\item Responsibilities within PSAAP:
+\begin{itemize}
+\item Development of an efficient solver for deterministic Boltzmann equation to model electron kinetics
+\end{itemize}
+\end{itemize}
+\end{frame}
+%===============================================================================
+\end{document}

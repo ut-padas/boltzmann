@@ -94,14 +94,11 @@ class Collisions(abc.ABC):
         W= (-np.sin(az_1) * np.sin(v_theta_1) * np.sin(v_phi_1) * np.sin(chi_1) + \
              np.cos(v_theta_1) * (np.cos(chi_1) * f1 + np.cos(az_1) * np.cos(v_phi_1) *np.sin(v_theta_1) *np.sin(chi_1))) / f1
 
-        if(np.min(W)<-1 or np.max(W)>1):
-            c1=W>1
-            c2=W<-1
-            
-            print("====resetting following to [-1,1]====")
-            print(W[c1])
-            print(W[c2])
-
+        
+        if(len(W)>0 and (np.min(W)<-1 or np.max(W)>1)):
+            c1= W > 1.0
+            c2= W < -1.0
+            print("Scattering direction : arcos(W) , W(min,max) = (%.10f,%.10f)" %(np.min(W),np.max(W)))
             W[c1] =1.0
             W[c2]=-1.0
         

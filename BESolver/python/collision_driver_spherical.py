@@ -2,6 +2,7 @@
 @package Boltzmann collision operator solver. 
 """
 
+from numpy.linalg.linalg import eig
 import basis
 import spec_spherical as sp
 import numpy as np
@@ -13,6 +14,22 @@ import visualize_utils
 import ets 
 import os
 import matplotlib.pyplot as plt
+
+def ode_analytic(fOp):
+    w,v=np.linalg.eig(fOp)
+    
+
+params.BEVelocitySpace.NUM_Q_VR  = 2
+params.BEVelocitySpace.NUM_Q_VT  = 10
+params.BEVelocitySpace.NUM_Q_VP  = 5
+params.BEVelocitySpace.NUM_Q_CHI = 128
+params.BEVelocitySpace.NUM_Q_PHI = 5
+
+
+params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = 19
+params.BEVelocitySpace.SPH_HARM_LM = [[0,0], [1,0]]
+colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+
 # instance of the collision operator
 cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
 spec  = colOpSp.SPEC_SPHERICAL
@@ -52,7 +69,7 @@ L_g0  = cf.assemble_mat(col_g0,maxwellian)
 L_g1  = cf.assemble_mat(col_g1,maxwellian)
 #L_g2  = cf.assemble_mat(col_g2,maxwellian)
 
-L     = L_g0 + L_g1# + L_g2 #L_g0 #L_g0p #L_g0 #+ L_g2 #L_g0 + L_g1 + L_g2
+L     = L_g0 + L_g1
 print("Collision Op: \n")
 print(L)
 
@@ -60,10 +77,20 @@ invML = np.matmul(np.linalg.inv(M) , L)
 print("M^-1 L : \n")
 print(invML)
 
+w,v=np.linalg.eig(invML)
+print("eigen values: ")
+print(w)
+print(v)
+print(np.matmul(np.transpose(v),v))
+
+
+
+
 
 if not os.path.exists('plots'):
     print("creating folder `plots`, output will be written into it")
     os.makedirs('plots')
+
 
 
 def col_op_rhs(u,t):
@@ -72,11 +99,9 @@ def col_op_rhs(u,t):
 ts = ets.ExplicitODEIntegrator(ets.TSType.RK4)
 ts.set_ts_size(params.BEVelocitySpace.VELOCITY_SPACE_DT)
 ts.set_rhs_func(col_op_rhs)
-
 X = np.linspace(-3,3,80)
 Y = np.linspace(-3,3,80)
-T = 5e-9 
-
+T = 20e-9 
 h_vec_t=list()
 im_count=0
 while ts.current_ts()[0] < T:
@@ -85,8 +110,8 @@ while ts.current_ts()[0] < T:
         print("time stepper current time ",ts_info[0])
         print(h_vec)
         fname = params.BEVelocitySpace.IO_FILE_NAME_PREFIX % im_count
-        h_vec_t.append(h_vec)
-        #visualize_utils.plot_f_z_slice(h_vec,maxwellian,spec,X,Y,fname,0.0,"z=0 , t = %ss"%format(ts_info[0], ".6E"))
+        #h_vec_t.append(h_vec)
+        visualize_utils.plot_f_z_slice(h_vec,maxwellian,spec,X,Y,fname,0.0,"z=0 , t = %ss"%format(ts_info[0], ".6E"))
         # plt.title("T=%.2f"%ts_info[0])
         # plt.imshow(u[:,:,z_slice_index,0])
         # plt.colorbar()
@@ -95,29 +120,26 @@ while ts.current_ts()[0] < T:
         # plt.savefig(fname)
         # plt.close()
         im_count+=1
-        
-    
     #v= np.zeros(u.shape)
-    
     h_vec = ts.evolve(h_vec)
 
-h_vec_t = np.transpose(np.array(h_vec_t))
-ts      = np.linspace(0,T,h_vec_t.shape[1])
-#print(h_vec_t)
-#print(ts)
-num_pr   = params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1
-num_sh   = len(params.BEVelocitySpace.SPH_HARM_LM)
-sh_modes = params.BEVelocitySpace.SPH_HARM_LM
-fig, axs = plt.subplots(num_pr, num_sh)
-fig.set_size_inches(4.5*num_sh,4*num_pr,)
-for pk in range(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1):
-    for lm_i,lm in enumerate(sh_modes):
-        axs[pk, lm_i].plot(ts, h_vec_t[pk*num_sh + lm_i],'g-o')
-        axs[pk, lm_i].set_title("P_%d Ylm[%d, %d]" %(pk,lm[0],lm[1]))
+# h_vec_t = np.transpose(np.array(h_vec_t))
+# ts      = np.linspace(0,T,h_vec_t.shape[1])
+# #print(h_vec_t)
+# #print(ts)
+# num_pr   = params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1
+# num_sh   = len(params.BEVelocitySpace.SPH_HARM_LM)
+# sh_modes = params.BEVelocitySpace.SPH_HARM_LM
+# fig, axs = plt.subplots(num_pr, num_sh)
+# fig.set_size_inches(4.5*num_sh,4*num_pr,)
+# for pk in range(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1):
+#     for lm_i,lm in enumerate(sh_modes):
+#         axs[pk, lm_i].plot(ts, h_vec_t[pk*num_sh + lm_i],'g-o')
+#         axs[pk, lm_i].set_title("P_%d Ylm[%d, %d]" %(pk,lm[0],lm[1]))
 
 #plt.show()
-fig.savefig("coll_op_g0_g1_g2")
-np.savetxt("coll_op_g0_g1_g2.dat",h_vec_t)
+#fig.savefig("coll_op_g0_g1_g2")
+#np.savetxt("coll_op_g0_g1_g2.dat",h_vec_t)
 
 
 # axs[0, 0].plot(x, y)

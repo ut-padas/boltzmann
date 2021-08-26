@@ -5,10 +5,10 @@ for cross-section and numerically validate the result
 """
 from re import S
 
-from numpy.lib.function_base import diff
 import basis
 import numpy as np
 import math
+import spec_spherical as sp
 import collision_operator_spherical as colOpSp
 import collision_operator as colOp
 import collisions 
@@ -19,22 +19,13 @@ import os
 import utils as BEUtils
 import maxpoly
 import time
+import matplotlib.pyplot as plt
 
 NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
 NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
 NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-
 NUM_Q_CHI    = params.BEVelocitySpace.NUM_Q_CHI
 NUM_Q_PHI    = params.BEVelocitySpace.NUM_Q_PHI
-
-
-maxwellian = lambda x: (collisions.MAXWELLIAN_N / ((collisions.ELECTRON_THEMAL_VEL * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
-cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-spec_sp  = colOpSp.SPEC_SPHERICAL
-
-g0  = collisions.eAr_G0()
-g1  = collisions.eAr_G1()
-g2  = collisions.eAr_G1()
 
 def Lm_l(collision,maxwellian):
     return colOpSp.CollisionOpSP._Lm_l(collision,maxwellian)
@@ -129,78 +120,243 @@ def Lp_v1(collision: collisions.Collisions, maxwellian):
     return D_pqs_klm
 
 
-t1 = time.time()
-L_loop = Lp_l(g0,maxwellian) - Lm_l(g0,maxwellian)
-t2 = time.time()
-print("loop based (s) : %.10f" %(t2-t1))
-
-t1 = time.time()
-L_np   = Lp(g0,maxwellian) - Lm(g0,maxwellian)
-t2 = time.time()
-print("np(tensor) based (s) : %.10f" %(t2-t1))
-print("np(tensor) based |L_np| : %.10f" %(np.linalg.norm(L_np)))
-print("loop based |L_loop|     : %.10f" %(np.linalg.norm(L_loop)))
-print("loop based |L_np - L_loop|       : %.10f" %(np.linalg.norm(L_loop-L_np)))
-print("Relative diff (L_np - L_loop)/|L_loop|: ")
-print((L_np-L_loop)/np.linalg.norm(L_loop))
+maxwellian = lambda x: (collisions.MAXWELLIAN_N / ((collisions.ELECTRON_THEMAL_VEL * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
+g0  = collisions.eAr_G0()
+g1  = collisions.eAr_G1()
+g2  = collisions.eAr_G1()
 
 
-# t1 = time.time()
-# Lm1 = Lm_l(g0,maxwellian)
-# t2 = time.time()
-# print("\nloop: \n")
-# print(Lm1)
-# print("loop based : %.10f" %(t2-t1))
-# t1 = time.time()
-# Lm2 = Lm(g0,maxwellian)
-# t2 = time.time()
-# print("np based : %.10f" %(t2-t1))
-# print("\nnp tensor format \n")
-# print(Lm2)
-# print("diff : Lm2-Lm1)/np.linalg.norm(Lm1)")
-# print((Lm2-Lm1)/np.linalg.norm(Lm1))
 
-# t1 = time.time()
-# Lp1 = Lp_l(g0,maxwellian)
-# t2 = time.time()
-# print("\nloop: \n")
-# print(Lp1)
-# print("loop based (s) : %.10f" %(t2-t1))
+def collision_op_test():
+    params.BEVelocitySpace.NUM_Q_VR    = 10
+    params.BEVelocitySpace.NUM_Q_VT    = 5
+    params.BEVelocitySpace.NUM_Q_VP    = 2
+    params.BEVelocitySpace.NUM_Q_CHI   = 10
+    params.BEVelocitySpace.NUM_Q_PHI   = 2
+    
+    cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+    spec_sp  = colOpSp.SPEC_SPHERICAL
 
-# t1 = time.time()
-# Lp2 = Lp(g0,maxwellian)
-# t2 = time.time()
-# print("\nnp tensor format \n")
-# print(Lp2)
-# print("np based (s) : %.10f" %(t2-t1))
-# print("diff : (Lp2-Lp1)/np.linalg.norm(Lp1)")
-# print((Lp2-Lp1)/np.linalg.norm(Lp1))
+    t1 = time.time()
+    L_loop = Lp_l(g0,maxwellian) - Lm_l(g0,maxwellian)
+    t2 = time.time()
+    print("loop based (s) : %.10f" %(t2-t1))
 
-# params.BEVelocitySpace.NUM_Q_VR                   = 10
-# params.BEVelocitySpace.NUM_Q_VT                   = 5
-# params.BEVelocitySpace.NUM_Q_VP                   = 2
-# params.BEVelocitySpace.NUM_Q_CHI                  = 2
-# params.BEVelocitySpace.NUM_Q_PHI                  = 5
+    t1 = time.time()
+    L_np   = Lp(g0,maxwellian) - Lm(g0,maxwellian)
+    t2 = time.time()
+    print("np(tensor) based (s) : %.10f" %(t2-t1))
+    print("np(tensor) based |L_np| : %.10f" %(np.linalg.norm(L_np)))
+    print("loop based |L_loop|     : %.10f" %(np.linalg.norm(L_loop)))
+    print("loop based |L_np - L_loop|       : %.10f" %(np.linalg.norm(L_loop-L_np)))
+    print("Relative diff (L_np - L_loop)/|L_loop|: ")
+    print((L_np-L_loop)/np.linalg.norm(L_loop))
 
-# L0=Lp(g0,maxwellian)
-# for i in range(20):
-#     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-#     params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
-#     #params.BEVelocitySpace.NUM_Q_VT                   = 2 * params.BEVelocitySpace.NUM_Q_VT
-#     #params.BEVelocitySpace.NUM_Q_VP                   = 2 * params.BEVelocitySpace.NUM_Q_VP
-#     params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
-#     #params.BEVelocitySpace.NUM_Q_PHI                  = 2 * params.BEVelocitySpace.NUM_Q_PHI
 
-#     L1=Lp(g0,maxwellian)
-#     print("L0")
-#     print(L0)
+def collision_op_conv():
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
+    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0]]
+    params.BEVelocitySpace.NUM_Q_VR    = 20
+    params.BEVelocitySpace.NUM_Q_VT    = 10
+    params.BEVelocitySpace.NUM_Q_VP    = 10
+    params.BEVelocitySpace.NUM_Q_CHI   = 2
+    params.BEVelocitySpace.NUM_Q_PHI   = 10
 
-#     print("L1")
-#     print(L1)
-#     print("(L1-L0)/np.linalg.norm(L0,ord='fro')")
-#     print((L1-L0)/np.linalg.norm(L0,ord='fro'))
+    L0=Lp(g0,maxwellian)
+    for i in range(5):
+        print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+        params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
+        #params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
+        #params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
+        params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
+        #params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
 
-#     L0=L1
+        L1=Lp(g0,maxwellian)
+        print("L0")
+        print(L0)
+        print("L1")
+        print(L1)
+        print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+        L0=L1
+
+    print("Refine on scattering azimuthal angle")
+    params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
+    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    L1=Lp(g0,maxwellian)
+    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+    
+    L0=L1
+    print("Refine on V polar angle")
+    params.BEVelocitySpace.NUM_Q_PHI                 = params.BEVelocitySpace.NUM_Q_PHI//2
+    params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
+    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    L1=Lp(g0,maxwellian)
+    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+
+
+    L0=L1
+    print("Refine on V azimuthal angle")
+    params.BEVelocitySpace.NUM_Q_VT                 = params.BEVelocitySpace.NUM_Q_VT//2
+    params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
+    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    L1=Lp(g0,maxwellian)
+    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+
+
+
+
+    
+
+
+def analytical_time_integration(collision,maxwellian,h_init):
+
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
+    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0],[1,1]]
+    params.BEVelocitySpace.NUM_Q_VR    = 20
+    params.BEVelocitySpace.NUM_Q_VT    = 10
+    params.BEVelocitySpace.NUM_Q_VP    = 10
+    params.BEVelocitySpace.NUM_Q_CHI   = 64
+    params.BEVelocitySpace.NUM_Q_PHI   = 10
+    
+
+
+    colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+    cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    spec_sp  = colOpSp.SPEC_SPHERICAL
+
+    sph_modes = params.BEVelocitySpace.SPH_HARM_LM
+    num_p     = spec_sp._p +1
+    num_sh    = len(params.BEVelocitySpace.SPH_HARM_LM)
+
+    L    = cf_sp.assemble_mat(collision,maxwellian)
+    M    = spec_sp.compute_maxwellian_mm(collision,maxwellian)
+    FOp  = np.matmul(np.linalg.inv(M),L)
+    W,Q  = np.linalg.eig(FOp)
+    print(W)
+    Qinv = np.linalg.inv(Q)
+    #W    = np.diag(W)
+    #FOp1 = np.matmul(np.matmul(Q,np.diag(W)), Qinv)
+    #print(np.linalg.norm(FOp-FOp1))
+    #y_init = np.dot(Qinv,h_init)
+
+    # plt.plot(np.diag(W))
+    # plt.xlabel("klm mode")
+    # plt.ylabel("eigen value")
+    # plt.show()
+
+    h_init    = np.zeros(spec_sp.get_num_coefficients())
+    h_init[0] = 1.0
+    y_init    = np.dot(Qinv,h_init)
+    
+    #print([y_init[i] * Q[:,i] for i in range(num_p*num_sh)])
+    # print(Q)
+    # print(Q[:,0])
+    num_pts = 80
+    X = np.linspace(-5,5,num_pts)
+    Y = np.linspace(-5,5,num_pts)
+    Z = np.array([0])
+
+    X,Y,Z=np.meshgrid(X,Y,Z,indexing='ij')
+
+    R     = np.sqrt(X**2 + Y**2 + Z**2)
+    THETA = np.arccos(Z/R)
+    PHI   = np.arctan(Y/X)  
+
+    P_klm = np.array([np.exp(-R**2)*spec_sp.basis_eval_full(R,THETA,PHI,k,sph_modes[lm_i][0],sph_modes[lm_i][1]) for k in range(num_p) for lm_i in range(num_sh)])
+    #print(P_klm.shape)
+    P_klm = P_klm.reshape(num_p*num_sh,-1)
+    P_klm = np.transpose(P_klm)
+    #print(P_klm.shape)
+    #print(P_klm[:,3])
+
+    fun_sol = np.array([y_init[i] * Q[:,i] for i in range(num_p*num_sh)])
+    #print(fun_sol)
+    fun_sol = np.transpose(fun_sol)
+
+    print("check if original initial condition can be recovered: ")
+    print(fun_sol.sum(axis=1))
+
+    fun_sol_on_g = np.matmul(P_klm,fun_sol)
+    fun_sol_on_g = np.transpose(fun_sol_on_g)
+
+
+    #print(fun_sol)
+    # fun_sol_on_g = [np.dot(P_klm,fun_sol[i]) for ]
+    # fun_sol_on_g = np.transpose(fun_sol_on_g)
+    # fun_sol_on_g = fun_sol_on_g.reshape(num_p*num_sh,num_pts,num_pts)
+    #print(fun_sol_on_g)
+    #print(fun_sol_on_g.shape)
+
+    fig, axs = plt.subplots(num_p, num_sh)
+    fig.set_size_inches(6,16)
+    #fig.set_size_inches(3.5*num_sh, 5*num_p)
+    for pk in range(num_p):
+        for lm_i,lm in enumerate(sph_modes):
+            im=axs[pk, lm_i].imshow(fun_sol_on_g[pk*num_sh + lm_i].reshape(num_pts,num_pts))
+            plt.colorbar(im, ax=axs[pk, lm_i])
+            axs[pk, lm_i].set_title("P_%d Ylm[%d, %d], eig : %.5E" %(pk,lm[0],lm[1],W[pk*num_sh + lm_i]),fontsize = 6.0)
+            axs[pk, lm_i].tick_params(axis='both', which='major', labelsize=8)
+    plt.tight_layout()
+    plt.show()
+    fig.savefig("fun_sol")
+    
+    # print(y_init)
+    # print(Qinv[:,0])
+    # T      = 1e-2
+    # YT     = y_init*np.exp(np.diag(W)*T)
+    # HT     = np.dot(Q,YT)
+    # print(HT)
+
+
+
+
+
+
+
+
+
+
+    
+    #print(FOp -np.transpose(FOp))
+    
+    # print(FOp)
+    # print(np.transpose(FOp))
+    
+
+    # print(np.linalg.cond(FOp))
+    # D,U = np.linalg.eig(FOp)
+
+    # h_init    = np.zeros(spec_sp.get_num_coefficients())
+    # h_init[0] = 1.0
+
+    # print(np.allclose(np.matmul(np.matmul(U,np.diag(D)),np.linalg.inv(U)),FOp))
+    # print(np.linalg.norm(np.matmul(np.matmul(U,np.diag(D)),np.transpose(U))-FOp))
+    # print(FOp)
+
+    # print(np.linalg.norm(FOp-np.transpose(FOp)))
+    # # print(W)
+
+    # # #print(W)
+    # # print(np.abs(U))
+    # plt.plot(np.abs(D))
+    # plt.show()
+
+    # X= U * np.exp(W*T)
+    # print(X)
+
+    
+
+
+
+
+#collision_op_test()
+collision_op_conv()
+analytical_time_integration(g0,maxwellian,0)
+
+
+
+
 
     
 

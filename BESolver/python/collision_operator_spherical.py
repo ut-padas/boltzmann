@@ -181,7 +181,7 @@ class CollisionOpSP():
         VPhi_q        = np.linspace(0,2*np.pi,NUM_Q_VP)
 
         [glx_s,glw_s] = legendre.Gauss_Pn(NUM_Q_CHI)
-        Chi_q         = np.arccos(glw_s)
+        Chi_q         = np.arccos(glx_s)
         Phi_q         = np.linspace(0,2*np.pi,NUM_Q_PHI)
         
         assert NUM_Q_VP>1
@@ -268,7 +268,7 @@ class CollisionOpSP():
         VPhi_q        = np.linspace(0,2*np.pi,NUM_Q_VP)
 
         [glx_s,glw_s] = legendre.Gauss_Pn(NUM_Q_CHI)
-        Chi_q         = np.arccos(glw_s)
+        Chi_q         = np.arccos(glx_s)
         Phi_q         = np.linspace(0,2*np.pi,NUM_Q_PHI)
         
         assert NUM_Q_VP>1
@@ -303,6 +303,7 @@ class CollisionOpSP():
         
         num_p  = spec_sp._p+1
         num_sh = len(spec_sp._sph_harm_lm)
+        #print(num_sh)
 
         # Ap_klm1 = np.zeros(tuple([num_p,num_sh]) + incident_mg[0].shape)
         # for i in range(num_p):
@@ -373,7 +374,7 @@ class CollisionOpSP():
         VPhi_q        = np.linspace(0,2*np.pi,NUM_Q_VP)
 
         [glx_s,glw_s] = legendre.Gauss_Pn(NUM_Q_CHI)
-        Chi_q         = np.arccos(glw_s)
+        Chi_q         = np.arccos(glx_s)
         Phi_q         = np.linspace(0,2*np.pi,NUM_Q_PHI)
         
         assert NUM_Q_VP>1
@@ -450,7 +451,7 @@ class CollisionOpSP():
         VPhi_q        = np.linspace(0,2*np.pi,NUM_Q_VP)
 
         [glx_s,glw_s] = legendre.Gauss_Pn(NUM_Q_CHI)
-        Chi_q         = np.arccos(glw_s)
+        Chi_q         = np.arccos(glx_s)
         Phi_q         = np.linspace(0,2*np.pi,NUM_Q_PHI)
         
         assert NUM_Q_VP>1

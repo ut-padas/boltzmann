@@ -22,11 +22,11 @@ class BEVelocitySpace():
     #SPH_HARM_LM               = [[0,0], [1,-1], [1,0], [1,1], [2,-2],[2,-1],[2,0],[2,1],[2,2]] # , [3,0], [4,0]]
     SPH_HARM_LM                = [[0,0], [1,0]]
     #SPH_HARM_LM               = [[0,0]]
-    NUM_Q_VR                   = 10
+    NUM_Q_VR                   = 20
     NUM_Q_VT                   = 10
-    NUM_Q_VP                   = 5
-    NUM_Q_CHI                  = 512
-    NUM_Q_PHI                  = 5
+    NUM_Q_VP                   = 10
+    NUM_Q_CHI                  = 64
+    NUM_Q_PHI                  = 10
     NUM_Q_PTS_ON_V             = 20
     NUM_Q_PTS_ON_SPHERE        = 10 #np.max(NUM_Q_CHI,NUM_Q_VT)
 

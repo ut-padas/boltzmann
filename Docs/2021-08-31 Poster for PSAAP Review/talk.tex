@@ -105,12 +105,12 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 {\fontfamily{phv}\selectfont
   { \scriptsize
     % -- define presenter, authors here
-    Milinda Fernando, Daniil Bochkov, ...\newline
+    Milinda Fernando, Daniil Bochkov, Todd Oliver, George Biros\newline
     % --
   }
   {\color{burntorange} \tiny
     % -- define role, meeting event, location, etc
-    PSAAP III Annual Review $\cdot$ August 30-31, 2021
+    Year-1 Review $\cdot$ August, 2021 $\cdot$ Austin, TX
     % --
   }
 }
@@ -134,36 +134,29 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 
 %===============================================================================
 \begin{frame}
-\frametitle{Outline}
-\begin{itemize}
-  \item Boltzmann equation for electron kinetics
-  \item Petrov-Galerkin approach
-  \item Investigation of different bases
-  \item Implementation 
-\end{itemize}
-\end{frame}
-
-%===============================================================================
-\begin{frame}
 \frametitle{Boltzmann equation}
 %
 \begin{itemize}
-\item \textbf{Importance:} details of EDF $f_e = f_e(\vect{x}, \vect{v}, t)$ define transport and kinetic properties
-\item Evolution of EDF satisfies the Boltzmann equation
+\item \textbf{Importance:} 
+%Electron density function $f_e = f_e(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties
+Distribution function of electrons defines transport and kinetic properties
+\\
+$\rightarrow$ Need to couple plasma model with electron kinetics (Y3)
+\item Evolution of $f_e = f_e(\vect{x}, \vect{v}, t)$ obeys the \textbf{Boltzmann equation}
 \small
 \begin{align*}
-\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = \sum_{a} Q_a(f_e)
+\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = \sum_{a} C_a(f_e)
 \end{align*}
-where for a given collision type $a=$ elastic, excitation, ionization, etc
+where, for example, in case of $a=$ elastic collisions
 \begin{align*}
-Q_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{scat. cross sec.}} 
+C_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
 \left( f_e(v^\prime) - f_e(v) \right) \ud \omega 
 \end{align*}
 \item \textbf{Main challenge}: 6+1 dimensions
 \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
-\item \textbf{Currently}: spatially homogeneous case $f = f(\vect{v}, t)$ to investigate efficient velocity-space discretizations
+\item \textbf{Currently (Y1)}: spatially homogeneous case $f_e = f_e(\vect{v}, t)$ to investigate efficient velocity-space discretizations
 \begin{align*}
-\partial_t f = Q(f,f)
+\partial_t f_e = \sum_{a} C_a(f_e)
 \end{align*}
 \end{itemize}
 %
@@ -243,7 +236,7 @@ h\of{\vect{v},t} =
 \sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{v} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}},
 \quad
 \quad
-\phi\of{\vect{v}} = \Phi_p\of{v} Y_{qs}\of{v_\theta, v_\phi}
+\phi\of{\vect{v}} = \Phi_p\of{v} \underbrace{Y_{qs}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}
 \end{align*}
 
 \item Resulting system of ODEs:
@@ -312,7 +305,7 @@ N_n\of{v} = 1 - \frac{|x-x_n|}{\Delta x},\quad x_{n-1} < x < x_{n+1}
 \begin{columns}[T]
 \begin{column}{0.3\linewidth}
 \begin{itemize}
-\item Bolsig+ \cite{?} data for Ar 
+\item Bolsig+ data for Ar 
 \item Included reactions:
 \hspace{-0.5in}
 \begin{itemize}
@@ -410,11 +403,34 @@ where
 %===============================================================================
 
 \begin{frame}
-\frametitle{Implementation}
+\frametitle{Solver implementation}
 %
-\begin{center}
-   \includegraphics[height=2.in]{example-image-b}
-\end{center}
+\begin{columns}[T]
+\begin{column}{0.6\linewidth}
+\begin{itemize}
+\item Python 
+\item 5-dimensional integrations: 
+\begin{itemize}
+\item Tenzorized implementation
+\item 0.0093s vs 5.2256s loop-based
+\end{itemize}
+\item Flexible choice of basis functions in radial directions
+\item Reactions implemented
+\begin{itemize}
+\item Elastic: $e + \text{Ar} \rightarrow e + \text{Ar}$
+\item Excitation: $e + \text{Ar} \rightarrow e + \text{Ar}^*$
+\item Ionization: $e + \text{Ar} \rightarrow e + \text{Ar}^+ + e$
+\end{itemize}
+\item Currently: testing and verification
+\end{itemize}
+\end{column}
+\begin{column}{0.4\linewidth}
+  \vspace{-0.35in}
+  \begin{center}
+   \includegraphics[width=\textwidth]{figures/code.png}
+  \end{center}
+\end{column}
+\end{columns}
 %
 \end{frame}
 

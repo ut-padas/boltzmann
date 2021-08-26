@@ -80,32 +80,92 @@
 
 %===============================================================================
 \begin{frame}
-\frametitle{Daniil Bochkov}
+\begin{center}
+{Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin approach \\ 
+{\tiny Milinda Fernando, Daniil Bochkov, Todd Oliver, George Biros}}
+\end{center}
+%
+\scalebox{0.7}{
+\begin{columns}[T]
+\begin{column}{.71\linewidth}
 \begin{itemize}
-%\item BS ('12) and MS ('14) in Applied Math and Phys, Moscow Institute of Physics and Technology
+\item \textbf{Importance:} 
+%Electron density function $f_e = f_e(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties
+Distribution function of electrons defines transport and kinetic properties
+\\
+$\rightarrow$ Need to couple plasma model with electron kinetics (Y3)
+\item Evolution of $f_e = f_e(\vect{x}, \vect{v}, t)$ obeys the \textbf{Boltzmann equation}
+\begin{align*}
+\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = \sum_{a} C_a(f_e)
+\end{align*}
+where, for example, in case of $a=$ elastic collisions
+\begin{align*}
+C_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
+\left( f_e(v^\prime) - f_e(v) \right) \ud \omega 
+\end{align*}
+\item \textbf{Main challenge}: 6+1 dimensions
+\item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
+\item \textbf{Currently (Y1)}: spatially homogeneous case $f = f(\vect{v}, t)$ 
+\begin{align*}
+\partial_t f =  \sum_{a} C_a(f_e)
+\end{align*}
+to investigate efficient velocity-space discretizations
+\end{itemize}
+\end{column}
+\begin{column}{.71\linewidth}
+\begin{itemize}
+\item \textbf{Approach:} Petrov-Galerkin
+\begin{itemize}
+\item Nearly isotropic and symmetric $f$ $\rightarrow$ employ spherical harmonics
+\item Solution as a perturbed Maxwellian $M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}$: 
+\begin{align*}
+f\of{\vect{v}}
+= M\of{v} \sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{v} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}
+\quad \rightarrow \quad \text{ODEs for } h_{k,l,m} \of{t}
+%M\of{v} = \frac{n}{\left( \vth \sqrt{\pi} \right)^3} e^{-\left(\frac{v}{\vth}\right)^2}
+%M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}
+%, \quad
+%\vth = \sqrt{\frac{2kT}{m}}
+\end{align*}
+%\begin{align*}
+%\rightarrow \quad \sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  L_{p,q,s}^{k,l,m} h_{k,l,m}\of{t}
+%\end{align*}
+\end{itemize}
+\end{itemize}
+\begin{columns}[T]
+\begin{column}{.5\linewidth}
 %\begin{itemize}
-%\item Electromagnetic simulations in geophysics
-%\item Modeling of porous flow of polymer solutions
+%\item 
+\begin{itemize}
+\item[] \textbf{Results:}
+\item Invetigating choice of $\Phi_k(v)$:
+\begin{itemize}
+\item Tested Laguerre, Maxwell, Chebyshev, Linear polys using Bolsig+ data
+\end{itemize}
+\item Solver implementation:
+\begin{itemize}
+\item Python
+\item Tenzorized 5D integrations: \\0.0093s vs 5.2256s loop-based
+\item Arbitrary choice of $\Phi_k(v)$
+\item Reactions implemented:
+Elastic, Excitation, Ionization
+\item Testing and verification are underway
+\end{itemize}
+\end{itemize}
 %\end{itemize}
-\item PHD in Mechanical Engineering, University of California Santa Barbara, Sep 2020
-\begin{itemize}
-\item Numerical Methods for PDEs and Moving Boundary Problems (Level-Set Methods)
-\begin{itemize}
-\item Self-assembly of free-surface block copolymers and polymer nanocomposites
-\item Shape optimization for Directed Self-Assembly
-\item Multialloy solidification, Epitaxial growth, Biofilm growth, Biomolecule electrostatics
-\end{itemize}
-\end{itemize}
-\item Joined UT Austin in Nov 2020 
-\begin{itemize}
-\item Characterization of model inadequacy in the context of block copolymer self-assembly
-\end{itemize}
-\item Joined PSAAP in Jul 2021, Team: Algorithms
-\item Responsibilities within PSAAP:
-\begin{itemize}
-\item Development of an efficient solver for deterministic Boltzmann equation to model electron kinetics
-\end{itemize}
-\end{itemize}
+\end{column}
+\begin{column}{.5\linewidth}
+\begin{center}
+\vspace{-0.2in}
+\includegraphics[width=.99\textwidth]{figures/bolsig_convergence.png}
+\includegraphics[width=.5\textwidth]{figures/code.png}
+\end{center}
+\end{column}
+\end{columns}
+\end{column}
+\end{columns}
+}
+%
 \end{frame}
-%===============================================================================
 \end{document}
+

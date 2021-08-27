@@ -138,25 +138,25 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 %
 \begin{itemize}
 \item \textbf{Importance:} 
-%Electron density function $f_e = f_e(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties
+%Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties
 Distribution function of electrons defines transport and kinetic properties
 \\
 $\rightarrow$ Need to couple plasma model with electron kinetics (Y3)
-\item Evolution of $f_e = f_e(\vect{x}, \vect{v}, t)$ obeys the \textbf{Boltzmann equation}
+\item Evolution of $f = f(\vect{x}, \vect{v}, t)$ obeys the \textbf{Boltzmann equation}
 \small
 \begin{align*}
-\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = \sum_{a} C_a(f_e)
+\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  - \vect{E} \cdot \nabla_{\vect{v }}f = \sum_{a} C_a(f)
 \end{align*}
 where, for example, in case of $a=$ elastic collisions
 \begin{align*}
-C_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
-\left( f_e(v^\prime) - f_e(v) \right) \ud \omega 
+C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
+\left( f(v^\prime) - f(v) \right) \ud \omega 
 \end{align*}
 \item \textbf{Main challenge}: 6+1 dimensions
 \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
-\item \textbf{Currently (Y1)}: spatially homogeneous case $f_e = f_e(\vect{v}, t)$ to investigate efficient velocity-space discretizations
+\item \textbf{Currently (Y1)}: spatially homogeneous case $f = f(\vect{v}, t)$ to investigate efficient velocity-space discretizations
 \begin{align*}
-\partial_t f_e = \sum_{a} C_a(f_e)
+\partial_t f = \sum_{a} C_a(f)
 \end{align*}
 \end{itemize}
 %
@@ -167,16 +167,16 @@ C_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny sc
 %%
 %Boltzmann equation for electron-heavy neutral collisions can be modeled by, 
 %\begin{itemize}
-%\item Electron density function $f_e = f_e(\vect{x}, \vect{v}, t)$
+%\item Electron density function $f = f(\vect{x}, \vect{v}, t)$
 %\end{itemize}
 %\small
 %\begin{align*}
-%\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = Q(f_e)
+%\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  + \vect{L} \cdot \nabla_{\vect{v }}f = Q(f)
 %\end{align*}
 %where, for example, for a given collision $a$
 %\begin{align*}
-%Q_a(f_e) &= n_0\int_{S^2} v \sigma_a(v,\omega) 
-%\left( f(v^\prime) - f(v) \right) d\omega \text{ where } Q(f_e) = \sum_{a} Q_a(f_e)
+%Q_a(f) &= n_0\int_{S^2} v \sigma_a(v,\omega) 
+%\left( f(v^\prime) - f(v) \right) d\omega \text{ where } Q(f) = \sum_{a} Q_a(f)
 %\end{align*}
 %% \item \textbf{Main challenge}: 6+1 dimensions
 %% \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
@@ -199,7 +199,7 @@ C_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny sc
 %  \ \\ \ \\ \ \\
 %\textbf{Currently working}: Solving the collision operator, i.e., 
 %\begin{align*}
-%\partial_t f_e = Q(f_e)
+%\partial_t f = Q(f)
 %\end{align*}
 %\end{frame}
 
@@ -214,10 +214,10 @@ C_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny sc
 $
 \displaystyle
 \quad
-\partial_t f = Q(f,f)
+\partial_t f = \sum_{a} C_a(f)
 \quad \rightarrow \quad
-\partial_t \myint{R^3}{} f \phi\of{\vect{v}} \ud \vect{v} =
-\myint{R^3}{} Q(f) \phi\of{\vect{v}} \ud \vect{v}
+\partial_t \myint{R^3}{} f \phi\of{\vect{v}} \ud \vect{v} = \sum_{a}
+\myint{R^3}{} C_a(f) \phi\of{\vect{v}} \ud \vect{v}
 $
 
 \item Solution as a perturbed Maxwellian:

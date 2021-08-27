@@ -90,24 +90,24 @@
 \begin{column}{.71\linewidth}
 \begin{itemize}
 \item \textbf{Importance:} 
-%Electron density function $f_e = f_e(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties
-Distribution function of electrons defines transport and kinetic properties
+%Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties
+Distribution function of electrons defines transport and reaction properties
 \\
 $\rightarrow$ Need to couple plasma model with electron kinetics (Y3)
-\item Evolution of $f_e = f_e(\vect{x}, \vect{v}, t)$ obeys the \textbf{Boltzmann equation}
+\item Evolution of $f = f(\vect{x}, \vect{v}, t)$ obeys the \textbf{Boltzmann equation}
 \begin{align*}
-\partial_t f_e + \vect{v}\cdot \nabla_{\vect{x}} f_e  + \vect{L} \cdot \nabla_{\vect{v }}f_e = \sum_{a} C_a(f_e)
+\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  - \vect{E} \cdot \nabla_{\vect{v }}f = \sum_{a} C_a(f)
 \end{align*}
 where, for example, in case of $a=$ elastic collisions
 \begin{align*}
-C_a(f_e) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
-\left( f_e(v^\prime) - f_e(v) \right) \ud \omega 
+C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
+\left( f(v^\prime) - f(v) \right) \ud \omega 
 \end{align*}
 \item \textbf{Main challenge}: 6+1 dimensions
 \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
 \item \textbf{Currently (Y1)}: spatially homogeneous case $f = f(\vect{v}, t)$ 
 \begin{align*}
-\partial_t f =  \sum_{a} C_a(f_e)
+\partial_t f =  \sum_{a} C_a(f)
 \end{align*}
 to investigate efficient velocity-space discretizations
 \end{itemize}
@@ -117,10 +117,13 @@ to investigate efficient velocity-space discretizations
 \item \textbf{Approach:} Petrov-Galerkin
 \begin{itemize}
 \item Nearly isotropic and symmetric $f$ $\rightarrow$ employ spherical harmonics
-\item Solution as a perturbed Maxwellian $M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}$: 
+%\item Solution as a perturbed Maxwellian $M\of{v}$:
+%$M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}$: 
 \begin{align*}
 f\of{\vect{v}}
-= M\of{v} \sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{v} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}
+=
+%M\of{v} 
+\sum_{k,l,m} h_{k,l,m} \of{t} \Phi_k\of{v} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}
 \quad \rightarrow \quad \text{ODEs for } h_{k,l,m} \of{t}
 %M\of{v} = \frac{n}{\left( \vth \sqrt{\pi} \right)^3} e^{-\left(\frac{v}{\vth}\right)^2}
 %M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}
@@ -138,7 +141,7 @@ f\of{\vect{v}}
 %\item 
 \begin{itemize}
 \item[] \textbf{Results:}
-\item Invetigating choice of $\Phi_k(v)$:
+\item Investigating choice of $\Phi_k(v)$:
 \begin{itemize}
 \item Tested Laguerre, Maxwell, Chebyshev, Linear polys using Bolsig+ data
 \end{itemize}

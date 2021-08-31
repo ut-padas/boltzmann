@@ -126,9 +126,59 @@ g1  = collisions.eAr_G1()
 g2  = collisions.eAr_G1()
 
 
+def plot_crosssection(collision: collisions.Collisions,num_q):
+    #np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
+    
+    ELE_VOLT        = collisions.ELECTRON_VOLT
+    BOLTZMANN_CONST = collisions.BOLTZMANN_CONST
+
+    TEMP_K_1EV          = ELE_VOLT/BOLTZMANN_CONST
+    g            = collision 
+    ev   = collision._energy
+    tcs  = collision._total_cs
+
+    [gmx,gmw]    = maxpoly.maxpolygauss(num_q-1)
+    print(gmx)
+    weight_func  = maxpoly.maxpolyweight
+
+    MAXWELLIAN_TEMP_K   = 5*TEMP_K_1EV
+    V_TH                = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/collisions.MASS_ELECTRON)
+    energy_ev = (0.5 * collisions.MASS_ELECTRON * ((gmx*V_TH)**2))/ELE_VOLT
+    tcs_q     = g.total_cross_section(energy_ev)
+
+    # p1 = plt.plot(ev,tcs,'o-b')
+    # p2 = plt.plot(energy_ev,tcs_q,'x-g')
+    plt.plot(ev,tcs,'o-b',energy_ev,tcs_q,'x-g')
+    plt.legend(["LXCAT","V_thermal=1EV"])
+
+    # MAXWELLIAN_TEMP_K   = 5*TEMP_K_1EV
+    # V_TH                = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/collisions.MASS_ELECTRON)
+    # energy_ev = (0.5 * collisions.MASS_ELECTRON * ((gmx*V_TH)**2))/ELE_VOLT
+    # tcs_q     = g.total_cross_section(energy_ev)
+    # p3 = plt.plot(energy_ev,tcs_q,'x-r',label='GMX-5eV')
+
+    # MAXWELLIAN_TEMP_K   = 10*TEMP_K_1EV
+    # V_TH                = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/collisions.MASS_ELECTRON)
+    # energy_ev = (0.5 * collisions.MASS_ELECTRON * ((gmx*V_TH)**2))/ELE_VOLT
+    # tcs_q     = g.total_cross_section(energy_ev)
+    # p4 =plt.plot(energy_ev,tcs_q,'x-y',label='GMX-10eV')
+
+    # MAXWELLIAN_TEMP_K   = 20*TEMP_K_1EV
+    # V_TH                = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/collisions.MASS_ELECTRON)
+    # energy_ev = (0.5 * collisions.MASS_ELECTRON * ((gmx*V_TH)**2))/ELE_VOLT
+    # tcs_q     = g.total_cross_section(energy_ev)
+    # p5 = plt.plot(energy_ev,tcs_q,'x-m',label='GMX-20eV')
+
+    # plt.legend([p1,p2,p3,p4,p5],["lxcat",'GMX-1eV','GMX-5eV','GMX-10eV','GMX-20eV'])
+    plt.xlabel("eV")
+    plt.ylabel("total cs (m2)")
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.show()
+
 
 def collision_op_test():
-    params.BEVelocitySpace.NUM_Q_VR    = 10
+    params.BEVelocitySpace.NUM_Q_VR    = 20
     params.BEVelocitySpace.NUM_Q_VT    = 5
     params.BEVelocitySpace.NUM_Q_VP    = 2
     params.BEVelocitySpace.NUM_Q_CHI   = 10
@@ -155,23 +205,27 @@ def collision_op_test():
 
 
 def collision_op_conv():
-    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=1
     params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0]]
-    params.BEVelocitySpace.NUM_Q_VR    = 20
+    params.BEVelocitySpace.NUM_Q_VR    = 10
     params.BEVelocitySpace.NUM_Q_VT    = 10
     params.BEVelocitySpace.NUM_Q_VP    = 10
-    params.BEVelocitySpace.NUM_Q_CHI   = 2
+    params.BEVelocitySpace.NUM_Q_CHI   = 32
     params.BEVelocitySpace.NUM_Q_PHI   = 10
 
+    colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+    cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    spec_sp  = colOpSp.SPEC_SPHERICAL
+
+    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
     L0=Lp(g0,maxwellian)
-    for i in range(5):
-        print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    for i in range(2):
         params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
         #params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
         #params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
         params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
         #params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
-
+        print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
         L1=Lp(g0,maxwellian)
         print("L0")
         print(L0)
@@ -180,6 +234,15 @@ def collision_op_conv():
         print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
         L0=L1
 
+    L0=L1
+    print("Refine on VR ")
+    params.BEVelocitySpace.NUM_Q_VR                  = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
+    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    L1=Lp(g0,maxwellian)
+    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+
+
+    L0=L1
     print("Refine on scattering azimuthal angle")
     params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
@@ -204,23 +267,16 @@ def collision_op_conv():
     print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
 
 
-
-
-    
-
-
-def analytical_time_integration(collision,maxwellian,h_init):
+def eigenvec_collision_op(collision,maxwellian):
 
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
-    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0],[1,1]]
-    params.BEVelocitySpace.NUM_Q_VR    = 20
+    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0],[1,1],[2,0]]
+    params.BEVelocitySpace.NUM_Q_VR    = 51
     params.BEVelocitySpace.NUM_Q_VT    = 10
     params.BEVelocitySpace.NUM_Q_VP    = 10
     params.BEVelocitySpace.NUM_Q_CHI   = 64
     params.BEVelocitySpace.NUM_Q_PHI   = 10
     
-
-
     colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
     cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     spec_sp  = colOpSp.SPEC_SPHERICAL
@@ -231,31 +287,34 @@ def analytical_time_integration(collision,maxwellian,h_init):
 
     L    = cf_sp.assemble_mat(collision,maxwellian)
     M    = spec_sp.compute_maxwellian_mm(collision,maxwellian)
+
     FOp  = np.matmul(np.linalg.inv(M),L)
     W,Q  = np.linalg.eig(FOp)
+    print("Eigenvalues: ")
     print(W)
     Qinv = np.linalg.inv(Q)
-    #W    = np.diag(W)
-    #FOp1 = np.matmul(np.matmul(Q,np.diag(W)), Qinv)
-    #print(np.linalg.norm(FOp-FOp1))
-    #y_init = np.dot(Qinv,h_init)
+    
+    y_init = np.ones(num_p*num_sh)
+    
+    q_norm=np.array([np.linalg.norm(Q[:,i]) for i in range(num_p*num_sh)])
+    print("Eigenvectors normalized : ", np.allclose(q_norm,np.ones_like(q_norm)))
 
-    # plt.plot(np.diag(W))
-    # plt.xlabel("klm mode")
-    # plt.ylabel("eigen value")
-    # plt.show()
+    fun_sol = np.array([y_init[i] * Q[:,i] for i in range(num_p*num_sh)])
+    #print(fun_sol)
+    fun_sol = np.transpose(fun_sol)
 
-    h_init    = np.zeros(spec_sp.get_num_coefficients())
-    h_init[0] = 1.0
-    y_init    = np.dot(Qinv,h_init)
+    # if(h_init is not None):
+    #     print("Scaled for the initial condition : " ,np.allclose(fun_sol.sum(axis=1),h_init))
     
     #print([y_init[i] * Q[:,i] for i in range(num_p*num_sh)])
     # print(Q)
     # print(Q[:,0])
-    num_pts = 80
-    X = np.linspace(-5,5,num_pts)
-    Y = np.linspace(-5,5,num_pts)
-    Z = np.array([0])
+    
+    num_pts = 100
+    X = np.linspace(-1,1,num_pts)
+    Y = np.linspace(-1,1,num_pts)
+    #Z = np.linspace(-1,1,num_pts)
+    Z = np.array([0.5])
 
     X,Y,Z=np.meshgrid(X,Y,Z,indexing='ij')
 
@@ -263,97 +322,47 @@ def analytical_time_integration(collision,maxwellian,h_init):
     THETA = np.arccos(Z/R)
     PHI   = np.arctan(Y/X)  
 
-    P_klm = np.array([np.exp(-R**2)*spec_sp.basis_eval_full(R,THETA,PHI,k,sph_modes[lm_i][0],sph_modes[lm_i][1]) for k in range(num_p) for lm_i in range(num_sh)])
+    #P_klm = np.array([np.exp(-R**2)*spec_sp.basis_eval_full(R,THETA,PHI,k,sph_modes[lm_i][0],sph_modes[lm_i][1]) for k in range(num_p) for lm_i in range(num_sh)])
+    #P_klm = np.array([ maxwellian(R) *spec_sp.basis_eval_full(R,THETA,PHI,k,sph_modes[lm_i][0],sph_modes[lm_i][1]) for k in range(num_p) for lm_i in range(num_sh)])
+    P_klm = np.array([spec_sp.basis_eval_full(R,THETA,PHI,k,sph_modes[lm_i][0],sph_modes[lm_i][1]) for k in range(num_p) for lm_i in range(num_sh)])
     #print(P_klm.shape)
     P_klm = P_klm.reshape(num_p*num_sh,-1)
     P_klm = np.transpose(P_klm)
     #print(P_klm.shape)
     #print(P_klm[:,3])
-
-    fun_sol = np.array([y_init[i] * Q[:,i] for i in range(num_p*num_sh)])
-    #print(fun_sol)
-    fun_sol = np.transpose(fun_sol)
-
-    print("check if original initial condition can be recovered: ")
-    print(fun_sol.sum(axis=1))
-
+    
     fun_sol_on_g = np.matmul(P_klm,fun_sol)
     fun_sol_on_g = np.transpose(fun_sol_on_g)
 
+    # point_data=dict()
+    # for pk in range(num_p):
+    #     for lm_i,lm in enumerate(sph_modes):
+    #         point_data["klm_%d_%d_%d"%(pk,lm[0],lm[1])] = np.array(np.real(fun_sol_on_g[pk*num_sh + lm_i]).reshape(num_pts,num_pts,num_pts))
+    
+    # visualize_utils.vtk_structured_grid("eigen_vec3",X,Y,Z,point_data,None)
 
-    #print(fun_sol)
-    # fun_sol_on_g = [np.dot(P_klm,fun_sol[i]) for ]
-    # fun_sol_on_g = np.transpose(fun_sol_on_g)
-    # fun_sol_on_g = fun_sol_on_g.reshape(num_p*num_sh,num_pts,num_pts)
-    #print(fun_sol_on_g)
-    #print(fun_sol_on_g.shape)
-
+    
     fig, axs = plt.subplots(num_p, num_sh)
-    fig.set_size_inches(6,16)
+    fig.set_size_inches(8,30)
     #fig.set_size_inches(3.5*num_sh, 5*num_p)
     for pk in range(num_p):
         for lm_i,lm in enumerate(sph_modes):
-            im=axs[pk, lm_i].imshow(fun_sol_on_g[pk*num_sh + lm_i].reshape(num_pts,num_pts))
+            im=axs[pk, lm_i].imshow(np.real(fun_sol_on_g[pk*num_sh + lm_i].reshape(num_pts,num_pts)))
             plt.colorbar(im, ax=axs[pk, lm_i])
-            axs[pk, lm_i].set_title("P_%d Ylm[%d, %d], eig : %.5E" %(pk,lm[0],lm[1],W[pk*num_sh + lm_i]),fontsize = 6.0)
-            axs[pk, lm_i].tick_params(axis='both', which='major', labelsize=8)
+            axs[pk, lm_i].set_title("klm=(%d,%d,%d) eig:%.2E+%.2Ej" %(pk,lm[0],lm[1],np.real(W[pk*num_sh + lm_i]), np.imag(W[pk*num_sh + lm_i]) ),fontsize = 7.0)
+            axs[pk, lm_i].tick_params(axis='both', which='major', labelsize=7)
     plt.tight_layout()
     plt.show()
     fig.savefig("fun_sol")
-    
-    # print(y_init)
-    # print(Qinv[:,0])
-    # T      = 1e-2
-    # YT     = y_init*np.exp(np.diag(W)*T)
-    # HT     = np.dot(Q,YT)
-    # print(HT)
+    plt.close()
 
-
-
-
-
-
-
-
-
-
-    
-    #print(FOp -np.transpose(FOp))
-    
-    # print(FOp)
-    # print(np.transpose(FOp))
-    
-
-    # print(np.linalg.cond(FOp))
-    # D,U = np.linalg.eig(FOp)
-
-    # h_init    = np.zeros(spec_sp.get_num_coefficients())
-    # h_init[0] = 1.0
-
-    # print(np.allclose(np.matmul(np.matmul(U,np.diag(D)),np.linalg.inv(U)),FOp))
-    # print(np.linalg.norm(np.matmul(np.matmul(U,np.diag(D)),np.transpose(U))-FOp))
-    # print(FOp)
-
-    # print(np.linalg.norm(FOp-np.transpose(FOp)))
-    # # print(W)
-
-    # # #print(W)
-    # # print(np.abs(U))
-    # plt.plot(np.abs(D))
-    # plt.show()
-
-    # X= U * np.exp(W*T)
-    # print(X)
-
-    
-
-
+    return [W,fun_sol]
 
 
 #collision_op_test()
-collision_op_conv()
-analytical_time_integration(g0,maxwellian,0)
-
+#collision_op_conv()
+eigenvec_collision_op(g0,maxwellian)
+#plot_crosssection(g0,50)
 
 
 

@@ -8,6 +8,7 @@ from numpy.lib import meshgrid
 from numpy.ma import soften_mask
 import spec_spherical
 import utils
+import pyevtk
 
 def plot_density_distribution_iso(f,domain,sample_points):
     """
@@ -60,7 +61,6 @@ def plot_density_distribution_z_slice(spec, coeff, domain, sample_points,z_val=0
 
     plt.close()
 
-
 def plot_spec_coefficients(coeff,file_name=None):
     plt.plot(coeff)
     plt.xlabel('coefficient id')
@@ -71,7 +71,6 @@ def plot_spec_coefficients(coeff,file_name=None):
     else:
         plt.show()
     plt.close()
-
 
 def plot_f_theta_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , r_max,  r_res, phi_res,fname,theta=np.pi/2):
 
@@ -116,7 +115,6 @@ def plot_f_theta_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSph
     plt.savefig(fname)
     plt.close()
 
-
 def plot_f_z_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpherical , X , Y, fname,z_val=0.0,title=""):
 
     spherical_pts=list()
@@ -139,16 +137,16 @@ def plot_f_z_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpheric
                 f_val[pt_i] += cf[rid] * maxwellian(pt[0]) * spec.basis_eval_full(pt[0], pt[1], pt[2], pi, lm[0], lm[1])
 
     f_val=f_val.reshape((len(Y),len(X)))
-    #plt.title(title)
-    #plt.imshow(f_val)
-    #plt.colorbar()
+    plt.title(title)
+    plt.imshow(f_val)
+    plt.colorbar()
     # plt.show()
 
-    X,Y = np.meshgrid(X,Y)
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-    ax.plot_surface(X, Y, f_val, cmap=plt.cm.YlGnBu_r)
-    ax.set_title(title)
+    # X,Y = np.meshgrid(X,Y)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(projection='3d')
+    # ax.plot_surface(X, Y, f_val, cmap=plt.cm.YlGnBu_r)
+    # ax.set_title(title)
 
     # # Tweak the limits and add latex math labels.
     # # ax.set_zlim(0, 1)
@@ -161,3 +159,14 @@ def plot_f_z_slice(cf,maxwellian, spec : spec_spherical.SpectralExpansionSpheric
     plt.savefig(fname)
     plt.close()
 
+def vtk_structured_grid(fname,X,Y,Z, point_data, cell_data=None,field_data=None):
+    """
+    Writes the solution to vtk structured grid file. 
+    "X,Y,Z" : from mesh grid, 
+    point_data: dictionary {varname: data}
+    cell_data : dictionary {varname: data}
+    field_data : dictionary {varname: data}
+    """
+    
+    pyevtk.hl.gridToVTK(fname, X, Y, Z, cellData = cell_data, pointData = point_data,fieldData=field_data)
+    return

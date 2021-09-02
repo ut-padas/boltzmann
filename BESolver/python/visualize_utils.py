@@ -4,8 +4,6 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy.lib import meshgrid
-from numpy.ma import soften_mask
 import spec_spherical
 import utils
 import pyevtk

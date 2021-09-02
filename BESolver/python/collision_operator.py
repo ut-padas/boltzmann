@@ -2,15 +2,10 @@
 @package : Spectral based, Petrov-Galerkin discretization of the collission integral
 """
 import abc
-from math import sin
-from typing import MappingView
-
-from numpy.lib.function_base import _quantile_is_valid
 import basis
 import spec as sp
 import collisions
 import scipy.constants
-import pint
 import parameters as params
 import numpy as np
 

@@ -85,13 +85,11 @@ def is_collission_mat_converged(spec,cf,collision,maxwellian,tol):
 
     return 
 
-def moment_zero_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,scale=1.0):
+def moment_zero_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, V_TH, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
     """
     Computes the zero th velocity moment, i.e. number density
     \int_v f(v) dv
     """
-    V_TH         = collisions.ELECTRON_THEMAL_VEL
-    
     if NUM_Q_VR is None:
         NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
     
@@ -104,7 +102,7 @@ def moment_zero_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwell
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sph_harm = len(sph_harm_lm)
-    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR-1)
+    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
     weight_func  = spec_sp._basis_p.Wx()
     
     legendre     = basis.Legendre()
@@ -143,14 +141,11 @@ def moment_zero_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwell
     m0     = (np.sqrt(np.pi)/4) * (maxwellian_fac * (V_TH**3)) * scale * np.dot(MP_klm,cf)
     return m0
 
-def moment_second_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,scale=1.0):
+def moment_second_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, V_TH, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
     """
     Computes the second velocity moment, i.e. related to average kinetic energy, hence the temperature
     \int_v v^2 f(v) dv
     """
-
-    V_TH         = collisions.ELECTRON_THEMAL_VEL
-    
     if NUM_Q_VR is None:
         NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
     
@@ -163,7 +158,7 @@ def moment_second_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwe
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sph_harm = len(sph_harm_lm)
-    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR-1)
+    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
     weight_func  = spec_sp._basis_p.Wx()
     
     legendre     = basis.Legendre()
@@ -201,12 +196,69 @@ def moment_second_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwe
     return m2
 
 
-def compute_avg_temp(particle_mass,spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,m0=None,scale=1.0):
+def compute_avg_temp(particle_mass,spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, V_TH, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, m0=None, scale=1.0):
     if m0 is None:
-        m0         = moment_zero_f(spec_sp,cf,maxwellian,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,scale)
+        m0         = moment_zero_f(spec_sp,cf,maxwellian,V_TH,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,scale)
 
-    m2         = moment_second_f(spec_sp,cf,maxwellian,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,scale)
+    m2         = moment_second_f(spec_sp,cf,maxwellian,V_TH,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,scale)
     #avg energy per particle
     avg_energy = (0.5*particle_mass*m2)/m0
     temp       = (2/(3*collisions.BOLTZMANN_CONST)) * avg_energy
     return temp
+
+def compute_coefficients(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, maxwellian, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP):
+    """
+    Note the function is assumed to be f(v) = M(v) h(v), M(v)
+    should be compatible with the weight function of the polynomials. 
+    """
+    V_TH         = collisions.ELECTRON_THEMAL_VEL
+
+    if NUM_Q_VR is None:
+        NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+    
+    if NUM_Q_VT is None:
+        NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
+    
+    if NUM_Q_VP is None:
+        NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+            
+
+
+    num_p        = spec_sp._p +1
+    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    num_sph_harm = len(sph_harm_lm)
+    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    weight_func  = spec_sp._basis_p.Wx()
+    
+    legendre     = basis.Legendre()
+    [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
+    VTheta_q     = np.arccos(glx)
+    VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
+
+    # [glx_s,glw_s] = legendre.Gauss_Pn(NUM_Q_CHI)
+    # Chi_q         = np.arccos(glx_s)
+    # Phi_q         = np.linspace(0,2*np.pi,NUM_Q_PHI)
+    
+    assert NUM_Q_VP>1
+    sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
+    WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
+
+    #trap. weights
+    WVPhi_q[0]  = 0.5 * WVPhi_q[0]
+    WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
+
+    quad_grid = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
+    P_kr = spec_sp.Vq_r(quad_grid[0]) 
+    Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
+
+    hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) 
+    integral_fac   = 1
+
+    MP_klm = np.array([hq * P_kr[i]*Y_lm[j] for i in range(num_p) for j in range(num_sph_harm)])
+    MP_klm = np.dot(MP_klm,WVPhi_q)
+    MP_klm = np.dot(MP_klm,glw)
+    MP_klm = np.dot(MP_klm,gmw)
+
+    return MP_klm
+
+    

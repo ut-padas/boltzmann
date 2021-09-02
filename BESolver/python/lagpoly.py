@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.special
 
 # Coefficients of Laguerre polynomials up to 20th power

@@ -8,13 +8,17 @@ for a given binary collision
     - cross section calculation
 """
 import abc
-from math import cos, isnan, sin
-from operator import contains
 import numpy as np
-from numpy.linalg.linalg import norm
 import cross_section
 from scipy import interpolate
 import scipy.constants
+
+def thermal_velocity(t_ev):
+    """
+    computes the thermal velocity
+    t_ev : temperature in thermal velocity (t_ev=1 means temperature for 1ev)
+    """
+    return np.sqrt(2*BOLTZMANN_CONST*t_ev/MASS_ELECTRON)
 
 MASS_ELECTRON       = scipy.constants.m_e
 MASS_ARGON          = 6.6335209E-26 
@@ -28,7 +32,7 @@ TEMP_K_1EV          = ELECTRON_VOLT/BOLTZMANN_CONST
 MAXWELLIAN_TEMP_K   = 1*TEMP_K_1EV
 AR_NEUTRAL_N        = 3.22e22 # 1/m^3
 MAXWELLIAN_N        = 1.00e30 # 1/m^3
-ELECTRON_THEMAL_VEL = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
+ELECTRON_THEMAL_VEL = thermal_velocity(MAXWELLIAN_TEMP_K) # np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
 
 class Collisions(abc.ABC):
 

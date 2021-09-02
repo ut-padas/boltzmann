@@ -210,12 +210,4 @@ class SpectralExpansionSpherical:
         return Vq
 
 
-    # todo
-    # def compute_coefficients(self,func,mm_diag=None):
-    #     """
-    #     computes basis coefficients for a given function,
-    #     for basis orthogonal w.r.t. weight function w(x)
-    #     f(x) = w(x) \sum_i c_i P_i(x)
-    #     """
-
 

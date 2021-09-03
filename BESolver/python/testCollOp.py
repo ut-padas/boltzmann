@@ -19,7 +19,7 @@ import os
 import utils as BEUtils
 import maxpoly
 import time
-import matplotlib.pyplot as plt
+
 
 NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
 NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -27,18 +27,19 @@ NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
 NUM_Q_CHI    = params.BEVelocitySpace.NUM_Q_CHI
 NUM_Q_PHI    = params.BEVelocitySpace.NUM_Q_PHI
 
-def Lm_l(collision,maxwellian):
-    return colOpSp.CollisionOpSP._Lm_l(collision,maxwellian)
+def Lm_l(collision,maxwellian, vth):
+    return colOpSp.CollisionOpSP._Lm_l(collision,maxwellian,vth)
 
-def Lp_l(collision,maxwellian):
-    return colOpSp.CollisionOpSP._Lp_l(collision,maxwellian)
+def Lp_l(collision,maxwellian, vth):
+    return colOpSp.CollisionOpSP._Lp_l(collision,maxwellian, vth)
 
-def Lm(collision,maxwellian):
-    return colOpSp.CollisionOpSP._Lm(collision,maxwellian)
+def Lm(collision,maxwellian, vth):
+    return colOpSp.CollisionOpSP._Lm(collision,maxwellian, vth)
 
-def Lp(collision: collisions.Collisions, maxwellian):
-    return colOpSp.CollisionOpSP._Lp(collision,maxwellian)
+def Lp(collision: collisions.Collisions, maxwellian, vth):
+    return colOpSp.CollisionOpSP._Lp(collision,maxwellian, vth)
 
+VTH = collisions.ELECTRON_THEMAL_VEL
 maxwellian = lambda x: (collisions.MAXWELLIAN_N / ((collisions.ELECTRON_THEMAL_VEL * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
 g0  = collisions.eAr_G0()
 g1  = collisions.eAr_G1()
@@ -47,7 +48,8 @@ g2  = collisions.eAr_G1()
 
 def plot_crosssection(collision: collisions.Collisions,num_q):
     #np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
-    
+    import matplotlib.pyplot as plt
+
     ELE_VOLT        = collisions.ELECTRON_VOLT
     BOLTZMANN_CONST = collisions.BOLTZMANN_CONST
 
@@ -108,12 +110,12 @@ def collision_op_test():
     spec_sp  = colOpSp.SPEC_SPHERICAL
 
     t1 = time.time()
-    L_loop = Lp_l(g0,maxwellian) - Lm_l(g0,maxwellian)
+    L_loop = Lp_l(g0,maxwellian,VTH) - Lm_l(g0,maxwellian,VTH)
     t2 = time.time()
     print("loop based (s) : %.10f" %(t2-t1))
 
     t1 = time.time()
-    L_np   = Lp(g0,maxwellian) - Lm(g0,maxwellian)
+    L_np   = Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
     t2 = time.time()
     print("np(tensor) based (s) : %.10f" %(t2-t1))
     print("np(tensor) based |L_np| : %.10f" %(np.linalg.norm(L_np)))
@@ -137,7 +139,7 @@ def collision_op_conv():
     spec_sp  = colOpSp.SPEC_SPHERICAL
 
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L0=Lp(g0,maxwellian)
+    L0=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
     for i in range(2):
         params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
         #params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
@@ -145,7 +147,7 @@ def collision_op_conv():
         params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
         #params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
         print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-        L1=Lp(g0,maxwellian)
+        L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
         print("L0")
         print(L0)
         print("L1")
@@ -157,7 +159,7 @@ def collision_op_conv():
     print("Refine on VR ")
     params.BEVelocitySpace.NUM_Q_VR                  = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian)
+    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
     print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
 
 
@@ -165,7 +167,7 @@ def collision_op_conv():
     print("Refine on scattering azimuthal angle")
     params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian)
+    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
     print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
     
     L0=L1
@@ -173,7 +175,7 @@ def collision_op_conv():
     params.BEVelocitySpace.NUM_Q_PHI                 = params.BEVelocitySpace.NUM_Q_PHI//2
     params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian)
+    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
     print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
 
 
@@ -182,11 +184,13 @@ def collision_op_conv():
     params.BEVelocitySpace.NUM_Q_VT                 = params.BEVelocitySpace.NUM_Q_VT//2
     params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian)
+    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
     print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
 
 
 def eigenvec_collision_op(collision,maxwellian):
+
+    import matplotlib.pyplot as plt
 
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
     params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0],[1,1],[2,0]]
@@ -204,8 +208,8 @@ def eigenvec_collision_op(collision,maxwellian):
     num_p     = spec_sp._p +1
     num_sh    = len(params.BEVelocitySpace.SPH_HARM_LM)
 
-    L    = cf_sp.assemble_mat(collision,maxwellian)
-    M    = spec_sp.compute_maxwellian_mm(collision,maxwellian)
+    L    = cf_sp.assemble_mat(collision,maxwellian,VTH)
+    M    = spec_sp.compute_maxwellian_mm(maxwellian,VTH)
 
     FOp  = np.matmul(np.linalg.inv(M),L)
     W,Q  = np.linalg.eig(FOp)
@@ -285,50 +289,86 @@ def maxwellian_test():
     written in a maxwellian 1 w.r.t. basis maxwellian 2. 
     """
 
-    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
-    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0]]
-    params.BEVelocitySpace.NUM_Q_VR    = 50
-    params.BEVelocitySpace.NUM_Q_VT    = 10
-    params.BEVelocitySpace.NUM_Q_VP    = 10
-    params.BEVelocitySpace.NUM_Q_CHI   = 32
-    params.BEVelocitySpace.NUM_Q_PHI   = 10
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=15
+    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0],[1,1]]
+    params.BEVelocitySpace.NUM_Q_VR    = 51
+    params.BEVelocitySpace.NUM_Q_VT    = 16
+    params.BEVelocitySpace.NUM_Q_VP    = 16
+    params.BEVelocitySpace.NUM_Q_CHI   = 64
+    params.BEVelocitySpace.NUM_Q_PHI   = 16
 
     colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
     cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     spec_sp  = colOpSp.SPEC_SPHERICAL
 
-    MT1  = 0.5*collisions.TEMP_K_1EV
-    VTH1 = collisions.thermal_velocity(MT1)
-    maxwellian_1 = lambda x: (collisions.MAXWELLIAN_N / ((VTH1 * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
+    MT1  = 1.0*collisions.TEMP_K_1EV
+    VTH1 = collisions.electron_thermal_velocity(MT1)
+    maxwellian_1 = BEUtils.get_maxwellian_3d(VTH1,1)
 
-    MT2  = 1*collisions.TEMP_K_1EV
-    VTH2 = collisions.thermal_velocity(MT2)
-    print(VTH2,MT2)
-    maxwellian_2 = lambda x: (collisions.MAXWELLIAN_N / ((VTH2 * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
+    # set f to be the maxwellian 1
+    #hv1     = lambda v,vt,vp : 3.54490770e+00 * spec_sp.basis_eval_full(v,vt,vp,0,0,0) -1.22241517e-1 * spec_sp.basis_eval_full(v,vt,vp,2,1,0) #+ 5.55490164e-01 * spec_sp.basis_eval_full(v,vt,vp,2,0,0) -1.56114596e-01 * spec_sp.basis_eval_full(v,vt,vp,3,0,0) + 2.17803558e-02 *spec_sp.basis_eval_full(v,vt,vp,4,0,0)
+    hv1_vec = np.zeros(spec_sp.get_num_coefficients())
+    hv1_vec[0]=1
+    print(hv1_vec)
 
-    hv1    = lambda v,vt,vp : np.ones_like(v) * (maxwellian_2(0)/maxwellian_1(0))
-    hv2    = lambda v,vt,vp : np.ones_like(v)
+    import matplotlib.pyplot as plt
+    plt.plot(hv1_vec,'b-o',label='orig(T1)')
+    # try to expand it using maxwellian 2. 
+    for t_fac in np.linspace(1,3,3):
+        MT2  = (1/t_fac)*collisions.TEMP_K_1EV
+        VTH2 = collisions.electron_thermal_velocity(MT2)
+        maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
+        #print(VTH2,MT2)
+        maxwellian_ratio = lambda vr,vt,vp: ( (VTH2**2) / (VTH1**2) ) * np.exp( -(vr*VTH2/VTH1)**2 + vr**2)
+        mm_h2     = spec_sp.compute_maxwellian_mm(maxwellian_2,VTH2) #BEUtils.compute_func_PiPj(spec_sp,maxwellian_ratio,maxwellian_2,VTH2,None,None,None,1)
+        mm_h1     = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
+        hv2_vec   = np.dot(np.matmul(np.linalg.inv(mm_h2),mm_h1),hv1_vec)
+        #hv2_vec = np.dot(np.linalg.inv(mm), BEUtils.compute_func_proj_to_basis(spec_sp,mr_h1,maxwellian_2,VTH2,None,None,None,1))
+        #print(mm)
+        print(hv2_vec)
+        print("diff |hv2-hv1| = ",np.linalg.norm(hv2_vec-hv1_vec))
+        
+        m0_1 = BEUtils.moment_zero_f(spec_sp,hv1_vec,maxwellian_1,VTH1,None,None,None,1)
+        print("h1 m0: ", m0_1)
 
-    h2_vec = BEUtils.compute_coefficients(spec_sp,hv2,maxwellian_2,None,None,None)
-    h1_vec = BEUtils.compute_coefficients(spec_sp,hv1,maxwellian_1,None,None,None)
+        m0_2 = BEUtils.moment_zero_f(spec_sp,hv2_vec,maxwellian_2,VTH2,None,None,None,1)
+        print("h2 m0: ", m0_2)
+        print("mass diff : ", (m0_2-m0_1)/m0_1)
 
-    print("h2")
-    print(h2_vec)
+        plt.plot(hv2_vec,'-x',label='T2/T1 = %.2E'%(1/t_fac))
+        plt.legend()
 
-    print("h1")
-    print(h1_vec)
-    print(h2_vec[0]*maxwellian_2(0)/maxwellian_1(0))
+    plt.show()
+    plt.close()
 
-    m0 = BEUtils.moment_zero_f(spec_sp,h2_vec,maxwellian_2,VTH2,None,None,None,1)
-    m2 = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h2_vec,maxwellian_2,VTH2,None,None,None,m0,1)
-    print("m0 of h2 : ",m0)
-    print("temp of h2 : ",m2)
-    
+    plt.plot(hv1_vec,'b-o',label='orig(T1)')
+    # try to expand it using maxwellian 2. 
+    for t_fac in np.linspace(1,3,3):
+        MT2  = (t_fac)*collisions.TEMP_K_1EV
+        VTH2 = collisions.electron_thermal_velocity(MT2)
+        maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
+        #print(VTH2,MT2)
+        maxwellian_ratio = lambda vr,vt,vp: ( (VTH2**2) / (VTH1**2) ) * np.exp( -(vr*VTH2/VTH1)**2 + vr**2)
+        mm_h2     = spec_sp.compute_maxwellian_mm(maxwellian_2,VTH2) #BEUtils.compute_func_PiPj(spec_sp,maxwellian_ratio,maxwellian_2,VTH2,None,None,None,1)
+        mm_h1     = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
+        hv2_vec   = np.dot(np.matmul(np.linalg.inv(mm_h2),mm_h1),hv1_vec)
+        #hv2_vec = np.dot(np.linalg.inv(mm), BEUtils.compute_func_proj_to_basis(spec_sp,mr_h1,maxwellian_2,VTH2,None,None,None,1))
+        #print(mm)
+        print(hv2_vec)
+        print("diff |hv2-hv1| = ",np.linalg.norm(hv2_vec-hv1_vec))
+        
+        m0_1 = BEUtils.moment_zero_f(spec_sp,hv1_vec,maxwellian_1,VTH1,None,None,None,1)
+        print("h1 m0: ", m0_1)
 
-    m0 = BEUtils.moment_zero_f(spec_sp,h1_vec,maxwellian_1,VTH2,None,None,None,1)
-    m2 = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h1_vec,maxwellian_1,VTH2,None,None,None,m0,1)
-    print("m0 of h1 : ",m0)
-    print("temp of h1 : ",m2)
+        m0_2 = BEUtils.moment_zero_f(spec_sp,hv2_vec,maxwellian_2,VTH2,None,None,None,1)
+        print("h2 m0: ", m0_2)
+        print("mass diff : ", (m0_2-m0_1)/m0_1)
+
+        plt.plot(hv2_vec,'-x',label='T2/T1 = %.2E'%(t_fac))
+        plt.legend()
+
+    plt.show()
+    plt.close()
 
     
     

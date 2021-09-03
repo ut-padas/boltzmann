@@ -5,7 +5,6 @@
 import numpy as np
 import basis 
 from scipy.special import sph_harm
-import maxpoly # to perform integration over [0, +inf)
 
 class SpectralExpansionSpherical:
     """

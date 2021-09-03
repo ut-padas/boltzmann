@@ -9,8 +9,6 @@ import collisions
 import scipy.constants
 import numpy as np
 import parameters as params
-import utils
-
 
 class CollissionOp(abc.ABC):
 
@@ -38,12 +36,12 @@ class CollisionOpSP():
         self._spec = SPEC_SPHERICAL
 
     @staticmethod
-    def _Lm(collision : collisions.Collisions , maxwellian):
+    def _Lm(collision : collisions.Collisions , maxwellian, vth):
         """
         computes the - part of the collision operator
         \int_r^3 \int_s2 f(v0) dw
         """
-        V_TH         = collisions.ELECTRON_THEMAL_VEL
+        V_TH         = vth
         ELE_VOLT     = collisions.ELECTRON_VOLT
         MAXWELLIAN_N = collisions.MAXWELLIAN_N
         AR_NEUTRAL_N = collisions.AR_NEUTRAL_N
@@ -124,12 +122,12 @@ class CollisionOpSP():
         return Lm
 
     @staticmethod
-    def _Lp(collision : collisions.Collisions , maxwellian):
+    def _Lp(collision : collisions.Collisions , maxwellian, vth):
         
         """
         \int_r^3 \int_s2 f(v0) dw
         """
-        V_TH         = collisions.ELECTRON_THEMAL_VEL
+        V_TH         = vth 
         ELE_VOLT     = collisions.ELECTRON_VOLT
         MAXWELLIAN_N = collisions.MAXWELLIAN_N
         AR_NEUTRAL_N = collisions.AR_NEUTRAL_N
@@ -230,12 +228,12 @@ class CollisionOpSP():
         return D_pqs_klm
     
     @staticmethod
-    def _Lm_l(collision,maxwellian):
+    def _Lm_l(collision,maxwellian, vth):
         """
         loop based (slow) + part of the coll op
         \int_r^3 \int_s2 f(v0) dw
         """
-        V_TH         = collisions.ELECTRON_THEMAL_VEL
+        V_TH         = vth 
         ELE_VOLT     = collisions.ELECTRON_VOLT
         MAXWELLIAN_N = collisions.MAXWELLIAN_N
         AR_NEUTRAL_N = collisions.AR_NEUTRAL_N
@@ -306,12 +304,12 @@ class CollisionOpSP():
         return L_ij
 
     @staticmethod
-    def _Lp_l(collision,maxwellian):
+    def _Lp_l(collision,maxwellian, vth):
         """
         loop based (slow)  + part of the coll op
         \int_r^3 \int_s2 f(v1) dw
         """
-        V_TH         = collisions.ELECTRON_THEMAL_VEL
+        V_TH         = vth 
         ELE_VOLT     = collisions.ELECTRON_VOLT
         MAXWELLIAN_N = collisions.MAXWELLIAN_N
         AR_NEUTRAL_N = collisions.AR_NEUTRAL_N
@@ -384,8 +382,8 @@ class CollisionOpSP():
         return L_ij
 
     @staticmethod
-    def assemble_mat(collision : collisions.Collisions , maxwellian):
-        Lij = CollisionOpSP._Lp(collision,maxwellian)-CollisionOpSP._Lm(collision,maxwellian)
+    def assemble_mat(collision : collisions.Collisions , maxwellian, vth):
+        Lij = CollisionOpSP._Lp(collision,maxwellian,vth)-CollisionOpSP._Lm(collision,maxwellian,vth)
         return Lij
         
         

@@ -125,7 +125,7 @@ class Maxwell(Basis):
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
-        return maxpoly.maxpolygauss(deg-1)
+        return maxpoly.maxpolygauss(max(1,deg-1))
 
     def Wx(self):
         """
@@ -148,7 +148,7 @@ class Laguerre(Basis):
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
-        return lagpoly.lagpolygauss(deg-1)
+        return lagpoly.lagpolygauss(max(1,deg-1))
 
     def Wx(self):
         """

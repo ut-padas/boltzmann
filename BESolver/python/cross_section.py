@@ -7,7 +7,6 @@ import numba as nb
 import typing as tp
 # this is the read lxCat data file.
 import lxcat_data_parser as ldp
-import matplotlib.pyplot as plt
 from scipy import interpolate
 
 def lxcat_cross_section_to_numpy(file : str, column_fields : tp.List[str] )->list:
@@ -18,6 +17,7 @@ def lxcat_cross_section_to_numpy(file : str, column_fields : tp.List[str] )->lis
     
     return np_data
 
+#import matplotlib.pyplot as plt
 # np_data = lxcat_cross_section_to_numpy("lxcat_data/e_Ar_elastic.txt",["energy","cross section"])
 # #print(np_data[0])
 # #print(np_data[1])

@@ -13,12 +13,19 @@ import cross_section
 from scipy import interpolate
 import scipy.constants
 
-def thermal_velocity(t_ev):
+def electron_thermal_velocity(T):
     """
     computes the thermal velocity
-    t_ev : temperature in thermal velocity (t_ev=1 means temperature for 1ev)
+    T : temperature in K
     """
-    return np.sqrt(2*BOLTZMANN_CONST*t_ev/MASS_ELECTRON)
+    return np.sqrt(2*BOLTZMANN_CONST*T/MASS_ELECTRON)
+
+def electron_temperature(vth):
+    """
+    computes the thermal velocity
+    vth : thermal velocity
+    """
+    return (0.5 * MASS_ELECTRON * vth**2)/BOLTZMANN_CONST
 
 MASS_ELECTRON       = scipy.constants.m_e
 MASS_ARGON          = 6.6335209E-26 
@@ -31,8 +38,8 @@ BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_1EV          = ELECTRON_VOLT/BOLTZMANN_CONST
 MAXWELLIAN_TEMP_K   = 1*TEMP_K_1EV
 AR_NEUTRAL_N        = 3.22e22 # 1/m^3
-MAXWELLIAN_N        = 1.00e30 # 1/m^3
-ELECTRON_THEMAL_VEL = thermal_velocity(MAXWELLIAN_TEMP_K) # np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
+MAXWELLIAN_N        = 1.00e0 # 1/m^3
+ELECTRON_THEMAL_VEL = electron_thermal_velocity(MAXWELLIAN_TEMP_K) # np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/MASS_ELECTRON)
 
 class Collisions(abc.ABC):
 

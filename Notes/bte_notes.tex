@@ -84,10 +84,26 @@ The scattering velocity direction is computed based on using following notations
 The angle $\theta$ can be computed from $v_0$, and $\chi,\phi$ are taken to represent the solid angle for the collision event. The scattered velocity can be decomposed along the orthonormal basis vectors, $\hat{E_0}=\hat{v_{0}}$, $\hat{E_1}= \cfrac{\hat{v_0}\times e_i}{\sin\theta}$, and $\hat{E_2}= \hat{v_0}\times \hat{E_1}$. Therefore, the scattered direction unit vector can be written, 
 
 \begin{equation}
-    \hat{v_1} = \cos\chi \hat{v_0} + \sin\chi sin\phi (\frac{\hat{v_0}\times e_i}{\sin\theta}) + \sin\chi cos\phi (\hat{v_0}\times \frac{\hat{v_0}\times e_i}{\sin\theta}) \label{eq:scatter}
+    \hat{v_1} = \cos\chi \hat{v_0} + \sin\chi sin\phi (\frac{\hat{v_0}\times \hat{e_i}}{\sin\theta}) + \sin\chi cos\phi (\hat{v_0}\times \frac{\hat{v_0}\times \hat{e_i}}{\sin\theta}) \label{eq:scatter}
 \end{equation}
-
 We can see that, $\hat{v_1}\cdot \hat{v_1}=1$, and $\hat{v_1} \cdot \hat{v_0}= \cos\chi$.
+When $\theta = 0 $, we can pick $\hat{E_0}=\hat{e_i}$, $\hat{E_1}=\hat{e_j}$ and $\hat{E_2}=\hat{e_k}$ as the basis to derive the scattering direction. 
+
+In spherical coordinates, for a given incident vector $(v_r,\theta,\phi)$ that is not parallel to $\hat{e_i}$,  and scattering angle $(\chi,\gamma)$, we can compute the direction of the scattered particle as 
+
+\begin{align}
+    \theta^\prime &= \tiny \left\{\cos ^{-1}\left(\frac{\cos (\theta ) \left(\cos (\gamma ) \sin (\theta ) \sin (\chi ) \cos (\phi )+\cos (\chi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}\right)-\sin (\gamma ) \sin (\theta ) \sin (\chi ) \sin (\phi )}{\sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}}\right)\right\} \\
+    \phi^\prime &= \tan ^{-1}\left(\frac{\sin (\chi ) \left(\cos (\gamma ) \sin ^2(\theta ) \sin (\phi ) \cos (\phi )+\sin (\gamma ) \cos (\theta )\right)+\sin (\theta ) \cos (\chi ) \sin (\phi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}}{\sin (\theta ) \cos (\chi ) \cos (\phi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}-\cos (\gamma ) \sin (\chi ) \left(\sin ^2(\theta ) \sin ^2(\phi )+\cos ^2(\theta )\right)}\right)
+\end{align}
+
+If the incident vector is parallel to the $\hat{e_i}$, we can compute the above, 
+\begin{align}
+    \theta^\prime &=\left\{\cos ^{-1}(\cos (\gamma ) \sin (\chi ))\right\} \\
+    \phi^\prime &=\tan ^{-1}(\sin (\gamma ) \tan (\chi )) \\
+\end{align}
+
+
+
 
 \subsection{G0 : $e + Ar \rightarrow e + Ar$ collision operator}
 \begin{equation}
@@ -415,20 +431,55 @@ More additional tensors that we need to compute the $L^{+}$ component.
 
 \begin{itemize}
     \item $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$ : Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity (i.e., in G2 ejected electron). This is a rank 8 tensor where it might be too expensive to compute. For cases $G0$, $G1$ we can compute $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime} = {S^r}_{r^\prime} \otimes S^{\theta\phi\chi\gamma}_{\theta^\prime \phi^\prime}$ since radial component only depends on energy, while for reactions like $G2$ it's depends on both energy and direction (i.e., for momentum conservation).
-    \item ${Y^\prime}_{lm}^{\theta\phi}$ - lm spherical harmonic mode evaluated at the differed particle velocity direction
-    \item $P^{r\theta\phi\chi}_{k\gamma}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
-    \item $M^{r\theta\phi\chi}_{\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+    \item $P^{r\theta\phi\chi\gamma}_{k}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
+    \item $M^{r\theta\phi\chi\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
     \item $Y^{r\theta\phi\chi\gamma}_{lm}$ - $lm$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+    \item $\sigma^{r\theta\phi\chi\gamma}$ - differential cross section broadcasted on scattering cross section angles. 
+    \item $B^{r\theta\phi}_{pqs}$ - $pqs$ basis evaluated at the incident grid.              
 \end{itemize}
 
 For the general case, of the differed particle, (i.e., differed particle all velocity components are functions of $r,\theta,\phi,\chi,\gamma$) we can write the following. Note, $A$ is obtained for contraction on the $\gamma$ azimuthal of angle of the scattered particle, $B$ is obtained with contraction on the polar angle of the scattering direction, $C$ is obtained contraction on $(\theta,\phi)$ for the velocity space angular directions, and finally $L^{+}$ obtained using radical direction contraction. 
 
 \begin{align}
-    A^{r\theta\phi\chi}_{klm}  & =  ( P^{r\theta\phi\chi}_{k\gamma} M^{r\theta\phi\chi}_{\gamma} ) Y^{r\theta\phi\chi\gamma}_{lm} \\
-    B^{r\theta\phi}_{klm}      & = \frac{\pi}{|S_\gamma|} \sigma^{r\chi} (W_\chi A^{r\theta\phi}_{\chi klm}) \\
-    C^{rqs}_{klm}              & = \tilde{Y}^{qs}_{\theta\phi} B^{r\theta\phi}_{klm} \\
-    {L^{+}}_{k,l,m}^{p,q,s}     & = {P^p}_r C^{rqs}_{klm}
+    A^{r\theta\phi}_{klm}   &=  ( P^{r\theta\phi\chi\gamma}_{k} M^{r\theta\phi\chi\gamma} Y^{r\theta\phi\chi\gamma}_{lm}) W{\gamma} W_{\chi} \\
+    {L^{+}}_{k,l,m}^{p,q,s} &=  B^{r\theta\phi}_{pqs} A^{r\theta\phi}_{klm} W_\phi W_\theta W_r
+    % B^{r\theta\phi}_{klm}      & = \frac{\pi}{|S_\gamma|} \sigma^{r\chi} (W_\chi A^{r\theta\phi}_{\chi klm}) \\
+    % C^{rqs}_{klm}              & = \tilde{Y}^{qs}_{\theta\phi} B^{r\theta\phi}_{klm} \\
+    %{L^{+}}_{k,l,m}^{p,q,s}     & = {P^p}_r C^{rqs}_{klm}
 \end{align}
+
+\subsection{Distribution moments in basis expansion}
+Let $f(v) = M(v_\alpha) \sum_{klm} h_{klm} \phi_klm(v\alpha)$, where $v_\alpha = v/\alpha$. Then we can write the first moment of the distribution, 
+\begin{align}
+    n_e & = \int_{R^3} f(v) dv \\
+\end{align} which can be written as, 
+\begin{align}
+    n_e & = Q h 
+\end{align} where, taking $k=(p,q,s)$ 
+\begin{align}
+    Q_{klm} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = 0  \text{ if } klm \neq 000 \\
+    Q_{000} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = \frac{n}{4\pi}
+\end{align}
+
+
+
+\subsection{Varying thermal velocity}
+Let $\alpha,\beta$ be two thermal velocities, and their corresponding normalized velocity be $v_\alpha=v/\alpha,v_\beta=v/\beta$.
+Let $f(v) = M(v_\alpha) h(v_\alpha)$. Let $h^{(\alpha)}$ be the basis coefficients w.r.t. the chosen basis. Let us try to expand $f(v)$ using maxwellian at different temperature say at $\beta$, let $h^{(\beta)}$ be the coefficients for the expansion.
+\begin{equation}
+    M^{(\beta)} h^{(\beta)} = W^{(\alpha)} h^{(\alpha)}
+\end{equation} where, 
+\begin{align}
+    M^{(\beta)}_{ij} &= \int_{v} \int_{S^2} M(v_\beta) \phi_i(v_\beta) \phi_j(v_\beta) d\omega dv  = \frac{n}{4\pi} \delta_{ij} \\
+    W^{(\alpha)}_{ij} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_i(v_\beta) \phi_j(v_\alpha) d\omega dv   
+\end{align}
+
+For $W_ij^{(\alpha)}$, let i=0, then we can write (Note : $\phi_0(v_\beta)=1$)
+\begin{align*}
+    W^{(\alpha)}_{0j} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_0(v_\beta) \phi_j(v_\alpha) d\omega dv\\
+    W^{(\alpha)}_{0j} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_j(v_\alpha) d\omega dv = \frac{n}{4\pi} \delta_{0j}
+\end{align*}
+Therefore, we can write $h^{(\beta)}_0=h^{(\alpha)}_0$. There zeroth coefficient always match hence we should preserve zeroth moment of the distribution. 
 
  
 

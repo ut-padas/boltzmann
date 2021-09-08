@@ -88,9 +88,9 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
             print("coll_op_vth ", vth_coll_op, "vth _curr: ", vth_t)
             
             mm_h1  = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp, mw_cop, vth_coll_op, mw_t, vth_t, None, None, None, 1)
-            print("before ", h_t)
+            #print("before ", h_t)
             h_t    = np.dot(mm_h1,h_t)
-            print("after ", h_t)
+            #print("after ", h_t)
             
             print("Assembling the collision op. for temperature : ", temp_t)
             t_L.start()

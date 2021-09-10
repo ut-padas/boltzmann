@@ -371,12 +371,41 @@ def maxwellian_test():
     plt.close()
 
     
+def collision_op_thermal_test():
+
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = 1
+    params.BEVelocitySpace.SPH_HARM_LM = [[0,0],[1,0]]
+    params.BEVelocitySpace.NUM_Q_VR  = 21
+    params.BEVelocitySpace.NUM_Q_VT  = 16
+    params.BEVelocitySpace.NUM_Q_VP  = 16
+    params.BEVelocitySpace.NUM_Q_CHI = 64
+    params.BEVelocitySpace.NUM_Q_PHI = 16
+
+    cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+    spec_sp  = colOpSp.SPEC_SPHERICAL
+
+    VTH1 = 1.0 * VTH
+    MW1 = BEUtils.get_maxwellian_3d(VTH1,1)
+
+    L_np1   = Lp(g0,MW1,VTH1) - Lm(g0,MW1,VTH1)
+    print("Coll_Op at VTH: ",VTH1)
+    print(L_np1)
     
+    VTH2 = (1 - 1e-3)* VTH1 # +   #1e-2 * VTH1
+    MW2 = BEUtils.get_maxwellian_3d(VTH2,1)
+    L_np2   = Lp(g0,MW2,VTH2) - Lm(g0,MW2,VTH2)
+    
+    print("Coll_Op at VTH: ",VTH2)
+    print(L_np2)
+    
+    print("diff relative : ", np.linalg.norm(L_np1-L_np2)/np.linalg.norm(L_np2))
 
 
+collision_op_thermal_test()
 #collision_op_test()
 #collision_op_conv()
-maxwellian_test()
+#maxwellian_test()
 #eigenvec_collision_op(g0,maxwellian)
 #plot_crosssection(g0,50)
 

@@ -184,7 +184,7 @@ class CollisionOpSP():
         Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
         Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
         #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
-        Mp_r  = np.exp((Sd[0]/V_TH)**2 - (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
+        Mp_r  = np.exp(-(Sd[0]/V_TH)**2 + (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
         
         num_p  = spec_sp._p+1
         num_sh = len(spec_sp._sph_harm_lm)
@@ -370,7 +370,7 @@ class CollisionOpSP():
                             #print(vs)
                             #m_sc = maxwellian(vs[0]/V_TH)
                             #w_factor = (((v_abs*V_TH)**3 ) * m_sc * (V_TH)) / weight_func(v_abs)
-                            w_factor = np.exp((vs[0]/V_TH)**2 - (v_abs)**2) * (v_abs * V_TH)
+                            w_factor = np.exp(-(vs[0]/V_TH)**2 + (v_abs)**2) * (v_abs * V_TH)
                             #print("w_factor : ", w_factor)
                             for pi in range(num_p):
                                 for lm2_idx,lm2 in enumerate(sph_harm_lm):
@@ -384,7 +384,8 @@ class CollisionOpSP():
     @staticmethod
     def assemble_mat(collision : collisions.Collisions , maxwellian, vth):
         Lij = CollisionOpSP._Lp(collision,maxwellian,vth)-CollisionOpSP._Lm(collision,maxwellian,vth)
-        return Lij
+        # 09/14/21  With corrected L+ maxwellian scaling, if it is positive we will increase temperature. So we need to put a - sign. 
+        return -1*Lij
         
         
 

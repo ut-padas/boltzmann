@@ -373,7 +373,7 @@ def maxwellian_test():
     
 def collision_op_thermal_test():
 
-    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = 1
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = 4
     params.BEVelocitySpace.SPH_HARM_LM = [[0,0],[1,0]]
     params.BEVelocitySpace.NUM_Q_VR  = 21
     params.BEVelocitySpace.NUM_Q_VT  = 16
@@ -392,7 +392,8 @@ def collision_op_thermal_test():
     print("Coll_Op at VTH: ",VTH1)
     print(L_np1)
     
-    VTH2 = (1 - 1e-3)* VTH1 # +   #1e-2 * VTH1
+    NUM_COLL_STEPS=1000
+    VTH2 = (np.sqrt(1 - 2*collisions.MASS_R_EARGON)**NUM_COLL_STEPS) * VTH1 # +   #1e-2 * VTH1
     MW2 = BEUtils.get_maxwellian_3d(VTH2,1)
     L_np2   = Lp(g0,MW2,VTH2) - Lm(g0,MW2,VTH2)
     
@@ -401,9 +402,17 @@ def collision_op_thermal_test():
     
     print("diff relative : ", np.linalg.norm(L_np1-L_np2)/np.linalg.norm(L_np2))
 
+    W1,U1 = np.linalg.eig(L_np1)
+    W2,U2 = np.linalg.eig(L_np2)
 
-collision_op_thermal_test()
-#collision_op_test()
+    for i in range(U1.shape[1]):
+        print("EigenVec i : ",i ," angle change", np.arccos(np.dot(U1[:,i],U2[:,i])))
+    
+
+
+
+#collision_op_thermal_test()
+collision_op_test()
 #collision_op_conv()
 #maxwellian_test()
 #eigenvec_collision_op(g0,maxwellian)

@@ -100,21 +100,38 @@ which_all = [0, 6, 11, 12, 35]
 # which_all = [10]
 # which_all = [101, 102, 103]
 
+ehat_ext_max = 36
+
 for which_idx,which in enumerate(which_all):
 
     if which < 100:
         print(EbNlist[which])
-        ehat = 1.5*eveclist[which]/mulist[which]
+        ehat = 0.9*1.5*eveclist[which]/mulist[which]
         pehat = dveclist[which]
         maxw = 2./np.sqrt(np.pi)*(1.5/mulist[which])**(1.5)*np.exp(-ehat)
         # maxw = np.exp(-ehat)
 
+        frac = 0.8
+        startidx = int(np.ceil(len(ehat)*frac))
+
+        taillin = np.poly1d(np.polyfit(ehat[startidx:], np.log(pehat[startidx:]), 1))
+
+        del_e = (max(ehat)-min(ehat))/(len(ehat)-1)
+        ehat_ext = np.concatenate((ehat, np.arange(max(ehat)+del_e, ehat_ext_max, del_e)))
+        pehat_ext = np.concatenate((pehat, np.exp(taillin(np.arange(max(ehat)+del_e, ehat_ext_max, del_e)))))
+
         datax = np.sqrt(ehat)
         datay = pehat/(maxw+1e-20)
 
+        maxw_ext = 2./np.sqrt(np.pi)*(1.5/mulist[which])**(1.5)*np.exp(-ehat_ext)
+
+        datax = np.sqrt(ehat_ext)
+        datay = pehat_ext/(maxw_ext+1e-20)
+
         # plt.show()
-        # plt.plot(ehat, pehat)
-        # plt.plot(ehat, maxw)
+        # plt.semilogy(ehat, pehat,'-')
+        # plt.semilogy(ehat_ext, pehat_ext,'o')
+        # plt.semilogy(datax, datay,'-')
         # plt.show()
 
         print(np.trapz(datay*datax**2,x=datax))
@@ -140,8 +157,8 @@ for which_idx,which in enumerate(which_all):
 
 
         N = 500
-        # xx = np.linspace(min(datax),max(datax),num=N)
-        xx = np.linspace(0,10,num=N)
+        xx = np.linspace(min(datax),max(datax),num=N)
+        # xx = np.linspace(0,10,num=N)
         # x = np.linspace(0,100,num=N)
         yy = ftest(xx)
         # y = np.concatenate((y, y[-1::-1]))
@@ -177,6 +194,7 @@ for which_idx,which in enumerate(which_all):
 
         # ftest = lambda xx: np.interp(xx, x, y)
         ftest = interp1d(xx, y2, kind='cubic', bounds_error=False, fill_value=(y2[0],y2[-1]))
+        ftestexp = lambda x: ftest(x)*np.exp(-x**2)
         # ftest = Rbf(x, y)
     else:
         x = np.linspace(0,5,num=100)
@@ -187,6 +205,10 @@ for which_idx,which in enumerate(which_all):
         elif which == 103:
             ftest = lambda x: (1.5 + np.sin(5*x+1))
 
+        elastic_cf = lambda x: (1.2 + np.cos(2*x+1))
+        excitation_cf = lambda x: (1.2 + np.cos(2*x+1))
+        ionization_cf = lambda x: (1.2 + np.cos(2*x+1))
+
         # datay = ftest(x)
         # ftest = interp1d(x, datay, kind='cubic', fill_value='extrapolate')
 
@@ -194,14 +216,16 @@ for which_idx,which in enumerate(which_all):
     fg = ftest(xg)
 
     ftest11 = lambda y: ftest(min(x)+.5*(max(x)-min(x))*(y+1))
+    ftest11exp = lambda y: ftestexp(min(x)+.5*(max(x)-min(x))*(y+1))
 
     a = np.zeros(max_dofs)
     b = np.zeros(max_dofs)
     c = np.polynomial.chebyshev.chebinterpolate(ftest11, max_dofs)
+    cfull = np.polynomial.chebyshev.chebinterpolate(ftest11exp, max_dofs)
     # c = np.polynomial.chebyshev.chebfit(2*(x-min(x))/(max(x)-min(x))-1, ftest(x), maxpoly_nmax)
     # xtrapz = np.logspace(-10,2,num=50000)
     # xtrapz = np.linspace(min(x),max(x),num=50000)
-    xtrapz = np.linspace(0,10,num=10000)
+    xtrapz = np.linspace(0,20,num=10000)
     # plt.plot(xtrapz, lagpolyeval(xtrapz,2))
     # plt.plot(xtrapz, lagpolyeval2(xtrapz,2),'o:')
     # plt.show()
@@ -213,45 +237,52 @@ for which_idx,which in enumerate(which_all):
     for i in range(max_dofs):
         # a[i] = np.sum(maxpolyeval(xg, i)*np.exp(xg**2)*fg*wg)
         # b[i] = np.sum(lagpolyeval(xg**2, i)*np.exp(xg**2)*fg*wg)
-        a[i] = np.sum(maxpolyeval(xg, i)*fg*wg)
-        b[i] = np.sum(lagpolyeval(xg**2, i)*fg*wg)
+        # a[i] = np.sum(maxpolyeval(xg, i)*fg*wg)
+        # b[i] = np.sum(lagpolyeval(xg**2, i)*fg*wg)
         # a[i] = np.trapz(maxpolyeval(xtrapz, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
         #     / np.trapz(maxpolyeval(xtrapz, i)**2*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz)
         # b[i] = np.trapz(lagpolyeval(xtrapz**2, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
         #     / np.trapz(lagpolyeval(xtrapz**2, i)**2*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz)
-        # a[i] = np.trapz(maxpolyeval(xtrapz, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
-            # / np.sqrt(np.pi) * 4.
-        # b[i] = np.trapz(lagpolyeval(xtrapz**2, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
-            # / np.sqrt(np.pi) * 4.
+        a[i] = np.trapz(maxpolyeval(xtrapz, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
+            / np.sqrt(np.pi) * 4.
+        b[i] = np.trapz(lagpolyeval(xtrapz**2, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
+            / np.sqrt(np.pi) * 4.
 
 
-    xerror = np.linspace(min(x),max(x),num=10000)
+    xerror = np.linspace(min(x),max(x),num=100000)
 
     f_approx_m = np.zeros(len(x))
     f_approx_l = np.zeros(len(x))
     f_approx_c = np.zeros(len(x))
+    f_approx_cfull = np.zeros(len(x))
     f_approx_m_err = np.zeros(len(xerror))
     f_approx_l_err = np.zeros(len(xerror))
     f_approx_c_err = np.zeros(len(xerror))
+    f_approx_cfull_err = np.zeros(len(xerror))
     error_g0_m = np.zeros(max_dofs)
     error_g0_l = np.zeros(max_dofs)
     error_g0_c = np.zeros(max_dofs)
+    error_g0_cfull = np.zeros(max_dofs)
     error_g0_i = np.zeros(max_dofs)
     error_g1_m = np.zeros(max_dofs)
     error_g1_l = np.zeros(max_dofs)
     error_g1_c = np.zeros(max_dofs)
+    error_g1_cfull = np.zeros(max_dofs)
     error_g1_i = np.zeros(max_dofs)
     error_g2_m = np.zeros(max_dofs)
     error_g2_l = np.zeros(max_dofs)
     error_g2_c = np.zeros(max_dofs)
+    error_g2_cfull = np.zeros(max_dofs)
     error_g2_i = np.zeros(max_dofs)
     error_linf_m = np.zeros(max_dofs)
     error_linf_l = np.zeros(max_dofs)
     error_linf_c = np.zeros(max_dofs)
+    error_linf_cfull = np.zeros(max_dofs)
     error_linf_i = np.zeros(max_dofs)
     error_l2_m = np.zeros(max_dofs)
     error_l2_l = np.zeros(max_dofs)
     error_l2_c = np.zeros(max_dofs)
+    error_l2_cfull = np.zeros(max_dofs)
     error_l2_i = np.zeros(max_dofs)
 
     fttest_err = ftest(xerror)
@@ -271,6 +302,7 @@ for which_idx,which in enumerate(which_all):
         f_approx_m += a[i]*maxpolyeval(x, i)
         f_approx_l += b[i]*lagpolyeval(x**2, i)
         f_approx_c  = np.polynomial.chebyshev.chebval(2*(x-min(x))/(max(x)-min(x))-1.,c[0:i+1])
+        f_approx_cfull  = np.polynomial.chebyshev.chebval(2*(x-min(x))/(max(x)-min(x))-1.,cfull[0:i+1])
         xi = np.linspace(min(x), max(x), i+1)
         yi = ftest(xi)
         f_approx_i = np.interp(x, xi, yi)
@@ -278,47 +310,54 @@ for which_idx,which in enumerate(which_all):
         f_approx_m_err += a[i]*maxpolyeval(xerror, i)
         f_approx_l_err += b[i]*lagpolyeval(xerror**2, i)
         f_approx_c_err  = np.polynomial.chebyshev.chebval(2*(xerror-min(x))/(max(x)-min(x))-1.,c[0:i+1])
+        f_approx_cfull_err  = np.polynomial.chebyshev.chebval(2*(xerror-min(x))/(max(x)-min(x))-1.,cfull[0:i+1])
         f_approx_i_err = np.interp(xerror, xi, yi)
 
         error_g0_m[i] = np.trapz((f_approx_m_err-fttest_err)*elastic_err*x3exp_err, x=xerror)/elastic_scale
         error_g0_l[i] = np.trapz((f_approx_l_err-fttest_err)*elastic_err*x3exp_err, x=xerror)/elastic_scale
         error_g0_c[i] = np.trapz((f_approx_c_err-fttest_err)*elastic_err*x3exp_err, x=xerror)/elastic_scale
+        error_g0_cfull[i] = np.trapz((f_approx_cfull_err/exp_err-fttest_err)*elastic_err*x3exp_err, x=xerror)/elastic_scale
         error_g0_i[i] = np.trapz((f_approx_i_err-fttest_err)*elastic_err*x3exp_err, x=xerror)/elastic_scale
 
         error_g1_m[i] = np.trapz((f_approx_m_err-fttest_err)*excitation_err*x3exp_err, x=xerror)/excitation_scale
         error_g1_l[i] = np.trapz((f_approx_l_err-fttest_err)*excitation_err*x3exp_err, x=xerror)/excitation_scale
         error_g1_c[i] = np.trapz((f_approx_c_err-fttest_err)*excitation_err*x3exp_err, x=xerror)/excitation_scale
+        error_g1_cfull[i] = np.trapz((f_approx_cfull_err/exp_err-fttest_err)*excitation_err*x3exp_err, x=xerror)/excitation_scale
         error_g1_i[i] = np.trapz((f_approx_i_err-fttest_err)*excitation_err*x3exp_err, x=xerror)/excitation_scale
 
         error_g2_m[i] = np.trapz((f_approx_m_err-fttest_err)*ionization_err*x3exp_err, x=xerror)/ionization_scale
         error_g2_l[i] = np.trapz((f_approx_l_err-fttest_err)*ionization_err*x3exp_err, x=xerror)/ionization_scale
         error_g2_c[i] = np.trapz((f_approx_c_err-fttest_err)*ionization_err*x3exp_err, x=xerror)/ionization_scale
+        error_g2_cfull[i] = np.trapz((f_approx_cfull_err/exp_err-fttest_err)*ionization_err*x3exp_err, x=xerror)/ionization_scale
         error_g2_i[i] = np.trapz((f_approx_i_err-fttest_err)*ionization_err*x3exp_err, x=xerror)/ionization_scale
 
         error_linf_m[i] = max(abs((f_approx_m_err-fttest_err)*exp_err))
         error_linf_l[i] = max(abs((f_approx_l_err-fttest_err)*exp_err))
         error_linf_c[i] = max(abs((f_approx_c_err-fttest_err)*exp_err))
+        error_linf_cfull[i] = max(abs(f_approx_cfull_err-fttest_err*exp_err))
         error_linf_i[i] = max(abs((f_approx_i_err-fttest_err)*exp_err))
         error_l2_m[i] = np.sqrt(sum(abs((f_approx_m_err-fttest_err)*exp_err)**2)/len(xerror))
         error_l2_l[i] = np.sqrt(sum(abs((f_approx_l_err-fttest_err)*exp_err)**2)/len(xerror))
         error_l2_c[i] = np.sqrt(sum(abs((f_approx_c_err-fttest_err)*exp_err)**2)/len(xerror))
+        error_l2_cfull[i] = np.sqrt(sum(abs(f_approx_cfull_err-fttest_err*exp_err)**2)/len(xerror))
         error_l2_i[i] = np.sqrt(sum(abs((f_approx_i_err-fttest_err)*exp_err)**2)/len(xerror))
 
         if plot_convergence == False:
             if i in degrees_all:
                 plt.subplot(len(which_all), len(degrees_all), which_idx*len(degrees_all)+degrees_all.index(i)+1)
-                plt.semilogy(x, f_approx_m*np.exp(-x**2),'-')
-                plt.semilogy(x, f_approx_l*np.exp(-x**2),'-')
-                plt.semilogy(x, f_approx_c*np.exp(-x**2),'-')
-                plt.semilogy(x, f_approx_i*np.exp(-x**2),'-')
-                plt.semilogy(x, ftest(x)*np.exp(-x**2),'k')
-                plt.semilogy(x, np.exp(-x**2),'k--')
-                # plt.plot(x, f_approx_m*np.exp(-x**2),'-')
-                # plt.plot(x, f_approx_l*np.exp(-x**2),'-')
-                # plt.plot(x, f_approx_c*np.exp(-x**2),'-')
-                # plt.plot(x, f_approx_i*np.exp(-x**2),'-')
-                # plt.plot(x, ftest(x)*np.exp(-x**2),'k')
-                # plt.plot(x, np.exp(-x**2),'k--')
+                # plt.semilogy(x, f_approx_m*np.exp(-x**2),'-')
+                # plt.semilogy(x, f_approx_l*np.exp(-x**2),'-')
+                # plt.semilogy(x, f_approx_c*np.exp(-x**2),'-')
+                # plt.semilogy(x, f_approx_i*np.exp(-x**2),'-')
+                # plt.semilogy(x, ftest(x)*np.exp(-x**2),'k')
+                # plt.semilogy(x, np.exp(-x**2),'k--')
+                plt.plot(x, f_approx_m*np.exp(-x**2),'-')
+                plt.plot(x, f_approx_l*np.exp(-x**2),'-')
+                plt.plot(x, f_approx_c*np.exp(-x**2),'-')
+                plt.plot(x, f_approx_cfull,'-')
+                plt.plot(x, f_approx_i*np.exp(-x**2),'-')
+                plt.plot(x, ftest(x)*np.exp(-x**2),'k')
+                plt.plot(x, np.exp(-x**2),'k--')
                 # plt.semilogy(x, f_approx_m*np.exp(-x**2)*x**2,'o--')
                 # plt.semilogy(x, f_approx_l*np.exp(-x**2)*x**2,'x:')
                 # plt.semilogy(x, f_approx_c*np.exp(-x**2)*x**2,'s:')
@@ -333,7 +372,7 @@ for which_idx,which in enumerate(which_all):
                 # plt.plot(x, excitation_cf(x),'-')
                 # plt.plot(x, ionization_cf(x),'-')
                 # plt.ylim((-0.25,1.5))
-                plt.xlim((0,5))
+                plt.xlim((0,7))
 
                 if degrees_all.index(i) == 0:
                     plt.ylabel('Density')
@@ -345,7 +384,7 @@ for which_idx,which in enumerate(which_all):
                     plt.title('Num. of polys: '+str(i))
 
                 if which_idx == 0 and degrees_all.index(i) == 0:
-                    plt.legend(['Maxwell','Laguerre','Chebyshev','Linear','Bolsig','Maxwellian'], loc='upper right')
+                    plt.legend(['Maxwell','Laguerre','Chebyshev','Chebyshev-Full','Linear','Bolsig','Maxwellian'], loc='upper right')
 
                 plt.grid()
 
@@ -356,6 +395,7 @@ for which_idx,which in enumerate(which_all):
         plt.semilogy(error_linf_l)
         plt.semilogy(error_linf_c)
         plt.semilogy(error_linf_i)
+        plt.semilogy(error_linf_cfull)
         plt.grid()
         plt.ylabel('Error')
         if which_idx == len(which_all)-1:
@@ -368,6 +408,7 @@ for which_idx,which in enumerate(which_all):
         plt.semilogy(error_l2_l)
         plt.semilogy(error_l2_c)
         plt.semilogy(error_l2_i)
+        plt.semilogy(error_l2_cfull)
         plt.grid()
         if which_idx == len(which_all)-1:
             plt.xlabel('Number of polynomials')
@@ -379,6 +420,7 @@ for which_idx,which in enumerate(which_all):
         plt.semilogy(abs(error_g0_l))
         plt.semilogy(abs(error_g0_c))
         plt.semilogy(abs(error_g0_i))
+        plt.semilogy(abs(error_g0_cfull))
         plt.grid()
         if which_idx == len(which_all)-1:
             plt.xlabel('Number of polynomials')
@@ -390,6 +432,7 @@ for which_idx,which in enumerate(which_all):
         plt.semilogy(abs(error_g1_l))
         plt.semilogy(abs(error_g1_c))
         plt.semilogy(abs(error_g1_i))
+        plt.semilogy(abs(error_g1_cfull))
         plt.grid()
         if which_idx == len(which_all)-1:
             plt.xlabel('Number of polynomials')
@@ -401,12 +444,13 @@ for which_idx,which in enumerate(which_all):
         plt.semilogy(abs(error_g2_l))
         plt.semilogy(abs(error_g2_c))
         plt.semilogy(abs(error_g2_i))
+        plt.semilogy(abs(error_g2_cfull))
         plt.grid()
 
         if which_idx == len(which_all)-1:
             plt.xlabel('Number of polynomials')
         if which_idx == 0:
-            plt.legend(['Maxwell','Laguerre','Chebyshev','Linear'])
+            plt.legend(['Maxwell','Laguerre','Chebyshev','Linear','Chebyshev-Full'])
             plt.title('Rate (ionization)')
 
         # plt.show()

@@ -2,10 +2,10 @@
 @package : Utility functions needed for the Boltzmann solver. 
 """
 import numpy as np
-import collisions
 import parameters as params
 import spec_spherical
 import basis
+import scipy.constants
 
 def maxwellian_normalized(v_abs):
     """
@@ -37,53 +37,27 @@ def gaussian(v,mu=None,sigma=1.0):
 
 def cartesian_to_spherical(vx,vy,vz):
     v_abs = np.sqrt(vx**2 + vy**2 + vz**2)
-    if np.allclose(v_abs,0.0):
-        return [0.0,0.0,0.0]
+    check_1  = np.isclose(v_abs,0.0)
+    check_2  = np.isclose(vx,0.0)
+
+    not_check_1 = np.logical_not(check_1)
+    not_check_2 = np.logical_not(check_2)
     
-    if np.allclose(vx,0.0):
-        return [v_abs, np.arccos(vz/v_abs), np.pi/2]
-        
-    return [v_abs, np.arccos(vz/v_abs), np.arctan(vy/vx)]
+    not_check_1_and_check_2 = np.logical_and(not_check_1,not_check_2)
+    
+    vr = np.zeros_like(v_abs)
+    vt = np.zeros_like(v_abs)
+    vp = np.zeros_like(v_abs)
+
+    vr = v_abs
+    vt[not_check_1_and_check_2] =  np.arccos(vz[not_check_1_and_check_2]/v_abs[not_check_1_and_check_2])
+    vp[not_check_1_and_check_2] =  np.arctan(vy[not_check_1_and_check_2]/vx[not_check_1_and_check_2])
+    vp[check_2]                 =  np.pi/2
+    
+    return [vr,vt,vp]
 
 def spherical_to_cartesian(v_abs, v_theta, v_phi):
     return [v_abs * np.sin(v_theta) * np.cos(v_phi), v_abs * np.sin(v_theta) * np.sin(v_phi), v_abs * np.cos(v_theta)]
-
-def is_collission_mat_converged(spec,cf,collision,maxwellian,tol):
-    
-    """
-    check if the assembled collision operator
-    converged with increasing quadrature points. 
-    """
-    print("-- converge on the spherical integration")
-    num_qv_s = 1 #params.BEVelocitySpace.NUM_Q_PTS_ON_SPHERE
-    num_qv   = 1 #params.BEVelocitySpace.NUM_Q_PTS_ON_V
-
-    V_TH  = collisions.ELECTRON_THEMAL_VEL
-    M     = spec.compute_maxwellian_mm(maxwellian, V_TH)
-    invM  = np.linalg.inv(M)
-
-    L     = params.BEVelocitySpace.VELOCITY_SPACE_DT * np.matmul( invM, cf.assemble_mat(collision, maxwellian, num_qv , num_qv_s) ) 
-    Lp    = params.BEVelocitySpace.VELOCITY_SPACE_DT * np.matmul( invM, cf.assemble_mat(collision, maxwellian, num_qv+1 , num_qv_s+1) ) #cf.assemble_mat(collision, maxwellian, num_qv , num_qv_s+1) 
-    error_func = lambda L,L1 : np.max( np.abs( (L1-L) ) )
-
-    if ( error_func(Lp,L) < tol ):
-        print("collision mat converged with %d number of quadrature points on the sphere" %(num_qv_s))
-    else:
-        num_qv += 1
-        num_qv_s+= 1
-        
-    while(error_func(Lp,L)  > tol):
-        L        = Lp
-        Lp       = params.BEVelocitySpace.VELOCITY_SPACE_DT * np.matmul(invM, cf.assemble_mat(collision, maxwellian, num_qv+1 , num_qv_s+1) ) 
-        print(" |Lp-L| : %.16f  with num q points on sphere %d " %(error_func(Lp,L), num_qv_s) )
-        print("number of # of quadrature point in r %d, # quadrature points for angular %d \n" %(num_qv,num_qv_s))
-        print(L)
-        print("\n")
-        print(Lp)
-        num_qv += 1
-        num_qv_s+= 1
-
-    return 
 
 def moment_zero_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, V_TH, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
     """
@@ -202,7 +176,7 @@ def compute_avg_temp(particle_mass,spec_sp: spec_spherical.SpectralExpansionSphe
     m2         = moment_second_f(spec_sp,cf,maxwellian,V_TH,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,scale)
     #avg energy per particle
     avg_energy = (0.5*particle_mass*m2)/m0
-    temp       = (2/(3*collisions.BOLTZMANN_CONST)) * avg_energy
+    temp       = (2/(3*scipy.constants.Boltzmann)) * avg_energy
     return temp
 
 def compute_func_projection_coefficients(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, maxwellian, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP):

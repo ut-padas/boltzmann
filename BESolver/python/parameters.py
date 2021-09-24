@@ -6,11 +6,9 @@ import numpy as np
 import basis
 import spec as sp
 import pint
-import collisions
 import scipy.constants 
 
-#http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node6.html
-PLASMA_FREQUENCY  = np.sqrt(collisions.MAXWELLIAN_N * (scipy.constants.elementary_charge**2) / (scipy.constants.epsilon_0  * scipy.constants.electron_mass))
+
 
 class BEVelocitySpace():
     VELOCITY_SPACE_POLY_ORDER  = 1
@@ -54,7 +52,4 @@ def print_parameters():
     print("NUM_Q_VP: ", BEVelocitySpace.NUM_Q_VP)
     print("NUM_Q_CHI: ", BEVelocitySpace.NUM_Q_CHI)
     print("NUM_Q_PHI: ", BEVelocitySpace.NUM_Q_PHI)
-    print("PLASMA_FREQUENCY: ", PLASMA_FREQUENCY)
-    print("PLASMA_TIMESCALE: ", 1/PLASMA_FREQUENCY)
-    print("MAXWELLIAN_TEMP_K: ",collisions.MAXWELLIAN_TEMP_K)
     

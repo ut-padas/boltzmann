@@ -178,54 +178,107 @@ class CollisionOpSP():
         
         scattering_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,Chi_q,Phi_q,indexing='ij')
         diff_cs  = g.assemble_diff_cs_mat(scattering_mg[0]*V_TH , scattering_mg[3]) * AR_NEUTRAL_N
-        
-        Sd    = g.compute_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
-        
-        Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
-        Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
-        #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
-        Mp_r  = np.exp(-(Sd[0]/V_TH)**2 + (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
-        
         num_p  = spec_sp._p+1
         num_sh = len(spec_sp._sph_harm_lm)
-        #print(num_sh)
 
-        # Ap_klm1 = np.zeros(tuple([num_p,num_sh]) + incident_mg[0].shape)
-        # for i in range(num_p):
-        #     for j in range(num_sh):
-        #         Ap_klm1[i,j] = diff_cs * Mp_r * Pp_kr[i] * Yp_lm[j]
+        if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
 
-        Ap_klm = np.array([diff_cs * Mp_r* Pp_kr[i] * Yp_lm[j] for i in range(num_p) for j in range(num_sh)])
+            Sd    = g.compute_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
+            
+            Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
+            Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
+            #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
+            Mp_r  = np.exp(-(Sd[0]/V_TH)**2 + (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
+            
+            
+            #print(num_sh)
 
-        Ap_klm = Ap_klm.reshape(tuple([num_p,num_sh]) + scattering_mg[0].shape)
+            # Ap_klm1 = np.zeros(tuple([num_p,num_sh]) + incident_mg[0].shape)
+            # for i in range(num_p):
+            #     for j in range(num_sh):
+            #         Ap_klm1[i,j] = diff_cs * Mp_r * Pp_kr[i] * Yp_lm[j]
 
-        Bp_klm = np.dot(Ap_klm,WPhi_q)
-        Bp_klm = np.dot(Bp_klm,glw_s)
+            Ap_klm = np.array([diff_cs * Mp_r* Pp_kr[i] * Yp_lm[j] for i in range(num_p) for j in range(num_sh)])
 
-        incident_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
-        P_pr  = spec_sp.Vq_r(incident_mg[0])
-        Y_qs  = spec_sp.Vq_sph(incident_mg[1],incident_mg[2])
+            Ap_klm = Ap_klm.reshape(tuple([num_p,num_sh]) + scattering_mg[0].shape)
 
-        C_pqs = np.array([P_pr[i] * Y_qs[j] for i in range(num_p) for j in range(num_sh)])
-        C_pqs = C_pqs.reshape(tuple([num_p,num_sh]) + incident_mg[0].shape)
+            Bp_klm = np.dot(Ap_klm,WPhi_q)
+            Bp_klm = np.dot(Bp_klm,glw_s)
 
-        D_pqs_klm = np.array([C_pqs[pi,li] * Bp_klm[pj,lj] for pi in range(num_p) for li in range(num_sh) for pj in range(num_p) for lj in range(num_sh)])
-        D_pqs_klm = D_pqs_klm.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
+            incident_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
+            P_pr  = spec_sp.Vq_r(incident_mg[0])
+            Y_qs  = spec_sp.Vq_sph(incident_mg[1],incident_mg[2])
 
-        D_pqs_klm = np.dot(D_pqs_klm,WVPhi_q)
-        D_pqs_klm = np.dot(D_pqs_klm,glw)
-        D_pqs_klm = np.dot(D_pqs_klm,gmw)
-        
-        # Lij =np.zeros((num_p*num_sh,num_p*num_sh))
-        # for pi in range(num_p):
-        #     for li in range(num_sh):
-        #         for pj in range(num_p):
-        #             for lj in range(num_sh):
-        #                 Lij[pi*num_sh+li,pj*num_sh+lj] = D_pqs_klm[pi,li,pj,lj]
-        # print(Lij-D_pqs_klm)
+            C_pqs = np.array([P_pr[i] * Y_qs[j] for i in range(num_p) for j in range(num_sh)])
+            C_pqs = C_pqs.reshape(tuple([num_p,num_sh]) + incident_mg[0].shape)
 
-        D_pqs_klm = D_pqs_klm.reshape((num_p*num_sh,num_p*num_sh))
-        return D_pqs_klm
+            D_pqs_klm = np.array([C_pqs[pi,li] * Bp_klm[pj,lj] for pi in range(num_p) for li in range(num_sh) for pj in range(num_p) for lj in range(num_sh)])
+            D_pqs_klm = D_pqs_klm.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
+
+            D_pqs_klm = np.dot(D_pqs_klm,WVPhi_q)
+            D_pqs_klm = np.dot(D_pqs_klm,glw)
+            D_pqs_klm = np.dot(D_pqs_klm,gmw)
+            
+            # Lij =np.zeros((num_p*num_sh,num_p*num_sh))
+            # for pi in range(num_p):
+            #     for li in range(num_sh):
+            #         for pj in range(num_p):
+            #             for lj in range(num_sh):
+            #                 Lij[pi*num_sh+li,pj*num_sh+lj] = D_pqs_klm[pi,li,pj,lj]
+            # print(Lij-D_pqs_klm)
+
+            D_pqs_klm = D_pqs_klm.reshape((num_p*num_sh,num_p*num_sh))
+            return D_pqs_klm
+        elif(g._type == collisions.CollisionType.EAR_G2):
+            Sd_particles = g.compute_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
+            Lp_mat       = np.zeros((num_p*num_sh,num_p*num_sh))
+            for Sd in Sd_particles:
+                Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
+                Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
+                #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
+                Mp_r  = np.exp(-(Sd[0]/V_TH)**2 + (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
+                
+                num_p  = spec_sp._p+1
+                num_sh = len(spec_sp._sph_harm_lm)
+                #print(num_sh)
+
+                # Ap_klm1 = np.zeros(tuple([num_p,num_sh]) + incident_mg[0].shape)
+                # for i in range(num_p):
+                #     for j in range(num_sh):
+                #         Ap_klm1[i,j] = diff_cs * Mp_r * Pp_kr[i] * Yp_lm[j]
+
+                Ap_klm = np.array([diff_cs * Mp_r* Pp_kr[i] * Yp_lm[j] for i in range(num_p) for j in range(num_sh)])
+
+                Ap_klm = Ap_klm.reshape(tuple([num_p,num_sh]) + scattering_mg[0].shape)
+
+                Bp_klm = np.dot(Ap_klm,WPhi_q)
+                Bp_klm = np.dot(Bp_klm,glw_s)
+
+                incident_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
+                P_pr  = spec_sp.Vq_r(incident_mg[0])
+                Y_qs  = spec_sp.Vq_sph(incident_mg[1],incident_mg[2])
+
+                C_pqs = np.array([P_pr[i] * Y_qs[j] for i in range(num_p) for j in range(num_sh)])
+                C_pqs = C_pqs.reshape(tuple([num_p,num_sh]) + incident_mg[0].shape)
+
+                D_pqs_klm = np.array([C_pqs[pi,li] * Bp_klm[pj,lj] for pi in range(num_p) for li in range(num_sh) for pj in range(num_p) for lj in range(num_sh)])
+                D_pqs_klm = D_pqs_klm.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
+
+                D_pqs_klm = np.dot(D_pqs_klm,WVPhi_q)
+                D_pqs_klm = np.dot(D_pqs_klm,glw)
+                D_pqs_klm = np.dot(D_pqs_klm,gmw)
+                
+                # Lij =np.zeros((num_p*num_sh,num_p*num_sh))
+                # for pi in range(num_p):
+                #     for li in range(num_sh):
+                #         for pj in range(num_p):
+                #             for lj in range(num_sh):
+                #                 Lij[pi*num_sh+li,pj*num_sh+lj] = D_pqs_klm[pi,li,pj,lj]
+                # print(Lij-D_pqs_klm)
+                D_pqs_klm = D_pqs_klm.reshape((num_p*num_sh,num_p*num_sh))
+                Lp_mat   += D_pqs_klm
+            return Lp_mat
+
     
     @staticmethod
     def _Lm_l(collision,maxwellian, vth):

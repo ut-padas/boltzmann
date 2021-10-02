@@ -12,6 +12,12 @@
 \newcommand{\ddt}[1]{\partial_t #1}
 \newcommand{\vth}{v_\textrm{th}}
 \newcommand{\reals}{\mathbb{R}}
+\newcommand{\RR}{\mathbb{R}}
+\usepackage{pgfplots}
+\pgfplotsset{compat=newest}
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 
 \title{Scalable deterministic numerical methods for the Boltzmann equation}
 %\author{Milinda Fernando}
@@ -449,16 +455,16 @@ For the general case, of the differed particle, (i.e., differed particle all vel
 \end{align}
 
 \subsection{Distribution moments in basis expansion}
-Let $f(v) = M(v_\alpha) \sum_{klm} h_{klm} \phi_klm(v\alpha)$, where $v_\alpha = v/\alpha$. Then we can write the first moment of the distribution, 
+Let $f(v) = M(v_\alpha) \sum_{klm} f_{klm} \phi_{klm}(v_\alpha)$, where $v_\alpha = v/\alpha$. Then we can write the zeroth moment (number of species particles) of the distribution, 
 \begin{align}
     n_e & = \int_{R^3} f(v) dv \\
 \end{align} which can be written as, 
 \begin{align}
-    n_e & = Q h 
-\end{align} where, taking $k=(p,q,s)$ 
+    n_e & = q^{klm} f_{klm}  
+\end{align} where, 
 \begin{align}
-    Q_{klm} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = 0  \text{ if } klm \neq 000 \\
-    Q_{000} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = \frac{n}{4\pi}
+    q_{klm} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = 0  \text{ if } klm \neq 000 \\
+    q_{000} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = \frac{n}{4\pi} 
 \end{align}
 
 
@@ -479,9 +485,82 @@ For $W_ij^{(\alpha)}$, let i=0, then we can write (Note : $\phi_0(v_\beta)=1$)
     W^{(\alpha)}_{0j} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_0(v_\beta) \phi_j(v_\alpha) d\omega dv\\
     W^{(\alpha)}_{0j} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_j(v_\alpha) d\omega dv = \frac{n}{4\pi} \delta_{0j}
 \end{align*}
-Therefore, we can write $h^{(\beta)}_0=h^{(\alpha)}_0$. There zeroth coefficient always match hence we should preserve zeroth moment of the distribution. 
+Therefore, we can write $h^{(\beta)}_0=h^{(\alpha)}_0$. There zeroth coefficient always match hence we should preserve zeroth moment of the distribution under basis change.  
 
- 
+\subsection{Mass conservation in the current discretization}
+For any smooth distribution, $f(v) = M(v_\alpha) \sum_{klm} f_{klm} \phi_{klm}(v_\alpha)$, and we can write, 
+\begin{align}
+    \int_{\RR^3} f dv &= const.  \\
+    \frac{d}{dt} \int_{\RR^3} f dv &= 0  \\
+    \int_{\RR^3} \partial_t f  dv &= \int_{\RR^3} c(f) dv =0 \\
+    % \partial_t f &= c(f) = n_0 \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega \\
+    % \frac{d}{dt} \int_{\RR^3} f dv =0  &\implies \int_{\RR^3} c(f) dv = 0 
+\end{align}
+We can further write, 
+\begin{align}
+    \int_{\RR^3} c(f) dv  &= \sum_{klm} f_{klm} \int_{\RR^3}\int_{S^2} \bigl( M(v^\prime/\alpha) \phi_{klm}(v^\prime/\alpha) -   M(v/\alpha) \phi_{klm}(v/\alpha) \bigr) \norm{v} \sigma(\norm{v},\omega) d\omega dv, \  \forall f(v,t) \\
+    \implies & \int_{\RR^3}\int_{S^2} \bigl( M(v^\prime/\alpha) \phi_{klm}(v^\prime/\alpha) -   M(v/\alpha) \phi_{klm}(v/\alpha) \bigr) \norm{v} \sigma(\norm{v},\omega) d\omega dv =0  \forall klm
+\end{align}
+But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\pi}$ with $v^\prime \neq v$.  
+
+
+
+
+
+% \section{Experimental Results}
+% We solve, 
+
+% \begin{align*}
+%     \partial_t f = C(f) &= n_0 \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega\\
+%     f(v,0) &= \frac{1}{(\sqrt{\pi}v_{th})^d} \exp{(-(\frac{v}{v_{th}})^2)} \text{ where } v_{th} = \sqrt{\frac{2kT}{m}}
+% \end{align*}
+        
+% \subsection{G0 : $e + Ar \rightarrow e + Ar$ collision operator}
+
+% \textbullet~ Test case 1 : Elastic collisions , note that $\norm{v\prime} = \norm{v}$.
+% \begin{figure}[H]
+%     \includegraphics[width=0.9\textwidth]{dat/g0_elastic.png}
+%     \caption{For this experiment, we use time step size of $1e-4$, and the left plot shows how the initial mass preserved overtime. On the right plot shows the temperature change with time.}
+% \end{figure}
+
+
+
+% \subsection{G0 : $e + Ar \rightarrow e + Ar$ collision operator (Inelastic case)}
+% \textbullet~ Test case 2 : Inelastic collisions, $\norm{v_1} = \norm{v_0} \sqrt{1- \frac{2m(1-cos\chi)}{M}}$ \\
+
+% Potential issues. 
+% \begin{itemize}
+%     \item With experimental cross section data, and our current choice of the basis expansion the discretized collision operator is coupled with thermal velocity. 
+%     \item Therefore, when temperature change we need to reassemble the collision operator. 
+%     \item We are limited by a time step size, for larger $dt$ we change the temperature significantly, result in mass loss when we timestep. 
+%     \item Currently, the solver doesn't seem to be converging. 
+% \end{itemize}
+
+% \begin{figure}[H]
+%     \includegraphics[width=0.9\textwidth]{dat/g0_inelastic1e-11.png}
+% \end{figure}
+
+
+\subsection{Numerical evaluation}
+
+The current implemented collision operator timestepper can be summarized as follows. 
+\begin{algorithm}
+\caption{Time stepper for collision operator}\label{alg:ts_collop}
+\begin{algorithmic}
+\Require $f^{n}$, thermal velocity $v_t ^{n-1}$, mass $M_0$ 
+%\Ensure $y = x^n$
+%\State $M \leftarrow zeroth\_moment(f^{n})$
+\State $T \leftarrow second\_moment(f^{n},M_0,v_t ^{n-1})$
+\State $v_t^{n} \leftarrow electron\_thermal\_velocity(T)$
+\State $f^{n} \leftarrow basis\_change(f^{n},v_t ^{n-1},v_t ^{n})$
+\State $C_n \leftarrow assemble\_collision\_mat(v_t^{n})$ 
+%\State $W,U \leftarrow eigen\_solve(C_n)$
+%\State $b\leftarrow U^{-1} f^{n}$
+\State $f^{n+1} \leftarrow eval\_eigen\_sol(C_n, dt,b)$ 
+\State $f^{n+1} \leftarrow enforce\_mass\_constraint(f^{n+1},M_0)$
+\State \Return $f^{n+1}$
+\end{algorithmic}
+\end{algorithm}
 
 
 \bibliographystyle{plain}

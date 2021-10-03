@@ -1,6 +1,7 @@
 """
 @package : Utility functions needed for the Boltzmann solver. 
 """
+from matplotlib.pyplot import plot
 import numpy as np
 import parameters as params
 import spec_spherical
@@ -228,4 +229,53 @@ def compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp: spec_spherical.SpectralExpansionSpher
 def get_maxwellian_3d(vth,n_scale=1):
     M = lambda x: (n_scale / ((vth * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
     return M
+
+def plot_EEDF(ev_pts, spec : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth, scale=1):
+    """
+    Assumes spherical harmonic basis in vtheta vphi direction. 
+    the integration over the spherical harmonics is done analytically. 
+    """
+    EV       = scipy.constants.electron_volt
+    E_MASS   = scipy.constants.electron_mass
+    vr       = np.sqrt(2* EV * ev_pts /E_MASS)
+    #print(vr)
+    #print(vr/vth)
+    #print(maxwellian(vr/vth))
+    eedf_pts = cf[0] * maxwellian(vr/vth) * spec.basis_eval_radial(vr/vth,0)
+
+    import matplotlib.pyplot as plt
+    plt.plot(ev_pts,eedf_pts)
+    plt.xlabel("Energy (eV)")
+    plt.ylabel("Number")
+    plt.grid()
+    plt.show()
+    #plt.close()
+
+def plot_EEDF(ev_pts, spec : spec_spherical.SpectralExpansionSpherical, cf_list, maxwellian_list, vth_list, scale=1):
+    """
+    Assumes spherical harmonic basis in vtheta vphi direction. 
+    the integration over the spherical harmonics is done analytically. 
+    """
+    EV       = scipy.constants.electron_volt
+    E_MASS   = scipy.constants.electron_mass
+    vr       = np.sqrt(2* EV * ev_pts /E_MASS)
+    #print(vr)
+    #print(vr/vth)
+    #print(maxwellian(vr/vth))
+    import matplotlib.pyplot as plt
+    for i,cf in enumerate(cf_list):
+        eedf_pts = cf[0] * maxwellian_list[i](vr/vth_list[i]) * spec.basis_eval_radial(vr/vth_list[i],0)
+        plt.plot(ev_pts,eedf_pts)
+        plt.xlabel("Energy (eV)")
+        plt.ylabel("Number")
+        plt.grid()
+    plt.show()
+
+
+    
+
+
+
+
+
 

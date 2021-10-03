@@ -22,6 +22,13 @@ t_M = profiler.profile_t("mass_assembly")
 t_L = profiler.profile_t("collOp_assembly")
 t_ts = profiler.profile_t("ts")
 
+
+collisions.AR_NEUTRAL_N=3.22e22
+collisions.MAXWELLIAN_N=1e6
+collisions.AR_IONIZED_N=3.22e22#collisions.MAXWELLIAN_N
+
+
+
 if not os.path.exists('plots'):
     print("creating folder `plots`, output will be written into it")
     os.makedirs('plots')
@@ -31,8 +38,10 @@ def eigen_solve_coll_op(FOp,h_init):
     W,Q  = np.linalg.eig(FOp)
     # print("Eigenvalues: ")
     # print(W)
-
     Qinv = np.linalg.inv(Q)
+    # AA = np.matmul(np.matmul(Q,np.diag(W)),Qinv)
+    # print((FOp-AA)/np.linalg.norm(FOp))
+
     y_init = np.dot(Qinv,h_init)
 
     q_norm=np.array([np.linalg.norm(Q[:,i]) for i in range(Q.shape[1])])
@@ -50,7 +59,6 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
-
     
 
     ts_integrator = ets.ExplicitODEIntegrator(ets.TSType.FORWARD_EULER)
@@ -71,11 +79,11 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
         
         fout   = open(OUTPUT_FILE_NAME, "a")
         t_curr = ts_info[0] 
-        mw_prev   = BEUtils.get_maxwellian_3d(vth_prev,1)
-        m0        = BEUtils.moment_zero_f(spec_sp,h_t,mw_prev,vth_prev,None,None,None,1)
+        mw_prev   = BEUtils.get_maxwellian_3d(vth_prev,MNE)
+        m0        = BEUtils.moment_n_f(spec_sp,h_t,mw_prev,vth_prev,0,None,None,None,1)
         temp_curr = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_prev,vth_prev,None,None,None,m0,1)
         vth_curr  = collisions.electron_thermal_velocity(temp_curr)
-        mw_curr   = BEUtils.get_maxwellian_3d(vth_curr,1)
+        mw_curr   = BEUtils.get_maxwellian_3d(vth_curr,MNE)
 
         vth_g0     = np.sqrt(1-2*collisions.MASS_R_EARGON) * vth_curr 
         
@@ -90,14 +98,12 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
         t_L.start()
         FOp    = spec_sp.create_mat()
         for g in col_list:
-            FOp+=collOp.assemble_mat(g,mw_curr,vth_curr)
-            # FOp+=collOp.assemble_mat(g,BEUtils.get_maxwellian_3d(vth_g0,1),vth_g0)
+            FOp += collOp.assemble_mat(g,mw_curr,vth_curr)
         t_L.stop()
         print("Assembling the collision op. for Vth : ", vth_curr)
         print("Collision Operator assembly time (s): ",t_L.snap)
 
         def f_rhs(f,t):
-            print(FOp)
             return np.matmul(FOp,f)
 
         ts_integrator.set_rhs_func(f_rhs)
@@ -165,7 +171,7 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
         fout = open(OUTPUT_FILE_NAME, "a")
 
         mw_prev   = BEUtils.get_maxwellian_3d(vth_prev,1)
-        m0        = BEUtils.moment_zero_f(spec_sp,h_t,mw_prev,vth_prev,None,None,None,1)
+        m0        = BEUtils.moment_n_f(spec_sp,h_t,mw_prev,vth_prev,0,None,None,None,1)
         temp_curr = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_prev,vth_prev,None,None,None,m0,1)
         vth_curr  = collisions.electron_thermal_velocity(temp_curr)
         mw_curr   = BEUtils.get_maxwellian_3d(vth_curr,1)
@@ -187,7 +193,7 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
         t_L.start()
         FOp    = spec_sp.create_mat()
         for g in col_list:
-            FOp+=collOp.assemble_mat(g,mw_curr,vth_curr)
+            FOp += collOp.assemble_mat(g,mw_curr,vth_curr)
         t_L.stop()
         print("Assembling the collision op. for Vth : ", vth_curr)
         print("Collision Operator assembly time (s): ",t_L.snap)
@@ -274,12 +280,12 @@ print("""============================================================""")
 params.print_parameters()
 
 
-maxwellian = BEUtils.get_maxwellian_3d(VTH,1)
-hv         = lambda v,vt,vp : np.ones_like(v)
+maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+hv         = lambda v,vt,vp : np.ones_like(v) * collisions.MAXWELLIAN_N
 h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
 
-col_g0 = collisions.eAr_G0()
 col_g0_no_E_loss = collisions.eAr_G0_NoEnergyLoss()
+col_g0 = collisions.eAr_G0()
 col_g1 = collisions.eAr_G1()
 col_g2 = collisions.eAr_G2()
 
@@ -288,6 +294,7 @@ M  = spec.compute_maxwellian_mm(maxwellian,VTH)
 t_M.stop()
 #print(M)
 print("Mass assembly time (s): ", t_M.seconds)
-ode_first_order_linear(cf,[col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
-#ode_numerical_solve(cf,[col_g0],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
-
+#ode_first_order_linear(cf,[col_g0_no_E_loss],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+ode_first_order_linear(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+#ode_numerical_solve(cf,[[col_g0,1],[col_g1,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+#ode_numerical_solve(cf,[[col_g0,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)

@@ -328,10 +328,10 @@ def maxwellian_test():
         print(hv2_vec)
         print("diff |hv2-hv1| = ",np.linalg.norm(hv2_vec-hv1_vec))
         
-        m0_1 = BEUtils.moment_zero_f(spec_sp,hv1_vec,maxwellian_1,VTH1,None,None,None,1)
+        m0_1 = BEUtils.moment_n_f(spec_sp,hv1_vec,maxwellian_1,VTH1,0,None,None,None,1)
         print("h1 m0: ", m0_1)
 
-        m0_2 = BEUtils.moment_zero_f(spec_sp,hv2_vec,maxwellian_2,VTH2,None,None,None,1)
+        m0_2 = BEUtils.moment_n_f(spec_sp,hv2_vec,maxwellian_2,VTH2,0,None,None,None,1)
         print("h2 m0: ", m0_2)
         print("mass diff : ", (m0_2-m0_1)/m0_1)
 
@@ -357,10 +357,10 @@ def maxwellian_test():
         print(hv2_vec)
         print("diff |hv2-hv1| = ",np.linalg.norm(hv2_vec-hv1_vec))
         
-        m0_1 = BEUtils.moment_zero_f(spec_sp,hv1_vec,maxwellian_1,VTH1,None,None,None,1)
+        m0_1 = BEUtils.moment_n_f(spec_sp,hv1_vec,maxwellian_1,VTH1,0,None,None,None,1)
         print("h1 m0: ", m0_1)
 
-        m0_2 = BEUtils.moment_zero_f(spec_sp,hv2_vec,maxwellian_2,VTH2,None,None,None,1)
+        m0_2 = BEUtils.moment_n_f(spec_sp,hv2_vec,maxwellian_2,VTH2,0,None,None,None,1)
         print("h2 m0: ", m0_2)
         print("mass diff : ", (m0_2-m0_1)/m0_1)
 

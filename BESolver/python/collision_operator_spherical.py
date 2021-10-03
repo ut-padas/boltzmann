@@ -3,6 +3,8 @@
 """
 
 import abc
+
+from numpy.lib.function_base import diff
 import basis
 import spec_spherical as sp
 import collisions
@@ -89,9 +91,13 @@ class CollisionOpSP():
         g=collision
 
         scattering_mg = np.meshgrid(gmx,Chi_q,indexing='ij')
-        #diff_cs       = AR_NEUTRAL_N* g.assemble_diff_cs_mat(scattering_mg[0]*V_TH , scattering_mg[1])
-        #total_cs_q = 2*np.pi * np.dot(diff_cs,glw_s)
-        total_cs_q = AR_NEUTRAL_N * g.total_cross_section(energy_ev)
+        
+        # we need to use the integrated diff cross section to better preserve mass for elastic collisions. 
+        # Using the total cross section directly can cause mass error if your quadrature is not accurate enough to
+        # integrate diff cross section for a given temperature. 
+        diff_cs       = g.get_Ar_density() * g.assemble_diff_cs_mat(scattering_mg[0]*V_TH , scattering_mg[1])
+        total_cs_q = 2*np.pi * np.dot(diff_cs,glw_s)
+        #total_cs_q = AR_NEUTRAL_N * g.total_cross_section(energy_ev)
         
         P_kr = spec_sp.Vq_r(gmx)
         #M_r  = maxwellian(gmx) * ( (gmx*V_TH)**3) * ((V_TH)/weight_func(gmx))
@@ -177,19 +183,21 @@ class CollisionOpSP():
         g=collision
         
         scattering_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,Chi_q,Phi_q,indexing='ij')
-        diff_cs  = g.assemble_diff_cs_mat(scattering_mg[0]*V_TH , scattering_mg[3]) * AR_NEUTRAL_N
+        #diff_cs  = g.assemble_diff_cs_mat(scattering_mg[0]*V_TH , scattering_mg[3]) * AR_NEUTRAL_N
         num_p  = spec_sp._p+1
         num_sh = len(spec_sp._sph_harm_lm)
 
         if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
 
-            Sd    = g.compute_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
-            
+            Sd      = g.compute_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
+            diff_cs = g.assemble_diff_cs_mat(Sd[0] , scattering_mg[3]) * g.get_Ar_density()
             Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
             Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
             #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
             Mp_r  = np.exp(-(Sd[0]/V_TH)**2 + (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
-            
+
+            #print(-(Sd[0]/V_TH)**2 + (scattering_mg[0])**2)
+                
             
             #print(num_sh)
 
@@ -233,11 +241,11 @@ class CollisionOpSP():
             Sd_particles = g.compute_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
             Lp_mat       = np.zeros((num_p*num_sh,num_p*num_sh))
             for Sd in Sd_particles:
+                diff_cs = g.assemble_diff_cs_mat(Sd[0] , scattering_mg[3]) * g.get_Ar_density()
                 Pp_kr = spec_sp.Vq_r(Sd[0]/V_TH) 
                 Yp_lm = spec_sp.Vq_sph(Sd[1],Sd[2])
                 #Mp_r  = maxwellian(Sd[0]/V_TH) * ( (scattering_mg[0]*V_TH)**3) * ((V_TH)/weight_func(scattering_mg[0]))
                 Mp_r  = np.exp(-(Sd[0]/V_TH)**2 + (scattering_mg[0])**2) *(scattering_mg[0]*V_TH)
-                
                 num_p  = spec_sp._p+1
                 num_sh = len(spec_sp._sph_harm_lm)
                 #print(num_sh)
@@ -438,7 +446,7 @@ class CollisionOpSP():
     def assemble_mat(collision : collisions.Collisions , maxwellian, vth):
         Lij = CollisionOpSP._Lp(collision,maxwellian,vth)-CollisionOpSP._Lm(collision,maxwellian,vth)
         # 09/14/21  With corrected L+ maxwellian scaling, if it is positive we will increase temperature. So we need to put a - sign. 
-        return -1*Lij
+        return Lij
         
         
 

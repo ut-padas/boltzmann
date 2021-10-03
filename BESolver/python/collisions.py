@@ -39,6 +39,7 @@ BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_1EV          = ELECTRON_VOLT/BOLTZMANN_CONST
 MAXWELLIAN_TEMP_K   = 20*TEMP_K_1EV
 AR_NEUTRAL_N        = 3.22e22 # 1/m^3
+AR_IONIZED_N        = 1.00e0
 MAXWELLIAN_N        = 1.00e0 # 1/m^3
 ELECTRON_THEMAL_VEL = electron_thermal_velocity(MAXWELLIAN_TEMP_K) 
 #http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node6.html
@@ -103,6 +104,7 @@ class Collisions(abc.ABC):
         
         t0 = np.arccos( np.cos(az_0) * np.sin(chi_0) )
         p0 = np.arctan( np.sin(az_0) * np.tan(chi_0) )
+        p0 = np.mod(p0,2*np.pi)
 
         f1 = np.sqrt(1 - (np.cos(v_phi_1)**2) * (np.sin(v_theta_1)**2))
 
@@ -120,6 +122,7 @@ class Collisions(abc.ABC):
         t1 = np.arccos(W)
         p1 = np.arctan(np.cos(chi_1) * np.sin(v_theta_1) * f1 * np.sin(v_phi_1) + np.sin(chi_1) * ( np.cos(v_theta_1)* np.sin(az_1) + np.cos(az_1) * np.cos(v_phi_1) * (np.sin(v_theta_1)**2) * np.sin(v_phi_1)) / (np.cos(v_phi_1) * np.cos(chi_1) * np.sin(v_theta_1) * f1 - 
         np.cos(az_1) * ( np.cos(v_theta_1)**2 + (np.sin(v_theta_1)**2) * (np.sin(v_phi_1)**2)) * np.sin(chi_1) ))
+        p1 = np.mod(p1,2*np.pi)
         
         r1      = np.ones_like(v_theta)
         theta_p = np.zeros_like(v_theta)
@@ -219,10 +222,13 @@ class eAr_G0_NoEnergyLoss(Collisions):
         vs[0] = vr
         return vs
 
-
     @staticmethod
     def min_energy_threshold():
         return 0.0
+
+    @staticmethod
+    def get_Ar_density():
+        return AR_NEUTRAL_N
 
 """
 e + Ar -> e + Ar
@@ -245,14 +251,18 @@ class eAr_G0(Collisions):
     @staticmethod
     def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        vel_fac  = vr * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+        #vel_fac  = vr * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+        vel_fac  = vr / np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         vs[0]    = vel_fac
         return vs
 
     @staticmethod
     def min_energy_threshold():
         return 0.0
-    
+
+    @staticmethod
+    def get_Ar_density():
+        return AR_NEUTRAL_N
 
 """
 e + Ar -> e + Ar^*
@@ -275,15 +285,25 @@ class eAr_G1(Collisions):
     @staticmethod
     def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        check1   = vr**2 > (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
-        vel_fac  = np.sqrt(vr[check1]**2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
-        vs[0][np.logical_not(check1)]=0
-        vs[0][check1] = vel_fac
+        
+        # post collision velocity. 
+        #check1   = vr**2 > (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
+        #vel_fac  = np.sqrt(vr[check1]**2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        #vs[0][np.logical_not(check1)]=0
+        #vs[0][check1] = vel_fac
+
+        #pre collision velocity. 
+        vel_fac  = np.sqrt(vr**2    + (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        vs[0]    = vel_fac
         return vs
 
     @staticmethod
     def min_energy_threshold():
         return E_AR_EXCITATION_eV
+
+    @staticmethod
+    def get_Ar_density():
+        return AR_NEUTRAL_N
 
 """
 e + Ar -> e + Ar^+
@@ -313,45 +333,84 @@ class eAr_G2(Collisions):
     def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         
-        # see if collision can be triggered. 
-        check_1            = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
-        vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
-        vs[0][np.logical_not(check_1)] = 0
-        v2_fac             = vs[0]
+        # pre collision velocity. 
+        vs[0]    = np.sqrt(2 * (vr**2 + (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)) )
+        v0       = np.zeros(vr.shape + tuple([3]))
+        v1       = np.zeros(vr.shape + tuple([3]))
+        v2       = np.zeros(vr.shape + tuple([3]))
         
-        #  = v1_fac[check_1]
-        v0              = np.zeros(vr.shape + tuple([3]))
-        v1              = np.zeros(vr.shape + tuple([3]))
-        v2              = np.zeros(vr.shape + tuple([3]))
-        
-        v0[check_1,0]   = vr[check_1] * np.sin(vt[check_1]) * np.cos(vp[check_1])
-        v0[check_1,1]   = vr[check_1] * np.sin(vt[check_1]) * np.sin(vp[check_1])
-        v0[check_1,2]   = vr[check_1] * np.cos(vt[check_1])
+        check_1  = vr>0
+        #print(check_1)
+        v0[check_1,0]   = vr[check_1]* np.sin(vt[check_1]) * np.cos(vp[check_1])
+        v0[check_1,1]   = vr[check_1]* np.sin(vt[check_1]) * np.sin(vp[check_1])
+        v0[check_1,2]   = vr[check_1]* np.cos(vt[check_1])
 
         v1[check_1,0]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.cos(vs[2][check_1])
         v1[check_1,1]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.sin(vs[2][check_1])
         v1[check_1,2]   = vs[0][check_1] * np.cos(vs[1][check_1])
         
         
-        v2[check_1,:]   = v0[check_1,:] - v1[check_1,:]
-        v2_norm_fac        = (v2_fac[check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
+        # v2[check_1,0]   = (v0[check_1,0] - v1[check_1,0])
+        # v2[check_1,1]   = (v0[check_1,1] - v1[check_1,1])
+        # v2[check_1,2]   = (v0[check_1,2] - v1[check_1,2])
+
+        v2[check_1,:]   = v1[check_1,:] - v0[check_1,:]
+        v2_norm_fac     = (vs[0][check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
         
         v2[check_1,0]   = v2_norm_fac * v2[check_1,0]
         v2[check_1,1]   = v2_norm_fac * v2[check_1,1]
         v2[check_1,2]   = v2_norm_fac * v2[check_1,2]
-        
         vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
         v2_sp           = BEUtils.cartesian_to_spherical(v2[check_1,0],v2[check_1,1],v2[check_1,2])
 
         vs2[0][check_1] = v2_sp[0]
         vs2[1][check_1] = v2_sp[1]
         vs2[2][check_1] = v2_sp[2]
+        
+
+
+        # # see if collision can be triggered. 
+        # check_1            = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
+        # vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        # vs[0][np.logical_not(check_1)] = 0
+        # v2_fac             = vs[0]
+        
+        # v0              = np.zeros(vr.shape + tuple([3]))
+        # v1              = np.zeros(vr.shape + tuple([3]))
+        # v2              = np.zeros(vr.shape + tuple([3]))
+        
+        # v0[check_1,0]   = vr[check_1] * np.sin(vt[check_1]) * np.cos(vp[check_1])
+        # v0[check_1,1]   = vr[check_1] * np.sin(vt[check_1]) * np.sin(vp[check_1])
+        # v0[check_1,2]   = vr[check_1] * np.cos(vt[check_1])
+
+        # v1[check_1,0]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.cos(vs[2][check_1])
+        # v1[check_1,1]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.sin(vs[2][check_1])
+        # v1[check_1,2]   = vs[0][check_1] * np.cos(vs[1][check_1])
+        
+        
+        # v2[check_1,:]   = v0[check_1,:] - v1[check_1,:]
+        # v2_norm_fac        = (v2_fac[check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
+        
+        # v2[check_1,0]   = v2_norm_fac * v2[check_1,0]
+        # v2[check_1,1]   = v2_norm_fac * v2[check_1,1]
+        # v2[check_1,2]   = v2_norm_fac * v2[check_1,2]
+        
+        # vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
+        # v2_sp           = BEUtils.cartesian_to_spherical(v2[check_1,0],v2[check_1,1],v2[check_1,2])
+
+        # vs2[0][check_1] = v2_sp[0]
+        # vs2[1][check_1] = v2_sp[1]
+        # vs2[2][check_1] = v2_sp[2]
 
         return [vs,vs2]
 
     @staticmethod
     def min_energy_threshold():
         return E_AR_IONIZATION_eV
+
+    @staticmethod
+    def get_Ar_density():
+        return AR_IONIZED_N
 
 """
 Simple test collision class to test

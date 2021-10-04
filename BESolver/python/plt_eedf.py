@@ -23,10 +23,22 @@ E_MASS   = scipy.constants.electron_mass
 vr       = np.sqrt(2* EV * ev_pts /E_MASS)
 
 TIME_INDEX=0
+MASS_INDEX=1
 TEMP_INDEX=3
 C000_INDEX=4
 
+
 INIT_MASS = data[0,1]
+
+def spec_tail(cf):
+    return np.linalg.norm(cf[cf.shape[0]//2:]) / np.linalg.norm(cf)
+
+plt.rcParams['axes.grid'] = True
+fig,ax_plt = plt.subplots(2,2)
+sp_tail=list()
+
+for i in range(0,data.shape[0]):
+    sp_tail.append(spec_tail(data[i,C000_INDEX:]))
 
 for i in range(0,data.shape[0],args.frequency):
     time = data[i,TIME_INDEX]
@@ -37,15 +49,35 @@ for i in range(0,data.shape[0],args.frequency):
 
     eedf_pts = data[i,C000_INDEX] * Mv(vr/vth) 
 
-    plt.plot(ev_pts,eedf_pts,label="t=%.4E"%time)
-    plt.xlabel("Energy (eV)")
-    plt.ylabel("EEDF")
-    plt.grid()
-    plt.legend()
+    #print(np.append(time,sp_tail))
+
+
+    ax_plt[0,0].plot(ev_pts,eedf_pts,label="t=%.4E"%time)
+    ax_plt[0,0].set_xlabel("Energy (eV)")
+    ax_plt[0,0].set_ylabel("EEDF")
+    #ax_plt[0,0].grid()
+    ax_plt[0,0].legend()
+
     
+ax_plt[0,1].plot(data[:,TIME_INDEX],data[:,MASS_INDEX])
+ax_plt[0,1].set_xlabel("time(s)")
+ax_plt[0,1].set_ylabel("mass")    
+#ax_plt[0,1].grid()
+
+ax_plt[1,0].plot(data[:,TIME_INDEX],data[:,TEMP_INDEX])
+ax_plt[1,0].set_xlabel("time(s)")
+ax_plt[1,0].set_ylabel("temp(K)")    
+#ax_plt[1,0].grid()
+
+ax_plt[1,1].plot(data[:,TIME_INDEX],np.array(sp_tail))
+ax_plt[1,1].set_xlabel("time(s)")
+ax_plt[1,1].set_ylabel("norm_tail/norm_overall")    
+#ax_plt[1,1].grid()
+
+
 
 plt.show()
-plt.savefig(args.output)
+#plt.savefig(args.output)
 plt.close()
 
 

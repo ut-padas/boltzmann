@@ -25,7 +25,7 @@ t_ts = profiler.profile_t("ts")
 
 collisions.AR_NEUTRAL_N=3.22e22
 collisions.MAXWELLIAN_N=1e6
-collisions.AR_IONIZED_N=3.22e22#collisions.MAXWELLIAN_N
+collisions.AR_IONIZED_N=3.22e22 #collisions.MAXWELLIAN_N
 
 
 
@@ -315,5 +315,6 @@ t_M.stop()
 print("Mass assembly time (s): ", t_M.seconds)
 #ode_first_order_linear(cf,[col_g0_no_E_loss],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
 ode_first_order_linear(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+#ode_numerical_solve(cf,[col_g0_no_E_loss,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
 #ode_numerical_solve(cf,[[col_g0,1],[col_g1,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
 #ode_numerical_solve(cf,[[col_g0,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)

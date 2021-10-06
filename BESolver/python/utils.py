@@ -1,7 +1,6 @@
 """
 @package : Utility functions needed for the Boltzmann solver. 
 """
-from matplotlib.pyplot import plot
 import numpy as np
 import parameters as params
 import spec_spherical

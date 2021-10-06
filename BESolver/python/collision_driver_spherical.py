@@ -24,7 +24,7 @@ t_ts = profiler.profile_t("ts")
 
 
 collisions.AR_NEUTRAL_N=3.22e22
-collisions.MAXWELLIAN_N=1e6
+collisions.MAXWELLIAN_N=1e18
 collisions.AR_IONIZED_N=3.22e22 #collisions.MAXWELLIAN_N
 
 
@@ -59,7 +59,7 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
-    IO_COUT_FEQ=5
+    IO_COUT_FEQ=1
 
     ts_integrator = ets.ExplicitODEIntegrator(ets.TSType.FORWARD_EULER)
     ts_integrator.set_ts_size(dt)
@@ -75,6 +75,7 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
     m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_prev,vth_prev,0,None,None,None,1)
     temp_t0   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_prev,vth_prev,None,None,None,m0_t0,1)
 
+    collisions.AR_IONIZED_N = MNE
     while ts_integrator.current_ts()[0] < t_end:
         ts_info = ts_integrator.current_ts()
         t_step  = ts_info[1]
@@ -92,6 +93,9 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
         mw_curr   = BEUtils.get_maxwellian_3d(vth_curr,MNE)
 
         vth_g0     = np.sqrt(1-2*collisions.MASS_R_EARGON) * vth_curr 
+        MNE        = m0
+        collisions.AR_IONIZED_N = MNE
+     
         
         print(f"dt={dt:.2E} N_e(t={t_curr:.2E})={m0:.12E} maxwellian N_e={m0_t0:.12E} relative error: {(m0_t0-m0)/m0_t0:.12E} temperature(K)={temp_curr:.12E} ")
         if(t_step % IO_COUT_FEQ ==0):
@@ -134,7 +138,7 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
     COL_OP_VTH_TOL  = 1e-5
     COL_OP_FREQ     = 1
     MASS_LOSS_TOL   = ml_tol
-    IO_COUT_FEQ     = 5
+    IO_COUT_FEQ     = 1
 
     dt_tau = 1/collisions.PLASMA_FREQUENCY
     print("==========================================================================")
@@ -191,6 +195,8 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
         vth_curr  = collisions.electron_thermal_velocity(temp_curr)
         mw_curr   = BEUtils.get_maxwellian_3d(vth_curr,MNE)
 
+        MNE        = m0
+        #collisions.AR_IONIZED_N = MNE
         print(f"dt={dt:.2E} N_e(t={t_curr:.2E})={m0:.12E} maxwellian N_e={m0_t0:.12E} relative error: {(m0_t0-m0)/m0_t0:.12E} temperature(K)={temp_curr:.12E} ")
         
         if(t_step % IO_COUT_FEQ ==0):
@@ -314,7 +320,7 @@ t_M.stop()
 #print(M)
 print("Mass assembly time (s): ", t_M.seconds)
 #ode_first_order_linear(cf,[col_g0_no_E_loss],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
-ode_first_order_linear(cf,[col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
-#ode_numerical_solve(cf,[col_g0_no_E_loss,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+ode_first_order_linear(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+#ode_numerical_solve(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
 #ode_numerical_solve(cf,[[col_g0,1],[col_g1,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
 #ode_numerical_solve(cf,[[col_g0,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)

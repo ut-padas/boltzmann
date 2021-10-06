@@ -162,7 +162,11 @@ class Collisions(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+        pass
+
+    @abc.abstractmethod
+    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         pass
     
     @abc.abstractmethod
@@ -186,7 +190,9 @@ class Collisions(abc.ABC):
         diff_cs   = (total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
         return diff_cs
 
-    
+    @abc.abstractmethod
+    def get_cross_section_scaling():
+        pass
 
 
 
@@ -217,7 +223,13 @@ class eAr_G0_NoEnergyLoss(Collisions):
         return v1 
 
     @staticmethod
-    def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+        vs    = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        vs[0] = vr
+        return vs
+
+    @staticmethod
+    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs    = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         vs[0] = vr
         return vs
@@ -227,7 +239,7 @@ class eAr_G0_NoEnergyLoss(Collisions):
         return 0.0
 
     @staticmethod
-    def get_Ar_density():
+    def get_cross_section_scaling():
         return AR_NEUTRAL_N
 
 """
@@ -247,11 +259,17 @@ class eAr_G0(Collisions):
         vel_fac  = np.linalg.norm(v0,2) * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         v1       = vel_fac  * v1_dir
         return v1 
+    
+    @staticmethod
+    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        vel_fac  = vr * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+        vs[0]    = vel_fac
+        return vs
 
     @staticmethod
-    def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        #vel_fac  = vr * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         vel_fac  = vr / np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         vs[0]    = vel_fac
         return vs
@@ -261,7 +279,7 @@ class eAr_G0(Collisions):
         return 0.0
 
     @staticmethod
-    def get_Ar_density():
+    def get_cross_section_scaling():
         return AR_NEUTRAL_N
 
 """
@@ -283,18 +301,23 @@ class eAr_G1(Collisions):
         return v1
 
     @staticmethod
-    def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        
-        # post collision velocity. 
-        #check1   = vr**2 > (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
-        #vel_fac  = np.sqrt(vr[check1]**2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
-        #vs[0][np.logical_not(check1)]=0
-        #vs[0][check1] = vel_fac
-
         #pre collision velocity. 
         vel_fac  = np.sqrt(vr**2    + (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
         vs[0]    = vel_fac
+        return vs
+
+    @staticmethod
+    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        # post collision velocity. - Note : the total cross-section for Ein < E_threshold is zero, this is
+        # to avoid geting complex numbers in the computations. 
+        check1   = vr**2 > (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
+        vel_fac  = np.sqrt(vr[check1]**2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        vs[0][np.logical_not(check1)]=0
+        vs[0][check1] = vel_fac
+
         return vs
 
     @staticmethod
@@ -302,7 +325,7 @@ class eAr_G1(Collisions):
         return E_AR_EXCITATION_eV
 
     @staticmethod
-    def get_Ar_density():
+    def get_cross_section_scaling():
         return AR_NEUTRAL_N
 
 """
@@ -330,7 +353,7 @@ class eAr_G2(Collisions):
         return v1,v2
 
     @staticmethod
-    def compute_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
         vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         
         # pre collision velocity. 
@@ -349,11 +372,6 @@ class eAr_G2(Collisions):
         v1[check_1,1]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.sin(vs[2][check_1])
         v1[check_1,2]   = vs[0][check_1] * np.cos(vs[1][check_1])
         
-        
-        # v2[check_1,0]   = (v0[check_1,0] - v1[check_1,0])
-        # v2[check_1,1]   = (v0[check_1,1] - v1[check_1,1])
-        # v2[check_1,2]   = (v0[check_1,2] - v1[check_1,2])
-
         v2[check_1,:]   = v1[check_1,:] - v0[check_1,:]
         v2_norm_fac     = (vs[0][check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
         
@@ -367,40 +385,44 @@ class eAr_G2(Collisions):
         vs2[1][check_1] = v2_sp[1]
         vs2[2][check_1] = v2_sp[2]
         
+        return [vs,vs2]
 
+    @staticmethod
+    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
+        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        # see if collision can be triggered. - total cross section should take care of this. 
+        # this is to avoid complex numbers in the velocity computations. 
+        check_1            = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
+        vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        vs[0][np.logical_not(check_1)] = 0
+        v2_fac             = vs[0]
+        
+        v0              = np.zeros(vr.shape + tuple([3]))
+        v1              = np.zeros(vr.shape + tuple([3]))
+        v2              = np.zeros(vr.shape + tuple([3]))
+        
+        v0[check_1,0]   = vr[check_1] * np.sin(vt[check_1]) * np.cos(vp[check_1])
+        v0[check_1,1]   = vr[check_1] * np.sin(vt[check_1]) * np.sin(vp[check_1])
+        v0[check_1,2]   = vr[check_1] * np.cos(vt[check_1])
 
-        # # see if collision can be triggered. 
-        # check_1            = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
-        # vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
-        # vs[0][np.logical_not(check_1)] = 0
-        # v2_fac             = vs[0]
+        v1[check_1,0]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.cos(vs[2][check_1])
+        v1[check_1,1]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.sin(vs[2][check_1])
+        v1[check_1,2]   = vs[0][check_1] * np.cos(vs[1][check_1])
         
-        # v0              = np.zeros(vr.shape + tuple([3]))
-        # v1              = np.zeros(vr.shape + tuple([3]))
-        # v2              = np.zeros(vr.shape + tuple([3]))
         
-        # v0[check_1,0]   = vr[check_1] * np.sin(vt[check_1]) * np.cos(vp[check_1])
-        # v0[check_1,1]   = vr[check_1] * np.sin(vt[check_1]) * np.sin(vp[check_1])
-        # v0[check_1,2]   = vr[check_1] * np.cos(vt[check_1])
+        v2[check_1,:]   = v0[check_1,:] - v1[check_1,:]
+        v2_norm_fac     = (v2_fac[check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
+        
+        v2[check_1,0]   = v2_norm_fac * v2[check_1,0]
+        v2[check_1,1]   = v2_norm_fac * v2[check_1,1]
+        v2[check_1,2]   = v2_norm_fac * v2[check_1,2]
+        
+        vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
+        v2_sp           = BEUtils.cartesian_to_spherical(v2[check_1,0],v2[check_1,1],v2[check_1,2])
 
-        # v1[check_1,0]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.cos(vs[2][check_1])
-        # v1[check_1,1]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.sin(vs[2][check_1])
-        # v1[check_1,2]   = vs[0][check_1] * np.cos(vs[1][check_1])
-        
-        
-        # v2[check_1,:]   = v0[check_1,:] - v1[check_1,:]
-        # v2_norm_fac        = (v2_fac[check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
-        
-        # v2[check_1,0]   = v2_norm_fac * v2[check_1,0]
-        # v2[check_1,1]   = v2_norm_fac * v2[check_1,1]
-        # v2[check_1,2]   = v2_norm_fac * v2[check_1,2]
-        
-        # vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
-        # v2_sp           = BEUtils.cartesian_to_spherical(v2[check_1,0],v2[check_1,1],v2[check_1,2])
-
-        # vs2[0][check_1] = v2_sp[0]
-        # vs2[1][check_1] = v2_sp[1]
-        # vs2[2][check_1] = v2_sp[2]
+        vs2[0][check_1] = v2_sp[0]
+        vs2[1][check_1] = v2_sp[1]
+        vs2[2][check_1] = v2_sp[2]
 
         return [vs,vs2]
 
@@ -409,7 +431,7 @@ class eAr_G2(Collisions):
         return E_AR_IONIZATION_eV
 
     @staticmethod
-    def get_Ar_density():
+    def get_cross_section_scaling():
         return AR_IONIZED_N
 
 """

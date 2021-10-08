@@ -35,6 +35,8 @@ def spec_tail(cf):
 
 plt.rcParams['axes.grid'] = True
 fig,ax_plt = plt.subplots(2,2)
+fig.set_figheight(8)
+fig.set_figwidth(8)
 sp_tail=list()
 
 for i in range(0,data.shape[0]):
@@ -55,6 +57,8 @@ for i in range(0,data.shape[0],args.frequency):
     ax_plt[0,0].plot(ev_pts,eedf_pts,label="t=%.4E"%time)
     ax_plt[0,0].set_xlabel("Energy (eV)")
     ax_plt[0,0].set_ylabel("EEDF")
+    ax_plt[0,0].set_yscale("log")
+    ax_plt[0,0].set_xscale("log")
     #ax_plt[0,0].grid()
     ax_plt[0,0].legend()
 
@@ -74,11 +78,14 @@ ax_plt[1,1].set_xlabel("time(s)")
 ax_plt[1,1].set_ylabel("norm_tail/norm_overall")    
 #ax_plt[1,1].grid()
 
+plt.tight_layout()
 
-
-plt.show()
+#plt.show()
+plt.savefig(args.filename+".png")
 #plt.savefig(args.output)
-plt.close()
+#plt.close()
+#f.show()
+#f.close()
 
 
 

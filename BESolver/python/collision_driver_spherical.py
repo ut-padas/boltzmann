@@ -24,7 +24,7 @@ t_ts = profiler.profile_t("ts")
 
 
 collisions.AR_NEUTRAL_N=3.22e22
-collisions.MAXWELLIAN_N=1e18
+collisions.MAXWELLIAN_N=1e10
 collisions.AR_IONIZED_N=3.22e22 #collisions.MAXWELLIAN_N
 
 
@@ -175,7 +175,6 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
     # point_data=dict()
     
     ev_pts     = np.linspace(0,50,1000) 
-    m_ht=h_init[0]
     mw_prev   = BEUtils.get_maxwellian_3d(vth_prev,MNE)
     m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_prev,vth_prev,0,None,None,None,1)
     temp_t0   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_prev,vth_prev,None,None,None,m0_t0,1)
@@ -195,8 +194,6 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
         vth_curr  = collisions.electron_thermal_velocity(temp_curr)
         mw_curr   = BEUtils.get_maxwellian_3d(vth_curr,MNE)
 
-        MNE        = m0
-        #collisions.AR_IONIZED_N = MNE
         print(f"dt={dt:.2E} N_e(t={t_curr:.2E})={m0:.12E} maxwellian N_e={m0_t0:.12E} relative error: {(m0_t0-m0)/m0_t0:.12E} temperature(K)={temp_curr:.12E} ")
         
         if(t_step % IO_COUT_FEQ ==0):
@@ -209,8 +206,8 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
         print("vth_prev = %.12E  vth_curr = %.12E" %(vth_prev,vth_curr))
         mm_h1  = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp, mw_prev, vth_prev, mw_curr, vth_curr, None, None, None, 1)
         h_t    = np.dot(mm_h1,h_t)
-        #h_t[0] = m_ht
-
+        #print(h_t)
+        
         # if(t_step % VTK_IO_FREQ  is 0):
         #     point_data["f(v)"] = np.matmul(P_klm,h_t)
         #     pyevtk.hl.gridToVTK(OUTPUT_FILE_NAME+"_vtk_%04d"%(t_step//VTK_IO_FREQ), X, Y, Z, cellData = None, pointData = point_data,fieldData=None)
@@ -241,7 +238,6 @@ def ode_first_order_linear(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwe
         h_t = np.dot(fun_sol,c_t) #h_test
         assert np.allclose(np.imag(h_t),np.zeros(h_t.shape)) , "imaginary part is not close to zero"
         h_t   = np.real(h_t)
-        #h_t[0]   = m_ht
 
         mw_prev   = mw_curr
         vth_prev  = vth_curr
@@ -304,9 +300,8 @@ print("\tDT : ", params.BEVelocitySpace().VELOCITY_SPACE_DT, " s")
 print("""============================================================""")
 params.print_parameters()
 
-
 maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-hv         = lambda v,vt,vp : np.ones_like(v) #* collisions.MAXWELLIAN_N
+hv         = lambda v,vt,vp : np.ones_like(v) #+ v + v**2   #* collisions.MAXWELLIAN_N
 h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
 
 col_g0_no_E_loss = collisions.eAr_G0_NoEnergyLoss()
@@ -320,7 +315,9 @@ t_M.stop()
 #print(M)
 print("Mass assembly time (s): ", t_M.seconds)
 #ode_first_order_linear(cf,[col_g0_no_E_loss],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
-ode_first_order_linear(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
-#ode_numerical_solve(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+#ode_first_order_linear(cf,[col_g0,col_g1],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+#ode_first_order_linear(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+ode_numerical_solve(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
+#ode_numerical_solve(cf,[col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
 #ode_numerical_solve(cf,[[col_g0,1],[col_g1,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)
 #ode_numerical_solve(cf,[[col_g0,1]],h_vec,maxwellian,VTH,args.T_END,args.T_DT,args.mass_tol)

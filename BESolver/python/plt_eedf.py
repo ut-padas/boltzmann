@@ -58,19 +58,24 @@ for i in range(0,data.shape[0],args.frequency):
     ax_plt[0,0].set_xlabel("Energy (eV)")
     ax_plt[0,0].set_ylabel("EEDF")
     ax_plt[0,0].set_yscale("log")
-    ax_plt[0,0].set_xscale("log")
+    #ax_plt[0,0].set_xscale("log")
     #ax_plt[0,0].grid()
     ax_plt[0,0].legend()
 
     
-ax_plt[0,1].plot(data[:,TIME_INDEX],data[:,MASS_INDEX])
+ax_plt[0,1].plot(data[:,TIME_INDEX],data[:,MASS_INDEX]/INIT_MASS)
 ax_plt[0,1].set_xlabel("time(s)")
-ax_plt[0,1].set_ylabel("mass")    
+ax_plt[0,1].set_ylabel("mass (t) / mass (0)")
+
+m_min = np.min(data[:,MASS_INDEX]/INIT_MASS)
+m_max = np.max(data[:,MASS_INDEX]/INIT_MASS)
+if(np.fabs(m_max-m_min)<1e-6):
+    ax_plt[0,1].set_ylim([1-1e-6,1+1e-6])
 #ax_plt[0,1].grid()
 
-ax_plt[1,0].plot(data[:,TIME_INDEX],data[:,TEMP_INDEX])
+ax_plt[1,0].plot(data[:,TIME_INDEX],data[:,TEMP_INDEX]*scipy.constants.Boltzmann/collisions.ELECTRON_VOLT)
 ax_plt[1,0].set_xlabel("time(s)")
-ax_plt[1,0].set_ylabel("temp(K)")    
+ax_plt[1,0].set_ylabel("temperature (eV)")    
 #ax_plt[1,0].grid()
 
 ax_plt[1,1].plot(data[:,TIME_INDEX],np.array(sp_tail))

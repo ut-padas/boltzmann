@@ -24,10 +24,10 @@ markers   =[',', '+', '-', '.', 'o', '*']
 
 for i, f in enumerate(file_names):
     data = np.loadtxt(f,skiprows=1)
-    plt.plot(data[:,TIME_INDEX],data[:,TEMP_INDEX],label=plot_label[i],markersize=2,marker='o')
+    plt.plot(data[:,TIME_INDEX],data[:,TEMP_INDEX]*scipy.constants.Boltzmann/collisions.ELECTRON_VOLT,label=plot_label[i],markersize=2,marker='o')
 
 plt.xlabel("time (s)")
-plt.ylabel("temperature (K)")
+plt.ylabel("temperature (eV)")
 plt.grid()
 plt.legend()
 plt.show()
@@ -39,10 +39,10 @@ plot_label=["G0 (Nr,Nt,Np)=(8,2,1) dt=1e-8","G1 (Nr,Nt,Np)=(8,2,1) dt=1e-8","G2 
 
 for i, f in enumerate(file_names):
     data = np.loadtxt(f,skiprows=1)
-    plt.plot(data[:,TIME_INDEX],data[:,TEMP_INDEX],label=plot_label[i],markersize=2,marker='o')
+    plt.plot(data[:,TIME_INDEX],data[:,TEMP_INDEX]*scipy.constants.Boltzmann/collisions.ELECTRON_VOLT,label=plot_label[i],markersize=2,marker='o')
 
 plt.xlabel("time (s)")
-plt.ylabel("temperature (K)")
+plt.ylabel("temperature (eV)")
 plt.grid()
 plt.legend()
 plt.show()

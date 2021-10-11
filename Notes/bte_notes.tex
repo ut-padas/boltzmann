@@ -51,17 +51,23 @@ The collision operator (i.e., capture the physics of the collisions) can be brok
     \item Loss term ($C^-(f,f)$) : For a fixed $(t,x)$ how many particles are lost with velocity $v$.
 \end{enumerate} which are defined as follows. 
 
-\begin{align}
-    C^{+}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v^\prime)f(v_*^\prime) d\omega dv_* \\
-    C^{-}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v)f(v_*) d\omega dv_* 
-\end{align}
+\subsection{Multi-species binary collisions}
+\label{sec:multispecies_collissions}
+Let $f_e,f_o$, denotes the distribution functions for electrons and heavy particles respectively. 
 
-The collision operator then defined as, 
-\begin{equation}
-    \begin{split}
-        C(f,f) = C^{+}(f,f) - C^{-}(f,f) %= \\ \int_{\R^3}\int_{S^2} B(|v-v_*|,\theta)(f(v^\prime)f(v_*^\prime) - f(v)f(v_*) ) d\omega dv_*    
-    \end{split}
-\end{equation}
+
+
+% \begin{align}
+%     C^{+}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v^\prime)f(v_*^\prime) d\omega dv_* \\
+%     C^{-}(f,f) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega) f(v)f(v_*) d\omega dv_* 
+% \end{align}
+
+% The collision operator then defined as, 
+% \begin{equation}
+%     \begin{split}
+%         C(f,f) = C^{+}(f,f) - C^{-}(f,f) %= \\ \int_{\R^3}\int_{S^2} B(|v-v_*|,\theta)(f(v^\prime)f(v_*^\prime) - f(v)f(v_*) ) d\omega dv_*    
+%     \end{split}
+% \end{equation}
 
 \section{Electron - Ar collisions}
 \label{sec:col_op_torch}
@@ -504,9 +510,6 @@ We can further write,
 But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\pi}$ with $v^\prime \neq v$.  
 
 
-
-
-
 % \section{Experimental Results}
 % We solve, 
 
@@ -541,11 +544,11 @@ But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\p
 % \end{figure}
 
 
-\subsection{Numerical evaluation}
+\newpage
+\section{Numerical evaluation}
 
-The current implemented collision operator timestepper can be summarized as follows. 
 \begin{algorithm}
-\caption{Time stepper for collision operator}\label{alg:ts_collop}
+\caption{Time stepper for linear collision operator} \label{alg:ts_collop}
 \begin{algorithmic}
 \Require $f^{n}$, thermal velocity $v_t ^{n-1}$, mass $M_0$ 
 %\Ensure $y = x^n$
@@ -561,6 +564,51 @@ The current implemented collision operator timestepper can be summarized as foll
 \State \Return $f^{n+1}$
 \end{algorithmic}
 \end{algorithm}
+For nonlinear collision operators, standard explicit RK schemes can be applied. 
+
+\subsection{G0: $e + Ar \rightarrow e + Ar $}
+\begin{figure}[H]
+    \includegraphics[width=\textwidth]{dat/g0_dt_1e-8_Nr_8.dat.png}
+    \caption{G0 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+\end{figure}
+
+\begin{figure}[H]
+    \includegraphics[width=\textwidth]{dat/g0_dt_1e-7_Nr_8_perturb_mw.dat.png}
+    \caption{G0 collision operator with $dt=1e-7$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1 + v + v^2$.}
+\end{figure}
+
+\subsection{G1: $e + Ar \rightarrow e + Ar^* $}
+\begin{figure}[H]
+    \includegraphics[width=\textwidth]{dat/g1_dt_1e-8_Nr_8.dat.png}
+    \caption{G1 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+\end{figure}
+
+\subsection{G2: $e + Ar \rightarrow e + Ar^+ e $}
+\begin{figure}[H]
+    \includegraphics[width=\textwidth]{dat/g2_dt_1e-8_Nr_8.dat.png}
+    \caption{G2 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+\end{figure}
+
+\subsection{G0 + G1 combined}
+\begin{figure}[H]
+    \includegraphics[width=\textwidth]{dat/g01_convgence.png}
+    \caption{G0 + G1 collision operator convergence study on the temperature curve, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+\end{figure}
+
+\begin{figure}[H]
+    \includegraphics[width=\textwidth]{dat/g01_dt_1e-9_Nr_16.dat.png}
+    \caption{G0 + G1 collision operator with $dt=1e-9$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+\end{figure}
+
+\subsection{G0 + G2 combined (nonlinear with $n_i = n_e$)}
+\begin{figure}[H]
+    \includegraphics[width=\textwidth]{dat/g2_dt_1e-8_Nr_16_quasi_neutral.dat.png}
+    \caption{G0 + G2 collision operator with $dt=1e-8$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$, and $n_e=1e10$.}
+\end{figure}
+
+
+
+
 
 
 \bibliographystyle{plain}

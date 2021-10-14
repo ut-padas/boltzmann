@@ -568,24 +568,24 @@ For nonlinear collision operators, standard explicit RK schemes can be applied.
 
 \subsection{G0: $e + Ar \rightarrow e + Ar $}
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{dat/g0_dt_1e-8_Nr_8.dat.png}
+    \includegraphics[width=\textwidth]{{dat/g0_dt_1e-8_Nr_8.dat}.png}
     \caption{G0 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
 \end{figure}
 
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{dat/g0_dt_1e-7_Nr_8_perturb_mw.dat.png}
+    \includegraphics[width=\textwidth]{{dat/g0_dt_1e-7_Nr_8_perturb_mw.dat}.png}
     \caption{G0 collision operator with $dt=1e-7$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1 + v + v^2$.}
 \end{figure}
 
 \subsection{G1: $e + Ar \rightarrow e + Ar^* $}
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{dat/g1_dt_1e-8_Nr_8.dat.png}
+    \includegraphics[width=\textwidth]{{dat/g1_dt_1e-8_Nr_8.dat}.png}
     \caption{G1 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
 \end{figure}
 
 \subsection{G2: $e + Ar \rightarrow e + Ar^+ e $}
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{dat/g2_dt_1e-8_Nr_8.dat.png}
+    \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_8.dat}.png}
     \caption{G2 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
 \end{figure}
 
@@ -596,23 +596,223 @@ For nonlinear collision operators, standard explicit RK schemes can be applied.
 \end{figure}
 
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{dat/g01_dt_1e-9_Nr_16.dat.png}
+    \includegraphics[width=\textwidth]{{dat/g01_dt_1e-9_Nr_16.dat}.png}
     \caption{G0 + G1 collision operator with $dt=1e-9$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
 \end{figure}
 
 \subsection{G0 + G2 combined (nonlinear with $n_i = n_e$)}
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{dat/g2_dt_1e-8_Nr_16_quasi_neutral.dat.png}
+    \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_16_quasi_neutral.dat}.png}
     \caption{G0 + G2 collision operator with $dt=1e-8$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$, and $n_e=1e10$.}
 \end{figure}
-
-
-
-
-
 
 \bibliographystyle{plain}
 \bibliography{bte_notes.bib}
 
+\appendix
 
+\section{Derivation of Collision operators}
+
+\subsection{Binary reactions}
+
+We start with reactions of the type
+\begin{align*}
+\text{Ar} + e \longrightarrow \tilde{\text{Ar}} + e
+\end{align*}
+where $\tilde{\text{Ar}} = \text{Ar}$ in the case of elastic collisions and $\tilde{\text{Ar}} = \text{Ar}^\ast$ in the case of excitation events. Let us denote the expressions that map given pre-collisional velocities $\vect{v}_e$, $\vect{v}_0$ to post-collisional velocities as 
+\begin{align*}
+\vect{v}_e^\text{post} &= \vect{v}_e^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}
+\\
+\vect{v}_0^\text{post} &= \vect{v}_0^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}
+\end{align*} 
+where $\vect{\omega} \in S^2$ is the vector defining along which directions velocities change in the reaction. Specifically, from the conservation of momentum and energy it can be derived that
+\begin{align*}
+\vect{v}_e^\text{post} &= \vect{v}_e + \frac{\alpha}{m_e}\vect{\omega},
+\\
+\vect{v}_0^\text{post} &= \vect{v}_0 - \frac{\alpha}{m_0}\vect{\omega},
+\end{align*}
+where
+\begin{align*}
+\alpha &= \frac{u + \sqrt{u^2 - 4 \Delta E \mu}}{2\mu},
+\quad 
+u = \vect{\omega} \cdot \left( \vect{v}_0 - \vect{v}_e \right),
+\quad 
+\mu = \frac{m_e+m_0}{2 m_e m_0}
+\end{align*}
+and $\Delta E$ denotes the energy loss during the reaction ($\Delta E = 0$ for elastic collisions). The inverse map (assuming it exists and well-defined) is denoted as 
+\begin{align*}
+\vect{v}_e^\text{pre} &= \vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}
+\\
+\vect{v}_0^\text{pre} &= \vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}
+\end{align*} 
+where $\vect{v}_e$, $\vect{v}_0$ now represent the post-collision velocities. Thus we have 
+\begin{align*}
+\vect{v}_e &= \vect{v}_e^\text{pre} \of{\vect{v}_e^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{\omega}}
+\\
+\vect{v}_0 &= \vect{v}_0^\text{pre} \of{\vect{v}_e^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{\omega}}
+\end{align*} 
+
+Let us denote the collision kernel of reaction as $B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}$ which is a function of pre-collision velocities $\vect{v}_e$, $\vect{v}_0$ and the direction of velocity change $\vect{\omega}$. The number of electrons with velocity $\vect{v}_e$ that will participate in the reaction and, thus, lost is given by 
+\begin{align*}
+C^- = \int_{R^3} \int_{S^2} B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} \diff{\vect{v}_0} \diff{\vect{\omega}}
+\end{align*}
+The number of electrons with the same velocity created in the reaction is given by
+\begin{align*}
+C^+ = \int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} 
+f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
+\delta\of{\vect{v}_e^\text{post}\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} - \vect{v}_e} 
+\diff{\vect{v}_0^\prime} \diff{\vect{v}_e^\prime} \diff{\vect{\omega}}
+\end{align*}
+where we integrate over all possible pre-collision velocities $\vect{v}_e^\prime$, $\vect{v}_0^\prime$ but pick out only those that result in post-collision electron velocity $\vect{v}_e$ (thanks to the delta function). Note that in the expression for $C^-$ symbols $\vect{v}_e$, $\vect{v}_0$ have the meaning of pre-collision velocity, while in the expression for $C^+$ those are denoted by $\vect{v}_e^\prime$, $\vect{v}_0^\prime$. 
+
+\textbf{Remark.} One could define $C^-$ in an analogous to $C^+$ way. That is, consider reactions for all possible pre-collision velocities $\vect{v}_e^\prime$, $\vect{v}_0^\prime$ but select only those that lead to loss of electrons with velocity $\vect{v}_e$
+\begin{align*}
+C^- = \int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} 
+f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
+\delta\of{\vect{v}_e^\prime - \vect{v}_e} 
+\diff{\vect{v}_0^\prime} \diff{\vect{v}_e^\prime} \diff{\vect{\omega}}.
+\end{align*}
+
+We understand $C^-$ and $C^+$ as operators acting on functions of variable $\vect{v}_e$. Their weak forms are given by
+\begin{align*}
+\int_{R^3} C^- \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+&=
+\int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
+f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
+\phi\of{\vect{v}_e} 
+\diff{\vect{v}_e} \diff{\vect{v}_0} \diff{\vect{\omega}}
+\\
+\int_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+&= 
+\int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} 
+f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
+\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}}} 
+\diff{\vect{v}_0^\prime} \diff{\vect{v}_e^\prime} \diff{\vect{\omega}}
+\\
+&= 
+\int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
+f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
+\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}} 
+\diff{\vect{v}_0} \diff{\vect{v}_e} \diff{\vect{\omega}}
+\end{align*}
+where we integrated out the delta function and renamed dummy variables. Thus the weak form of the total collision operator $C = C^+ - C^-$ can be written as 
+\begin{align*}
+\int_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+&=
+\int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
+f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
+\left(
+\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}} 
+- \phi\of{\vect{v}_e} 
+\right)
+\diff{\vect{v}_0} \diff{\vect{v}_e} \diff{\vect{\omega}}
+\end{align*}
+
+While for our purposes this formulation is all we need, for completeness sake we derive a strong form of the collision operator. To do so, we perform a change of variables in the weak form of gain operator $C^+$ according to:
+\begin{align*}
+\vect{v}_e^\prime &= \vect{v}_e^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}
+\\
+\vect{v}_0^\prime &= \vect{v}_0^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}
+\end{align*}
+As result we get
+\begin{multline*}
+\int_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+= 
+\int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}, \vect{v}_0^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}, \vect{\omega}} 
+\times
+\\
+\times
+f_e\of{\vect{v}_e^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}} 
+f_0\of{\vect{v}_0^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}} 
+\phi\of{\vect{v}_e^{\prime\prime}} 
+|J\of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}|
+\diff{\vect{v}_0^{\prime\prime}} \diff{\vect{v}_e^{\prime\prime}} \diff{\vect{\omega}}
+\end{multline*}
+or, after renaming dummy variables,
+\begin{multline*}
+\int_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+= 
+\int_{R^3} \int_{R^3} \int_{S^2} 
+B\of{\vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{\omega}} 
+\times
+\\
+\times
+f_e\of{\vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}} 
+f_0\of{\vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}} 
+\phi\of{\vect{v}_e} 
+|J\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}|
+\diff{\vect{v}_0} \diff{\vect{v}_e} \diff{\vect{\omega}}
+\end{multline*}
+where $J\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} = \frac{ \partial \left( \vect{v}_e^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} \right)}{\partial \left( \vect{v}_e, \vect{v}_0 \right)}$ is the Jacobian of the transformation of variables. Note that in this last expression $\vect{v}_e$, $\vect{v}_0$ can be interpreted as post-collision velocities. Combining it with the weak form of the loss operator (where $\vect{v}_e$, $\vect{v}_0$ actually stand for pre-collision velocities) we obtain
+\begin{multline*}
+\int_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+=
+\int_{R^3} \int_{R^3} \int_{S^2} 
+\phi\of{\vect{v}_e} 
+\diff{\vect{v}_0} \diff{\vect{v}_e} \diff{\vect{\omega}}
+\times
+\\
+\times
+\big(
+B^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}  
+f_e^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}
+f_0^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
+|J\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}|
+\\
+-
+B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
+f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
+\big)
+\end{multline*}
+where notation $x^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} = x\of{\vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{\omega}}$ is used. Thus, a strong form of the total collision operator for general binary reactions can be written as
+\begin{align*}
+C = 
+\int_{R^3} \int_{S^2} 
+\left(
+f_e^\text{pre}
+f_0^\text{pre}
+B^\text{pre} 
+|J|
+-
+f_e
+f_0
+B
+\right)
+\diff{\vect{v}_0} \diff{\vect{\omega}}
+\end{align*}
+In case of elastic collisions it can be shown that $|J| = 1$ and
+\begin{align*}
+B^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} &=
+B\of{\vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{\omega}} 
+\\
+&=
+B\of{|\vect{v}_e^\text{pre}- \vect{v}_0^\text{pre}|, |\left(\vect{v}_e^\text{pre}- \vect{v}_0^\text{pre}\right)\cdot\vect{\omega}|} 
+\\
+&=
+B\of{|\vect{v}_e- \vect{v}_0|, |\left(\vect{v}_e- \vect{v}_0\right)\cdot\vect{\omega}|}
+\\
+&=
+B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
+\end{align*}
+and the collision operator becomes the familiar
+\begin{align*}
+C = 
+\int_{R^3} \int_{S^2} 
+\left(
+f_e^\text{pre}
+f_0^\text{pre}
+-
+f_e
+f_0
+\right)
+B
+\diff{\vect{v}_0} \diff{\vect{\omega}}
+\end{align*}
 \end{document}

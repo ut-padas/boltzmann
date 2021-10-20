@@ -58,7 +58,7 @@ for i in range(0,data.shape[0],args.frequency):
     ax_plt[0,0].set_xlabel("Energy (eV)")
     ax_plt[0,0].set_ylabel("EEDF")
     ax_plt[0,0].set_yscale("log")
-    #ax_plt[0,0].set_xscale("log")
+    ax_plt[0,0].set_xscale("log")
     #ax_plt[0,0].grid()
     ax_plt[0,0].legend()
 
@@ -72,15 +72,22 @@ m_max = np.max(data[:,MASS_INDEX]/INIT_MASS)
 if(np.fabs(m_max-m_min)<1e-6):
     ax_plt[0,1].set_ylim([1-1e-6,1+1e-6])
 #ax_plt[0,1].grid()
+ax_plt[0,1].ticklabel_format(axis="x", style="sci", scilimits=(0,0))
 
 ax_plt[1,0].plot(data[:,TIME_INDEX],data[:,TEMP_INDEX]*scipy.constants.Boltzmann/collisions.ELECTRON_VOLT)
 ax_plt[1,0].set_xlabel("time(s)")
 ax_plt[1,0].set_ylabel("temperature (eV)")    
+ax_plt[1,0].ticklabel_format(axis="x", style="sci", scilimits=(0,0))
+#ax_plt[1,0].set_yscale("log")
+#ax_plt[1,0].set_xscale("log")
 #ax_plt[1,0].grid()
 
 ax_plt[1,1].plot(data[:,TIME_INDEX],np.array(sp_tail))
 ax_plt[1,1].set_xlabel("time(s)")
-ax_plt[1,1].set_ylabel("norm_tail/norm_overall")    
+ax_plt[1,1].set_ylabel("norm_tail")
+ax_plt[1,1].ticklabel_format(axis="x", style="sci", scilimits=(0,0))
+#ax_plt[1,1].set_yscale("log")
+#ax_plt[1,1].set_xscale("log")
 #ax_plt[1,1].grid()
 
 plt.tight_layout()

@@ -615,6 +615,19 @@ But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\p
     \caption{G0 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a radial direction approximation order with decreasing timestep size. }
 \end{table}
 
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|}
+        \hline
+        $Nr,dt$ & relative error (temperature)\\
+        \hline
+        Nr=4 dt=1e-10      &           1.35499e-06 \\
+        Nr=8 dt=5e-11      &           6.60874e-07 \\
+        \hline
+    \end{tabular}
+    \caption{G0 collision operator : $l_\infty$ norm of the relative error in the temperature profile compared against the $Nr=16$ and $dt=2.5E-11$ case. }
+\end{table}
+
 \subsection{G0: $e + Ar \rightarrow e + Ar $  with  G2: $e + Ar \rightarrow e + Ar^+ + e $ (20eV)}
 \begin{figure}[H]
     \centering
@@ -663,6 +676,19 @@ But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\p
     \caption{G0 + G2 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a radial direction approximation order with decreasing timestep size. }
 \end{table}
 
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|}
+        \hline
+        $Nr,dt$ & relative error (temperature)\\
+        \hline
+        Nr=4 dt=1e-10      &           0.25555 \\
+        Nr=8 dt=5e-11      &           0.362987 \\
+        \hline
+    \end{tabular}
+    \caption{G0 + G2 (at 20eV) collision operator : $l_\infty$ norm of the relative error in the temperature profile compared against the $Nr=16$ and $dt=2.5E-11$ case. }
+\end{table}
+
 \subsection{G0: $e + Ar \rightarrow e + Ar $  with  G2: $e + Ar \rightarrow e + Ar^+ + e $ (1eV)}
 \begin{figure}[H]
     \centering
@@ -684,40 +710,20 @@ But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\p
 \end{figure}
 
 
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|}
+        \hline
+        $Nr,dt$ & relative error (temperature)\\
+        \hline
+        Nr=4 dt=1e-10         &       3.56035e-07 \\
+        Nr=8 dt=5e-11         &       1.3401e-08   \\
+        \hline
+    \end{tabular}
+    \caption{G0 + G2 (at 1eV) collision operator : $l_\infty$ norm of the relative error in the temperature profile compared against the $Nr=16$ and $dt=2.5E-11$ case. }
+\end{table}
 
-% \begin{figure}[H]
-%     \includegraphics[width=\textwidth]{{dat/g0_dt_1e-7_Nr_8_perturb_mw.dat}.png}
-%     \caption{G0 collision operator with $dt=1e-7$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1 + v + v^2$.}
-% \end{figure}
 
-% \subsection{G1: $e + Ar \rightarrow e + Ar^* $}
-% \begin{figure}[H]
-%     \includegraphics[width=\textwidth]{{dat/g1_dt_1e-8_Nr_8.dat}.png}
-%     \caption{G1 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
-% \end{figure}
-
-% \subsection{G2: $e + Ar \rightarrow e + Ar^+ e $}
-% \begin{figure}[H]
-%     \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_8.dat}.png}
-%     \caption{G2 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
-% \end{figure}
-
-% \subsection{G0 + G1 combined}
-% \begin{figure}[H]
-%     \includegraphics[width=\textwidth]{dat/g01_convgence.png}
-%     \caption{G0 + G1 collision operator convergence study on the temperature curve, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
-% \end{figure}
-
-% \begin{figure}[H]
-%     \includegraphics[width=\textwidth]{{dat/g01_dt_1e-9_Nr_16.dat}.png}
-%     \caption{G0 + G1 collision operator with $dt=1e-9$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
-% \end{figure}
-
-% \subsection{G0 + G2 combined (nonlinear with $n_i = n_e$)}
-% \begin{figure}[H]
-%     \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_16_quasi_neutral.dat}.png}
-%     \caption{G0 + G2 collision operator with $dt=1e-8$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$, and $n_e=1e10$.}
-% \end{figure}
 
 \bibliographystyle{plain}
 \bibliography{bte_notes.bib}

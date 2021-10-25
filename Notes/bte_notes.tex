@@ -546,65 +546,178 @@ But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\p
 
 \newpage
 \section{Numerical evaluation}
+% \begin{algorithm}
+% \caption{Time stepper for linear collision operator} \label{alg:ts_collop}
+% \begin{algorithmic}
+% \Require $f^{n}$, thermal velocity $v_t ^{n-1}$, mass $M_0$ 
+% %\Ensure $y = x^n$
+% %\State $M \leftarrow zeroth\_moment(f^{n})$
+% \State $T \leftarrow second\_moment(f^{n},M_0,v_t ^{n-1})$
+% \State $v_t^{n} \leftarrow electron\_thermal\_velocity(T)$
+% \State $f^{n} \leftarrow basis\_change(f^{n},v_t ^{n-1},v_t ^{n})$
+% \State $C_n \leftarrow assemble\_collision\_mat(v_t^{n})$ 
+% %\State $W,U \leftarrow eigen\_solve(C_n)$
+% %\State $b\leftarrow U^{-1} f^{n}$
+% \State $f^{n+1} \leftarrow eval\_eigen\_sol(C_n, dt,b)$ 
+% \State $f^{n+1} \leftarrow enforce\_mass\_constraint(f^{n+1},M_0)$
+% \State \Return $f^{n+1}$
+% \end{algorithmic}
+% \end{algorithm}
+% For nonlinear collision operators, standard explicit RK schemes can be applied. 
 
-\begin{algorithm}
-\caption{Time stepper for linear collision operator} \label{alg:ts_collop}
-\begin{algorithmic}
-\Require $f^{n}$, thermal velocity $v_t ^{n-1}$, mass $M_0$ 
-%\Ensure $y = x^n$
-%\State $M \leftarrow zeroth\_moment(f^{n})$
-\State $T \leftarrow second\_moment(f^{n},M_0,v_t ^{n-1})$
-\State $v_t^{n} \leftarrow electron\_thermal\_velocity(T)$
-\State $f^{n} \leftarrow basis\_change(f^{n},v_t ^{n-1},v_t ^{n})$
-\State $C_n \leftarrow assemble\_collision\_mat(v_t^{n})$ 
-%\State $W,U \leftarrow eigen\_solve(C_n)$
-%\State $b\leftarrow U^{-1} f^{n}$
-\State $f^{n+1} \leftarrow eval\_eigen\_sol(C_n, dt,b)$ 
-\State $f^{n+1} \leftarrow enforce\_mass\_constraint(f^{n+1},M_0)$
-\State \Return $f^{n+1}$
-\end{algorithmic}
-\end{algorithm}
-For nonlinear collision operators, standard explicit RK schemes can be applied. 
 
-\subsection{G0: $e + Ar \rightarrow e + Ar $}
+
+\subsection{G0: $e + Ar \rightarrow e + Ar $ (20eV)}
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{{dat/g0_dt_1e-8_Nr_8.dat}.png}
-    \caption{G0 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g0_temp_profile.png}
+    \caption{Temperature profile for G0 collision operator with increasing number of polynomials in radial direction with different timestep sizes. The temperature profile curved are grouped based on the number of polynomials used in the radial direction. The above can be expected due to the projection of the infinite dimensional collision operator with finite dimensional approximation. }
 \end{figure}
 
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{{dat/g0_dt_1e-7_Nr_8_perturb_mw.dat}.png}
-    \caption{G0 collision operator with $dt=1e-7$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1 + v + v^2$.}
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g0_nr.png}
+    \caption{Relative error in the temperature, for G0 collision operator taking $N_r=16$ as the base profile with different timztep sizes of $1E-10$, $5E-11$ and $2.5E-11$. The relative error in the temperature profile, are grouped with respect refinement in the number of radial polynomials used. }
 \end{figure}
 
-\subsection{G1: $e + Ar \rightarrow e + Ar^* $}
-\begin{figure}[H]
-    \includegraphics[width=\textwidth]{{dat/g1_dt_1e-8_Nr_8.dat}.png}
-    \caption{G1 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
-\end{figure}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|}
+        \hline
+        $dt$ & $|f_{Nr=4}-f_{Nr=16}|_\infty$ & $|f_{Nr=8}-f_{Nr=16}|_\infty$ \\
+        \hline
+        1E-10        & 1.35043E-06  &    6.58742E-07 \\
+        5E-11        & 1.34977E-06  &    6.58425E-07 \\
+        2.5E-11      & 1.35083E-06  &    6.58942E-07 \\
+        \hline
+    \end{tabular}
+    \caption{G0 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a specified timestep size with increasing radial direction approximation order.  }
+\end{table}
 
-\subsection{G2: $e + Ar \rightarrow e + Ar^+ e $}
-\begin{figure}[H]
-    \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_8.dat}.png}
-    \caption{G2 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
-\end{figure}
-
-\subsection{G0 + G1 combined}
-\begin{figure}[H]
-    \includegraphics[width=\textwidth]{dat/g01_convgence.png}
-    \caption{G0 + G1 collision operator convergence study on the temperature curve, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
-\end{figure}
 
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{{dat/g01_dt_1e-9_Nr_16.dat}.png}
-    \caption{G0 + G1 collision operator with $dt=1e-9$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g0_dt.png}
+    \caption{Relative error in the temperature, for G0 collision operator taking $dt=2.5E-11$ as the base profile with different Nr polynomials $Nr=4$, $Nr=8$ and $Nr=16$. The relative error curves are grouped with respect to the refinement in the timestep size. The above shows, for the given finite dimensional approximation of the collision operator, computed temperature profile convergences for a fixed profile.}
 \end{figure}
 
-\subsection{G0 + G2 combined (nonlinear with $n_i = n_e$)}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|}
+        \hline
+        $Nr$ & $|f_{dt=1E-10}-f_{dt=2.5E-11}|_\infty$ & $|f_{dt=5E-11}-f_{dt=2.5E-11}|_\infty$ \\
+        \hline
+        4          & 6.24007e-09         & 2.08135e-09 \\
+        8          & 6.80473e-09         & 2.26967e-09 \\
+        16         & 7.34148e-09         & 2.44868e-09 \\
+        \hline
+    \end{tabular}
+    \caption{G0 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a radial direction approximation order with decreasing timestep size. }
+\end{table}
+
+\subsection{G0: $e + Ar \rightarrow e + Ar $  with  G2: $e + Ar \rightarrow e + Ar^+ + e $ (20eV)}
 \begin{figure}[H]
-    \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_16_quasi_neutral.dat}.png}
-    \caption{G0 + G2 collision operator with $dt=1e-8$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$, and $n_e=1e10$.}
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g02_temp_profile.png}
+    \caption{Temperature profile for G0 + G2 collision operator with increasing number of polynomials in radial direction with different timestep sizes. }
 \end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g02_nr.png}
+    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $N_r=16$ as the base profile with different timztep sizes of $1E-10$, $5E-11$ and $2.5E-11$.}
+\end{figure}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|}
+        \hline
+        $dt$ & $|f_{Nr=4}-f_{Nr=16}|_\infty$ & $|f_{Nr=8}-f_{Nr=16}|_\infty$ \\
+        \hline
+        1e-10         & 0.0153427        & 0.0024703   \\
+        5e-11         & 0.051785         & 0.018351 \\
+        2.5e-11       & 0.00773937       & 0.00134626 \\
+        \hline
+    \end{tabular}
+    \caption{G0 + G2 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a specified timestep size with increasing radial direction approximation order. }
+\end{table}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g02_dt.png}
+    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $dt=2.5E-11$ as the base profile with different Nr polynomials $Nr=4$, $Nr=8$ and $Nr=16$.}
+\end{figure}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|}
+        \hline
+        $Nr$ & $|f_{dt=1E-10}-f_{dt=2.5E-11}|_\infty$ & $|f_{dt=5E-11}-f_{dt=2.5E-11}|_\infty$ \\
+        \hline
+        4         &   0.0258552           & 0.0257722 \\
+        8         &   0.0258221           & 0.0257365 \\
+       16        &    0.025834            & 0.0257491 \\
+        \hline
+    \end{tabular}
+    \caption{G0 + G2 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a radial direction approximation order with decreasing timestep size. }
+\end{table}
+
+\subsection{G0: $e + Ar \rightarrow e + Ar $  with  G2: $e + Ar \rightarrow e + Ar^+ + e $ (1eV)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.49\textwidth]{dat/g012_temp_1ev.png}
+    \includegraphics[width=0.49\textwidth]{dat/g012_mass_1ev.png}
+    \caption{Temperature (on the left) and the mass (on the right) profiles for G0 + G2 collision operator with increasing number of polynomials in radial direction with different timestep sizes. }
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g02_nr_1ev.png}
+    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $N_r=16$ as the base profile with different timztep sizes of $1E-10$, $5E-11$ and $2.5E-11$.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.99\textwidth]{dat/g02_nr_1ev.png}
+    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $dt=2.5E-11$ as the base profile with different Nr polynomials $Nr=4$, $Nr=8$ and $Nr=16$.}
+\end{figure}
+
+
+
+% \begin{figure}[H]
+%     \includegraphics[width=\textwidth]{{dat/g0_dt_1e-7_Nr_8_perturb_mw.dat}.png}
+%     \caption{G0 collision operator with $dt=1e-7$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1 + v + v^2$.}
+% \end{figure}
+
+% \subsection{G1: $e + Ar \rightarrow e + Ar^* $}
+% \begin{figure}[H]
+%     \includegraphics[width=\textwidth]{{dat/g1_dt_1e-8_Nr_8.dat}.png}
+%     \caption{G1 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+% \end{figure}
+
+% \subsection{G2: $e + Ar \rightarrow e + Ar^+ e $}
+% \begin{figure}[H]
+%     \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_8.dat}.png}
+%     \caption{G2 collision operator with $dt=1e-8$, $N_r=8$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+% \end{figure}
+
+% \subsection{G0 + G1 combined}
+% \begin{figure}[H]
+%     \includegraphics[width=\textwidth]{dat/g01_convgence.png}
+%     \caption{G0 + G1 collision operator convergence study on the temperature curve, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+% \end{figure}
+
+% \begin{figure}[H]
+%     \includegraphics[width=\textwidth]{{dat/g01_dt_1e-9_Nr_16.dat}.png}
+%     \caption{G0 + G1 collision operator with $dt=1e-9$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$.}
+% \end{figure}
+
+% \subsection{G0 + G2 combined (nonlinear with $n_i = n_e$)}
+% \begin{figure}[H]
+%     \includegraphics[width=\textwidth]{{dat/g2_dt_1e-8_Nr_16_quasi_neutral.dat}.png}
+%     \caption{G0 + G2 collision operator with $dt=1e-8$, $N_r=16$, $N_\theta=2$, and $N_\phi=1$, with $f(v,0)= M(v)h(v)$, with $h(v)=1$, and $n_e=1e10$.}
+% \end{figure}
 
 \bibliographystyle{plain}
 \bibliography{bte_notes.bib}

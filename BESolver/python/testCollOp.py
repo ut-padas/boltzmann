@@ -282,6 +282,70 @@ def eigenvec_collision_op(collision,maxwellian):
     return [W,fun_sol]
 
 
+def maxwellian_basis_change_test():
+    """
+    try to compute the expansion coefficients function 
+    written in a maxwellian 1 w.r.t. basis maxwellian 2. 
+    """
+
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=30
+    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0],[1,1]]
+    params.BEVelocitySpace.NUM_Q_VR    = 51
+    params.BEVelocitySpace.NUM_Q_VT    = 16
+    params.BEVelocitySpace.NUM_Q_VP    = 16
+    params.BEVelocitySpace.NUM_Q_CHI   = 64
+    params.BEVelocitySpace.NUM_Q_PHI   = 16
+
+    colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+    cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    spec_sp  = colOpSp.SPEC_SPHERICAL
+
+    MT1  = 1.0*collisions.TEMP_K_1EV
+    VTH1 = collisions.electron_thermal_velocity(MT1)
+    maxwellian_1 = BEUtils.get_maxwellian_3d(VTH1,1)
+
+    tail_norm = lambda x, i: np.linalg.norm(x[i:],ord=2)/np.linalg.norm(x,ord=2)
+
+    h_vec = spec_sp.create_vec()
+    h_vec[0] = 1.0
+
+    # for epsilon in np.linspace(0,1e-1,100):
+    #     MT2  = collisions.TEMP_K_1EV * (1.0-epsilon)
+    #     VTH2 = collisions.electron_thermal_velocity(MT2)
+    #     maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
+    #     mm_h1     = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
+    #     h_new = np.dot(mm_h1,h_vec)
+    #     tail  = tail_norm(h_new, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER//2)
+    #     print(f"T2 = T1(1-{epsilon:.6E}) = {MT2 : .6E} , T1 = {MT1:.6E} norm of W mat {np.linalg.norm(mm_h1) : .6E}, tail norm : {tail: .6E}")
+
+    epsilon  = 0.1
+    tail_tol = 1e-3 / 100
+    while True:
+        VTH1 = collisions.electron_thermal_velocity(MT1)
+        maxwellian_1 = BEUtils.get_maxwellian_3d(VTH1,1)
+        MT2  = MT1 * (1.0-epsilon)
+        VTH2 = collisions.electron_thermal_velocity(MT2)
+        maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
+        mm_h1     = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
+        h_new = np.dot(mm_h1,h_vec)
+        tail  = tail_norm(h_new, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER//2)
+
+        if(tail > tail_tol):
+            epsilon=epsilon/2
+        else:
+            print(f"T2 = T1(1-{epsilon:.6E}) = {MT2 * collisions.BOLTZMANN_CONST/ collisions.ELECTRON_VOLT : .6E} , T1 = {MT1 * collisions.BOLTZMANN_CONST/ collisions.ELECTRON_VOLT:.6E} norm of W mat {np.linalg.norm(mm_h1) : .6E}, tail norm : {tail: .6E}")
+            MT1=MT2
+            h_vec=h_new
+            epsilon=0.1
+            tail_tol = tail_tol * (1.1)
+            
+        
+        
+
+
+
+
+
 
 def maxwellian_test():
     """
@@ -412,9 +476,10 @@ def collision_op_thermal_test():
 
 
 #collision_op_thermal_test()
-collision_op_test()
+#collision_op_test()
 #collision_op_conv()
 #maxwellian_test()
+maxwellian_basis_change_test()
 #eigenvec_collision_op(g0,maxwellian)
 #plot_crosssection(g0,50)
 

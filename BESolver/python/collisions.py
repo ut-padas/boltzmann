@@ -48,6 +48,9 @@ PLASMA_FREQUENCY  = np.sqrt(MAXWELLIAN_N * (scipy.constants.elementary_charge**2
 
 class Collisions(abc.ABC):
 
+    is_scattering_mat_assembled = False
+    sc_direction_mat=None
+
     def __init__(self)->None:
         pass
     
@@ -88,13 +91,22 @@ class Collisions(abc.ABC):
         return vs
 
     @staticmethod
+    def reset_scattering_direction_sp_mat():
+        Collisions.is_scattering_mat_assembled=False
+        Collisions.sc_direction_mat=None
+        return
+
+    @staticmethod
     def compute_scattering_direction_sp(v_r,v_theta,v_phi,polar_angle,azimuthal_angle):
 
+        if Collisions.is_scattering_mat_assembled :
+            return Collisions.sc_direction_mat
+        
         check1 = np.isclose(v_theta,np.pi/2)
         check2 = np.logical_or(np.isclose(v_phi,0),np.isclose(v_phi,np.pi))
         check2 = np.logical_or(check2, np.isclose(v_phi,2*np.pi))
 
-        check1 = np.logical_and(check1 , check1)
+        check1 = np.logical_and(check1 , check2)
         
         [v_theta_0, v_theta_1] = [v_theta[check1] , v_theta[np.logical_not(check1)]]
         [v_phi_0, v_phi_1]     = [v_phi[check1]   , v_phi[np.logical_not(check1)]]
@@ -111,7 +123,7 @@ class Collisions(abc.ABC):
         W= (-np.sin(az_1) * np.sin(v_theta_1) * np.sin(v_phi_1) * np.sin(chi_1) + \
              np.cos(v_theta_1) * (np.cos(chi_1) * f1 + np.cos(az_1) * np.cos(v_phi_1) *np.sin(v_theta_1) *np.sin(chi_1))) / f1
 
-        
+        # just to make sure, we don't get NANs in the scattering direction computations. 
         if(len(W)>0 and (np.min(W)<-1 or np.max(W)>1)):
             c1= W > 1.0
             c2= W < -1.0
@@ -138,7 +150,9 @@ class Collisions(abc.ABC):
         theta_p[np.logical_not(check1)] = t1
         phi_p  [np.logical_not(check1)] = p1
 
-        return [r1,theta_p,phi_p]        
+        Collisions.is_scattering_mat_assembled=True
+        Collisions.sc_direction_mat=[r1,theta_p,phi_p]
+        return Collisions.sc_direction_mat
         
     def total_cross_section(self, energy):
         """

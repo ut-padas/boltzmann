@@ -288,9 +288,9 @@ def maxwellian_basis_change_test():
     written in a maxwellian 1 w.r.t. basis maxwellian 2. 
     """
 
-    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=30
-    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0],[1,1]]
-    params.BEVelocitySpace.NUM_Q_VR    = 51
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
+    params.BEVelocitySpace.SPH_HARM_LM = [[0,0],[1,1]]
+    params.BEVelocitySpace.NUM_Q_VR    = 21
     params.BEVelocitySpace.NUM_Q_VT    = 16
     params.BEVelocitySpace.NUM_Q_VP    = 16
     params.BEVelocitySpace.NUM_Q_CHI   = 64
@@ -300,7 +300,9 @@ def maxwellian_basis_change_test():
     cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     spec_sp  = colOpSp.SPEC_SPHERICAL
 
-    MT1  = 1.0*collisions.TEMP_K_1EV
+    TAIL_NORM_INDEX = (spec_sp._p+1) * len(spec_sp._sph_harm_lm) // 2
+
+    MT1  = 20.0*collisions.TEMP_K_1EV
     VTH1 = collisions.electron_thermal_velocity(MT1)
     maxwellian_1 = BEUtils.get_maxwellian_3d(VTH1,1)
 
@@ -308,44 +310,64 @@ def maxwellian_basis_change_test():
 
     h_vec = spec_sp.create_vec()
     h_vec[0] = 1.0
+    h_vec[1] = 1.0
 
-    # for epsilon in np.linspace(0,1e-1,100):
-    #     MT2  = collisions.TEMP_K_1EV * (1.0-epsilon)
+    h_vec = np.zeros_like(h_vec)
+    h_vec[0]=1.0
+
+    tmp_red_fac = 0.1
+    MT2  = tmp_red_fac * MT1
+
+    print(f"T1 = {MT1:.4E}")
+    print(f"T2 = {MT2:.4E}")
+    VTH2 = collisions.electron_thermal_velocity(MT2)
+    maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
+
+    mm_h12    = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
+    h_im     = np.dot(mm_h12,h_vec)
+
+    mm_h21    = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_2,VTH2,maxwellian_1,VTH1,None,None,None,1)
+    h_new     = np.dot(mm_h21,h_im)
+    
+    #print("is eye  : ",np.allclose(np.dot(mm_h12,mm_h21),np.eye(mm_h12.shape[0])))
+    print("|I-w_21 * w_12| = ", np.linalg.norm(np.dot(mm_h12,mm_h21)-np.eye(mm_h12.shape[0])))
+    print(f"normed difference (foward and back) : {np.linalg.norm(h_new-h_vec):.8E}")
+    print("T1= %s" %np.transpose(h_vec))
+    print("T2= %s" %np.transpose(h_im))
+    print("T1= %s" %np.transpose(h_new))
+    h_vec = np.zeros_like(h_vec)
+    h_vec[0]=1
+
+    for epsilon in np.linspace(0,5e-1,10):
+        MT2  = 20 * collisions.TEMP_K_1EV * (1.0-epsilon)
+        VTH2 = collisions.electron_thermal_velocity(MT2)
+        maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
+        mm_h1     = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
+        h_new = np.dot(mm_h1,h_vec)
+        tail  = tail_norm(h_new, TAIL_NORM_INDEX)
+        print(f"T2 = T1(1-{epsilon:.6E}) = {MT2 : .6E} , T1 = {MT1:.6E} norm of W mat {np.linalg.norm(mm_h1) : .6E}, tail norm : {tail: .6E}")
+
+    # epsilon  = 0.1
+    # tail_tol = 1e-3 / 100
+    # while True:
+    #     VTH1 = collisions.electron_thermal_velocity(MT1)
+    #     maxwellian_1 = BEUtils.get_maxwellian_3d(VTH1,1)
+    #     MT2  = MT1 * (1.0-epsilon)
     #     VTH2 = collisions.electron_thermal_velocity(MT2)
     #     maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
     #     mm_h1     = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
     #     h_new = np.dot(mm_h1,h_vec)
     #     tail  = tail_norm(h_new, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER//2)
-    #     print(f"T2 = T1(1-{epsilon:.6E}) = {MT2 : .6E} , T1 = {MT1:.6E} norm of W mat {np.linalg.norm(mm_h1) : .6E}, tail norm : {tail: .6E}")
 
-    epsilon  = 0.1
-    tail_tol = 1e-3 / 100
-    while True:
-        VTH1 = collisions.electron_thermal_velocity(MT1)
-        maxwellian_1 = BEUtils.get_maxwellian_3d(VTH1,1)
-        MT2  = MT1 * (1.0-epsilon)
-        VTH2 = collisions.electron_thermal_velocity(MT2)
-        maxwellian_2 = BEUtils.get_maxwellian_3d(VTH2,1)
-        mm_h1     = BEUtils.compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp,maxwellian_1,VTH1,maxwellian_2,VTH2,None,None,None,1)
-        h_new = np.dot(mm_h1,h_vec)
-        tail  = tail_norm(h_new, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER//2)
-
-        if(tail > tail_tol):
-            epsilon=epsilon/2
-        else:
-            print(f"T2 = T1(1-{epsilon:.6E}) = {MT2 * collisions.BOLTZMANN_CONST/ collisions.ELECTRON_VOLT : .6E} , T1 = {MT1 * collisions.BOLTZMANN_CONST/ collisions.ELECTRON_VOLT:.6E} norm of W mat {np.linalg.norm(mm_h1) : .6E}, tail norm : {tail: .6E}")
-            MT1=MT2
-            h_vec=h_new
-            epsilon=0.1
-            tail_tol = tail_tol * (1.1)
+    #     if(tail > tail_tol):
+    #         epsilon=epsilon/2
+    #     else:
+    #         print(f"T2 = T1(1-{epsilon:.6E}) = {MT2 * collisions.BOLTZMANN_CONST/ collisions.ELECTRON_VOLT : .6E} , T1 = {MT1 * collisions.BOLTZMANN_CONST/ collisions.ELECTRON_VOLT:.6E} norm of W mat {np.linalg.norm(mm_h1) : .6E}, tail norm : {tail: .6E}")
+    #         MT1=MT2
+    #         h_vec=h_new
+    #         epsilon=0.1
+    #         tail_tol = tail_tol * (1.1)
             
-        
-        
-
-
-
-
-
 
 def maxwellian_test():
     """

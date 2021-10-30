@@ -9,6 +9,7 @@ import collisions
 import scipy.constants
 import numpy as np
 import parameters as params
+import time
 
 class CollissionOp(abc.ABC):
 
@@ -178,6 +179,13 @@ class CollisionOpSP():
         num_p         = spec_sp._p+1
         num_sh        = len(spec_sp._sph_harm_lm)
 
+        # basis evaluated at incident directions. 
+        incident_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
+        P_pr  = spec_sp.Vq_r(incident_mg[0])
+        Y_qs  = spec_sp.Vq_sph(incident_mg[1],incident_mg[2])
+        C_pqs = np.array([P_pr[i] * Y_qs[j] for i in range(num_p) for j in range(num_sh)])
+        C_pqs = C_pqs.reshape(tuple([num_p,num_sh]) + incident_mg[0].shape)
+        
         if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
             Sd      = g.post_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
             Pp_kr   = spec_sp.Vq_r(Sd[0]/V_TH) 
@@ -189,13 +197,6 @@ class CollisionOpSP():
 
             Bp_klm = np.dot(Ap_klm,WPhi_q)
             Bp_klm = np.dot(Bp_klm,glw_s)
-
-            incident_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
-            P_pr  = spec_sp.Vq_r(incident_mg[0])
-            Y_qs  = spec_sp.Vq_sph(incident_mg[1],incident_mg[2])
-
-            C_pqs = np.array([P_pr[i] * Y_qs[j] for i in range(num_p) for j in range(num_sh)])
-            C_pqs = C_pqs.reshape(tuple([num_p,num_sh]) + incident_mg[0].shape)
 
             D_pqs_klm = np.array([Bp_klm[pi,li] * C_pqs[pj,lj] for pi in range(num_p) for li in range(num_sh) for pj in range(num_p) for lj in range(num_sh)])
             D_pqs_klm = D_pqs_klm.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
@@ -229,13 +230,6 @@ class CollisionOpSP():
 
                 Bp_klm = np.dot(Ap_klm,WPhi_q)
                 Bp_klm = np.dot(Bp_klm,glw_s)
-
-                incident_mg = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
-                P_pr  = spec_sp.Vq_r(incident_mg[0])
-                Y_qs  = spec_sp.Vq_sph(incident_mg[1],incident_mg[2])
-
-                C_pqs = np.array([P_pr[i] * Y_qs[j] for i in range(num_p) for j in range(num_sh)])
-                C_pqs = C_pqs.reshape(tuple([num_p,num_sh]) + incident_mg[0].shape)
 
                 D_pqs_klm = np.array([Bp_klm[pi,li] * C_pqs[pj,lj] for pi in range(num_p) for li in range(num_sh) for pj in range(num_p) for lj in range(num_sh)])
                 D_pqs_klm = D_pqs_klm.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)

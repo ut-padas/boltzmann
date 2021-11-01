@@ -4,7 +4,7 @@
 \usepackage{amssymb}
 \usepackage{color}
 \input{premble.tex}
-\newcommand{\myint}[2]{\int\limits_{#1}^{#2}}
+\newcommand{\myint}{\int\limits}
 \newcommand{\diff}[1]{\, d#1}
 \newcommand{\vect}[1]{\mathbf{#1}}
 \usepackage{mleftright}
@@ -363,11 +363,11 @@ In spherical coordinates, the above becomes,
 
 \begin{align*}
     {L}_{k,l,m}^{p,q,s} &=n_0
-    \myint{0}{+\infty} 
+    \myint_{0}^{+\infty} 
     v^2
     P^p \of{\frac{v}{\vth}} 
-    \myint{S^2}{}
-    \myint{S^2}{}
+    \myint_{S^2}^{}
+    \myint_{S^2}^{}
     B\of{v,\omega} Y^{qs}\of{v_\theta, v_\phi} 
      \times
     \\
@@ -384,7 +384,7 @@ In spherical coordinates, the above becomes,
 
 \begin{align*}
     {M}_{k,l,m}^{p,q,s} &=
-    \myint{0}{+\infty} 
+    \myint_{0}^{+\infty} 
     v^2
     M\of{v} P^p \of{\frac{v}{\vth}}  P_k \of{\frac{v}{\vth}} \delta^{qs}_{lm}
     \diff{v} 
@@ -758,7 +758,15 @@ u = \vect{\omega} \cdot \left( \vect{v}_0 - \vect{v}_e \right),
 \quad 
 \mu = \frac{m_e+m_0}{2 m_e m_0}
 \end{align*}
-and $\Delta E$ denotes the energy loss during the reaction ($\Delta E = 0$ for elastic collisions). The inverse map (assuming it exists and well-defined) is denoted as 
+and $\Delta E$ denotes the energy loss during the reaction ($\Delta E = 0$ for elastic collisions). Note that if $\Delta E=0$, then
+\begin{align*}
+\vect{v}_e^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}} = \vect{v}_e,
+\\
+\vect{v}_0^\text{post} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}} = \vect{v}_0,
+\end{align*} 
+for $\vect{\omega} \cdot \left( \vect{v}_0 - \vect{v}_e \right) < 0$, that is, no collision happens.
+
+The inverse map (assuming it exists and well-defined) is denoted as 
 \begin{align*}
 \vect{v}_e^\text{pre} &= \vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}
 \\
@@ -773,11 +781,11 @@ where $\vect{v}_e$, $\vect{v}_0$ now represent the post-collision velocities. Th
 
 Let us denote the collision kernel of reaction as $B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}$ which is a function of pre-collision velocities $\vect{v}_e$, $\vect{v}_0$ and the direction of velocity change $\vect{\omega}$. The number of electrons with velocity $\vect{v}_e$ that will participate in the reaction and, thus, lost is given by 
 \begin{align*}
-C^- = \int_{R^3} \int_{S^2} B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} \diff{\vect{v}_0} \diff{\vect{\omega}}
+C^- = \myint_{R^3} \myint_{S^2} B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} \diff{\vect{v}_0} \diff{\vect{\omega}}
 \end{align*}
 The number of electrons with the same velocity created in the reaction is given by
 \begin{align*}
-C^+ = \int_{R^3} \int_{R^3} \int_{S^2} 
+C^+ = \myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} 
 f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
 \delta\of{\vect{v}_e^\text{post}\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} - \vect{v}_e} 
@@ -787,7 +795,7 @@ where we integrate over all possible pre-collision velocities $\vect{v}_e^\prime
 
 \textbf{Remark.} One could define $C^-$ in an analogous to $C^+$ way. That is, consider reactions for all possible pre-collision velocities $\vect{v}_e^\prime$, $\vect{v}_0^\prime$ but select only those that lead to loss of electrons with velocity $\vect{v}_e$
 \begin{align*}
-C^- = \int_{R^3} \int_{R^3} \int_{S^2} 
+C^- = \myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} 
 f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
 \delta\of{\vect{v}_e^\prime - \vect{v}_e} 
@@ -796,24 +804,24 @@ f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime}
 
 We understand $C^-$ and $C^+$ as operators acting on functions of variable $\vect{v}_e$. Their weak forms are given by
 \begin{align*}
-\int_{R^3} C^- \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+\myint_{R^3} C^- \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
 &=
-\int_{R^3} \int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
 f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
 \phi\of{\vect{v}_e} 
 \diff{\vect{v}_e} \diff{\vect{v}_0} \diff{\vect{\omega}}
 \\
-\int_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+\myint_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
 &= 
-\int_{R^3} \int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}} 
 f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
 \phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \vect{\omega}}} 
 \diff{\vect{v}_0^\prime} \diff{\vect{v}_e^\prime} \diff{\vect{\omega}}
 \\
 &= 
-\int_{R^3} \int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
 f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
 \phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}} 
@@ -821,9 +829,9 @@ f_e\of{\vect{v}_e} f_0\of{\vect{v}_0}
 \end{align*}
 where we integrated out the delta function and renamed dummy variables. Thus the weak form of the total collision operator $C = C^+ - C^-$ can be written as 
 \begin{align*}
-\int_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+\myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
 &=
-\int_{R^3} \int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
 f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
 \left(
@@ -841,9 +849,9 @@ While for our purposes this formulation is all we need, for completeness sake we
 \end{align*}
 As result we get
 \begin{multline*}
-\int_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+\myint_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
 = 
-\int_{R^3} \int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}, \vect{v}_0^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\prime}, \vect{\omega}}, \vect{\omega}} 
 \times
 \\
@@ -856,9 +864,9 @@ f_0\of{\vect{v}_0^\text{pre} \of{\vect{v}_e^{\prime\prime}, \vect{v}_0^{\prime\p
 \end{multline*}
 or, after renaming dummy variables,
 \begin{multline*}
-\int_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+\myint_{R^3} C^+ \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
 = 
-\int_{R^3} \int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
 B\of{\vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{\omega}} 
 \times
 \\
@@ -871,9 +879,9 @@ f_0\of{\vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}}
 \end{multline*}
 where $J\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} = \frac{ \partial \left( \vect{v}_e^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} \right)}{\partial \left( \vect{v}_e, \vect{v}_0 \right)}$ is the Jacobian of the transformation of variables. Note that in this last expression $\vect{v}_e$, $\vect{v}_0$ can be interpreted as post-collision velocities. Combining it with the weak form of the loss operator (where $\vect{v}_e$, $\vect{v}_0$ actually stand for pre-collision velocities) we obtain
 \begin{multline*}
-\int_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+\myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
 =
-\int_{R^3} \int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
 \phi\of{\vect{v}_e} 
 \diff{\vect{v}_0} \diff{\vect{v}_e} \diff{\vect{\omega}}
 \times
@@ -893,7 +901,7 @@ f_e\of{\vect{v}_e} f_0\of{\vect{v}_0}
 where notation $x^\text{pre}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} = x\of{\vect{v}_e^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{v}_0^\text{pre} \of{\vect{v}_e, \vect{v}_0, \vect{\omega}}, \vect{\omega}}$ is used. Thus, a strong form of the total collision operator for general binary reactions can be written as
 \begin{align*}
 C = 
-\int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{S^2} 
 \left(
 f_e^\text{pre}
 f_0^\text{pre}
@@ -923,7 +931,7 @@ B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}
 and the collision operator becomes the familiar
 \begin{align*}
 C = 
-\int_{R^3} \int_{S^2} 
+\myint_{R^3} \myint_{S^2} 
 \left(
 f_e^\text{pre}
 f_0^\text{pre}
@@ -934,4 +942,96 @@ f_0
 B
 \diff{\vect{v}_0} \diff{\vect{\omega}}
 \end{align*}
+
+\clearpage
+In the derivation above we assumed that the collision kernel $B=B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}$ is known. However, for electron-heavy particle collisions information is available in terms of collisional cross sections $\sigma = \sigma\of{|\vect{v}_e|, \chi, \theta}$, where $\vect{v}_e$ is the velocity of the incident electron in the frame of reference of the heavy particle, and $\chi$, $\theta$ are angles of scattering. It is usually assumed that collisions occur axisymmetrically, that is $\sigma = \sigma\of{|\vect{v}_e|, \chi}$
+
+\begin{align*}
+C^- = \myint_{R^3} \myint_{R^3} \myint_{0}^{\pi} \myint_{0}^{2\pi} 
+|\vect{v}_e^\prime-\vect{v}_0^\prime| \sigma\of{|\vect{v}_e^\prime-\vect{v}_0^\prime|, \chi}
+f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
+\delta\of{\vect{v}_e^\prime - \vect{v}_e} 
+\diff{\vect{v}_0^\prime} \diff{\vect{v}_e^\prime} \sin\of{\chi} \diff{\chi} \diff{\theta}.
+\end{align*}
+\begin{align*}
+C^+ = \myint_{R^3} \myint_{R^3} \myint_{0}^{\pi} \myint_{0}^{2\pi} 
+|\vect{v}_e^\prime-\vect{v}_0^\prime| \sigma\of{|\vect{v}_e^\prime-\vect{v}_0^\prime|, \chi}
+f_e\of{\vect{v}_e^\prime} f_0\of{\vect{v}_0^\prime} 
+\delta\of{\vect{v}_e^\text{post}\of{\vect{v}_e^\prime, \vect{v}_0^\prime, \chi, \theta} - \vect{v}_e} 
+\diff{\vect{v}_0^\prime} \diff{\vect{v}_e^\prime} \sin\of{\chi} \diff{\chi} \diff{\theta}.
+\end{align*}
+
+\clearpage
+\section{Analysis of projection operator}
+Consider a distribution function given as an expansion in terms of Maxwell polynomials based on thermal velocity $v_0$
+\begin{align*}
+f_0\of{v} &= \frac{1}{\left( \sqrt{\pi} v_0 \right)^3} e^{-\left( \frac{v}{v_0} \right)^2} \sum_{j=0}^{N} a_j P_j\of{\frac{v}{v_0}}
+\end{align*}
+We are interested in obtaining the same distribution function in a different basis corresponding to thermal velocity $v_1$
+\begin{align*}
+f_1 \of{v} &= \frac{1}{\left( \sqrt{\pi} v_1 \right)^3} e^{-\left( \frac{v}{v_1} \right)^2} \sum_{j=0}^{N} b_j P_j\of{\frac{v}{v_1}}
+\end{align*}
+A natural way of obtaining coefficients $b_i$ from known coefficients $a_i$ is to ensure that the action of both distribution functions onto a chosen set of test functions coincides
+\begin{align*}
+\myint_{R} {v}^2 f_0\of{v} \phi\of{v} \diff{v} = 
+\myint_{R} {v}^2 f_1\of{v} \phi\of{v} \diff{v}
+\end{align*}
+Choosing polynomial functions up to order $N$ (more precisely, Maxwell polynomials $P_i\of{\frac{v}{v_1}}$ for sake of convenience) as the set of test functions one gets (using orthogonality)
+\begin{align*}
+b_i \myint_{R} \left( \frac{v}{v_1} \right)^2 e^{-\left( \frac{v}{v_1} \right)^2} P^2_i\of{\frac{v}{v_1}} \diff{\left(\frac{v}{v_1}\right)} = 
+\sum_{j=0}^{N} a_j
+\myint_{R} \left( \frac{v}{v_0} \right)^2 e^{-\left( \frac{v}{v_0} \right)^2}  P_j\of{\frac{v}{v_0}} P_i\of{\frac{v}{v_1}} \diff{\left(\frac{v}{v_0}\right)} 
+\end{align*}
+Note that automatically $b_0 = a_0$, which can be interpreted as mass conservation during projection. 
+Let us denote $\vect{a} = \left( a_0,\ldots, a_N \right)^T$ and $\vect{b} = \left( b_0,\ldots, b_N \right)^T$, then the transformation from one expansion to another one can be written as 
+\begin{align*}
+\vect{b} = \Pi \vect{a}
+\end{align*}
+where elements of matrix $\Pi$ are given by
+\begin{align*}
+\Pi_{i,j} &= \myint_{R} \left( \frac{v}{v_0} \right)^2 e^{-\left( \frac{v}{v_0} \right)^2} P_j\of{\frac{v}{v_0}} P_i\of{\frac{v}{v_1}} \diff{\left(\frac{v}{v_0}\right)} 
+/ 
+\myint_{R} \left( \frac{v}{v_1} \right)^2 e^{-\left( \frac{v}{v_1} \right)^2} P^2_i\of{\frac{v}{v_1}} \diff{\left(\frac{v}{v_1}\right)}
+\end{align*}
+Assume that the relation between thermal velocities $v_0$ and $v_1$ are given by relative change $\varepsilon$ as
+\begin{align*}
+v_1 = v_0 \left( 1 + \varepsilon \right)
+\end{align*}
+Then the expression for $\Pi_{i,j}$ can be written as
+\begin{align*}
+\Pi_{i,j} = \Pi_{i,j} \of{\varepsilon}
+&= \myint_{R} x^2 e^{-x^2} P_i\of{\frac{x}{ 1 + \varepsilon }} P_j\of{x} \diff{x} / \myint_{R} x^2 e^{-x^2} P^2_i\of{x} \diff{x}
+\end{align*}
+
+\subsection{Preliminary experimental observations}
+
+Figure~\ref{fig:projection} (a) shows the eiganvalues of the projection operator for a few different values of $\varepsilon$. As one can see, if $\varepsilon > 0$ (projection to a higher temperature) then all eigenvalues seem to be less than one. On the other hand, if $\varepsilon < 0$ (projection to a lower temperature) then all eigenvalues appear to be greater than one, which might indicate of a very unstable behavior. Indeed, all information, including errors, gets amplified during projection. 
+
+\begin{figure}[H]
+\label{fig:projection}
+\centering
+\includegraphics[width=\textwidth]{dat/projection_different_eps.png}
+\caption{(a) Eigenvalues of projection operator for different $\varepsilon$; (b) Projection of clean data; (c) Projection of polluted data; (d) Projection of polluted data with small steps and thresholding}
+\end{figure}
+
+To inspect the behavior of the projection operator more closely, let us consider projection of a series which coefficients are given by $a_i = \exp\of{-100i}$. The results of projection with different $\varepsilon$ are given in Figure~\ref{fig:projection} (b) and, at the first glance, do not indicate of any instabilities. However, this is likely due to coefficients $a_i$ decaying very fast. Indeed, if we add a random noise to coefficients $a_i$ then the projection results seem to stay stable only if $\varepsilon > 0$ while for $\varepsilon < 0$ high-order coefficients growing uncontrollably (see Figure~\ref{fig:projection} (c)). 
+
+A possible fix could be to use multiple small projection steps with zeroing all coefficients below a chosen threshold after each sub-step. The example of such a strategy is given in  Figure~\ref{fig:projection} (d) where a target relative change $\varepsilon_0 = 0.001$ was used (that is, the number of sub-steps and their size are chosen as $m = \text{ceil}\of{\frac{\log\of{1+\varepsilon}}{\log\of{1+\varepsilon_0}}}$ and $\tilde{\varepsilon} = \sqrt[n]{1+\varepsilon} - 1$). This strategy produces almost identical results as in the case of one full step and does not result in an uncontrollable growth of high-order coefficients for $\varepsilon < 0$. However, it is unclear whether there are any growing instabilities in the low-order part of the spectrum which are not seen due to large values of the coefficients there.
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=1.2\textwidth]{dat/projection_pos_eigs.png}
+\includegraphics[width=1.2\textwidth]{dat/projection_pos_eigs_visual.png}
+\caption{Eigenvectors (top) and their visualization (bottom) for $\varepsilon = 0.1$}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=1.2\textwidth]{dat/projection_neg_eigs.png}
+\includegraphics[width=1.2\textwidth]{dat/projection_neg_eigs_visual.png}
+\caption{Eigenvectors (top) and their visualization (bottom) for $\varepsilon = -0.1$}
+\end{figure}
+
+
 \end{document}

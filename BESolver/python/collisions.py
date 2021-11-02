@@ -37,7 +37,7 @@ ELECTRON_VOLT       = scipy.constants.electron_volt
 
 BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_1EV          = ELECTRON_VOLT/BOLTZMANN_CONST
-MAXWELLIAN_TEMP_K   = 20*TEMP_K_1EV
+MAXWELLIAN_TEMP_K   = 1*TEMP_K_1EV
 AR_NEUTRAL_N        = 3.22e22 # 1/m^3
 AR_IONIZED_N        = 1.00e0
 MAXWELLIAN_N        = 1.00e0 # 1/m^3
@@ -48,10 +48,9 @@ PLASMA_FREQUENCY  = np.sqrt(MAXWELLIAN_N * (scipy.constants.elementary_charge**2
 
 class Collisions(abc.ABC):
 
-    is_scattering_mat_assembled = False
-    sc_direction_mat=None
-
     def __init__(self)->None:
+        self._is_scattering_mat_assembled=False
+        self._sc_direction_mat=None
         pass
     
     def load_cross_section(self,fname)->None:
@@ -90,17 +89,15 @@ class Collisions(abc.ABC):
         assert np.allclose(np.dot(vs,vs),1.0) , "vs scattering direction is not a unit vector %f " % np.dot(vs,vs) 
         return vs
 
-    @staticmethod
-    def reset_scattering_direction_sp_mat():
-        Collisions.is_scattering_mat_assembled=False
-        Collisions.sc_direction_mat=None
+    def reset_scattering_direction_sp_mat(self):
+        self._is_scattering_mat_assembled=False
+        self._sc_direction_mat=None
         return
 
-    @staticmethod
-    def compute_scattering_direction_sp(v_r,v_theta,v_phi,polar_angle,azimuthal_angle):
+    def compute_scattering_direction_sp(self,v_r,v_theta,v_phi,polar_angle,azimuthal_angle):
 
-        if Collisions.is_scattering_mat_assembled :
-            return Collisions.sc_direction_mat
+        if self._is_scattering_mat_assembled :
+            return self._sc_direction_mat
         
         check1 = np.isclose(v_theta,np.pi/2)
         check2 = np.logical_or(np.isclose(v_phi,0),np.isclose(v_phi,np.pi))
@@ -110,6 +107,7 @@ class Collisions(abc.ABC):
         
         [v_theta_0, v_theta_1] = [v_theta[check1] , v_theta[np.logical_not(check1)]]
         [v_phi_0, v_phi_1]     = [v_phi[check1]   , v_phi[np.logical_not(check1)]]
+        
         
         [chi_0, chi_1]         = [polar_angle[check1], polar_angle[np.logical_not(check1)]]
         [az_0, az_1]           = [azimuthal_angle[check1], azimuthal_angle[np.logical_not(check1)]]
@@ -132,8 +130,9 @@ class Collisions(abc.ABC):
             W[c2]=-1.0
         
         t1 = np.arccos(W)
-        p1 = np.arctan(np.cos(chi_1) * np.sin(v_theta_1) * f1 * np.sin(v_phi_1) + np.sin(chi_1) * ( np.cos(v_theta_1)* np.sin(az_1) + np.cos(az_1) * np.cos(v_phi_1) * (np.sin(v_theta_1)**2) * np.sin(v_phi_1)) / (np.cos(v_phi_1) * np.cos(chi_1) * np.sin(v_theta_1) * f1 - 
-        np.cos(az_1) * ( np.cos(v_theta_1)**2 + (np.sin(v_theta_1)**2) * (np.sin(v_phi_1)**2)) * np.sin(chi_1) ))
+        yy = np.cos(chi_1) * np.sin(v_theta_1) * f1 * np.sin(v_phi_1) + np.sin(chi_1) * ( np.cos(v_theta_1)* np.sin(az_1) + np.cos(az_1) * np.cos(v_phi_1) * (np.sin(v_theta_1)**2) * np.sin(v_phi_1))
+        xx= (np.cos(v_phi_1) * np.cos(chi_1) * np.sin(v_theta_1) * f1 - np.cos(az_1) * ( np.cos(v_theta_1)**2 + (np.sin(v_theta_1)**2) * (np.sin(v_phi_1)**2)) * np.sin(chi_1) )
+        p1 = np.arctan2(yy,xx)
         p1 = np.mod(p1,2*np.pi)
         
         r1      = np.ones_like(v_theta)
@@ -150,9 +149,9 @@ class Collisions(abc.ABC):
         theta_p[np.logical_not(check1)] = t1
         phi_p  [np.logical_not(check1)] = p1
 
-        Collisions.is_scattering_mat_assembled=True
-        Collisions.sc_direction_mat=[r1,theta_p,phi_p]
-        return Collisions.sc_direction_mat
+        self._is_scattering_mat_assembled=True
+        self._sc_direction_mat=[r1,theta_p,phi_p]
+        return self._sc_direction_mat
         
     def total_cross_section(self, energy):
         """
@@ -236,15 +235,13 @@ class eAr_G0_NoEnergyLoss(Collisions):
         v1       = vel_fac  * v1_dir
         return v1 
 
-    @staticmethod
-    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs    = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+    def pre_scattering_velocity_sp(self, vr,vt,vp, polar_angle, azimuthal_angle):
+        vs    = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         vs[0] = vr
         return vs
 
-    @staticmethod
-    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs    = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+    def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        vs    = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         vs[0] = vr
         return vs
 
@@ -265,6 +262,7 @@ class eAr_G0(Collisions):
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Elastic.txt")
         self._type=CollisionType.EAR_G0
+        self._v_scale=None
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -274,17 +272,21 @@ class eAr_G0(Collisions):
         v1       = vel_fac  * v1_dir
         return v1 
     
-    @staticmethod
-    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        vel_fac  = vr * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+    def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        if self._is_scattering_mat_assembled == False:
+            self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+
+        vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        vel_fac  = vr * self._v_scale
         vs[0]    = vel_fac
         return vs
 
-    @staticmethod
-    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        vel_fac  = vr / np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+    def pre_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        if self._is_scattering_mat_assembled == False:
+            self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+
+        vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        vel_fac  = vr / self._v_scale
         vs[0]    = vel_fac
         return vs
 
@@ -314,24 +316,21 @@ class eAr_G1(Collisions):
         v1       =  vel_fac  * v1_dir
         return v1
 
-    @staticmethod
-    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+    def pre_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         #pre collision velocity. 
         vel_fac  = np.sqrt(vr**2    + (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
         vs[0]    = vel_fac
         return vs
 
-    @staticmethod
-    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+    def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         # post collision velocity. - Note : the total cross-section for Ein < E_threshold is zero, this is
         # to avoid geting complex numbers in the computations. 
         check1   = vr**2 > (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
         vel_fac  = np.sqrt(vr[check1]**2    - (2 * E_AR_EXCITATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
         vs[0][np.logical_not(check1)]=0
         vs[0][check1] = vel_fac
-
         return vs
 
     @staticmethod
@@ -351,6 +350,8 @@ class eAr_G2(Collisions):
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Ionization.txt")
         self._type=CollisionType.EAR_G2
+        self._momentum_setup = False
+        
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -366,79 +367,85 @@ class eAr_G2(Collisions):
 
         return v1,v2
 
-    @staticmethod
-    def pre_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+    def pre_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        return None
+        # vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         
-        # pre collision velocity. 
-        vs[0]    = np.sqrt(2 * (vr**2 + (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)) )
-        v0       = np.zeros(vr.shape + tuple([3]))
-        v1       = np.zeros(vr.shape + tuple([3]))
-        v2       = np.zeros(vr.shape + tuple([3]))
+        # # pre collision velocity. 
+        # vs[0]    = np.sqrt(2 * (vr**2 + (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)) )
+        # if(self._momentum_setup == False):
+        #     self._v0       = np.zeros(vr.shape + tuple([3]))
+        #     self._v1       = np.zeros(vr.shape + tuple([3]))
+        #     self._v2       = np.zeros(vr.shape + tuple([3]))
         
-        check_1  = vr>0
-        #print(check_1)
-        v0[check_1,0]   = vr[check_1]* np.sin(vt[check_1]) * np.cos(vp[check_1])
-        v0[check_1,1]   = vr[check_1]* np.sin(vt[check_1]) * np.sin(vp[check_1])
-        v0[check_1,2]   = vr[check_1]* np.cos(vt[check_1])
+        #     self._check_1  = vr>=0
+        #     self._v0[self._check_1,0]   = np.sin(vt[self._check_1]) * np.cos(vp[self._check_1])
+        #     self._v0[self._check_1,1]   = np.sin(vt[self._check_1]) * np.sin(vp[self._check_1])
+        #     self._v0[self._check_1,2]   = np.cos(vt[self._check_1])
 
-        v1[check_1,0]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.cos(vs[2][check_1])
-        v1[check_1,1]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.sin(vs[2][check_1])
-        v1[check_1,2]   = vs[0][check_1] * np.cos(vs[1][check_1])
-        
-        v2[check_1,:]   = v1[check_1,:] - v0[check_1,:]
-        v2_norm_fac     = (vs[0][check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
-        
-        v2[check_1,0]   = v2_norm_fac * v2[check_1,0]
-        v2[check_1,1]   = v2_norm_fac * v2[check_1,1]
-        v2[check_1,2]   = v2_norm_fac * v2[check_1,2]
-        vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
-        v2_sp           = BEUtils.cartesian_to_spherical(v2[check_1,0],v2[check_1,1],v2[check_1,2])
+        #     self._v1[self._check_1,0]   = np.sin(vs[1][self._check_1]) * np.cos(vs[2][self._check_1])
+        #     self._v1[self._check_1,1]   = np.sin(vs[1][self._check_1]) * np.sin(vs[2][self._check_1])
+        #     self._v1[self._check_1,2]   = np.cos(vs[1][self._check_1])
 
-        vs2[0][check_1] = v2_sp[0]
-        vs2[1][check_1] = v2_sp[1]
-        vs2[2][check_1] = v2_sp[2]
-        
-        return [vs,vs2]
 
-    @staticmethod
-    def post_scattering_velocity_sp(vr,vt,vp, polar_angle, azimuthal_angle):
-        vs       = Collisions.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        # see if collision can be triggered. - total cross section should take care of this. 
-        # this is to avoid complex numbers in the velocity computations. 
+        # self._v2[self._check_1,:]   = vs[0][self._check_1,:] * self._v1[self._check_1,:] + vr[self._check_1,:] * self._v0[self._check_1,:]
+        # v2_norm_fac     = (vs[0][self._check_1] / ( np.sqrt(self._v2[self._check_1,0]**2 + self._v2[self._check_1,1]**2 + self._v2[self._check_1,2]**2)))
+        
+        # self._v2[self._check_1,0]   = v2_norm_fac * self._v2[self._check_1,0]
+        # self._v2[self._check_1,1]   = v2_norm_fac * self._v2[self._check_1,1]
+        # self._v2[self._check_1,2]   = v2_norm_fac * self._v2[self._check_1,2]
+
+        # vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
+        # v2_sp           = BEUtils.cartesian_to_spherical(self._v2[self._check_1,0],self._v2[self._check_1,1],self._v2[self._check_1,2])
+        # vs2[0][self._check_1] = v2_sp[0]
+        # vs2[1][self._check_1] = v2_sp[1]
+        # vs2[2][self._check_1] = v2_sp[2]
+        
+        # return [vs,vs2]
+
+    
+    def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        vs                       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         check_1            = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
         vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
         vs[0][np.logical_not(check_1)] = 0
         v2_fac             = vs[0]
         
-        v0              = np.zeros(vr.shape + tuple([3]))
-        v1              = np.zeros(vr.shape + tuple([3]))
-        v2              = np.zeros(vr.shape + tuple([3]))
-        
-        v0[check_1,0]   = vr[check_1] * np.sin(vt[check_1]) * np.cos(vp[check_1])
-        v0[check_1,1]   = vr[check_1] * np.sin(vt[check_1]) * np.sin(vp[check_1])
-        v0[check_1,2]   = vr[check_1] * np.cos(vt[check_1])
 
-        v1[check_1,0]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.cos(vs[2][check_1])
-        v1[check_1,1]   = vs[0][check_1] * np.sin(vs[1][check_1]) * np.sin(vs[2][check_1])
-        v1[check_1,2]   = vs[0][check_1] * np.cos(vs[1][check_1])
+        if(self._momentum_setup == False):
+            self._v0       = np.zeros(vr.shape + tuple([3]))
+            self._v1       = np.zeros(vr.shape + tuple([3]))
+            self._v2       = np.zeros(vr.shape + tuple([3]))
+            self._check_1  = vr>=0 
         
-        
-        v2[check_1,:]   = v0[check_1,:] - v1[check_1,:]
-        v2_norm_fac     = (v2_fac[check_1] / ( np.sqrt(v2[check_1,0]**2 + v2[check_1,1]**2 + v2[check_1,2]**2)))
-        
-        v2[check_1,0]   = v2_norm_fac * v2[check_1,0]
-        v2[check_1,1]   = v2_norm_fac * v2[check_1,1]
-        v2[check_1,2]   = v2_norm_fac * v2[check_1,2]
-        
-        vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
-        v2_sp           = BEUtils.cartesian_to_spherical(v2[check_1,0],v2[check_1,1],v2[check_1,2])
+            self._v0[self._check_1,0]   = np.sin(vt[self._check_1]) * np.cos(vp[self._check_1])
+            self._v0[self._check_1,1]   = np.sin(vt[self._check_1]) * np.sin(vp[self._check_1])
+            self._v0[self._check_1,2]   = np.cos(vt[self._check_1])
 
-        vs2[0][check_1] = v2_sp[0]
-        vs2[1][check_1] = v2_sp[1]
-        vs2[2][check_1] = v2_sp[2]
+            self._v1[self._check_1,0]   = np.sin(vs[1][self._check_1]) * np.cos(vs[2][self._check_1])
+            self._v1[self._check_1,1]   = np.sin(vs[1][self._check_1]) * np.sin(vs[2][self._check_1])
+            self._v1[self._check_1,2]   = np.cos(vs[1][self._check_1])
 
-        return [vs,vs2]
+            self._vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
+
+            self._momentum_setup = True
+
+
+        self._v2[self._check_1,0]   = vr[self._check_1] * self._v0[self._check_1,0] - vs[0][self._check_1] * self._v1[self._check_1,0]
+        self._v2[self._check_1,1]   = vr[self._check_1] * self._v0[self._check_1,1] - vs[0][self._check_1] * self._v1[self._check_1,1]
+        self._v2[self._check_1,2]   = vr[self._check_1] * self._v0[self._check_1,2] - vs[0][self._check_1] * self._v1[self._check_1,2]
+        v2_norm_fac     = (vs[0][self._check_1] / ( np.sqrt(self._v2[self._check_1,0]**2 + self._v2[self._check_1,1]**2 + self._v2[self._check_1,2]**2)))
+        
+        self._v2[self._check_1,0]   = v2_norm_fac * self._v2[self._check_1,0]
+        self._v2[self._check_1,1]   = v2_norm_fac * self._v2[self._check_1,1]
+        self._v2[self._check_1,2]   = v2_norm_fac * self._v2[self._check_1,2]
+
+        
+        v2_sp           = BEUtils.cartesian_to_spherical(self._v2[self._check_1,0],self._v2[self._check_1,1],self._v2[self._check_1,2])
+        self._vs2[0][self._check_1] = v2_sp[0]
+        self._vs2[1][self._check_1] = v2_sp[1]
+        self._vs2[2][self._check_1] = v2_sp[2]
+        return [vs,self._vs2]
 
     @staticmethod
     def min_energy_threshold():

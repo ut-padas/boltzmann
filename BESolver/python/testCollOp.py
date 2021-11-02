@@ -112,24 +112,24 @@ def collision_op_test():
 
 
 def collision_op_conv():
-    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=3
-    params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0]]
-    params.BEVelocitySpace.NUM_Q_VR    = 10
-    params.BEVelocitySpace.NUM_Q_VT    = 16
-    params.BEVelocitySpace.NUM_Q_VP    = 16
-    params.BEVelocitySpace.NUM_Q_CHI   = 32
-    params.BEVelocitySpace.NUM_Q_PHI   = 16
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=31
+    params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
+    params.BEVelocitySpace.NUM_Q_VR    = 20
+    params.BEVelocitySpace.NUM_Q_VT    = 8
+    params.BEVelocitySpace.NUM_Q_VP    = 4
+    params.BEVelocitySpace.NUM_Q_CHI   = 8
+    params.BEVelocitySpace.NUM_Q_PHI   = 2
     g=g0
     cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     g.reset_scattering_direction_sp_mat()
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
     L0=cf_sp._Lp(g,maxwellian,VTH) - cf_sp._Lm(g,maxwellian,VTH)
-    for i in range(2):
-        params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
-        #params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
-        #params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
-        params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
-        #params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
+    for i in range(5):
+        params.BEVelocitySpace.NUM_Q_VR                  = min(50,2 * params.BEVelocitySpace.NUM_Q_VR)
+        # params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
+        # params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
+        params.BEVelocitySpace.NUM_Q_CHI                 = 2 * params.BEVelocitySpace.NUM_Q_CHI
+        # params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
         g.reset_scattering_direction_sp_mat()
         cf_sp1    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
         print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
@@ -492,7 +492,7 @@ def collision_op_thermal_test():
 
 
 #collision_op_thermal_test()
-collision_op_test()
+#collision_op_test()
 collision_op_conv()
 #maxwellian_test()
 #maxwellian_basis_change_test()

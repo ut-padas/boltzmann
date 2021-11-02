@@ -405,20 +405,20 @@ args = parser.parse_args()
 
 
 params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL
-params.BEVelocitySpace.SPH_HARM_LM = [[0,0],[1,0]]
-params.BEVelocitySpace.NUM_Q_VR  = 21
-params.BEVelocitySpace.NUM_Q_VT  = 16
-params.BEVelocitySpace.NUM_Q_VP  = 16
+params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
+params.BEVelocitySpace.NUM_Q_VR  = 50
+params.BEVelocitySpace.NUM_Q_VT  = 8
+params.BEVelocitySpace.NUM_Q_VP  = 4
 params.BEVelocitySpace.NUM_Q_CHI = 64
-params.BEVelocitySpace.NUM_Q_PHI = 16
+params.BEVelocitySpace.NUM_Q_PHI = 2
 params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 NUM_T_STEPS      = int(args.T_END/args.T_DT)
 OUTPUT_FILE_NAME = args.out_fname
 
 ### mpi to run multiple convergence study runs. 
 ## ============================================
-CONV_NR    = np.array([3,7,15])
-CONV_STEPS = np.array([1e4,2e4,4e4])
+CONV_NR    = np.array([3,7,15,31])
+CONV_STEPS = np.array([1e4,2e4,4e4,8e4])
 CONV_DT    = args.T_END/CONV_STEPS
 RESTORE_SOLVER = args.restore
 INIT_EV    = args.electron_volt

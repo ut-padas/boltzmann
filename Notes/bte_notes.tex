@@ -483,7 +483,7 @@ Let $f(v) = M(v_\alpha) h(v_\alpha)$. Let $h^{(\alpha)}$ be the basis coefficien
 \end{equation} where, 
 \begin{align}
     M^{(\beta)}_{ij} &= \int_{v} \int_{S^2} M(v_\beta) \phi_i(v_\beta) \phi_j(v_\beta) d\omega dv  = \frac{n}{4\pi} \delta_{ij} \\
-    W^{(\alpha)}_{ij} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_i(v_\beta) \phi_j(v_\alpha) d\omega dv   
+    W^{(\alpha)}_{ij} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_i(v_\beta) \phi_j(v_\alpha) d\omega dv   \label{eq:bchnage}
 \end{align}
 
 For $W_ij^{(\alpha)}$, let i=0, then we can write (Note : $\phi_0(v_\beta)=1$)
@@ -492,6 +492,17 @@ For $W_ij^{(\alpha)}$, let i=0, then we can write (Note : $\phi_0(v_\beta)=1$)
     W^{(\alpha)}_{0j} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_j(v_\alpha) d\omega dv = \frac{n}{4\pi} \delta_{0j}
 \end{align*}
 Therefore, we can write $h^{(\beta)}_0=h^{(\alpha)}_0$. There zeroth coefficient always match hence we should preserve zeroth moment of the distribution under basis change.  
+
+\subsection{Bounds on the tails for the basis change}
+The thermal velocity basis change operator is given by, \eqref{eq:bchnage}, using orthogonality in the angular directions we can only operate in the radial direction. Therefore, the above simplifies to following (note that we can consider scaling of the 1d Maxwellian)
+\begin{align}
+    W_{ij} &= \int_{\reals} M(v_\alpha) P_i(v_\beta) P_j(v_\alpha)dv
+\end{align}
+Let $\epsilon >0$, $\alpha = \beta + \epsilon$. Then we can write the simplified $W_{ij}$ as, 
+\begin{align}
+    W_{ij} &= \frac{n}{\sqrt{\pi}^{3}}  \int_{\reals}  \exp(-v_\alpha^2) P_i (v_\alpha (1 + \frac{\epsilon}{\beta})) P_j(v_\alpha) \frac{dv}{\alpha} \\
+\end{align}
+
 
 \subsection{Mass conservation in the current discretization}
 For any smooth distribution, $f(v) = M(v_\alpha) \sum_{klm} f_{klm} \phi_{klm}(v_\alpha)$, and we can write, 

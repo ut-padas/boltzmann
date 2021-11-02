@@ -1,6 +1,9 @@
 """
 @package : simple convergence plots
 """
+import matplotlib as mpl
+#mpl.rcParams['text.usetex'] = True
+#mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 import matplotlib.pyplot as plt
 import spec_spherical
 import argparse
@@ -604,9 +607,90 @@ def g02_quasi_neutral_1ev():
 
 
 
+def g0_rk4_1ev_convergence():
+
+    file_names=[["dat_1ev/g0_dt_1.00000000E-10_Nr_3.dat",  "dat_1ev/g0_dt_5.00000000E-11_Nr_3.dat",  "dat_1ev/g0_dt_2.50000000E-11_Nr_3.dat",  "dat_1ev/g0_dt_1.25000000E-11_Nr_3.dat"],
+                ["dat_1ev/g0_dt_1.00000000E-10_Nr_7.dat",  "dat_1ev/g0_dt_5.00000000E-11_Nr_7.dat",  "dat_1ev/g0_dt_2.50000000E-11_Nr_7.dat",  "dat_1ev/g0_dt_1.25000000E-11_Nr_7.dat"],
+                ["dat_1ev/g0_dt_1.00000000E-10_Nr_15.dat", "dat_1ev/g0_dt_5.00000000E-11_Nr_15.dat", "dat_1ev/g0_dt_2.50000000E-11_Nr_15.dat", "dat_1ev/g0_dt_1.25000000E-11_Nr_15.dat"]]
+
+    data = list()
+    for t_res in file_names:
+        tmp=list()
+        for fname in t_res:
+            tmp.append(np.loadtxt(fname,skiprows=1))
+        data.append(tmp)
+
+    #print(data.shape)
+
+    # data_nr_1x_dt1 = np.loadtxt(file_names[0][0],skiprows=1)
+    # data_nr_2x_dt1 = np.loadtxt(file_names[1][0],skiprows=1)
+    # data_nr_4x_dt1 = np.loadtxt(file_names[2][0],skiprows=1)
+
+
+    # data_nr_1x_dt2 = np.loadtxt(file_names[0][1],skiprows=1)
+    # data_nr_2x_dt2 = np.loadtxt(file_names[1][1],skiprows=1)
+    # data_nr_4x_dt2 = np.loadtxt(file_names[2][1],skiprows=1)
+
+    # data_nr_1x_dt4 = np.loadtxt(file_names[0][2],skiprows=1)
+    # data_nr_2x_dt4 = np.loadtxt(file_names[1][2],skiprows=1)
+    # data_nr_4x_dt4 = np.loadtxt(file_names[2][2],skiprows=1)
+
+    # data_nr_1x_dt8 = np.loadtxt(file_names[0][3],skiprows=1)
+    # data_nr_2x_dt8 = np.loadtxt(file_names[1][3],skiprows=1)
+    # data_nr_4x_dt8 = np.loadtxt(file_names[2][3],skiprows=1)
+
+
+    highest_res = data[2][3]
+    hr_sampled  = [ highest_res[range(0,len(highest_res[:,TIME_INDEX]),8),:],
+                    highest_res[range(0,len(highest_res[:,TIME_INDEX]),4),:],
+                    highest_res[range(0,len(highest_res[:,TIME_INDEX]),2),:],
+                    highest_res[range(0,len(highest_res[:,TIME_INDEX]),1),:]]
+    
+    error_mat = np.zeros((3,4))
+    for row in range(0,3):
+        for col in range(0,4):
+            # check if time points match first. 
+            data_base = data[row][col][0:len(hr_sampled[col][:,TIME_INDEX]),:]
+            assert np.allclose( (data_base[:,TIME_INDEX] - hr_sampled[col][:,TIME_INDEX]) , np.zeros_like(hr_sampled[col][:,TIME_INDEX])) , "convergence test time sample points does not match"
+            error_mat[row,col] = np.max(abs(data_base[:,TEMP_INDEX] - hr_sampled[col][:,TEMP_INDEX]))
+    
+    #print(error_mat)
+    table_data = [
+        ["3" , error_mat[0,0], error_mat[0,1], error_mat[0,2], error_mat[0,3]],
+        ["7" , error_mat[1,0], error_mat[1,1], error_mat[1,2], error_mat[1,3]],
+        ["15", error_mat[2,0], error_mat[2,1], error_mat[2,2], error_mat[2,3]],
+    ]
+    print(tabulate(table_data,headers=["Nr","dt=1E-10","dt=5E-11","dt=2.5E-11","dt=1.25E-11"]))
+    
+    pl_lable = ["Nr=3, dt=1E-10", "Nr=7, dt=5E-11", "Nr=15, dt=2.5E-11"]
+    for row,col in ((0,0),(1,1),(2,2)):
+        data_base = data[row][col][0:len(hr_sampled[col][:,TIME_INDEX]),:]
+        plt.plot(hr_sampled[col][:,TIME_INDEX], (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT) * abs(data_base[:,TEMP_INDEX] - hr_sampled[col][:,TEMP_INDEX]),label=pl_lable[row])
+
+    plt.xlabel(r"$time(s) \rightarrow$")
+    plt.ylabel(r"$Diff(T) (eV) \rightarrow $")
+    plt.yscale("log")
+    plt.grid()
+    plt.legend()
+    plt.show()
 
 
 
-g0_convergence()
-g02_quasi_neutral()
-g02_quasi_neutral_1ev()
+
+    # data2 = data_nr_1x_dt4[range(0,len(data_nr_1x_dt4[:-sk_tail,TIME_INDEX]),2),TEMP_INDEX]
+
+    # data3 = data_nr_2x_dt4[range(0,len(data_nr_2x_dt4[:-sk_tail,TIME_INDEX]),4),TEMP_INDEX]
+    # data4 = data_nr_2x_dt4[range(0,len(data_nr_2x_dt4[:-sk_tail,TIME_INDEX]),2),TEMP_INDEX]
+
+    # data5 = data_nr_4x_dt4[range(0,len(data_nr_4x_dt4[:-sk_tail,TIME_INDEX]),4),TEMP_INDEX]
+    # data6 = data_nr_4x_dt4[range(0,len(data_nr_4x_dt4[:-sk_tail,TIME_INDEX]),2),TEMP_INDEX]
+
+
+
+#g0_convergence()
+#g02_quasi_neutral()
+#g02_quasi_neutral_1ev()
+
+g0_rk4_1ev_convergence()
+
+

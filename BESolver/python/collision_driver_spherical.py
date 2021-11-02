@@ -396,9 +396,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-Nr", "--NUM_P_RADIAL", help="Number of polynomials in radial direction", type=int, default=4)
 parser.add_argument("-Te", "--T_END", help="Simulation time", type=float, default=1e-14)
 parser.add_argument("-dt", "--T_DT", help="Simulation time step size ", type=float, default=1e-15)
-parser.add_argument("-o",  "--out_fname", help="output file name", type=str, default='out.dat')
+parser.add_argument("-o",  "--out_fname", help="output file name", type=str, default='.')
 parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-6)
 parser.add_argument("-c", "--collision_mode", help="collision mode", type=str, default="g0")
+parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type=float, default=1.0)
 parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
 
@@ -417,17 +418,15 @@ OUTPUT_FILE_NAME = args.out_fname
 ### mpi to run multiple convergence study runs. 
 ## ============================================
 CONV_NR    = np.array([3,7,15])
-CONV_STEPS = np.array([1e3,2e4,4e4])
+CONV_STEPS = np.array([1e4,2e4,4e4])
 CONV_DT    = args.T_END/CONV_STEPS
 RESTORE_SOLVER = args.restore
+INIT_EV    = args.electron_volt
 
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 npes = comm.Get_size()
-
-if(not rank):
-    print("Total MPI tasks : ", npes)
 
 args.T_DT         = CONV_DT[rank%len(CONV_DT)]
 args.NUM_P_RADIAL = CONV_NR[rank//len(CONV_DT)]
@@ -436,13 +435,16 @@ params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 print(params.BEVelocitySpace.VELOCITY_SPACE_DT)
 ## ============================================
 
-colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
-collisions.MAXWELLIAN_TEMP_K = 20 * collisions.TEMP_K_1EV
+if(not rank):
+    print("Total MPI tasks : ", npes)
+    print(args)
+
+collisions.MAXWELLIAN_TEMP_K   = INIT_EV * collisions.TEMP_K_1EV
 collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
     
 # instance of the collision operator
 cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-spec  = colOpSp.SPEC_SPHERICAL
+spec  = cf._spec
 VTH   = collisions.ELECTRON_THEMAL_VEL
 
 print("""===========================Parameters ======================""")

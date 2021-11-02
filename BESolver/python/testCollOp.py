@@ -27,18 +27,6 @@ NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
 NUM_Q_CHI    = params.BEVelocitySpace.NUM_Q_CHI
 NUM_Q_PHI    = params.BEVelocitySpace.NUM_Q_PHI
 
-def Lm_l(collision,maxwellian, vth):
-    return colOpSp.CollisionOpSP._Lm_l(collision,maxwellian,vth)
-
-def Lp_l(collision,maxwellian, vth):
-    return colOpSp.CollisionOpSP._Lp_l(collision,maxwellian, vth)
-
-def Lm(collision,maxwellian, vth):
-    return colOpSp.CollisionOpSP._Lm(collision,maxwellian, vth)
-
-def Lp(collision: collisions.Collisions, maxwellian, vth):
-    return colOpSp.CollisionOpSP._Lp(collision,maxwellian, vth)
-
 VTH = collisions.ELECTRON_THEMAL_VEL
 maxwellian = lambda x: (collisions.MAXWELLIAN_N / ((collisions.ELECTRON_THEMAL_VEL * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
 g0  = collisions.eAr_G0()
@@ -106,16 +94,14 @@ def collision_op_test():
     params.BEVelocitySpace.NUM_Q_PHI   = 2
     
     cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-    colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
-    spec_sp  = colOpSp.SPEC_SPHERICAL
 
     t1 = time.time()
-    L_loop = Lp_l(g0,maxwellian,VTH) - Lm_l(g0,maxwellian,VTH)
+    L_loop = cf_sp._Lp_l(g0,maxwellian,VTH) - cf_sp._Lm_l(g0,maxwellian,VTH)
     t2 = time.time()
     print("loop based (s) : %.10f" %(t2-t1))
 
     t1 = time.time()
-    L_np   = Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
+    L_np   = cf_sp._Lp(g0,maxwellian,VTH) - cf_sp._Lm(g0,maxwellian,VTH)
     t2 = time.time()
     print("np(tensor) based (s) : %.10f" %(t2-t1))
     print("np(tensor) based |L_np| : %.10f" %(np.linalg.norm(L_np)))
@@ -126,66 +112,74 @@ def collision_op_test():
 
 
 def collision_op_conv():
-    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=4
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=3
     params.BEVelocitySpace.SPH_HARM_LM = [ [0,0], [1,0]]
     params.BEVelocitySpace.NUM_Q_VR    = 10
-    params.BEVelocitySpace.NUM_Q_VT    = 10
-    params.BEVelocitySpace.NUM_Q_VP    = 10
+    params.BEVelocitySpace.NUM_Q_VT    = 16
+    params.BEVelocitySpace.NUM_Q_VP    = 16
     params.BEVelocitySpace.NUM_Q_CHI   = 32
-    params.BEVelocitySpace.NUM_Q_PHI   = 10
-
-    colOpSp.SPEC_SPHERICAL  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+    params.BEVelocitySpace.NUM_Q_PHI   = 16
+    g=g0
     cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-    spec_sp  = colOpSp.SPEC_SPHERICAL
-
+    g.reset_scattering_direction_sp_mat()
     print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L0=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
+    L0=cf_sp._Lp(g,maxwellian,VTH) - cf_sp._Lm(g,maxwellian,VTH)
     for i in range(2):
         params.BEVelocitySpace.NUM_Q_VR                   = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
         #params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
         #params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
         params.BEVelocitySpace.NUM_Q_CHI                  = 2 * params.BEVelocitySpace.NUM_Q_CHI
         #params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
+        g.reset_scattering_direction_sp_mat()
+        cf_sp1    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
         print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-        L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
-        print("L0")
-        print(L0)
-        print("L1")
-        print(L1)
-        print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+        L1=cf_sp1._Lp(g,maxwellian,VTH) - cf_sp1._Lm(g,maxwellian,VTH)
+        # print("L0")
+        # print(L0)
+        # print("L1")
+        # print(L1)
+        print("np.norm(L1-L0) : %.10E"%(np.linalg.norm(L1-L0)/np.linalg.norm(L1)))
         L0=L1
 
-    L0=L1
-    print("Refine on VR ")
-    params.BEVelocitySpace.NUM_Q_VR                  = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
-    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
-    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+    # L0=L1
+    # print("Refine on VR ")
+    # params.BEVelocitySpace.NUM_Q_VR                  = min(20,2 * params.BEVelocitySpace.NUM_Q_VR)
+    # g.reset_scattering_direction_sp_mat()
+    # cf_sp1    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    # print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    # L1=cf_sp1._Lp(g,maxwellian,VTH) - cf_sp1._Lm(g,maxwellian,VTH)
+    # print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
 
 
-    L0=L1
-    print("Refine on scattering azimuthal angle")
-    params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
-    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
-    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+    # L0=L1
+    # print("Refine on scattering azimuthal angle")
+    # params.BEVelocitySpace.NUM_Q_PHI                 = 2 * params.BEVelocitySpace.NUM_Q_PHI
+    # g.reset_scattering_direction_sp_mat()
+    # cf_sp1    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    # print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    # L1=cf_sp1._Lp(g,maxwellian,VTH) - cf_sp1._Lm(g,maxwellian,VTH)
+    # print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
     
-    L0=L1
-    print("Refine on V polar angle")
-    params.BEVelocitySpace.NUM_Q_PHI                 = params.BEVelocitySpace.NUM_Q_PHI//2
-    params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
-    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
-    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+    # L0=L1
+    # print("Refine on V polar angle")
+    # params.BEVelocitySpace.NUM_Q_PHI                 = params.BEVelocitySpace.NUM_Q_PHI//2
+    # params.BEVelocitySpace.NUM_Q_VT                  = 2 * params.BEVelocitySpace.NUM_Q_VT
+    # g.reset_scattering_direction_sp_mat()
+    # cf_sp1    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    # print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    # L1=cf_sp1._Lp(g,maxwellian,VTH) - cf_sp1._Lm(g,maxwellian,VTH)
+    # print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
 
 
-    L0=L1
-    print("Refine on V azimuthal angle")
-    params.BEVelocitySpace.NUM_Q_VT                 = params.BEVelocitySpace.NUM_Q_VT//2
-    params.BEVelocitySpace.NUM_Q_VP                  = 2 * params.BEVelocitySpace.NUM_Q_VP
-    print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
-    L1=Lp(g0,maxwellian,VTH) - Lm(g0,maxwellian,VTH)
-    print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
+    # L0=L1
+    # print("Refine on V azimuthal angle")
+    # params.BEVelocitySpace.NUM_Q_VT                 = params.BEVelocitySpace.NUM_Q_VT//2
+    # params.BEVelocitySpace.NUM_Q_VP                 = 2 * params.BEVelocitySpace.NUM_Q_VP
+    # g0.reset_scattering_direction_sp_mat()
+    # cf_sp1    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    # print("VR %d VT %d VP %d CHI %d PHI %d" %(params.BEVelocitySpace.NUM_Q_VR,params.BEVelocitySpace.NUM_Q_VT,params.BEVelocitySpace.NUM_Q_VP,params.BEVelocitySpace.NUM_Q_CHI,params.BEVelocitySpace.NUM_Q_PHI))
+    # L1=cf_sp1._Lp(g0,maxwellian,VTH) - cf_sp1._Lm(g0,maxwellian,VTH)
+    # print("np.norm(L1-L0) : %.10f"%np.linalg.norm(L1-L0))
 
 
 def eigenvec_collision_op(collision,maxwellian):
@@ -498,10 +492,10 @@ def collision_op_thermal_test():
 
 
 #collision_op_thermal_test()
-#collision_op_test()
-#collision_op_conv()
+collision_op_test()
+collision_op_conv()
 #maxwellian_test()
-maxwellian_basis_change_test()
+#maxwellian_basis_change_test()
 #eigenvec_collision_op(g0,maxwellian)
 #plot_crosssection(g0,50)
 

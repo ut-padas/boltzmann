@@ -127,7 +127,7 @@ Let $\varepsilon_0 = 1/2 m \norm{v_0}^2_2$ , $\varepsilon_1 = 1/2 m \norm{v_1}^2
     \Delta \varepsilon = \frac{2m(1-cos\chi)}{M}
 \end{equation} where, $m,M$ denotes the mass of the electron and the argon atom. Therefore the magnitude of the scattered velocity, can be written as, 
 \begin{equation}
-    \norm{v_1} = \norm{v_0} \sqrt{1- \frac{2m(1-cos\chi)}{M}}
+    \norm{v_1} = \norm{v_0} \sqrt{1- \frac{2m(1-cos\chi)}{M}} \label{eq:g0_eloss}
 \end{equation} where the direction of $v_1$ is specified by $\hat{v_1}$ in (\ref{eq:scatter}).
 
 \subsection{G1 : $e + Ar \rightarrow e + Ar^*$ collision operator}
@@ -496,7 +496,7 @@ Therefore, we can write $h^{(\beta)}_0=h^{(\alpha)}_0$. There zeroth coefficient
 \subsection{Bounds on the tails for the basis change}
 The thermal velocity basis change operator is given by, \eqref{eq:bchnage}, using orthogonality in the angular directions we can only operate in the radial direction. Therefore, the above simplifies to following (note that we can consider scaling of the 1d Maxwellian)
 \begin{align}
-    W_{ij} &= \int_{\reals} M(v_\alpha) P_i(v_\beta) P_j(v_\alpha)dv
+    W_{ij} &= \int_{\reals} M(v_\alpha) P_i(v_\beta) P_j(v_\alpha)dv \label{eq:basis_change}
 \end{align}
 Let $\epsilon >0$, $\alpha = \beta + \epsilon$. Then we can write the simplified $W_{ij}$ as, 
 \begin{align}
@@ -520,225 +520,193 @@ We can further write,
 \end{align}
 But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\pi}$ with $v^\prime \neq v$.  
 
-
-% \section{Experimental Results}
-% We solve, 
-
-% \begin{align*}
-%     \partial_t f = C(f) &= n_0 \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega\\
-%     f(v,0) &= \frac{1}{(\sqrt{\pi}v_{th})^d} \exp{(-(\frac{v}{v_{th}})^2)} \text{ where } v_{th} = \sqrt{\frac{2kT}{m}}
-% \end{align*}
-        
-% \subsection{G0 : $e + Ar \rightarrow e + Ar$ collision operator}
-
-% \textbullet~ Test case 1 : Elastic collisions , note that $\norm{v\prime} = \norm{v}$.
-% \begin{figure}[H]
-%     \includegraphics[width=0.9\textwidth]{dat/g0_elastic.png}
-%     \caption{For this experiment, we use time step size of $1e-4$, and the left plot shows how the initial mass preserved overtime. On the right plot shows the temperature change with time.}
-% \end{figure}
-
-
-
-% \subsection{G0 : $e + Ar \rightarrow e + Ar$ collision operator (Inelastic case)}
-% \textbullet~ Test case 2 : Inelastic collisions, $\norm{v_1} = \norm{v_0} \sqrt{1- \frac{2m(1-cos\chi)}{M}}$ \\
-
-% Potential issues. 
-% \begin{itemize}
-%     \item With experimental cross section data, and our current choice of the basis expansion the discretized collision operator is coupled with thermal velocity. 
-%     \item Therefore, when temperature change we need to reassemble the collision operator. 
-%     \item We are limited by a time step size, for larger $dt$ we change the temperature significantly, result in mass loss when we timestep. 
-%     \item Currently, the solver doesn't seem to be converging. 
-% \end{itemize}
-
-% \begin{figure}[H]
-%     \includegraphics[width=0.9\textwidth]{dat/g0_inelastic1e-11.png}
-% \end{figure}
-
-
 \newpage
 \section{Numerical evaluation}
-% \begin{algorithm}
-% \caption{Time stepper for linear collision operator} \label{alg:ts_collop}
-% \begin{algorithmic}
-% \Require $f^{n}$, thermal velocity $v_t ^{n-1}$, mass $M_0$ 
-% %\Ensure $y = x^n$
-% %\State $M \leftarrow zeroth\_moment(f^{n})$
-% \State $T \leftarrow second\_moment(f^{n},M_0,v_t ^{n-1})$
-% \State $v_t^{n} \leftarrow electron\_thermal\_velocity(T)$
-% \State $f^{n} \leftarrow basis\_change(f^{n},v_t ^{n-1},v_t ^{n})$
-% \State $C_n \leftarrow assemble\_collision\_mat(v_t^{n})$ 
-% %\State $W,U \leftarrow eigen\_solve(C_n)$
-% %\State $b\leftarrow U^{-1} f^{n}$
-% \State $f^{n+1} \leftarrow eval\_eigen\_sol(C_n, dt,b)$ 
-% \State $f^{n+1} \leftarrow enforce\_mass\_constraint(f^{n+1},M_0)$
-% \State \Return $f^{n+1}$
-% \end{algorithmic}
-% \end{algorithm}
-% For nonlinear collision operators, standard explicit RK schemes can be applied. 
+This section presents, a numerical evaluation of the spatially homogeneous Boltzmann equation without external force field. Recall, under the above assumptions we can write the collision source term as \eqref{eq:nr_be}, 
+\begin{equation}
+	\partial_t f_e(v,t) = \sum_{k} n_k C_k(f_e) \label{eq:nr_be}
+\end{equation} where the $C_k$ denotes the collision operator for the $k^{th}$ collision. We consider the following experiments in the study. 
+\begin{itemize}
+\item G0: $e + Ar \rightarrow e + Ar $ 
+\item G1: $e + Ar \rightarrow e + Ar^*$
+\item G2: $e + Ar \rightarrow e + Ar^+ + e$ 
+\end{itemize} The post collision velocities for the above collisions are summerized in \S\ref{sec:col_op_torch}.
 
+\subsection{Eigenmodes of the collision operator}
+For a assembled collision operator $L$, assuming linearity in $L$, we construct matrix, 
+\begin{equation}
+	E_t = Re\left( Q^{-1} \times  \text{diag}(\exp(\lambda_i t)) \times Q \right) 
+\end{equation}, where $L=Q^{-1} \Lambda Q$ is the eigen decomposition of $L$. If $L$ is linear the solution at time $t$ can be written as a linear combination of the columns vectors of $E_t$ where the coefficients are determined by the initial condition of the ODE. (see figures \ref{fig:eig_g_sep} \& \ref{fig:eig_g02_g012}  )
 
-
-\subsection{G0: $e + Ar \rightarrow e + Ar $ (20eV)}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g0_temp_profile.png}
-    \caption{Temperature profile for G0 collision operator with increasing number of polynomials in radial direction with different timestep sizes. The temperature profile curved are grouped based on the number of polynomials used in the radial direction. The above can be expected due to the projection of the infinite dimensional collision operator with finite dimensional approximation. }
+\begin{figure}[!htbp]
+	\includegraphics[width=0.32\textwidth]{fig/g0_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\includegraphics[width=0.32\textwidth]{fig/g1_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\includegraphics[width=0.32\textwidth]{fig/g2_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\caption{Eigen modes for the collision operator $G0,G1,G2$ (left most, middle, and the right most) evaluated at different time points. Collision operators are assembled under 1eV, $n_i=1e18,n_e=1e18, n_o = 3.22e22$.\label{fig:eig_g_sep}}
+\end{figure}
+\begin{figure}[!htbp]
+	\includegraphics[width=0.48\textwidth]{fig/g02_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\includegraphics[width=0.48\textwidth]{fig/g012_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\caption{Eigen modes for the collision operator $G0+G2$ (left) and $G0+G1+G2$ (the right) evaluated at different time points. Collision operators are assembled under 1eV, $n_i = 1e18, n_e=1e18, n_o = 3.22e22$.\label{fig:eig_g02_g012}}
 \end{figure}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g0_nr.png}
-    \caption{Relative error in the temperature, for G0 collision operator taking $N_r=16$ as the base profile with different timztep sizes of $1E-10$, $5E-11$ and $2.5E-11$. The relative error in the temperature profile, are grouped with respect refinement in the number of radial polynomials used. }
+\subsection{Handling changing temperature}
+Due to the kinetic energy loss in $e-Ar$ collisions, the thermal velocity decreases with the time. Since we use quadrature points on the normalized velocity (i.e., $\frac{v}{v_th}$) we need transform the solution from one temperature to another. If the temperature drop is significant and if we don't have enough basis functions in the radial direction, the projection between temperature cause an aliasing effect and gives larger tails. 
+
+Let $T_\alpha$ be the current temperature and we want to transform the solution to $T_\beta=T_\alpha + \epsilon$ where $\epsilon \in [-a,a]$ for $a>0$.
+
+\begin{align}
+W_{ij} &= \int_{\reals} M(v_\alpha) P_i(v_\beta) P_j(v_\alpha)dv \label{eq:basis_change}
+\end{align}
+Let $\epsilon >0$, $\alpha = \beta + \epsilon$. Then we can write the simplified $W_{ij}$ as, 
+\begin{align}
+W_{ij} &= \frac{n}{\sqrt{\pi}^{3}}  \int_{\reals}  \exp(-v_\alpha^2) P_i (v_\alpha (1 + \frac{\epsilon}{\beta})) P_j(v_\alpha) \frac{dv}{\alpha} \\
+\end{align}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_grid.png}
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_tail.png}
+	\caption{The left most figure shows the $f(v)$ expansion evaluated at uniform grid in the radial direction followed by normed difference computation for increasing $N_r$ polynomials. For a given Maxwellian distribution (i.e., $h^{\alpha}=1$) we compute the projection of the solution to $T_\beta=T_\alpha + \epsilon$ with computed $W_{\beta\alpha}$, where $h^{\beta} = W_{\beta \alpha} h^{\alpha}$. The right most figure shows the tail of the computed $h^{\beta}$ with increasing polynomials in the radial direction.  \label{fig:basis_projection_error}
+	}
 \end{figure}
+\begin{figure}[!hbtp]
+	\centering
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_3.png}
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_3.png}
+	
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_7.png}
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_7.png}
+	
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_15.png}
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_15.png}
+
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_31.png}
+	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_31.png}
+	\caption{ For each row the the right most figure shows the log scale to emphasis the variation in the tails of the distribution function. Each row corresponds to a temperature change indicated byt the $\epsilon$ parameter, and projected coefficient evaluated at a uniformly space grid of $10^5$ points in the range of $(0,6V_th)$. 
+		\label{fig:basis_grid_plot}
+	}
+\end{figure}
+
+
+
+
+
+\subsection{Assembling on the collision operator}
+Let $N_r$ , $N_\theta$, and $N_\phi$ denotes the number of polynomials used in radial, polar and azimuthal direction. 
+
+Let $Q_{r}, Q_{\theta}, Q_{\phi}$ be the quadrature points along radial, polar and azimuthal directions for the velocity space. $Q_{r} \times Q_{\theta} \times Q_{\phi}$ forms the quadrature grid for the electron collision incident events. 
+
+Let $Q_{\chi},Q_{\gamma}$ be the quadrature points in polar and azimuthal direction in scattering solid angle. 
 
 \begin{table}[H]
-    \centering
-    \begin{tabular}{|c|c|c|}
-        \hline
-        $dt$ & $|f_{Nr=4}-f_{Nr=16}|_\infty$ & $|f_{Nr=8}-f_{Nr=16}|_\infty$ \\
-        \hline
-        1E-10        & 1.35043E-06  &    6.58742E-07 \\
-        5E-11        & 1.34977E-06  &    6.58425E-07 \\
-        2.5E-11      & 1.35083E-06  &    6.58942E-07 \\
-        \hline
-    \end{tabular}
-    \caption{G0 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a specified timestep size with increasing radial direction approximation order.  }
-\end{table}
-
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g0_dt.png}
-    \caption{Relative error in the temperature, for G0 collision operator taking $dt=2.5E-11$ as the base profile with different Nr polynomials $Nr=4$, $Nr=8$ and $Nr=16$. The relative error curves are grouped with respect to the refinement in the timestep size. The above shows, for the given finite dimensional approximation of the collision operator, computed temperature profile convergences for a fixed profile.}
-\end{figure}
-
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|c|c|c|}
-        \hline
-        $Nr$ & $|f_{dt=1E-10}-f_{dt=2.5E-11}|_\infty$ & $|f_{dt=5E-11}-f_{dt=2.5E-11}|_\infty$ \\
-        \hline
-        4          & 6.24007e-09         & 2.08135e-09 \\
-        8          & 6.80473e-09         & 2.26967e-09 \\
-        16         & 7.34148e-09         & 2.44868e-09 \\
-        \hline
-    \end{tabular}
-    \caption{G0 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a radial direction approximation order with decreasing timestep size. }
-\end{table}
-
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|c|c|}
-        \hline
-        $Nr,dt$ & relative error (temperature)\\
-        \hline
-        Nr=4 dt=1e-10      &           1.35499e-06 \\
-        Nr=8 dt=5e-11      &           6.60874e-07 \\
-        \hline
-    \end{tabular}
-    \caption{G0 collision operator : $l_\infty$ norm of the relative error in the temperature profile compared against the $Nr=16$ and $dt=2.5E-11$ case. }
-\end{table}
-
-\subsection{G0: $e + Ar \rightarrow e + Ar $  with  G2: $e + Ar \rightarrow e + Ar^+ + e $ (20eV)}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g02_temp_profile.png}
-    \caption{Temperature profile for G0 + G2 collision operator with increasing number of polynomials in radial direction with different timestep sizes. }
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g02_nr.png}
-    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $N_r=16$ as the base profile with different timztep sizes of $1E-10$, $5E-11$ and $2.5E-11$.}
-\end{figure}
-
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|c|c|c|}
-        \hline
-        $dt$ & $|f_{Nr=4}-f_{Nr=16}|_\infty$ & $|f_{Nr=8}-f_{Nr=16}|_\infty$ \\
-        \hline
-        1e-10         & 0.0153427        & 0.0024703   \\
-        5e-11         & 0.051785         & 0.018351 \\
-        2.5e-11       & 0.00773937       & 0.00134626 \\
-        \hline
-    \end{tabular}
-    \caption{G0 + G2 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a specified timestep size with increasing radial direction approximation order. }
-\end{table}
-
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g02_dt.png}
-    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $dt=2.5E-11$ as the base profile with different Nr polynomials $Nr=4$, $Nr=8$ and $Nr=16$.}
-\end{figure}
-
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|c|c|c|}
-        \hline
-        $Nr$ & $|f_{dt=1E-10}-f_{dt=2.5E-11}|_\infty$ & $|f_{dt=5E-11}-f_{dt=2.5E-11}|_\infty$ \\
-        \hline
-        4         &   0.0258552           & 0.0257722 \\
-        8         &   0.0258221           & 0.0257365 \\
-       16        &    0.025834            & 0.0257491 \\
-        \hline
-    \end{tabular}
-    \caption{G0 + G2 collision operator : $l_\infty$ norm of the absolute value of the relative error in the temperature profile for a radial direction approximation order with decreasing timestep size. }
+	\centering
+	\begin{tabular}{|c|c|c|}
+		\hline
+		Grid & $(Q_\gamma,Q_\theta,Q_\phi)=(2,8,4)$ & $(Q_\gamma,Q_\theta,Q_\phi)=(4,16,8)$ \\
+		\hline
+		$Q_r=20,Q_\chi=8,$ & - & - \\
+		$Q_r=40,Q_\chi=16,$ & 7.46E-01 & - \\
+		$Q_r=51,Q_\chi=32,$ & 4.99E-03 & - \\
+		$Q_r=51,Q_\chi=64,$ & 7.48E-09 & - \\
+		$Q_r=51,Q_\chi=128,$ & - & 2.09E-12 \\
+		\hline
+	\end{tabular}
+	\caption{Relative error in the normed difference in the assembled collision operator for $G0$ at 1ev for $N_r=31,N_\theta=1$, and $N_\phi=1$.}
 \end{table}
 
 \begin{table}[H]
-    \centering
-    \begin{tabular}{|c|c|}
-        \hline
-        $Nr,dt$ & relative error (temperature)\\
-        \hline
-        Nr=4 dt=1e-10      &           0.25555 \\
-        Nr=8 dt=5e-11      &           0.362987 \\
-        \hline
-    \end{tabular}
-    \caption{G0 + G2 (at 20eV) collision operator : $l_\infty$ norm of the relative error in the temperature profile compared against the $Nr=16$ and $dt=2.5E-11$ case. }
+	\centering
+	\begin{tabular}{|c|c|c|}
+		\hline
+		Grid & $(Q_\gamma,Q_\theta,Q_\phi)=(2,8,4)$ & $(Q_\gamma,Q_\theta,Q_\phi)=(4,16,8)$ \\
+		\hline
+		$Q_r=20,Q_\chi=8,$ & - & - \\
+		$Q_r=40,Q_\chi=16,$ & 1.16E+00 & - \\
+		$Q_r=51,Q_\chi=32,$ & 3.46E-03 & - \\
+		$Q_r=51,Q_\chi=64,$ & 1.77E-07 & - \\
+		$Q_r=51,Q_\chi=128,$ & - & 1.65E-13 \\
+		\hline
+	\end{tabular}
+	\caption{Relative error in the normed difference in the assembled collision operator for $G2$ at 1ev for $N_r=31,N_\theta=1$, and $N_\phi=1$.}
 \end{table}
 
-\subsection{G0: $e + Ar \rightarrow e + Ar $  with  G2: $e + Ar \rightarrow e + Ar^+ + e $ (1eV)}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.49\textwidth]{dat/g012_temp_1ev.png}
-    \includegraphics[width=0.49\textwidth]{dat/g012_mass_1ev.png}
-    \caption{Temperature (on the left) and the mass (on the right) profiles for G0 + G2 collision operator with increasing number of polynomials in radial direction with different timestep sizes. }
-\end{figure}
+Therefore, for the convergence study it is reasonable to use a quadrature grid size of,$(Q_{r}, Q_{\theta}, Q_{\phi},Q_{\chi},Q_{\gamma}) =(51,8,4,64,2)$.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g02_nr_1ev.png}
-    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $N_r=16$ as the base profile with different timztep sizes of $1E-10$, $5E-11$ and $2.5E-11$.}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.99\textwidth]{dat/g02_nr_1ev.png}
-    \caption{Relative error in the temperature, for G0 + G2 collision operator taking $dt=2.5E-11$ as the base profile with different Nr polynomials $Nr=4$, $Nr=8$ and $Nr=16$.}
-\end{figure}
-
-
+\subsection{G0 at (1eV)}
 \begin{table}[H]
-    \centering
-    \begin{tabular}{|c|c|}
-        \hline
-        $Nr,dt$ & relative error (temperature)\\
-        \hline
-        Nr=4 dt=1e-10         &       3.56035e-07 \\
-        Nr=8 dt=5e-11         &       1.3401e-08   \\
-        \hline
-    \end{tabular}
-    \caption{G0 + G2 (at 1eV) collision operator : $l_\infty$ norm of the relative error in the temperature profile compared against the $Nr=16$ and $dt=2.5E-11$ case. }
+	\centering
+	\begin{tabular}{|c|c|c|c|c|}
+		\hline
+		$N_r$ & $dt=1E-10$ & $dt=5E-11$ & $dt=2.5E-11$ & $dt=1.25E-11$\\
+		\hline
+		3   & \textcolor{red}{1.61605e-05} & 1.61614e-05  & 1.61619e-05  &  1.61621e-05 \\
+		7   & 6.87078e-07 & \textcolor{red}{6.86688e-07}  &  6.86494e-07 &   6.864e-07 \\
+		15  & 1.83438e-07 & 1.83005e-07  &  \textcolor{red}{1.8279e-07}  &  1.82685e-07 \\
+		31  & 7.85306e-10 & 3.33874e-10  &  1.09496e-10 &   0 \\
+		\hline
+	\end{tabular}
+	\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 collision operator. }
 \end{table}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{fig/g0_temp_convergence.png}
+	\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 collision operator. }
+\end{figure}
+
+
+\subsection{G0 + G2 at (1eV)}
+\begin{table}[H]
+	\centering
+	\begin{tabular}{|c|c|c|c|c|}
+		\hline
+		$N_r$ & $dt=1E-10$ & $dt=5E-11$ & $dt=2.5E-11$ & $dt=1.25E-11$\\
+		\hline
+		 3  & \textcolor{red}{2.80491e-06} & 2.80545e-06 &  2.80572e-06  &  2.80586e-06 \\
+		 7  & 1.01959e-07 & \textcolor{red}{1.01808e-07} &  1.01734e-07  &  1.01697e-07 \\
+		15  & 2.2385e-08  & 2.2213e-08  &  \textcolor{red}{2.21275e-08}  &  2.20857e-08 \\
+		31  & 3.10214e-10 & 1.31967e-10 &  4.33156e-11  &  0 \\
+		\hline
+	\end{tabular}
+\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=3.5e-07 s for G0 +G2 collision operator with enforced quasi neutrality.}
+\end{table}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{fig/g02_temp_convergence.png}
+	\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=3.5e-07 s for G0 + G2 collision operator. }
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{fig/g02_mass_convergence.png}
+	\caption{Relative error in number of electrons compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=3.5e-07 s for G0 + G2 collision operator. }
+\end{figure}
+
+
+%\subsection{G0: $e + Ar \rightarrow e + Ar $ (1eV)}
+%This section presents a summary of the numerical experiments conducted on the different reactions. For the following convergence study, we study the $G0$ collision operator with energy loss modeled by \eqref{eq:g0_eloss}. 
+%\begin{itemize}
+%    \item Uniform time step size used, with collision operator reassembled at every time step. 
+%    \item RK4 time integrator is used for the convergence study. 
+%    \item At each step, the coefficient are projected to the correct temperature using the basis transformation in \eqref{eq:basis_change}
+%    \item For all convergence runs, we use
+%    \begin{itemize}
+%    	\item $N_\theta = 2$ 2 polynomials in the polar angle direction.
+%		\item $N_\phi   = 1$ 1 polynomials in the polar angle direction.
+%		\item $Q_r=21, Q_\theta=16, \Q_phi=16, Q_\chi=64, Q\_gamma=16$, we
+%    \end{itemize}
+%\end{itemize}
+
+
+
 
 
 
 \bibliographystyle{plain}
 \bibliography{bte_notes.bib}
-
+\newpage
 \appendix
 
 \section{Derivation of Collision operators}

@@ -122,10 +122,10 @@ class Collisions(abc.ABC):
              np.cos(v_theta_1) * (np.cos(chi_1) * f1 + np.cos(az_1) * np.cos(v_phi_1) *np.sin(v_theta_1) *np.sin(chi_1))) / f1
 
         # just to make sure, we don't get NANs in the scattering direction computations. 
-        if(len(W)>0 and (np.min(W)<-1 or np.max(W)>1)):
+        if((np.max(np.abs(W))) > 1.0):
+            print("Scattering direction : arcos(W) , W(min,max) = (%.16E,%.16E)" %(np.min(W),np.max(W)))
             c1= W > 1.0
             c2= W < -1.0
-            print("Scattering direction : arcos(W) , W(min,max) = (%.10f,%.10f)" %(np.min(W),np.max(W)))
             W[c1] =1.0
             W[c2]=-1.0
         
@@ -454,6 +454,12 @@ class eAr_G2(Collisions):
     @staticmethod
     def get_cross_section_scaling():
         return AR_IONIZED_N
+
+    def reset_scattering_direction_sp_mat(self):
+        self._is_scattering_mat_assembled=False
+        self._sc_direction_mat=None
+        self._momentum_setup=False
+        return
 
 """
 Simple test collision class to test

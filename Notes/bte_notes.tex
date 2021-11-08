@@ -533,11 +533,16 @@ This section presents, a numerical evaluation of the spatially homogeneous Boltz
 \end{itemize} The post collision velocities for the above collisions are summerized in \S\ref{sec:col_op_torch}.
 
 \subsection{Eigenmodes of the collision operator}
-For a assembled collision operator $L$, assuming linearity in $L$, we construct matrix, 
+For the assembled collision operator $L$, we construct the matrix, 
 \begin{equation}
 	E_t = Re\left( Q^{-1} \times  \text{diag}(\exp(\lambda_i t)) \times Q \right) 
-\end{equation}, where $L=Q^{-1} \Lambda Q$ is the eigen decomposition of $L$. If $L$ is linear the solution at time $t$ can be written as a linear combination of the columns vectors of $E_t$ where the coefficients are determined by the initial condition of the ODE. (see figures \ref{fig:eig_g_sep} \& \ref{fig:eig_g02_g012}  )
+\end{equation}, where $L=Q^{-1} \Lambda Q$ is the eigen decomposition of $L$. If $L$ is linear the solution at time $t$ can be written as a linear combination of the columns vectors of $E_t$ where the coefficients are determined by the initial condition of the ODE. (see figures \ref{fig:eig_g_sep} \& \ref{fig:eig_g02_g012})
 
+\begin{itemize}
+	\item For G0, first eigenmode ensures (the top right most figure in \ref{fig:eig_g_sep}) that if we start with Maxwellian the solution will stay at maxwellian for shorter periods in time. For longer periods the other modes will grow over time. The above is mainly due to the assembled collission operator is bound to the thermal velocity through the sampling of the experimental cross section data. 
+	\item For G1 and G2, at 1eV $E_t$ is close to the identity matrix, since the probability of triggering a excitation or ionization reaction is low, at 1eV. 
+	\item $E_t$ modes will depend on the background species densities, that scales the differential cross sections. 
+\end{itemize}
 \begin{figure}[!htbp]
 	\includegraphics[width=0.32\textwidth]{fig/g0_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
 	\includegraphics[width=0.32\textwidth]{fig/g1_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
@@ -553,7 +558,7 @@ For a assembled collision operator $L$, assuming linearity in $L$, we construct 
 \subsection{Handling changing temperature}
 Due to the kinetic energy loss in $e-Ar$ collisions, the thermal velocity decreases with the time. Since we use quadrature points on the normalized velocity (i.e., $\frac{v}{v_th}$) we need transform the solution from one temperature to another. If the temperature drop is significant and if we don't have enough basis functions in the radial direction, the projection between temperature cause an aliasing effect and gives larger tails. 
 
-Let $T_\alpha$ be the current temperature and we want to transform the solution to $T_\beta=T_\alpha + \epsilon$ where $\epsilon \in [-a,a]$ for $a>0$.
+Let $T_\alpha$ be the current temperature and we want to transform the solution to $T_\beta=T_\alpha (1+ \epsilon)$ where $\epsilon \in [-a,a]$ for $a>0$.
 
 \begin{align}
 W_{ij} &= \int_{\reals} M(v_\alpha) P_i(v_\beta) P_j(v_\alpha)dv \label{eq:basis_change}
@@ -567,7 +572,7 @@ W_{ij} &= \frac{n}{\sqrt{\pi}^{3}}  \int_{\reals}  \exp(-v_\alpha^2) P_i (v_\alp
 	\centering
 	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_grid.png}
 	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_tail.png}
-	\caption{The left most figure shows the $f(v)$ expansion evaluated at uniform grid in the radial direction followed by normed difference computation for increasing $N_r$ polynomials. For a given Maxwellian distribution (i.e., $h^{\alpha}=1$) we compute the projection of the solution to $T_\beta=T_\alpha + \epsilon$ with computed $W_{\beta\alpha}$, where $h^{\beta} = W_{\beta \alpha} h^{\alpha}$. The right most figure shows the tail of the computed $h^{\beta}$ with increasing polynomials in the radial direction.  \label{fig:basis_projection_error}
+	\caption{The left most figure shows the $f(v)$ expansion evaluated at uniform grid in the radial direction followed by normed difference computation for increasing $N_r$ polynomials. For a given Maxwellian distribution (i.e., $h^{\alpha}=1$) we compute the projection of the solution to $T_\beta=T_\alpha (1+\epsilon)$ with computed $W_{\beta\alpha}$, where $h^{\beta} = W_{\beta \alpha} h^{\alpha}$. The right most figure shows the tail of the computed $h^{\beta}$ with increasing polynomials in the radial direction.  \label{fig:basis_projection_error}
 	}
 \end{figure}
 \begin{figure}[!hbtp]
@@ -651,8 +656,9 @@ Therefore, for the convergence study it is reasonable to use a quadrature grid s
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.8\textwidth]{fig/g0_temp_convergence.png}
-	\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 collision operator. }
+	\includegraphics[width=0.49\textwidth]{fig/g0_temp_convergence.png}
+	\includegraphics[width=0.49\textwidth]{fig/g0_dt_1.25000000E-11_Nr_31.dat.png}
+	\caption{Relative error in temperature (the left most figure) compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 collision operator. The right most figure shows the highest resolution, EEDF, mass growth, temperature evolution and the tail norm of the used basis functions.  }
 \end{figure}
 
 
@@ -663,25 +669,27 @@ Therefore, for the convergence study it is reasonable to use a quadrature grid s
 		\hline
 		$N_r$ & $dt=1E-10$ & $dt=5E-11$ & $dt=2.5E-11$ & $dt=1.25E-11$\\
 		\hline
-		 3  & \textcolor{red}{2.80491e-06} & 2.80545e-06 &  2.80572e-06  &  2.80586e-06 \\
-		 7  & 1.01959e-07 & \textcolor{red}{1.01808e-07} &  1.01734e-07  &  1.01697e-07 \\
-		15  & 2.2385e-08  & 2.2213e-08  &  \textcolor{red}{2.21275e-08}  &  2.20857e-08 \\
-		31  & 3.10214e-10 & 1.31967e-10 &  4.33156e-11  &  0 \\
+		
+		 3   & \textcolor{red}{1.40916e-05} & 1.40925e-05 &  1.40924e-05  &  1.40923e-05 \\
+		 7   & 6.06432e-07 & \textcolor{red}{6.06074e-07} &  6.05866e-07  &  6.05765e-07 \\
+		 15  & 1.54661e-07 & 1.5426e-07  &  \textcolor{red}{1.54052e-07}  &  1.5395e-07  \\
+		 31  & 7.26707e-10 & 3.08953e-10 &  1.01324e-10  &  0  \\
 		\hline
 	\end{tabular}
-\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=3.5e-07 s for G0 +G2 collision operator with enforced quasi neutrality.}
+\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=9e-07 s for G0 +G2 collision operator with enforced quasi neutrality.}
 \end{table}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.8\textwidth]{fig/g02_temp_convergence.png}
-	\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=3.5e-07 s for G0 + G2 collision operator. }
+	\includegraphics[width=0.48\textwidth]{fig/g02_temp_convergence.png}
+	\includegraphics[width=0.48\textwidth]{fig/g02_dt_1.25000000E-11_Nr_31.dat.png}
+	\caption{Relative error (the left most figure) in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=9e-07 s for G0 + G2 collision operator. The right most figure shows the highest resolution EEDF, mass growth, temperature evolution and the tail norm of the used basis functions.  }
 \end{figure}
 
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.8\textwidth]{fig/g02_mass_convergence.png}
-	\caption{Relative error in number of electrons compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=3.5e-07 s for G0 + G2 collision operator. }
+	\caption{Relative error in number of electrons compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=9e-07 s for G0 + G2 collision operator. }
 \end{figure}
 
 

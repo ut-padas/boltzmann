@@ -25,6 +25,10 @@ C000_INDEX=4
 plt.rcParams["figure.figsize"] = (6,6)
 
 
+def spec_tail(cf):
+    tail_index = len(cf[0,C000_INDEX:])//2
+    #print(tail_index)
+    return np.linalg.norm(cf[:,(C000_INDEX + tail_index):],axis=1) / np.linalg.norm(cf[:,C000_INDEX:],axis=1)
 
 def g0_convergence():
     file_names=[["dat/g0_dt_1.00000000E-10_Nr_3.dat",  "dat/g0_dt_5.00000000E-11_Nr_3.dat",  "dat/g0_dt_2.50000000E-11_Nr_3.dat",  "dat/g0_dt_6.25000000E-12_Nr_3.dat"],
@@ -180,8 +184,6 @@ def g0_convergence():
     print("G0 refinement in both Nr and dt (20ev)")
     print("========================================")
     print(tabulate(table_data,headers=["run","rel. error (temperature)"]))
-
-
 
 
 def g02_quasi_neutral():
@@ -388,9 +390,6 @@ def g02_quasi_neutral():
     print("G0 + G2 refinement in both Nr and dt (20ev)")
     print("========================================")
     print(tabulate(table_data,headers=["run","rel. error (temperature)"]))
-
-
-
 
 
 def g02_quasi_neutral_1ev():
@@ -606,7 +605,6 @@ def g02_quasi_neutral_1ev():
     # data6   = data_nr_4x_dt4[range(0,len(data_nr_4x_dt4[:-sk_tail,TIME_INDEX]),2),TEMP_INDEX]
 
 
-
 def g0_rk4_1ev_convergence():
 
     file_names=[["dat_1ev/g0_dt_1.00000000E-10_Nr_3.dat",  "dat_1ev/g0_dt_5.00000000E-11_Nr_3.dat",  "dat_1ev/g0_dt_2.50000000E-11_Nr_3.dat",  "dat_1ev/g0_dt_1.25000000E-11_Nr_3.dat"],
@@ -653,6 +651,20 @@ def g0_rk4_1ev_convergence():
     plt.ylabel(r"$relative \ error (temp)\rightarrow $")
     plt.yscale("log")
     plt.grid()
+    plt.legend()
+    plt.show()
+
+    plt.close()
+
+    pl_lable = ["Nr=3, dt=1E-10", "Nr=7, dt=5E-11", "Nr=15, dt=2.5E-11", "Nr=31, dt=1.25E-11"]
+    for row,col in ((0,0),(1,1),(2,2),(3,3)):
+        data_base = data[row][col][0:len(hr_sampled[col][:,TIME_INDEX]),:]
+        plt.plot(hr_sampled[col][:,TIME_INDEX], spec_tail(data_base),label=pl_lable[row])
+    
+    plt.yscale("log")
+    plt.grid()
+    plt.xlabel(r"$time(s) \rightarrow$")
+    plt.ylabel(r"$|h_{tail}|/ |h| \rightarrow $")
     plt.legend()
     plt.show()
 
@@ -740,22 +752,30 @@ def g02_rk4_1ev_convergence():
     plt.legend()
     plt.show()
 
+    plt.close()
+    pl_lable = ["Nr=3, dt=1E-10", "Nr=7, dt=5E-11", "Nr=15, dt=2.5E-11", "Nr=31, dt=1.25E-11"]
+    for row,col in ((0,0),(1,1),(2,2),(3,3)):
+        data_base = data[row][col][0:len(hr_sampled[col][:,TIME_INDEX]),:]
+        plt.plot(hr_sampled[col][:,TIME_INDEX], spec_tail(data_base),label=pl_lable[row])
+    
+    plt.yscale("log")
+    plt.grid()
+    plt.xlabel(r"$time(s) \rightarrow$")
+    plt.ylabel(r"$|h_{tail}|/ |h| \rightarrow $")
+    plt.legend()
+    plt.show()
 
 
-
-    # data2 = data_nr_1x_dt4[range(0,len(data_nr_1x_dt4[:-sk_tail,TIME_INDEX]),2),TEMP_INDEX]
-
-    # data3 = data_nr_2x_dt4[range(0,len(data_nr_2x_dt4[:-sk_tail,TIME_INDEX]),4),TEMP_INDEX]
-    # data4 = data_nr_2x_dt4[range(0,len(data_nr_2x_dt4[:-sk_tail,TIME_INDEX]),2),TEMP_INDEX]
-
-    # data5 = data_nr_4x_dt4[range(0,len(data_nr_4x_dt4[:-sk_tail,TIME_INDEX]),4),TEMP_INDEX]
-    # data6 = data_nr_4x_dt4[range(0,len(data_nr_4x_dt4[:-sk_tail,TIME_INDEX]),2),TEMP_INDEX]
+    
 
 
 #g0_convergence()
 #g02_quasi_neutral()
 #g02_quasi_neutral_1ev()
 
+print("g0 convergence results")
 g0_rk4_1ev_convergence()
+
+print("g02 convergence results")
 g02_rk4_1ev_convergence()
 

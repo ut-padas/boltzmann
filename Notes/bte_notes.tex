@@ -535,25 +535,55 @@ This section presents, a numerical evaluation of the spatially homogeneous Boltz
 \subsection{Eigenmodes of the collision operator}
 For the assembled collision operator $L$, we construct the matrix, 
 \begin{equation}
-	E_t = Re\left( Q^{-1} \times  \text{diag}(\exp(\lambda_i t)) \times Q \right) 
-\end{equation}, where $L=Q^{-1} \Lambda Q$ is the eigen decomposition of $L$. If $L$ is linear the solution at time $t$ can be written as a linear combination of the columns vectors of $E_t$ where the coefficients are determined by the initial condition of the ODE. (see figures \ref{fig:eig_g_sep} \& \ref{fig:eig_g02_g012})
+	E_t = Re\left( Q \times  \text{diag}(\exp(\lambda_i t)) \times Q^{-1} \right) 
+\end{equation}, where $L=Q^{-1} \Lambda Q$ is the eigen decomposition of $L$. If $L$ is linear the solution at time $t$ can be written as a linear combination of the columns vectors of $E_t$ where the coefficients are determined by the initial condition of the ODE. (see figures \ref{fig:g0_nr3}, \ref{fig:g0_nr7}, \ref{fig:g0_nr15} \& \ref{fig:g0_nr31})
 
-\begin{itemize}
-	\item For G0, first eigenmode ensures (the top right most figure in \ref{fig:eig_g_sep}) that if we start with Maxwellian the solution will stay at maxwellian for shorter periods in time. For longer periods the other modes will grow over time. The above is mainly due to the assembled collission operator is bound to the thermal velocity through the sampling of the experimental cross section data. 
-	\item For G1 and G2, at 1eV $E_t$ is close to the identity matrix, since the probability of triggering a excitation or ionization reaction is low, at 1eV. 
-	\item $E_t$ modes will depend on the background species densities, that scales the differential cross sections. 
-\end{itemize}
+Based on the eigen decomposition of the G0, collission operator, we can plot the evolution of the each coefficient analytical time integration, for different $N_r$ values. 
+
 \begin{figure}[!htbp]
-	\includegraphics[width=0.32\textwidth]{fig/g0_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
-	\includegraphics[width=0.32\textwidth]{fig/g1_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
-	\includegraphics[width=0.32\textwidth]{fig/g2_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
-	\caption{Eigen modes for the collision operator $G0,G1,G2$ (left most, middle, and the right most) evaluated at different time points. Collision operators are assembled under 1eV, $n_i=1e18,n_e=1e18, n_o = 3.22e22$.\label{fig:eig_g_sep}}
+	\centering
+	\includegraphics[width=0.48\textwidth]{fig/g0_eig_abs_nr.png}
+	\includegraphics[width=0.48\textwidth]{fig/g0_eig_nr.png}
+	\caption{The leftmost plot shows the absolute eigenvalues with  increasing refinement in radial direction, where the rightmost plot shows the corresponding eigenvalues on the complex plane.\label{fig:g0_eig_nr}}
 \end{figure}
-\begin{figure}[!htbp]
-	\includegraphics[width=0.48\textwidth]{fig/g02_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
-	\includegraphics[width=0.48\textwidth]{fig/g012_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
-	\caption{Eigen modes for the collision operator $G0+G2$ (left) and $G0+G1+G2$ (the right) evaluated at different time points. Collision operators are assembled under 1eV, $n_i = 1e18, n_e=1e18, n_o = 3.22e22$.\label{fig:eig_g02_g012}}
+
+
+\begin{figure}[!tbhp]
+	\includegraphics[width=\textwidth]{fig/g0_Nr_3_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=3$, using eigenmodes of the operator\label{fig:g0_nr3}}
 \end{figure}
+
+\begin{figure}[!tbhp]
+	\includegraphics[width=\textwidth]{fig/g0_Nr_7_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=7$, using eigenmodes of the operator\label{fig:g0_nr7}}
+\end{figure}
+
+\begin{figure}[!tbhp]
+	\includegraphics[width=\textwidth]{fig/g0_Nr_15_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=15$, using eigenmodes of the operator\label{fig:g0_nr15}}
+\end{figure}
+
+\begin{figure}[!tbhp]
+	\includegraphics[width=\textwidth]{fig/g0_Nr_31_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=31$, using eigenmodes of the operator\label{fig:g0_nr31}}
+\end{figure}
+
+%\begin{itemize}
+%	\item For G0, first eigenmode ensures (the top right most figure in \ref{fig:eig_g_sep}) that if we start with Maxwellian the solution will stay at maxwellian for shorter periods in time. For longer periods the other modes will grow over time. The above is mainly due to the assembled collission operator is bound to the thermal velocity through the sampling of the experimental cross section data. 
+%	\item For G1 and G2, at 1eV $E_t$ is close to the identity matrix, since the probability of triggering a excitation or ionization reaction is low, at 1eV. 
+%	\item $E_t$ modes will depend on the background species densities, that scales the differential cross sections. 
+%\end{itemize}
+%\begin{figure}[!htbp]
+%	\includegraphics[width=0.32\textwidth]{fig/g0_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+%	\includegraphics[width=0.32\textwidth]{fig/g1_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+%	\includegraphics[width=0.32\textwidth]{fig/g2_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+%	\caption{Eigen modes for the collision operator $G0,G1,G2$ (left most, middle, and the right most) evaluated at different time points. Collision operators are assembled under 1eV, $n_i=1e18,n_e=1e18, n_o = 3.22e22$.\label{fig:eig_g_sep}}
+%\end{figure}
+%\begin{figure}[!htbp]
+%	\includegraphics[width=0.48\textwidth]{fig/g02_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+%	\includegraphics[width=0.48\textwidth]{fig/g012_Nr_7_eig_ev_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+%	\caption{Eigen modes for the collision operator $G0+G2$ (left) and $G0+G1+G2$ (the right) evaluated at different time points. Collision operators are assembled under 1eV, $n_i = 1e18, n_e=1e18, n_o = 3.22e22$.\label{fig:eig_g02_g012}}
+%\end{figure}
 
 \subsection{Handling changing temperature}
 Due to the kinetic energy loss in $e-Ar$ collisions, the thermal velocity decreases with the time. Since we use quadrature points on the normalized velocity (i.e., $\frac{v}{v_th}$) we need transform the solution from one temperature to another. If the temperature drop is significant and if we don't have enough basis functions in the radial direction, the projection between temperature cause an aliasing effect and gives larger tails. 
@@ -638,7 +668,7 @@ Let $Q_{\chi},Q_{\gamma}$ be the quadrature points in polar and azimuthal direct
 
 Therefore, for the convergence study it is reasonable to use a quadrature grid size of,$(Q_{r}, Q_{\theta}, Q_{\phi},Q_{\chi},Q_{\gamma}) =(51,8,4,64,2)$.
 
-\subsection{G0 at (1eV)}
+\subsection{G0 at (1eV) with projection and reassembly at each time step}
 \begin{table}[H]
 	\centering
 	\begin{tabular}{|c|c|c|c|c|}
@@ -661,8 +691,13 @@ Therefore, for the convergence study it is reasonable to use a quadrature grid s
 	\caption{Relative error in temperature (the left most figure) compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 collision operator. The right most figure shows the highest resolution, EEDF, mass growth, temperature evolution and the tail norm of the used basis functions.  }
 \end{figure}
 
+\begin{figure}[H]
+\includegraphics[width=0.48\textwidth]{fig/g0_tails_nr_dt.png}
+\includegraphics[width=0.48\textwidth]{fig/g02_tails_nr_dt.png}
+\caption{Tails of the spectral modes for increasing radial number of polynomials, for G0 and G0 + G2 collision operators using temperature projection and reassemblying the collision operator at each time step. \label{fig:proj_g0_g02_tails}}
+\end{figure}
 
-\subsection{G0 + G2 at (1eV)}
+\subsection{G0 + G2 at (1eV) with projection and reassembly at each time step}
 \begin{table}[H]
 	\centering
 	\begin{tabular}{|c|c|c|c|c|}
@@ -692,6 +727,51 @@ Therefore, for the convergence study it is reasonable to use a quadrature grid s
 	\caption{Relative error in number of electrons compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=9e-07 s for G0 + G2 collision operator. }
 \end{figure}
 
+\subsection{G0,G0+G1 without projection and reassembly of the collision operator}
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{|c|c|c|c|c|}
+		\hline
+		$N_r$ & $dt=1E-10$ & $dt=5E-11$ & $dt=2.5E-11$ & $dt=1.25E-11$\\
+		\hline
+		3    & \textcolor{red}{1.42649e-05} & 1.4266e-05   &  1.42665e-05   & 1.42668e-05 \\
+		7    & 6.84879e-07  & \textcolor{red}{6.84937e-07}  &  6.84965e-07   & 6.8498e-07 \\
+		15   & 2.01288e-07  & 2.01309e-07  &  \textcolor{red}{2.0132e-07}    & 2.01325e-07 \\
+		31   & 9.63185e-16  & 1.12483e-15  &  1.12487e-15   & 0 \\
+		\hline
+	\end{tabular}
+	\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 collision operator without temperature projection and collision operator reassembly. }
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{|c|c|c|c|c|}
+		\hline
+		$N_r$ & $dt=1E-10$ & $dt=5E-11$ & $dt=2.5E-11$ & $dt=1.25E-11$\\
+		\hline
+            3   & \textcolor{red}{1.42418e-05}  & 1.42429e-05  &  1.42434e-05  &  1.42437e-05\\
+            7   & 7.00786e-07  & \textcolor{red}{7.00844e-07}  &  7.00874e-07  &  7.00888e-07\\
+            15  & 2.01614e-07  & 2.01635e-07  &  \textcolor{red}{2.01646e-07}  &  2.01651e-07\\
+            31  & 1.28284e-15  & 1.12493e-15  &  1.4439e-15   &  0\\
+		\hline
+	\end{tabular}
+	\caption{Relative error in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 + G2 collision operator without temperature projection and collision operator reassembly. }
+\end{table}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.32\textwidth]{fig/g0_tails_no_proj_no_reassembly_rk4.png}
+	\includegraphics[width=0.32\textwidth]{fig/g0_tails_no_proj_no_reassembly_eig.png}
+	\includegraphics[width=0.32\textwidth]{fig/g02_tails_no_proj_no_reassembly_rk4.png}
+	\caption{Tails of the spectral modes for increasing radial number of polynomials, for G0 and G0 + G2 collision operators without using temperature projection and collision operator reassembly. The leftmost plot shows the tails evolution with RK4 timestepper, while the middle plot shows the same problem using eigen decomposition based evaluation at corresponding times for G0 collision operator, while the right most plot shows the tails for G0 + G2 with RK4 timestepper. \label{fig:proj_g0_g02_tails_no_proj}}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=1.0\textwidth]{fig/g0_proj_no_proj_temp.png}
+	\caption{Relative difference between the temperature profile, between projection and reassembly schemes and without projection and reassembly.\label{fig:proj_no_proj}}
+\end{figure}
 
 %\subsection{G0: $e + Ar \rightarrow e + Ar $ (1eV)}
 %This section presents a summary of the numerical experiments conducted on the different reactions. For the following convergence study, we study the $G0$ collision operator with energy loss modeled by \eqref{eq:g0_eloss}. 

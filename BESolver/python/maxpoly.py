@@ -4,13 +4,13 @@ import numpy as np
 # organized as [a00, a10, a11, a20, a21, a22, ... ], that is 
 # coefficients of n-degree polynomial are given by max_poly_coeffs[n*(n+1)/2]
 
-maxpoly_nmax    = 50 # max degree allowed
-maxpoly_data    = np.genfromtxt('polynomials/maxpoly_upto50.dat',delimiter=',')
+maxpoly_nmax    = 119 # max degree allowed
+maxpoly_data    = np.genfromtxt('polynomials/maxpoly_upto119.dat',delimiter=',')
 maxpoly_coeffs  = maxpoly_data[:,0]
 maxpoly_nodes   = maxpoly_data[:,1]
 maxpoly_weights = maxpoly_data[:,2]
 
-maxpoly_rec_data = np.genfromtxt('polynomials/maxpoly_upto50_recursive.dat',delimiter=',')
+maxpoly_rec_data = np.genfromtxt('polynomials/maxpoly_upto119_recursive.dat',delimiter=',')
 maxpoly_rec_a    = maxpoly_rec_data[:,0]
 maxpoly_rec_b    = maxpoly_rec_data[:,1]
 maxpoly_rec_n    = maxpoly_rec_data[:,2]

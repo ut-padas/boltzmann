@@ -8,16 +8,16 @@ from scipy.signal import savgol_filter
 import scipy.fftpack
 
 # max dofs used for represenation
-max_dofs = 50
+max_dofs = 119
 
 # bolsig+ data will be extended up to this point (if needed)
 ehat_ext_max = 49
 
 # use Gaussian quadratures or trapezoidal integration for projection
-use_gauss_for_proj = False
+use_gauss_for_proj = True
 
 # order of Gaussian quadrature used for projection
-gauss_q_order_proj = 50
+gauss_q_order_proj = 119
 
 # number of trapezoidal points used for projection
 trapz_num_q_points_proj = 100000
@@ -121,7 +121,7 @@ which_all = [0, 8, 9, 10, 11, 30]
 which_all = [0, 2, 4, 6, 8, 10, 11, 35]
 which_all = [0, 6, 11, 12, 35]
 # which_all = [10]
-# which_all = [101, 102, 103]
+which_all = [101, 102, 103]
 
 fig_data = plt.figure()
 fig_data.set_size_inches(30, 20, forward=True)
@@ -226,15 +226,15 @@ for which_idx,which in enumerate(which_all):
 
         for i in range(max_dofs):
             maxwell_coeffs[i] = np.sum(maxpolyeval(xg, i)*fg*wg)
-            laguerre_coeffs[i] = np.sum(lagpolyeval(xg**2, i)*fg*wg)
+            # laguerre_coeffs[i] = np.sum(lagpolyeval(xg**2, i)*fg*wg)
     else:
         xtrapz = np.linspace(0, 20, num=trapz_num_q_points_proj)
 
         for i in range(max_dofs):
             maxwell_coeffs[i] = np.trapz(maxpolyeval(xtrapz, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
                 / np.sqrt(np.pi) * 4.
-            laguerre_coeffs[i] = np.trapz(lagpolyeval(xtrapz**2, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
-                / np.sqrt(np.pi) * 4.
+            # laguerre_coeffs[i] = np.trapz(lagpolyeval(xtrapz**2, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
+                # / np.sqrt(np.pi) * 4.
 
     # grid to check error on
     xerror = np.linspace(min(x),max(x),num=error_num_points)
@@ -265,7 +265,7 @@ for which_idx,which in enumerate(which_all):
     for i in range(max_dofs):
 
         f_approx[0,:] += maxwell_coeffs[i]*maxpolyeval(x, i)
-        f_approx[1,:] += laguerre_coeffs[i]*lagpolyeval(x**2, i)
+        # f_approx[1,:] += laguerre_coeffs[i]*lagpolyeval(x**2, i)
         f_approx[2,:] = np.polynomial.chebyshev.chebval(2*(x-min(x))/(max(x)-min(x))-1., cheb_coeffs[0:i+1])
         f_approx[4,:] = np.polynomial.chebyshev.chebval(2*(x-min(x))/(max(x)-min(x))-1., cheb_coeffs_full[0:i+1])
         x_lin = np.linspace(min(x), max(x), i+1)
@@ -275,7 +275,7 @@ for which_idx,which in enumerate(which_all):
         f_approx[5,:]  = np.interp(x, x_lin, y_lin_full)
 
         f_approx_at_err_pts[0,:] += maxwell_coeffs[i]*maxpolyeval(xerror, i)
-        f_approx_at_err_pts[1,:] += laguerre_coeffs[i]*lagpolyeval(xerror**2, i)
+        # f_approx_at_err_pts[1,:] += laguerre_coeffs[i]*lagpolyeval(xerror**2, i)
         f_approx_at_err_pts[2,:] = np.polynomial.chebyshev.chebval(2*(xerror-min(x))/(max(x)-min(x))-1., cheb_coeffs[0:i+1])
         f_approx_at_err_pts[4,:] = np.polynomial.chebyshev.chebval(2*(xerror-min(x))/(max(x)-min(x))-1., cheb_coeffs_full[0:i+1])
         f_approx_at_err_pts[3,:] = np.interp(xerror, x_lin, y_lin)

@@ -11,12 +11,14 @@ import numpy as np
 import scipy.constants 
 import utils as BEUtils
 import collisions
+import collision_operator_spherical as colOpSp
 from tabulate import tabulate
 
 TIME_INDEX=0
 MASS_INDEX=1
 TEMP_INDEX=3
 C000_INDEX=4
+DATA_FOLDER_NAME="dat_1ev_no_proj"
 
 #f = plt.figure()
 #f.set_figwidth(100)
@@ -607,10 +609,10 @@ def g02_quasi_neutral_1ev():
 
 def g0_rk4_1ev_convergence():
 
-    file_names=[["dat_1ev/g0_dt_1.00000000E-10_Nr_3.dat",  "dat_1ev/g0_dt_5.00000000E-11_Nr_3.dat",  "dat_1ev/g0_dt_2.50000000E-11_Nr_3.dat",  "dat_1ev/g0_dt_1.25000000E-11_Nr_3.dat"],
-                ["dat_1ev/g0_dt_1.00000000E-10_Nr_7.dat",  "dat_1ev/g0_dt_5.00000000E-11_Nr_7.dat",  "dat_1ev/g0_dt_2.50000000E-11_Nr_7.dat",  "dat_1ev/g0_dt_1.25000000E-11_Nr_7.dat"],
-                ["dat_1ev/g0_dt_1.00000000E-10_Nr_15.dat", "dat_1ev/g0_dt_5.00000000E-11_Nr_15.dat", "dat_1ev/g0_dt_2.50000000E-11_Nr_15.dat", "dat_1ev/g0_dt_1.25000000E-11_Nr_15.dat"],
-                ["dat_1ev/g0_dt_1.00000000E-10_Nr_31.dat", "dat_1ev/g0_dt_5.00000000E-11_Nr_31.dat", "dat_1ev/g0_dt_2.50000000E-11_Nr_31.dat", "dat_1ev/g0_dt_1.25000000E-11_Nr_31.dat"]]
+    file_names=[[DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_3.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_7.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_15.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_31.dat"]]
 
     data = list()
     for t_res in file_names:
@@ -669,14 +671,88 @@ def g0_rk4_1ev_convergence():
     plt.show()
 
 
+    # plt.close()
+    # MNE  = data[0][0][0,MASS_INDEX]
+    # MT1  = data[0][0][0,TEMP_INDEX]
+    # VTH1             = collisions.electron_thermal_velocity(MT1)
+    # NR=[3,7,15,31]
+    # pl_lable = ["Nr=3, dt=1E-10", "Nr=7, dt=5E-11", "Nr=15, dt=2.5E-11", "Nr=31, dt=1.25E-11"]
+    # cf_sp_base   = colOpSp.CollisionOpSP(3,NR[-1])
+    # spec_base    = cf_sp_base._spec 
+    # for row in range(4):
+    #     cf_sp    = colOpSp.CollisionOpSP(3,NR[row])
+    #     spec_sp  = cf_sp._spec
+    #     for col in range(4):
+    #         data_base = data[row][col][0:len(hr_sampled[col][:,TIME_INDEX]),:]
+    #         error_mat[row,col]=0.0
+    #         num_sample_pts = 10
+    #         step_sz        = data_base.shape[0] // num_sample_pts
+    #         tt = np.zeros(num_sample_pts)
+    #         er = np.zeros(num_sample_pts)
+            
+    #         for ii,t in enumerate(range(0,data_base.shape[0],step_sz)):
+    #             grid_pts         = int(1e5)
+    #             grid_bds         = (0.0,8)
+    #             MNE1             = data_base[t,MASS_INDEX]
+    #             VTH1             = collisions.electron_thermal_velocity(data_base[t,TEMP_INDEX]) 
+    #             MW1              = BEUtils.get_maxwellian_3d(VTH1 ,MNE1)
+    #             vr1              = np.linspace(grid_bds[0]*VTH1,grid_bds[1]*VTH1,grid_pts)
+                
+
+    #             v1               = vr1/VTH1
+    #             Mr1              = MW1(v1)
+    #             Pr1              = spec_sp.Vq_r(v1).transpose()
+    #             fv1              = Mr1 * (np.dot(Pr1,data_base[t,C000_INDEX:]).reshape(-1))
+
+
+    #             MNE2             = hr_sampled[col][t,MASS_INDEX]
+    #             VTH2             = collisions.electron_thermal_velocity(hr_sampled[col][t,TEMP_INDEX]) 
+    #             MW2              = BEUtils.get_maxwellian_3d(VTH2 ,MNE2)
+    #             v2               = vr1/VTH2
+    #             Mr2              = MW2(v2)
+    #             Pr2              = spec_base.Vq_r(v2).transpose()
+    #             fv2              = Mr2 * (np.dot(Pr2,hr_sampled[col][t,C000_INDEX:]).reshape(-1))
+
+    #             # plt.plot(v1,fv1,label="fv1")
+    #             # plt.plot(v2,fv2,label="fv2")
+    #             # plt.legend()
+    #             # #plt.yscale("log")
+    #             # plt.grid()
+    #             # plt.show()
+    #             # plt.close()
+    #             # print("DT: %.16E VTH1 : %.16E MNE1: %.16E VTH2 : %.16E MNE2: %.16E |fv1-fv2| %.8E " %(abs(data_base[t,TIME_INDEX]-hr_sampled[col][t,TIME_INDEX]),VTH1, MNE1,VTH2, MNE2,np.linalg.norm(fv2-fv1)/np.linalg.norm(fv2)))
+    #             # print(np.linalg.norm(fv2-fv1)/np.linalg.norm(fv2))
+    #             assert np.allclose( (data_base[t,TIME_INDEX] - hr_sampled[col][t,TIME_INDEX]) , np.zeros_like(hr_sampled[col][t,TIME_INDEX])) , "convergence test time sample points does not match"
+    #             tt[ii] = data_base[t,TIME_INDEX]
+    #             er[ii] = np.linalg.norm((fv2-fv1))/np.linalg.norm(fv2)
+
+    #         error_mat[row,col] = np.max(er)
+    #         if row==col:
+    #             plt.plot(tt,er,label=pl_lable[row])
     
 
-def g02_rk4_1ev_convergence():
+    # plt.yscale("log")
+    # plt.grid()
+    # plt.legend()
+    # plt.xlabel("time(s)")
+    # plt.ylabel("|f2-f1|/f2")
+    # plt.show()
 
-    file_names=[["dat_1ev/g02_dt_1.00000000E-10_Nr_3.dat",  "dat_1ev/g02_dt_5.00000000E-11_Nr_3.dat",  "dat_1ev/g02_dt_2.50000000E-11_Nr_3.dat",  "dat_1ev/g02_dt_1.25000000E-11_Nr_3.dat"],
-                ["dat_1ev/g02_dt_1.00000000E-10_Nr_7.dat",  "dat_1ev/g02_dt_5.00000000E-11_Nr_7.dat",  "dat_1ev/g02_dt_2.50000000E-11_Nr_7.dat",  "dat_1ev/g02_dt_1.25000000E-11_Nr_7.dat"],
-                ["dat_1ev/g02_dt_1.00000000E-10_Nr_15.dat", "dat_1ev/g02_dt_5.00000000E-11_Nr_15.dat", "dat_1ev/g02_dt_2.50000000E-11_Nr_15.dat", "dat_1ev/g02_dt_1.25000000E-11_Nr_15.dat"],
-                ["dat_1ev/g02_dt_1.00000000E-10_Nr_31.dat", "dat_1ev/g02_dt_5.00000000E-11_Nr_31.dat", "dat_1ev/g02_dt_2.50000000E-11_Nr_31.dat", "dat_1ev/g02_dt_1.25000000E-11_Nr_31.dat"]]
+    # table_data = [
+    #     ["3" , error_mat[0,0], error_mat[0,1], error_mat[0,2], error_mat[0,3]],
+    #     ["7" , error_mat[1,0], error_mat[1,1], error_mat[1,2], error_mat[1,3]],
+    #     ["15", error_mat[2,0], error_mat[2,1], error_mat[2,2], error_mat[2,3]],
+    #     ["31", error_mat[3,0], error_mat[3,1], error_mat[3,2], error_mat[3,3]],
+    # ]
+    # print(tabulate(table_data,headers=["Nr","dt=1E-10","dt=5E-11","dt=2.5E-11","dt=1.25E-11"]))
+
+
+def g02_rk4_1ev_convergence():
+    
+    file_names=[[DATA_FOLDER_NAME+"/g02_dt_1.00000000E-10_Nr_3.dat",  DATA_FOLDER_NAME+"/g02_dt_5.00000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g02_dt_2.50000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g02_dt_1.25000000E-11_Nr_3.dat"],
+                [DATA_FOLDER_NAME+"/g02_dt_1.00000000E-10_Nr_7.dat",  DATA_FOLDER_NAME+"/g02_dt_5.00000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g02_dt_2.50000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g02_dt_1.25000000E-11_Nr_7.dat"],
+                [DATA_FOLDER_NAME+"/g02_dt_1.00000000E-10_Nr_15.dat", DATA_FOLDER_NAME+"/g02_dt_5.00000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g02_dt_2.50000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g02_dt_1.25000000E-11_Nr_15.dat"],
+                [DATA_FOLDER_NAME+"/g02_dt_1.00000000E-10_Nr_31.dat", DATA_FOLDER_NAME+"/g02_dt_5.00000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g02_dt_2.50000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g02_dt_1.25000000E-11_Nr_31.dat"]]
 
     data = list()
     for t_res in file_names:
@@ -766,7 +842,123 @@ def g02_rk4_1ev_convergence():
     plt.show()
 
 
+    # plt.close()
+    # MNE  = data[0][0][0,MASS_INDEX]
+    # MT1  = data[0][0][0,TEMP_INDEX]
+    # VTH1             = collisions.electron_thermal_velocity(MT1)
+    # NR=[3,7,15,31]
+    # pl_lable = ["Nr=3, dt=1E-10", "Nr=7, dt=5E-11", "Nr=15, dt=2.5E-11", "Nr=31, dt=1.25E-11"]
+    # cf_sp_base   = colOpSp.CollisionOpSP(3,NR[-1])
+    # spec_base    = cf_sp_base._spec 
+    # for row in range(4):
+    #     cf_sp    = colOpSp.CollisionOpSP(3,NR[row])
+    #     spec_sp  = cf_sp._spec
+    #     for col in range(4):
+    #         data_base = data[row][col][0:len(hr_sampled[col][:,TIME_INDEX]),:]
+    #         error_mat[row,col]=0.0
+    #         num_sample_pts = 10
+    #         step_sz        = data_base.shape[0] // num_sample_pts
+    #         tt = np.zeros(num_sample_pts)
+    #         er = np.zeros(num_sample_pts)
+            
+    #         for ii,t in enumerate(range(0,data_base.shape[0],step_sz)):
+    #             grid_pts         = int(1e5)
+    #             grid_bds         = (0.0,8)
+    #             MNE1             = data_base[t,MASS_INDEX]
+    #             VTH1             = collisions.electron_thermal_velocity(data_base[t,TEMP_INDEX]) 
+    #             MW1              = BEUtils.get_maxwellian_3d(VTH1 ,MNE1)
+    #             vr1              = np.linspace(grid_bds[0]*VTH1,grid_bds[1]*VTH1,grid_pts)
+                
+
+    #             v1               = vr1/VTH1
+    #             Mr1              = MW1(v1)
+    #             Pr1              = spec_sp.Vq_r(v1).transpose()
+    #             fv1              = Mr1 * (np.dot(Pr1,data_base[t,C000_INDEX:]).reshape(-1))
+
+
+    #             MNE2             = hr_sampled[col][t,MASS_INDEX]
+    #             VTH2             = collisions.electron_thermal_velocity(hr_sampled[col][t,TEMP_INDEX]) 
+    #             MW2              = BEUtils.get_maxwellian_3d(VTH2 ,MNE2)
+    #             v2               = vr1/VTH2
+    #             Mr2              = MW2(v2)
+    #             Pr2              = spec_base.Vq_r(v2).transpose()
+    #             fv2              = Mr2 * (np.dot(Pr2,hr_sampled[col][t,C000_INDEX:]).reshape(-1))
+
+    #             # plt.plot(v1,fv1,label="fv1")
+    #             # plt.plot(v2,fv2,label="fv2")
+    #             # plt.legend()
+    #             # #plt.yscale("log")
+    #             # plt.grid()
+    #             # plt.show()
+    #             # plt.close()
+    #             #print("DT: %.16E VTH1 : %.16E MNE1: %.16E VTH2 : %.16E MNE2: %.16E |fv1-fv2| %.8E " %(abs(data_base[t,TIME_INDEX]-hr_sampled[col][t,TIME_INDEX]),VTH1, MNE1,VTH2, MNE2,np.linalg.norm(fv2-fv1)/np.linalg.norm(fv2)))
+    #             #print(np.linalg.norm(fv2-fv1)/np.linalg.norm(fv2))
+    #             assert np.allclose( (data_base[t,TIME_INDEX] - hr_sampled[col][t,TIME_INDEX]) , np.zeros_like(hr_sampled[col][t,TIME_INDEX])) , "convergence test time sample points does not match"
+    #             tt[ii] = data_base[t,TIME_INDEX]
+    #             er[ii] = np.linalg.norm((fv2-fv1))/np.linalg.norm(fv2)
+
+    #         error_mat[row,col] = np.max(er)
+    #         if row==col:
+    #             plt.plot(tt,er,label=pl_lable[row])
     
+
+    # plt.yscale("log")
+    # plt.grid()
+    # plt.legend()
+    # plt.xlabel("time(s)")
+    # plt.ylabel("|f2-f1|/f2")
+    # plt.show()
+
+    # table_data = [
+    #     ["3" , error_mat[0,0], error_mat[0,1], error_mat[0,2], error_mat[0,3]],
+    #     ["7" , error_mat[1,0], error_mat[1,1], error_mat[1,2], error_mat[1,3]],
+    #     ["15", error_mat[2,0], error_mat[2,1], error_mat[2,2], error_mat[2,3]],
+    #     ["31", error_mat[3,0], error_mat[3,1], error_mat[3,2], error_mat[3,3]],
+    # ]
+    # print(tabulate(table_data,headers=["Nr","dt=1E-10","dt=5E-11","dt=2.5E-11","dt=1.25E-11"]))
+
+
+    
+def g0_proj_vs_no_proj():
+
+    DATA_FOLDER_NAME="dat_1ev_no_proj"
+    file_names_np=[[DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_3.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_7.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_15.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_31.dat"]]
+
+    DATA_FOLDER_NAME="dat_1ev"
+    file_names_p =[[DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_3.dat",  DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_3.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_7.dat",  DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_7.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_15.dat", DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_15.dat"],
+                [DATA_FOLDER_NAME +"/g0_dt_1.00000000E-10_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_31.dat", DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_31.dat"]]
+
+
+    data_proj = list()
+    for t_res in file_names_p:
+        tmp=list()
+        for fname in t_res:
+            tmp.append(np.loadtxt(fname,skiprows=1))
+        data_proj.append(tmp)
+
+    data_no_proj = list()
+    for t_res in file_names_np:
+        tmp=list()
+        for fname in t_res:
+            tmp.append(np.loadtxt(fname,skiprows=1))
+        data_no_proj.append(tmp)
+    Nr=[3,7,15,31]
+
+    for (r,c) in ((0,0),(1,1),(2,2),(3,3)):
+        plt.plot(data_proj[r][c][:,TIME_INDEX],abs(data_proj[r][c][:,TEMP_INDEX]-data_no_proj[r][c][:,TEMP_INDEX])/data_proj[r][c][:,TEMP_INDEX],label="Nr=%d"%Nr[r])
+
+    plt.xlabel("time(s)")
+    plt.ylabel("relative error")
+    plt.grid()
+    plt.legend()
+    plt.yscale("log")
+    plt.show()
+            
 
 
 #g0_convergence()
@@ -779,3 +971,4 @@ g0_rk4_1ev_convergence()
 print("g02 convergence results")
 g02_rk4_1ev_convergence()
 
+#g0_proj_vs_no_proj()

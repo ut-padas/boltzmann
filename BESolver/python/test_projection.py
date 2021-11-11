@@ -15,6 +15,8 @@ eps_all = np.linspace(0.05, 0.55, 11)
 # eps_all = np.arange(-0.15,0.001,0.01)
 # eps_all = np.arange(-0.15,0.2,0.05)
 eps_all = [-0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15, 0.20]
+# eps_all = [-0.015, -0.010, -0.005, 0, 0.005, 0.010, 0.015, 0.020]
+# eps_all = [0.0015]
 
 # use Gaussian quadratures or trapezoidal integration for projection
 use_gauss_for_proj = False
@@ -36,18 +38,25 @@ maxeig_fwd = np.zeros([len(eps_all), max_dofs])
 maxeig_bwd = np.zeros([len(eps_all), max_dofs])
 maxeig_cyc = np.zeros([len(eps_all), max_dofs])
 
-a_exp = np.ones(max_dofs)*np.exp(-np.linspace(0, 10, max_dofs))*1.e-13
-a_noise = np.random.rand(max_dofs)*1.e-16
+a_exp = np.ones(max_dofs)*np.exp(-np.linspace(0, 100, max_dofs))*0
+a_noise = np.random.rand(max_dofs)*1.e-14
+a_exp[0] = 1
 
 # for i in range(max_dofs):
 #     if abs(a[i]) < 1.e-15:
 #         a[i] = 0
 
 proj_mat_fwd = np.zeros([max_dofs, max_dofs])
+proj_mat_fwd_pen = np.zeros([max_dofs, max_dofs])
+proj_mat_fwd_over = np.zeros([max_dofs, max_dofs])
+proj_mat_fwd_back = np.zeros([max_dofs, max_dofs])
 proj_mat_bwd = np.zeros([max_dofs, max_dofs])
+proj_mat_bwd2 = np.zeros([max_dofs, max_dofs])
 
 eigs_fwd = np.zeros([len(eps_all), max_dofs])
+eigs_fwd2 = np.zeros([len(eps_all), max_dofs])
 eigs_bwd = np.zeros([len(eps_all), max_dofs])
+eigs_bwd2 = np.zeros([len(eps_all), max_dofs])
 
 b_exp = np.zeros([len(eps_all), max_dofs])
 b_noise = np.zeros([len(eps_all), max_dofs])
@@ -57,6 +66,9 @@ c_exp_noise = np.zeros([len(eps_all), max_dofs])
 f_exp = np.zeros([len(eps_all), max_dofs])
 f_noise = np.zeros([len(eps_all), max_dofs])
 
+overstep = 5
+pen = 1.e-14
+
 for eps_idx, eps in enumerate(eps_all):
     eps_fwd = eps
     eps_bwd = -eps/(1.+eps)
@@ -65,21 +77,90 @@ for eps_idx, eps in enumerate(eps_all):
         norm = np.sum(maxpolyeval(xg, i)**2*wg)
         for j in range(max_dofs):
             proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd), i)*wg)/norm
-            proj_mat_bwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.-eps_bwd), i)*wg)/norm
+            proj_mat_fwd_over[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+overstep*eps_fwd), i)*wg)/norm
+            proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd)*(1.+overstep*eps_fwd), i)*wg)/norm
+            proj_mat_bwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_bwd), i)*wg)/norm
+            proj_mat_bwd2[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+2.*eps_bwd), i)*wg)/norm
 
+    proj_mat_fwd_pen = np.matmul(np.transpose(proj_mat_bwd),proj_mat_bwd) + pen*np.eye(max_dofs,max_dofs)
+    proj_mat_fwd_pen = np.matmul(np.linalg.inv(proj_mat_fwd_pen),np.transpose(proj_mat_bwd))
+    proj_mat_fwd = np.linalg.inv(proj_mat_bwd)
+    proj_mat_fwd_over = np.matmul(proj_mat_fwd_back, proj_mat_fwd_over)
+    proj_mat_bwd2 = np.matmul(proj_mat_fwd, proj_mat_bwd2)
     eigs_fwd[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_fwd)), [1,max_dofs])
+    eigs_fwd2[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_fwd_over)), [1,max_dofs])
     eigs_bwd[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_bwd)), [1,max_dofs])
+    eigs_bwd2[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_bwd2)), [1,max_dofs])
+
+    # w, v = np.linalg.eig(proj_mat_bwd)
+    # c_noise = np.linalg.solve(v, a_exp)
+    # c_noise2 = np.linalg.solve(v, a_noise+a_exp)
+    # plt.semilogy(abs(c_noise-c_noise2)/abs(c_noise),'-o')
+    # plt.semilogy(abs(np.real(c_noise)),'-o')
+    # plt.semilogy(abs(np.imag(c_noise)),'-o')
+    # plt.semilogy(abs(np.real(c_noise2)),'-*')
+    # plt.semilogy(abs(np.imag(c_noise2)),'-*')
+    # plt.show()
+    # if eps > 0:
+    #     c_noise[0:5] = 0
+    # else:
+    #     c_noise[-5:] = 0
+    # c_noise = np.matmul(v, c_noise)
 
     if abs(eps) < 1.e-15:
         b_exp[eps_idx,:] = a_exp
         b_noise[eps_idx,:] = a_noise
+        # b_noise[eps_idx,:] = c_noise
         eps_all[eps_idx] = 0
     else:
-        b_exp[eps_idx,:] = np.matmul(proj_mat_fwd, a_exp)
-        b_noise[eps_idx,:] = np.matmul(proj_mat_fwd, a_noise)
+        # b_exp[eps_idx,:] = np.matmul(proj_mat_fwd, a_exp)
+        # b_noise[eps_idx,:] = np.matmul(proj_mat_fwd, a_noise)
+        # b_exp[eps_idx,:] = np.matmul(proj_mat_fwd, a_exp)
+        # b_noise[eps_idx,:] = np.matmul(proj_mat_fwd, a_noise)
+        b_exp[eps_idx,:] = np.matmul(proj_mat_fwd_pen, a_exp)
+        b_noise[eps_idx,:] = np.matmul(proj_mat_fwd_pen, a_noise)
+        # b_noise[eps_idx,:] += a_noise
+        # b_exp[eps_idx,:] = np.matmul(proj_mat_bwd, b_exp[eps_idx,:])
+        # b_noise[eps_idx,:] = np.matmul(proj_mat_bwd, b_noise[eps_idx,:])
+        # b_noise[eps_idx,:] = np.matmul(proj_mat_fwd, c_noise)
+        # b_exp[eps_idx,:] = a_exp
+        # b_noise[eps_idx,:] = np.real(c_noise)
 
+# plt.semilogy(np.transpose(eigs_fwd), ':')
+# plt.semilogy(np.transpose(eigs_fwd2))
+# plt.ylabel('Magnitude')
+# plt.xlabel('Eigenvalue no.')
+# plt.grid()
+# plt.legend(['$\epsilon=$'+str(eps) for eps in eps_all])
+# plt.show()
 
 eps0 = 0.001
+overstep = 10
+
+# for eps_idx, eps in enumerate(eps_all):
+
+#     c_exp_noise[eps_idx,:] = a_exp+a_noise
+
+#     if eps > 0:
+#         n = int(np.ceil(np.log(1.+eps)/np.log(1.+eps0)))
+#     else:
+#         n = int(np.ceil(np.log(1.+eps)/np.log(1.-eps0)))
+
+#     if n > 0:
+#         eps_fwd = (1.+eps)**(1/n) - 1.
+
+#         for i in range(max_dofs):
+#             norm = np.sum(maxpolyeval(xg, i)**2*wg)
+#             for j in range(max_dofs):
+#                 proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+overstep*eps_fwd), i)*wg)/norm
+#                 proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg*(1.+overstep*eps_fwd), i)*wg)/norm
+
+#         for i in range(n):
+#             # for j in range(max_dofs):
+#             #     if abs(c_exp_noise[eps_idx,j]) < 1.e-14:
+#             #         c_exp_noise[eps_idx,j] = 0
+#             c_exp_noise[eps_idx,:] = np.matmul(proj_mat_fwd, c_exp_noise[eps_idx,:])
+#             c_exp_noise[eps_idx,:] = np.matmul(proj_mat_fwd_back, c_exp_noise[eps_idx,:])
 
 for eps_idx, eps in enumerate(eps_all):
 
@@ -92,8 +173,6 @@ for eps_idx, eps in enumerate(eps_all):
 
     if n > 0:
         eps_fwd = (1.+eps)**(1/n) - 1.
-
-        print(eps, n, eps_fwd)
 
         for i in range(max_dofs):
             norm = np.sum(maxpolyeval(xg, i)**2*wg)
@@ -132,7 +211,6 @@ plt.grid()
 plt.legend(['$\epsilon=$'+str(eps) for eps in eps_all])
 
 plt.subplot(1,4,4)
-plt.show()
 plt.semilogy(abs(np.transpose(c_exp_noise)))
 plt.gca().set_prop_cycle(None)
 plt.semilogy(abs(np.transpose(b_exp+b_noise)),':')

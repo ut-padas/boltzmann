@@ -157,7 +157,15 @@ class Laguerre(Basis):
         return lagpoly.lagpolyweight
 
 
-
+def uniform_simpson(domain, pts):
+    assert pts%2==1, "simpson requires even number of intervals"
+    assert pts>1   , "composite simpson require more than 1"
+    gx = np.linspace(domain[0],domain[1],pts)
+    dx = (domain[1]-domain[0])/(pts-1)
+    gw = np.ones_like(gx) * (dx/3.0)
+    gw[range(2,pts-1,2)]  *= 2.0
+    gw[range(1,pts,2)]    *= 4.0
+    return gx,gw
 
 
 

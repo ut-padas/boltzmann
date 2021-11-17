@@ -29,10 +29,11 @@ class CollisionOpSP():
     direc delta distribution function. 
     """
     
-    def __init__(self,dim,p_order) -> None:
+    def __init__(self,dim,p_order,q_mode=sp.QuadMode.GMX) -> None:
         self._dim  = dim
         self._p    = p_order
-        self._spec = sp.SpectralExpansionSpherical(self._p,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM) 
+        self._spec = sp.SpectralExpansionSpherical(self._p,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM)
+        self._spec._q_mode = q_mode
         self.__alloc_internal_vars()
 
     def __alloc_internal_vars(self):
@@ -45,7 +46,13 @@ class CollisionOpSP():
         spec_sp                = self._spec
         self._num_p            = spec_sp._p +1
         self._num_sh           = len(spec_sp._sph_harm_lm)
-        [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+
+        if spec_sp._q_mode == sp.QuadMode.GMX:
+            [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+        elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+            num_q                  = self._NUM_Q_VR
+            [self._gmx,self._gmw]  = basis.uniform_simpson((1e-8,10),num_q)
+        
         weight_func            = spec_sp._basis_p.Wx()
 
         legendre                  = basis.Legendre()
@@ -110,8 +117,15 @@ class CollisionOpSP():
         #total_cs_q = AR_NEUTRAL_N * g.total_cross_section(energy_ev)
         
         P_kr = spec_sp.Vq_r(gmx)
-        M_r  = gmx* V_TH
-        
+
+        if spec_sp._q_mode == sp.QuadMode.GMX:
+            M_r =  gmx * V_TH 
+        elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+            M_r  = np.sqrt(16/np.pi)*np.exp(-gmx**2) * (gmx**3) *V_TH 
+        else:
+            Mr=None
+            print("Unknown quadrature mode- inner product weight function is set to none.")
+
         C_r  = M_r * (total_cs_q)
         Wg = gmw.reshape(-1,len(gmw))
         
@@ -153,7 +167,14 @@ class CollisionOpSP():
             Sd      = g.post_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
             Pp_kr   = spec_sp.Vq_r(Sd[0]/V_TH) 
             Yp_lm   = spec_sp.Vq_sph(Sd[1],Sd[2])
-            Mp_r    = (scattering_mg[0]*V_TH)
+
+            if spec_sp._q_mode == sp.QuadMode.GMX:
+                Mp_r    = (scattering_mg[0])*V_TH
+            elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+                Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
+            else:
+                Mr=None
+                print("Unknown quadrature mode- inner product weight function is set to none.")
             
             Ap_klm = np.array([diff_cs * Mp_r* Pp_kr[i] * Yp_lm[j] for i in range(num_p) for j in range(num_sh)])
             Ap_klm = Ap_klm.reshape(tuple([num_p,num_sh]) + scattering_mg[0].shape)
@@ -178,7 +199,15 @@ class CollisionOpSP():
             for Sd in Sd_particles:
                 Pp_kr   = spec_sp.Vq_r(Sd[0]/V_TH) 
                 Yp_lm   = spec_sp.Vq_sph(Sd[1],Sd[2])
-                Mp_r    = (scattering_mg[0]*V_TH)
+
+                if spec_sp._q_mode == sp.QuadMode.GMX:
+                    Mp_r    = (scattering_mg[0]*V_TH)
+                elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+                    Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
+                else:
+                    Mr=None
+                    print("Unknown quadrature mode- inner product weight function is set to none.")
+
                 num_p   = spec_sp._p+1
                 num_sh  = len(spec_sp._sph_harm_lm)
                 
@@ -204,6 +233,7 @@ class CollisionOpSP():
         """
         loop based (slow) + part of the coll op
         \int_r^3 \int_s2 f(v0) dw
+        !Note: only works with gauss-maxwell quadrature points
         """
         V_TH         = vth 
         ELE_VOLT     = collisions.ELECTRON_VOLT
@@ -283,6 +313,7 @@ class CollisionOpSP():
         """
         loop based (slow)  + part of the coll op
         \int_r^3 \int_s2 f(v1) dw
+        !Note: only works with gauss-maxwell quadrature points
         """
         V_TH         = vth 
         ELE_VOLT     = collisions.ELECTRON_VOLT

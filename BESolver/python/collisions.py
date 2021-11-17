@@ -200,7 +200,7 @@ class Collisions(abc.ABC):
         #v = v.reshape(num_v,1)
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
         total_cs  = self._total_cs_interp1d(energy_ev)
-        diff_cs   = (total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
+        diff_cs   = 2e-20 * np.ones_like(v) #total_cs#(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
         return diff_cs
 
     @abc.abstractmethod

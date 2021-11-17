@@ -80,8 +80,16 @@ for v_theta_i, v_theta in enumerate(theta_q):
 
 print(q_mat)
 
+def test_simpson():
+    fx = lambda x : np.cos(x)**2 + np.sin(x)**2
+    gx,gw=basis.uniform_simpson((0,np.pi/2),411)
+    m  = fx(gx)
+    qfx=np.dot(m,gw)
+    q_abs = np.pi/2
+    print("qFx: ",qfx)
+    print("error: ",abs(qfx-q_abs))
 
-
+#test_simpson()
 #1d
 # se= sp.SpectralExpansion(1,1,hermiteE)
 # M=se.compute_mass_matrix(is_diagonal=True)

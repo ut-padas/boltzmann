@@ -76,7 +76,8 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sph_harm = len(sph_harm_lm)
-    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    # [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(max(NUM_Q_VR,100))
     weight_func  = spec_sp._basis_p.Wx()
     
     legendre     = basis.Legendre()

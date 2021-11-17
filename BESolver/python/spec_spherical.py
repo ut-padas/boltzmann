@@ -4,7 +4,13 @@
 """
 import numpy as np
 import basis 
+import enum
 from scipy.special import sph_harm
+import enum
+
+class QuadMode(enum.Enum):
+    GMX     = 0 # default
+    SIMPSON = 1
 
 class SpectralExpansionSpherical:
     """
@@ -24,6 +30,7 @@ class SpectralExpansionSpherical:
 
         self._basis_p  = basis_p
         self._basis_1d = list()
+        self._q_mode   = QuadMode.GMX
         
         for deg in range(self._p+1):
             self._basis_1d.append(self._basis_p.Pn(deg,self._domain,self._window))
@@ -83,39 +90,16 @@ class SpectralExpansionSpherical:
         if the chosen basis is orthogonal set is_diagonal to True. 
         Given we always use spherical harmonics we will integrate them exactly
         """
-        num_p = self._p+1
-        num_sph_harm = len(self._sph_harm_lm)
+        num_p  = self._p+1
+        num_sh = len(self._sph_harm_lm)
         [gx, gw] = self._basis_p.Gauss_Pn(num_p)
-        
-        # note : r_id, c_id defined inside the loops on purpose (loops become pure nested), assuming it will allow
-        # more agressive optimizations from the python
-        if(is_diagonal):
-            mm_diag = self.create_vec()
-            for pi in range(num_p):
-                for yi in range(num_sph_harm): # todo: optimize this out
-                    # quadrature loop. 
-                    for qi,v_abs in enumerate(gx): # loop over quadrature points
-                        r_id = pi*num_sph_harm + yi
-                        mm_diag[r_id] += gw[qi] * (self.basis_eval_radial(v_abs, pi)**2)
-            return mm_diag
-            
-        else:
-            mm = self.create_mat()
-            # loop over polynomials i
-            for yi in range(num_sph_harm): # todo: optimize this out
-                for pi in range(num_p):
-                    # loop over polynomials j
-                    for yj in range(num_sph_harm): # todo: optimize this out
-                        for pj in range(num_p):
-                            # quadrature loop. 
-                            for qi,v_abs in enumerate(gx): # loop over quadrature points
-                                r_id = pi*num_sph_harm + yi
-                                c_id = pj*num_sph_harm + yj
-                                # this is only true for spherical harmonic basis. 
-                                if (yi is not yj):
-                                    continue
-                                mm[r_id,c_id]+= gw[qi] * self.basis_eval_radial(v_abs, pi) * self.basis_eval_radial(v_abs, pj)
-            return mm
+        Vr = self.Vq_r(gx)
+        mr = np.ones_like(gx) #((gx**2) * maxwellian(gx) * (v_th**3))
+        mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
+        mm = np.dot(mm,gw).reshape(num_p,num_p)
+        Lm = np.eye(num_sh)
+        mm = np.kron(mm,Lm).reshape(num_p*num_sh,num_p*num_sh)
+        return mm
 
     def compute_maxwellian_mm(self,maxwellian,v_th):
         """
@@ -123,26 +107,14 @@ class SpectralExpansionSpherical:
         for generic maxwellian mm might not be diagonal. 
         """
         num_p = self._p+1
-        num_sph_harm = len(self._sph_harm_lm)
+        num_sh = len(self._sph_harm_lm)
         [gx, gw] = self._basis_p.Gauss_Pn(num_p)
-        w_func   =self._basis_p.Wx()
-        mm = self.create_mat()
-        # loop over polynomials i
-        for yi in range(num_sph_harm): # todo: optimize this out
-            for pi in range(num_p):
-                # loop over polynomials j
-                for yj in range(num_sph_harm): # todo: optimize this out
-                    for pj in range(num_p):
-                        # quadrature loop. 
-                        for qi,v_abs in enumerate(gx): # loop over quadrature points
-                            r_id = pi*num_sph_harm + yi
-                            c_id = pj*num_sph_harm + yj
-                            # this is only true for spherical harmonic basis. 
-                            if (yi is not yj):
-                                continue
-                            mr = 1#((v_abs**2) * maxwellian(v_abs) * (v_th**3))/w_func(v_abs)
-                            mm[r_id,c_id]+= gw[qi] * mr * self.basis_eval_radial(v_abs, pi) * self.basis_eval_radial(v_abs, pj)
-        
+        Vr = self.Vq_r(gx)
+        mr = np.ones_like(gx) #((gx**2) * maxwellian(gx) * (v_th**3))
+        mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
+        mm = np.dot(mm,gw).reshape(num_p,num_p)
+        Lm = np.eye(num_sh)
+        mm = np.kron(mm,Lm).reshape(num_p*num_sh,num_p*num_sh)
         return mm
 
     def Vq_r(self, v_r, scale=1):

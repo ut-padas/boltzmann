@@ -41,8 +41,7 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
     MTEMP = collisions.electron_temperature(MVTH)
     COL_OP_TEMP_TOL = ts_tol
     TAIL_NORM_INDEX = (spec_sp._p+1) * len(spec_sp._sph_harm_lm) // 2
-    IO_COUT_FEQ     = 1
-
+    
     dt_tau = 1/collisions.PLASMA_FREQUENCY
     print("==========================================================================")
 
@@ -149,8 +148,7 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     TAIL_NORM_INDEX = (spec_sp._p+1) * len(spec_sp._sph_harm_lm) // 2
-    IO_COUT_FEQ     = 1
-
+    
     dt_tau = 1/collisions.PLASMA_FREQUENCY
     print("==========================================================================")
 
@@ -184,15 +182,19 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1)
     ode_solver.set_initial_value(h_init,t=0.0)
 
-    fout = open(OUTPUT_FILE_NAME, "w")
+    fout   = open(OUTPUT_FILE_NAME, "w")
+    t_step = 0
     while ode_solver.successful() and ode_solver.t < t_end:
         t_curr = ode_solver.t
+        if(t_step % IO_COUT_FEQ == 0):
+            ht     = ode_solver.y
+            dat_ht = np.append(np.array([t_curr]),ht)
+            np.savetxt(fout,dat_ht,newline=" ")
+            print("",file=fout)
+
         ode_solver.integrate(ode_solver.t + dt)
-        ht     = ode_solver.y
-        dat_ht = np.append(np.array([t_curr]),ht)
-        np.savetxt(fout,dat_ht,newline=" ")
-        print("",file=fout)
-    
+        t_step+=1
+        
     fout.close()
 
 
@@ -239,8 +241,8 @@ OUTPUT_FILE_NAME = args.out_fname
 
 ### mpi to run multiple convergence study runs. 
 ## ============================================
-CONV_NR    = np.array([4,8,16,32,64])
-CONV_STEPS = np.array([1e4,2e4,4e4,8e4,16e4])
+CONV_NR      = np.array([4,8,16,32,64])
+CONV_STEPS   = np.array([1e4,2e4,4e4,8e4,16e4])
 CONV_DT    = args.T_END/CONV_STEPS
 RESTORE_SOLVER = args.restore
 INIT_EV    = args.electron_volt
@@ -250,8 +252,11 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 npes = comm.Get_size()
 
-args.T_DT         = CONV_DT[rank%len(CONV_DT)]
-args.NUM_P_RADIAL = CONV_NR[rank//len(CONV_DT)]
+IO_COUT_FEQ  = (1<<rank) * 100
+#args.T_DT         = CONV_DT[rank%len(CONV_DT)]
+#args.NUM_P_RADIAL = CONV_NR[rank//len(CONV_DT)]
+args.T_DT         = CONV_DT[rank]
+args.NUM_P_RADIAL = CONV_NR[rank]
 params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=args.NUM_P_RADIAL
 params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 print(params.BEVelocitySpace.VELOCITY_SPACE_DT)

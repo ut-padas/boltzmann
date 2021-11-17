@@ -961,14 +961,50 @@ def g0_proj_vs_no_proj():
             
 
 
+def g0_conv_plot():
+
+    f_names=[
+                DATA_FOLDER_NAME+"/g0_dt_1.00000000E-10_Nr_4.dat",
+                DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_8.dat",
+                DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_16.dat",
+                DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_32.dat",
+                DATA_FOLDER_NAME+"/g0_dt_6.25000000E-12_Nr_64.dat" 
+            ]
+    
+    TIME_INDEX=0
+    C000_INDEX=1
+    
+    NR   = [4, 8, 16, 32, 64]
+    DT   = [1e-10, 5e-11, 2.5e-11, 1.25e-11, 6.25e-12]
+    data = list()
+    
+    for f in f_names:
+        data.append(np.loadtxt(f))
+
+    import matplotlib.pylab as plt
+    for i in range(len(NR)):
+        nr = NR[i]
+        tail_index = (nr+1)
+        tail_norm = np.linalg.norm(data[i][:,C000_INDEX +  tail_index//2: C000_INDEX + tail_index],axis=1)/np.linalg.norm(data[i][:,C000_INDEX: C000_INDEX + tail_index],axis=1)
+        plt.plot( data[i][:,TIME_INDEX], tail_norm,label="nr= %d dt=%.2E"%(nr,DT[i]))
+    
+    plt.xlabel("time (s)")
+    plt.ylabel("tail norm")
+    plt.yscale("log")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
+g0_conv_plot()
 #g0_convergence()
 #g02_quasi_neutral()
 #g02_quasi_neutral_1ev()
 
-print("g0 convergence results")
-g0_rk4_1ev_convergence()
+#print("g0 convergence results")
+#g0_rk4_1ev_convergence()
 
-print("g02 convergence results")
-g02_rk4_1ev_convergence()
+#print("g02 convergence results")
+#g02_rk4_1ev_convergence()
 
 #g0_proj_vs_no_proj()

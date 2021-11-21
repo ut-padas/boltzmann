@@ -7,6 +7,8 @@ import spec_spherical
 import basis
 import scipy.constants
 
+MAX_GMX_Q_VR_PTS=118
+
 def maxwellian_normalized(v_abs):
     """
     Normalized Maxwellian without 
@@ -65,7 +67,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     \int_v f(v) dv
     """
     if NUM_Q_VR is None:
-        NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+        NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -77,7 +79,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sph_harm = len(sph_harm_lm)
     # [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(max(NUM_Q_VR,100))
+    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
     weight_func  = spec_sp._basis_p.Wx()
     
     legendre     = basis.Legendre()
@@ -132,7 +134,7 @@ def compute_func_projection_coefficients(spec_sp: spec_spherical.SpectralExpansi
     should be compatible with the weight function of the polynomials. 
     """
     if NUM_Q_VR is None:
-        NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+        NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -185,7 +187,7 @@ def compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp: spec_spherical.SpectralExpansionSpher
     computes the \int_{R^3} M(v_a) f(v_a) Pi(vth_1) Pj(vth_2) dv
     """
     if NUM_Q_VR is None:
-        NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+        NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT

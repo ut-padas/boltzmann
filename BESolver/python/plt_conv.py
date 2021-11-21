@@ -5,14 +5,16 @@ import matplotlib as mpl
 #mpl.rcParams['text.usetex'] = True
 #mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 import matplotlib.pyplot as plt
-import spec_spherical
+import spec_spherical as sp
 import argparse
 import numpy as np
 import scipy.constants 
 import utils as BEUtils
 import collisions
 import collision_operator_spherical as colOpSp
+import parameters as params
 from tabulate import tabulate
+
 
 TIME_INDEX=0
 MASS_INDEX=1
@@ -963,37 +965,112 @@ def g0_proj_vs_no_proj():
 
 def g0_conv_plot():
 
-    f_names=[
-                DATA_FOLDER_NAME+"/g0_dt_1.00000000E-10_Nr_4.dat",
-                DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_8.dat",
-                DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_16.dat",
-                DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_32.dat",
-                DATA_FOLDER_NAME+"/g0_dt_6.25000000E-12_Nr_64.dat" 
-            ]
-    
-    TIME_INDEX=0
-    C000_INDEX=1
-    
-    NR   = [4, 8, 16, 32, 64]
-    DT   = [1e-10, 5e-11, 2.5e-11, 1.25e-11, 6.25e-12]
-    data = list()
-    
-    for f in f_names:
-        data.append(np.loadtxt(f))
+    for mm in range(0,8):
+        DATA_FOLDER_NAME="dat_1ev_cs_m"+str(mm)
+        EV = 1.0
 
-    import matplotlib.pylab as plt
-    for i in range(len(NR)):
-        nr = NR[i]
-        tail_index = (nr+1)
-        tail_norm = np.linalg.norm(data[i][:,C000_INDEX +  tail_index//2: C000_INDEX + tail_index],axis=1)/np.linalg.norm(data[i][:,C000_INDEX: C000_INDEX + tail_index],axis=1)
-        plt.plot( data[i][:,TIME_INDEX], tail_norm,label="nr= %d dt=%.2E"%(nr,DT[i]))
+        params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
+        params.BEVelocitySpace.NUM_Q_VR    = 118
+        params.BEVelocitySpace.NUM_Q_VT    = 2
+        params.BEVelocitySpace.NUM_Q_VP    = 2
+        params.BEVelocitySpace.NUM_Q_CHI   = 2
+        params.BEVelocitySpace.NUM_Q_PHI   = 2
+        
+        collisions.AR_NEUTRAL_N=3.22e22
+        collisions.MAXWELLIAN_N=1e18
+        collisions.AR_IONIZED_N=1e18
+        collisions.MAXWELLIAN_TEMP_K   = EV * collisions.TEMP_K_1EV
+        collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+        VTH = collisions.ELECTRON_THEMAL_VEL
+        maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+
+        f_names=[
+                    DATA_FOLDER_NAME+"/g0_dt_1.00000000E-10_Nr_4.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_8.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_16.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_32.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_6.25000000E-12_Nr_64.dat" 
+                ]
+        
+        TIME_INDEX=0
+        C000_INDEX=1
+        
+        NR   = [4, 8, 16, 32, 64]
+        DT   = [1e-10, 5e-11, 2.5e-11, 1.25e-11, 6.25e-12]
+        data = list()
+        
+        for f in f_names:
+            data.append(np.loadtxt(f))
+            #print(data[-1].shape)
+
+        import matplotlib.pylab as plt
+        for i in range(len(NR)):
+            nr = NR[i]
+            tail_end   = (nr+1)
+            tail_begin = tail_end//2
+            tail_norm = np.linalg.norm(data[i][:,C000_INDEX + tail_begin: C000_INDEX + tail_end],axis=1)/np.linalg.norm(data[i][:,C000_INDEX: C000_INDEX + tail_end],axis=1)
+            plt.plot(data[i][:,TIME_INDEX], tail_norm,label="nr= %d dt=%.2E"%(nr,DT[i]))
+        
+        plt.xlabel("time (s)")
+        plt.ylabel("tail norm")
+        plt.yscale("log")
+        plt.legend()
+        plt.grid()
+        fname=DATA_FOLDER_NAME+"_tail.png"
+        plt.savefig(fname)
+        plt.close()
+
+        temperature = np.zeros((len(NR),data[0].shape[0]))
+
+        for i in range(len(NR)):
+            nr = NR[i]
+            params.BEVelocitySpace().VELOCITY_SPACE_POLY_ORDER=nr
+            cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=sp.QuadMode.GMX)
+            spec_sp  = cf_sp._spec
+
+            m0_t0             = BEUtils.moment_n_f(spec_sp,np.transpose(data[i][:,C000_INDEX:]),maxwellian,VTH,0,None,None,None,1)
+            temperature[i,:]  = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,np.transpose(data[i][:,C000_INDEX:]),maxwellian,VTH,None,None,None,m0_t0,1)
+        
+        for i in range(1,len(NR)):
+            nr = NR[i]
+            # cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=sp.QuadMode.GMX)
+            # spec_sp  = cf_sp._spec
+            #rel_error = temperature[i] * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT
+            rel_error  = abs(temperature[i-1,:]-temperature[i,:])/temperature[i,:]
+            plt.plot(data[i][:,TIME_INDEX],rel_error,label="nr= %d dt=%.2E"%(NR[i-1],DT[i-1]))
+        
+        plt.xlabel("time (s)")
+        plt.ylabel("relative error")
+        plt.yscale("log")
+        plt.legend()
+        plt.grid()
+        fname=DATA_FOLDER_NAME+"_temp_error.png"
+        plt.savefig(fname)
+        plt.close()
+
+        for i in range(1,len(NR)):
+            nr = NR[i]
+            # cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=sp.QuadMode.GMX)
+            # spec_sp  = cf_sp._spec
+            rel_error = temperature[i] * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT
+            plt.plot(data[i][:,TIME_INDEX],rel_error,label="nr= %d dt=%.2E"%(NR[i-1],DT[i-1]))
+        
+        plt.xlabel("time (s)")
+        plt.ylabel("temperature (eV)")
+        #plt.yscale("log")
+        plt.legend()
+        plt.grid()
+        fname=DATA_FOLDER_NAME+"_temp.png"
+        plt.savefig(fname)
+        plt.close()
+
+
+
+
     
-    plt.xlabel("time (s)")
-    plt.ylabel("tail norm")
-    plt.yscale("log")
-    plt.legend()
-    plt.grid()
-    plt.show()
+
+
+
 
 
 g0_conv_plot()

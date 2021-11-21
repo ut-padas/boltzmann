@@ -180,11 +180,12 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
 
     from scipy.integrate import ode
     ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1)
+    #ode_solver = ode(f_rhs,jac=None).set_integrator("lsoda",method='bdf',rtol=1e-12)
     ode_solver.set_initial_value(h_init,t=0.0)
 
     fout   = open(OUTPUT_FILE_NAME, "w")
     t_step = 0
-    while ode_solver.successful() and ode_solver.t < t_end:
+    while ode_solver.successful() and t_step < CONV_STEPS[rank]: #ode_solver.t < t_end:
         t_curr = ode_solver.t
         if(t_step % IO_COUT_FEQ == 0):
             ht     = ode_solver.y
@@ -227,10 +228,10 @@ parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type
 parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
 
-
+q_mode= sp.QuadMode.SIMPSON
 params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL
 params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
-params.BEVelocitySpace.NUM_Q_VR  = 118
+params.BEVelocitySpace.NUM_Q_VR  = 1601
 params.BEVelocitySpace.NUM_Q_VT  = 2
 params.BEVelocitySpace.NUM_Q_VP  = 2
 params.BEVelocitySpace.NUM_Q_CHI = 2
@@ -241,8 +242,9 @@ OUTPUT_FILE_NAME = args.out_fname
 
 ### mpi to run multiple convergence study runs. 
 ## ============================================
+base_steps   = 1e4
 CONV_NR      = np.array([4,8,16,32,64])
-CONV_STEPS   = np.array([1e4,2e4,4e4,8e4,16e4])
+CONV_STEPS   = np.array([base_steps,base_steps*2,base_steps*4,base_steps*8,base_steps*16])
 CONV_DT    = args.T_END/CONV_STEPS
 RESTORE_SOLVER = args.restore
 INIT_EV    = args.electron_volt
@@ -270,7 +272,7 @@ collisions.MAXWELLIAN_TEMP_K   = INIT_EV * collisions.TEMP_K_1EV
 collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
     
 # instance of the collision operator
-cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode)
 spec  = cf._spec
 VTH   = collisions.ELECTRON_THEMAL_VEL
 

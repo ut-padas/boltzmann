@@ -149,7 +149,7 @@ def collision_op_conv(collision,ev=1.0):
     for nr in NR:
         params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=nr
         params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
-        params.BEVelocitySpace.NUM_Q_VR    = 51
+        params.BEVelocitySpace.NUM_Q_VR    = 118
         params.BEVelocitySpace.NUM_Q_VT    = 2
         params.BEVelocitySpace.NUM_Q_VP    = 2
         params.BEVelocitySpace.NUM_Q_CHI   = 2
@@ -880,6 +880,56 @@ def q_mode_gmx_simpson_test(collision,ev=1.0):
     
     print("||L_smp-L_gmx||/||L_gmx|| = %.16E "%(np.linalg.norm(L_smp-L_gmx)/np.linalg.norm(L_gmx)))
 
+def plot_synthetic_cs():
+
+    collisions.AR_NEUTRAL_N=3.22e22
+    collisions.MAXWELLIAN_N=1e18
+    collisions.AR_IONIZED_N=1e18
+
+    collisions.MAXWELLIAN_TEMP_K   = 1.0 * collisions.TEMP_K_1EV
+    collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+    VTH = collisions.ELECTRON_THEMAL_VEL
+
+    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+    gx,gw      = basis.uniform_simpson((1e-8,10),1601)
+    v          = gx * VTH
+    energy_ev  = (0.5 * collisions.MASS_ELECTRON * (v**2))/collisions.ELECTRON_VOLT
+    # with np.printoptions(threshold=np.inf):
+    #     print(energy_ev)
+    
+    import matplotlib.pyplot as plt
+    for m in range(0,8):
+        t_cs       = collisions.Collisions.synthetic_tcs(energy_ev,m)
+        plt.plot(energy_ev,t_cs,label="mode=%d"%m)
+    
+    
+    #plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
+def plot_maxwell_poly():
+    basis_p = basis.Maxwell()
+    x=np.linspace(0,6,10000)
+    import matplotlib.pyplot as plt
+
+    for d in range(3,7,1):
+        m  = 1<<d
+        pm = basis_p.Pn(m)
+        plt.plot(x,pm(x),label="d=%d"%m)
+    
+    plt.xlabel("x")
+    plt.ylabel("P(x)")
+    #plt.yscale("log")
+    plt.grid()
+    plt.legend()
+    #plt.savefig("maxpoly.png")
+    plt.show()
+
+        
+
 g0  = collisions.eAr_G0()
 g1  = collisions.eAr_G1()
 g2  = collisions.eAr_G2()
@@ -887,6 +937,12 @@ g0_p = collisions.eAr_G0_NoEnergyLoss()
 
 #q_mode_gmx_simpson_test([g0],1.0)
 #collision_op_conv([g0],1.0)    
-spec_convergence_collision_op([g0],1.0)
+#spec_convergence_collision_op([g0],1.0)
+
+#plot_synthetic_cs()
+plot_maxwell_poly()
+
+
+
 
 

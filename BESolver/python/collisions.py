@@ -9,6 +9,7 @@ for a given binary collision
 """
 import abc
 import numpy as np
+from numpy.lib.function_base import diff
 import cross_section
 from scipy import interpolate
 import scipy.constants
@@ -189,6 +190,149 @@ class Collisions(abc.ABC):
         """
         pass
 
+    @staticmethod
+    def synthetic_tcs(ev,mode):
+        """
+        synthetic cross-sections for testing. 
+        """
+
+        if mode==0:
+            return 2e-20 * np.ones_like(ev)
+        elif mode==1:
+            """
+            high gradient increasing
+            """
+            x0 = 0.0
+            x1 = 1
+
+            e0 = 1.24e-21
+            e1 = 2.24e-20
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs = m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode==2:
+            """
+            low gradient increasing
+            """
+            x0 = 0.0
+            x1 = 1
+
+            e0 = 1.24e-20
+            e1 = 1.44e-20
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs = m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode == 3:
+            """
+            high gradient decreasing
+            """
+            x0 = 0.0
+            x1 = 4.00000003e+00
+
+            e0 = 1.44e-20
+            e1 = 0
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs=  m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode == 4:
+            """
+            low gradient decreasing
+            """
+            x0 = 0.0
+            x1 = 5e1
+
+            e0 = 1.44e-20
+            e1 = 0
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs=  m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode==5:
+            """
+            high gradient kink
+            """
+            tcs = np.zeros_like(ev)
+
+            x0 = 0.0
+            x1 = 4.00000003e+00
+            x2 = 5e1
+
+            e0 = 3.24e-20
+            e1 = 1.00e-21
+            e2 = 3.24e-20
+
+            m2= (e2-e1)/(x2-x1)
+            mask = ev >= x1
+            tcs[mask] = e1 + (ev[mask]-x1) * m2
+
+            mask=np.logical_not(mask)
+            m1  = (e1-e0)/(x1-x0)
+            tcs[mask] = e0 + (ev[mask]-x0) * m1
+
+            #tcs[tcs<0]=0
+            return tcs
+
+        elif mode==6:
+            """
+            low gradient kink
+            """
+            tcs = np.zeros_like(ev)
+
+            x0 = 0.0
+            x1 = 4.00000003e+00
+            x2 = 5e1
+
+            e0 = 3.24e-20
+            e1 = 1.00e-20
+            e2 = 3.24e-20
+
+            m2= (e2-e1)/(x2-x1)
+            mask = ev >= x1
+            tcs[mask] = e1 + (ev[mask]-x1) * m2
+
+            mask=np.logical_not(mask)
+            m1  = (e1-e0)/(x1-x0)
+            tcs[mask] = e0 + (ev[mask]-x0) * m1
+
+            #tcs[tcs<0]=0
+            return tcs
+
+        elif mode==7:
+            """
+            low gradient kink
+            """
+            tcs = np.zeros_like(ev)
+
+            x0 = 0.0
+            x1 = 4.03503909e+00
+            x2 = 1e2
+
+            e0 = 3.24e-20
+            e1 = 1.00e-20
+            e2 = 3.24e-20
+
+            m2= (e2-e1)/(x2-x1)
+            mask = ev >= x1
+            tcs[mask] = e1 + (ev[mask]-x1) * m2
+
+            mask=np.logical_not(mask)
+            m1  = (e1-e0)/(x1-x0)
+            tcs[mask] = e0 + (ev[mask]-x0) * m1
+
+            #tcs[tcs<0]=0
+            return tcs
+
     def assemble_diff_cs_mat(self,v,chi):
         """
         computes the differential cross section matrix. 
@@ -196,13 +340,13 @@ class Collisions(abc.ABC):
         chi : np array of scattering angles
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
-        #num_v = len(v)
-        #v = v.reshape(num_v,1)
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        total_cs  = self._total_cs_interp1d(energy_ev)
-        diff_cs   = 2e-20 * np.ones_like(v) #total_cs#(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
+        #total_cs  = self._total_cs_interp1d(energy_ev)
+        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
+        total_cs   = Collisions.synthetic_tcs(energy_ev,7)
+        diff_cs    = total_cs / np.pi
         return diff_cs
-
+    
     @abc.abstractmethod
     def get_cross_section_scaling():
         pass
@@ -274,7 +418,8 @@ class eAr_G0(Collisions):
     
     def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
         if self._is_scattering_mat_assembled == False:
-            self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+            #self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
+            self._v_scale = np.sqrt(1- 2*MASS_R_EARGON)
 
         vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         vel_fac  = vr * self._v_scale

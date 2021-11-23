@@ -83,8 +83,7 @@ class Collisions(abc.ABC):
             E2 = np.array([0.0,0.0,1.0])
         else:
             E1 = np.cross(E0,ei)/np.sin(theta)
-            E2 = np.cross(E0,E1)
-
+            E2 = np.cross(E0,-E1)
         vs = np.cos(polar_angle) * E0 + np.sin(polar_angle)*np.sin(azimuthal_angle) * E1 + np.sin(polar_angle)*np.cos(azimuthal_angle) * E2
         # sanity check, 
         assert np.allclose(np.dot(vs,vs),1.0) , "vs scattering direction is not a unit vector %f " % np.dot(vs,vs) 
@@ -100,55 +99,97 @@ class Collisions(abc.ABC):
         if self._is_scattering_mat_assembled :
             return self._sc_direction_mat
         
-        check1 = np.isclose(v_theta,np.pi/2)
-        check2 = np.logical_or(np.isclose(v_phi,0),np.isclose(v_phi,np.pi))
-        check2 = np.logical_or(check2, np.isclose(v_phi,2*np.pi))
+        v_phi[np.isclose(v_phi,0)] +=1e-6
+        v_phi[np.isclose(v_phi,np.pi)] +=1e-6
+        v_phi[np.isclose(v_phi,2*np.pi)] -=1e-6
 
-        check1 = np.logical_and(check1 , check2)
-        
-        [v_theta_0, v_theta_1] = [v_theta[check1] , v_theta[np.logical_not(check1)]]
-        [v_phi_0, v_phi_1]     = [v_phi[check1]   , v_phi[np.logical_not(check1)]]
-        
-        
-        [chi_0, chi_1]         = [polar_angle[check1], polar_angle[np.logical_not(check1)]]
-        [az_0, az_1]           = [azimuthal_angle[check1], azimuthal_angle[np.logical_not(check1)]]
-        
-        t0 = np.arccos( np.cos(az_0) * np.sin(chi_0) )
-        p0 = np.arctan( np.sin(az_0) * np.tan(chi_0) )
-        p0 = np.mod(p0,2*np.pi)
+        E0        = np.zeros(v_r.shape+tuple([3]))
+        index_set = v_r>=0
 
-        f1 = np.sqrt(1 - (np.cos(v_phi_1)**2) * (np.sin(v_theta_1)**2))
+        E0[index_set,0]  = np.sin(v_theta[index_set]) * np.cos(v_phi[index_set])
+        E0[index_set,1]  = np.sin(v_theta[index_set]) * np.sin(v_phi[index_set])
+        E0[index_set,2]  = np.cos(v_theta[index_set])
 
-        W= (-np.sin(az_1) * np.sin(v_theta_1) * np.sin(v_phi_1) * np.sin(chi_1) + \
-             np.cos(v_theta_1) * (np.cos(chi_1) * f1 + np.cos(az_1) * np.cos(v_phi_1) *np.sin(v_theta_1) *np.sin(chi_1))) / f1
+        ei      = np.array([1.0,0.0,0.0])
+        theta   = np.arccos(np.dot(E0,ei))
+        s_theta = np.sin(theta[index_set])
 
-        # just to make sure, we don't get NANs in the scattering direction computations. 
-        if((np.max(np.abs(W))) > 1.0):
-            print("Scattering direction : arcos(W) , W(min,max) = (%.16E,%.16E)" %(np.min(W),np.max(W)))
-            c1= W > 1.0
-            c2= W < -1.0
-            W[c1] =1.0
-            W[c2]=-1.0
-        
-        t1 = np.arccos(W)
-        yy = np.cos(chi_1) * np.sin(v_theta_1) * f1 * np.sin(v_phi_1) + np.sin(chi_1) * ( np.cos(v_theta_1)* np.sin(az_1) + np.cos(az_1) * np.cos(v_phi_1) * (np.sin(v_theta_1)**2) * np.sin(v_phi_1))
-        xx= (np.cos(v_phi_1) * np.cos(chi_1) * np.sin(v_theta_1) * f1 - np.cos(az_1) * ( np.cos(v_theta_1)**2 + (np.sin(v_theta_1)**2) * (np.sin(v_phi_1)**2)) * np.sin(chi_1) )
-        p1 = np.arctan2(yy,xx)
-        p1 = np.mod(p1,2*np.pi)
+        E1    = np.cross(E0,ei)
+        E1[index_set,0] = E1[index_set,0]/s_theta
+        E1[index_set,1] = E1[index_set,1]/s_theta
+        E1[index_set,2] = E1[index_set,2]/s_theta
+
+        E2    = np.cross(E0,-E1)
         
         r1      = np.ones_like(v_theta)
         theta_p = np.zeros_like(v_theta)
         phi_p   = np.zeros_like(v_phi)
+
+        v0 = np.zeros_like(E0)
+
+        for i in range(3):
+            v0[index_set,i] = np.cos(polar_angle[index_set]) * E0[index_set,i]  + np.sin(polar_angle[index_set]) * np.sin(azimuthal_angle[index_set]) * E1[index_set,i] + np.sin(polar_angle[index_set]) * np.cos(azimuthal_angle[index_set]) * E2[index_set,i]
+
         
-        theta_p[check1] = t0
-        phi_p[check1]   = p0
+        r1              = np.sqrt(v0[index_set,0]**2 + v0[index_set,1]**2 + v0[index_set,2]**2)
+        r1              = r1.reshape(v_r.shape)
 
-        # print(np.isnan(t1).shape)
-        # print(v_theta[np.isnan(t1)[0]])
-        # print(v_theta[np.logical_not(check1)])
+        theta_p         = np.arccos(np.divide(v0[index_set,2], r1[index_set], where=r1[index_set] != 0))
+        phi_p           = np.arctan2(v0[index_set,1], v0[index_set,0])
+        phi_p           = phi_p % (2 * np.pi)
 
-        theta_p[np.logical_not(check1)] = t1
-        phi_p  [np.logical_not(check1)] = p1
+        theta_p = theta_p.reshape(v_r.shape)
+        phi_p   = phi_p.reshape(v_r.shape)
+
+        # check1 = np.isclose(v_theta,np.pi/2)
+        # check2 = np.logical_or(np.isclose(v_phi,0),np.isclose(v_phi,np.pi))
+        # check2 = np.logical_or(check2, np.isclose(v_phi,2*np.pi))
+
+        # check1 = np.logical_and(check1 , check2)
+        
+        # [v_theta_0, v_theta_1] = [v_theta[check1] , v_theta[np.logical_not(check1)]]
+        # [v_phi_0, v_phi_1]     = [v_phi[check1]   , v_phi[np.logical_not(check1)]]
+        
+        
+        # [chi_0, chi_1]         = [polar_angle[check1], polar_angle[np.logical_not(check1)]]
+        # [az_0, az_1]           = [azimuthal_angle[check1], azimuthal_angle[np.logical_not(check1)]]
+        
+        # t0 = np.arccos( np.cos(az_0) * np.sin(chi_0) )
+        # p0 = np.arctan( np.sin(az_0) * np.tan(chi_0) )
+        # p0 = np.mod(p0,2*np.pi)
+
+        # f1 = np.sqrt(1 - (np.cos(v_phi_1)**2) * (np.sin(v_theta_1)**2))
+
+        # W= (-np.sin(az_1) * np.sin(v_theta_1) * np.sin(v_phi_1) * np.sin(chi_1) + \
+        #      np.cos(v_theta_1) * (np.cos(chi_1) * f1 + np.cos(az_1) * np.cos(v_phi_1) *np.sin(v_theta_1) *np.sin(chi_1))) / f1
+
+        # # just to make sure, we don't get NANs in the scattering direction computations. 
+        # if((np.max(np.abs(W))) > 1.0):
+        #     print("Scattering direction : arcos(W) , W(min,max) = (%.16E,%.16E)" %(np.min(W),np.max(W)))
+        #     c1= W > 1.0
+        #     c2= W < -1.0
+        #     W[c1] =1.0
+        #     W[c2]=-1.0
+        
+        # t1 = np.arccos(W)
+        # yy = np.cos(chi_1) * np.sin(v_theta_1) * f1 * np.sin(v_phi_1) + np.sin(chi_1) * ( np.cos(v_theta_1)* np.sin(az_1) + np.cos(az_1) * np.cos(v_phi_1) * (np.sin(v_theta_1)**2) * np.sin(v_phi_1))
+        # xx= (np.cos(v_phi_1) * np.cos(chi_1) * np.sin(v_theta_1) * f1 - np.cos(az_1) * ( np.cos(v_theta_1)**2 + (np.sin(v_theta_1)**2) * (np.sin(v_phi_1)**2)) * np.sin(chi_1) )
+        # p1 = np.arctan2(yy,xx)
+        # p1 = np.mod(p1,2*np.pi)
+        
+        # r1      = np.ones_like(v_theta)
+        # theta_p = np.zeros_like(v_theta)
+        # phi_p   = np.zeros_like(v_phi)
+        
+        # theta_p[check1] = t0
+        # phi_p[check1]   = p0
+
+        # # print(np.isnan(t1).shape)
+        # # print(v_theta[np.isnan(t1)[0]])
+        # # print(v_theta[np.logical_not(check1)])
+
+        # theta_p[np.logical_not(check1)] = t1
+        # phi_p  [np.logical_not(check1)] = p1
 
         self._is_scattering_mat_assembled=True
         self._sc_direction_mat=[r1,theta_p,phi_p]
@@ -195,7 +236,7 @@ class Collisions(abc.ABC):
         """
         synthetic cross-sections for testing. 
         """
-
+        print("synthetic mode : ", mode)
         if mode==0:
             return 2e-20 * np.ones_like(ev)
         elif mode==1:
@@ -233,7 +274,7 @@ class Collisions(abc.ABC):
             high gradient decreasing
             """
             x0 = 0.0
-            x1 = 4.00000003e+00
+            x1 = 4.0
 
             e0 = 1.44e-20
             e1 = 0
@@ -265,7 +306,7 @@ class Collisions(abc.ABC):
             tcs = np.zeros_like(ev)
 
             x0 = 0.0
-            x1 = 4.00000003e+00
+            x1 = 4.0
             x2 = 5e1
 
             e0 = 3.24e-20
@@ -290,7 +331,7 @@ class Collisions(abc.ABC):
             tcs = np.zeros_like(ev)
 
             x0 = 0.0
-            x1 = 4.00000003e+00
+            x1 = 4.0
             x2 = 5e1
 
             e0 = 3.24e-20
@@ -315,7 +356,7 @@ class Collisions(abc.ABC):
             tcs = np.zeros_like(ev)
 
             x0 = 0.0
-            x1 = 4.03503909e+00
+            x1 = 4.0
             x2 = 1e2
 
             e0 = 3.24e-20
@@ -333,6 +374,29 @@ class Collisions(abc.ABC):
             #tcs[tcs<0]=0
             return tcs
 
+        elif mode==8:
+            """
+            quadratic smooth
+            """
+            tcs = np.zeros_like(ev)
+            
+            x0  = 4.03503909e+00
+            e0  = 2.20e-28
+            tcs = 3.22e-22 * (ev-x0)**2 + e0
+            return tcs
+
+        elif mode==9:
+            """
+            quadratic smooth
+            """
+            tcs = np.zeros_like(ev)
+            
+            x0  = 10.03503909e+00
+            e0  = 2.20e-28
+            tcs = 3.22e-22 * (ev-x0)**2 + e0
+            return tcs
+
+
     def assemble_diff_cs_mat(self,v,chi):
         """
         computes the differential cross section matrix. 
@@ -343,7 +407,7 @@ class Collisions(abc.ABC):
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
         #total_cs  = self._total_cs_interp1d(energy_ev)
         #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev,7)
+        total_cs   = Collisions.synthetic_tcs(energy_ev,3)
         diff_cs    = total_cs / np.pi
         return diff_cs
     

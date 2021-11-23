@@ -898,17 +898,18 @@ def plot_synthetic_cs():
     #     print(energy_ev)
     
     import matplotlib.pyplot as plt
-    for m in range(0,8):
+    for m in range(0,10):
         t_cs       = collisions.Collisions.synthetic_tcs(energy_ev,m)
-        plt.plot(energy_ev,t_cs,label="mode=%d"%m)
+        plt.plot(energy_ev,t_cs,label="f_%d"%m)
     
     
-    #plt.xscale("log")
+    plt.xscale("log")
     plt.yscale("log")
+    plt.xlabel("energy (eV)")
+    plt.ylabel("cross section (m^2)")
     plt.legend()
     plt.grid()
     plt.show()
-
 
 def plot_maxwell_poly():
     basis_p = basis.Maxwell()
@@ -928,7 +929,68 @@ def plot_maxwell_poly():
     #plt.savefig("maxpoly.png")
     plt.show()
 
-        
+def test_scattering():
+    collisions.AR_NEUTRAL_N=3.22e22
+    collisions.MAXWELLIAN_N=1e18
+    collisions.AR_IONIZED_N=1e18
+
+    ev = 1.0
+    collisions.MAXWELLIAN_TEMP_K   = ev * collisions.TEMP_K_1EV
+    collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+    VTH = 1#collisions.ELECTRON_THEMAL_VEL
+
+    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=32
+    params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
+    params.BEVelocitySpace.NUM_Q_VT    = 2
+    params.BEVelocitySpace.NUM_Q_VP    = 2
+    params.BEVelocitySpace.NUM_Q_CHI   = 2
+    params.BEVelocitySpace.NUM_Q_PHI   = 2
+
+    params.BEVelocitySpace.NUM_Q_VR    = 4
+    cf_sp_gmx    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode=sp.QuadMode.GMX)
+    spec_sp_gmx  = cf_sp_gmx._spec
+
+    incident_mg   = cf_sp_gmx._incident_mg_plus
+    scattering_mg = cf_sp_gmx._scattering_mg_plus
+    g  = collisions.eAr_G0()
+    g.reset_scattering_direction_sp_mat()
+    sd = g.compute_scattering_direction_sp(scattering_mg[0],scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
+    #print(incident_mg)
+    #print(sd)
+    # v0=np.zeros(tuple([3])+incident_mg[0].shape)
+    # v0[0] = incident_mg[0] * np.sin(incident_mg[1]) * np.cos(incident_mg[2])
+    # v0[1] = incident_mg[0] * np.sin(incident_mg[1]) * np.sin(incident_mg[2])
+    # v0[2] = incident_mg[0] * np.cos(incident_mg[1]) 
+
+    # g.compute_scattering_direction()
+    v0 = np.zeros(3)
+    v1 = np.zeros(3)
+
+    error = np.zeros_like(scattering_mg[0])
+    
+    for vr in range(params.BEVelocitySpace.NUM_Q_VR):
+        for vt in range(params.BEVelocitySpace.NUM_Q_VT):
+            for vp in range(params.BEVelocitySpace.NUM_Q_VP):
+                for s1 in range(params.BEVelocitySpace.NUM_Q_CHI):
+                    for s2 in range(params.BEVelocitySpace.NUM_Q_PHI):
+                        v0[0] = scattering_mg[0][vr,vt,vp,s1,s2] * np.sin(scattering_mg[1][vr,vt,vp,s1,s2]) * np.cos(scattering_mg[2][vr,vt,vp,s1,s2])
+                        v0[1] = scattering_mg[0][vr,vt,vp,s1,s2] * np.sin(scattering_mg[1][vr,vt,vp,s1,s2]) * np.sin(scattering_mg[2][vr,vt,vp,s1,s2])
+                        v0[2] = scattering_mg[0][vr,vt,vp,s1,s2] * np.cos(scattering_mg[1][vr,vt,vp,s1,s2])
+
+                        v1[0] = sd[0][vr,vt,vp,s1,s2] * np.sin(sd[1][vr,vt,vp,s1,s2]) * np.cos(sd[2][vr,vt,vp,s1,s2])
+                        v1[1] = sd[0][vr,vt,vp,s1,s2] * np.sin(sd[1][vr,vt,vp,s1,s2]) * np.sin(sd[2][vr,vt,vp,s1,s2])
+                        v1[2] = sd[0][vr,vt,vp,s1,s2] * np.cos(sd[1][vr,vt,vp,s1,s2])
+
+                        vs    = g.compute_scattering_direction(v0,scattering_mg[3][vr,vt,vp,s1,s2],scattering_mg[4][vr,vt,vp,s1,s2])
+
+                        #print("vs: ",vs," v1: ",v1)
+                        # print("vIn = %s s1 = %.4E s2 = %.4E \t vOut1 = %s \t vOut2 = %s " %(np.array_str(v0,precision=8),scattering_mg[3][vr,vt,vp,s1,s2],scattering_mg[4][vr,vt,vp,s1,s2],np.array_str(vs,precision=8),np.array_str(v1,precision=8)))
+                        error[vr,vt,vp,s1,s2] = np.linalg.norm(vs-v1)
+    
+    error=error.reshape(-1)
+    print("np.allclose(error,np.zeros_like(error): ",np.allclose(error,np.zeros_like(error)))
 
 g0  = collisions.eAr_G0()
 g1  = collisions.eAr_G1()
@@ -939,9 +1001,9 @@ g0_p = collisions.eAr_G0_NoEnergyLoss()
 #collision_op_conv([g0],1.0)    
 #spec_convergence_collision_op([g0],1.0)
 
-#plot_synthetic_cs()
-plot_maxwell_poly()
-
+plot_synthetic_cs()
+#plot_maxwell_poly()
+test_scattering()
 
 
 

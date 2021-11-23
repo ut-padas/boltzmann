@@ -961,11 +961,9 @@ def g0_proj_vs_no_proj():
     plt.yscale("log")
     plt.show()
             
-
-
 def g0_conv_plot():
 
-    for mm in range(0,8):
+    for mm in range(0,10):
         DATA_FOLDER_NAME="dat_1ev_cs_m"+str(mm)
         EV = 1.0
 
@@ -1063,14 +1061,6 @@ def g0_conv_plot():
         fname=DATA_FOLDER_NAME+"_temp.png"
         plt.savefig(fname)
         plt.close()
-
-
-
-
-    
-
-
-
 
 
 g0_conv_plot()

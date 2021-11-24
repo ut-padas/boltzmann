@@ -520,6 +520,49 @@ We can further write,
 \end{align}
 But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\pi}$ with $v^\prime \neq v$.  
 
+\clearpage
+\section{Advection term}
+
+\begin{align*}
+\vect{E}\cdot \nabla_{\vect{v}} f
+\end{align*}
+
+\begin{align*}
+f = M\of{\textstyle\frac{v}{\vth}} \sum_{klm} a_{klm} P_k\of{\textstyle\frac{v}{\vth}} Y_{lm}\of{\theta,\phi}
+\end{align*}
+
+\begin{align*}
+\nabla_{\vect{v}} f = \sum_{klm} a_{klm} 
+\left(
+\frac{d \left(M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}} \right)}{dv}  \vect{Y}_{lm}\of{\theta,\phi}
++
+\frac{\left(M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}} \right)}{v}  \vect{\Psi}_{lm}\of{\theta,\phi}
+\right)
+\end{align*}
+
+
+\begin{align*}
+\nabla_{\vect{v}} f = 
+\sum_{klm} 
+b_{klm} 
+M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}}  \hat{\vect{v}} Y_{lm}\of{\theta,\phi} 
++
+\sum_{klm} 
+a_{klm}
+M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}} 
+\nabla_{\vect{v}} Y_{lm}\of{\theta,\phi}
+\end{align*}
+
+\begin{align*}
+\vect{Y}_{lm}\of{\theta,\phi} &= \hat{\vect{v}} Y_{lm}\of{\theta,\phi} 
+\\
+\vect{\Psi}_{lm}\of{\theta,\phi} &= v \nabla_{\vect{v}} Y_{lm}\of{\theta,\phi}
+\end{align*}
+
+\begin{align*}
+\myint \vect{E}\cdot \nabla_{\vect{v}} f P_p\of{\textstyle\frac{v}{\vth}} Y_{qs}\of{\theta,\phi} v^2 \diff{v} \diff{\omega_{\vect{v}}}
+\end{align*}
+
 \newpage
 \section{Numerical evaluation}
 This section presents, a numerical evaluation of the spatially homogeneous Boltzmann equation without external force field. Recall, under the above assumptions we can write the collision source term as \eqref{eq:nr_be}, 
@@ -549,22 +592,22 @@ Based on the eigen decomposition of the G0, collission operator, we can plot the
 
 
 \begin{figure}[!tbhp]
-	\includegraphics[width=\textwidth]{fig/g0_Nr_3_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\includegraphics[width=\textwidth]{fig/{g0_Nr_3_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18}.png}
 	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=3$, using eigenmodes of the operator\label{fig:g0_nr3}}
 \end{figure}
 
 \begin{figure}[!tbhp]
-	\includegraphics[width=\textwidth]{fig/g0_Nr_7_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\includegraphics[width=\textwidth]{fig/{g0_Nr_7_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18}.png}
 	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=7$, using eigenmodes of the operator\label{fig:g0_nr7}}
 \end{figure}
 
 \begin{figure}[!tbhp]
-	\includegraphics[width=\textwidth]{fig/g0_Nr_15_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\includegraphics[width=\textwidth]{fig/{g0_Nr_15_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18}.png}
 	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=15$, using eigenmodes of the operator\label{fig:g0_nr15}}
 \end{figure}
 
 \begin{figure}[!tbhp]
-	\includegraphics[width=\textwidth]{fig/g0_Nr_31_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18.png}
+	\includegraphics[width=\textwidth]{fig/{g0_Nr_31_coeff_vs_time_1.00E+00_NI_1.00E+18_N0_3.22E+22_NE_1.00E+18}.png}
 	\caption{Time evolution of the mode coefficient for $G0$ collision operator with $N_r=31$, using eigenmodes of the operator\label{fig:g0_nr31}}
 \end{figure}
 
@@ -687,7 +730,7 @@ Therefore, for the convergence study it is reasonable to use a quadrature grid s
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.49\textwidth]{fig/g0_temp_convergence.png}
-	\includegraphics[width=0.49\textwidth]{fig/g0_dt_1.25000000E-11_Nr_31.dat.png}
+	\includegraphics[width=0.49\textwidth]{fig/{g0_dt_1.25000000E-11_Nr_31.dat}.png}
 	\caption{Relative error in temperature (the left most figure) compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=1e-06 s for G0 collision operator. The right most figure shows the highest resolution, EEDF, mass growth, temperature evolution and the tail norm of the used basis functions.  }
 \end{figure}
 
@@ -717,7 +760,7 @@ Therefore, for the convergence study it is reasonable to use a quadrature grid s
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.48\textwidth]{fig/g02_temp_convergence.png}
-	\includegraphics[width=0.48\textwidth]{fig/g02_dt_1.25000000E-11_Nr_31.dat.png}
+	\includegraphics[width=0.48\textwidth]{fig/{g02_dt_1.25000000E-11_Nr_31.dat}.png}
 	\caption{Relative error (the left most figure) in temperature compared at matching time points taking $N_r=31,dt=1.25E-11$ as the baseline over time horizon $T$=9e-07 s for G0 + G2 collision operator. The right most figure shows the highest resolution EEDF, mass growth, temperature evolution and the tail norm of the used basis functions.  }
 \end{figure}
 

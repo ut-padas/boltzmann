@@ -54,6 +54,46 @@ def maxpolyeval(x, p):
 
 maxpolyweight = lambda x: 4/np.sqrt(np.pi)*x**2*np.exp(-x**2)
 
+def diff_matrix(n):
+
+    D = np.zeros([n+1, n+1])
+
+    for j in range(n+1):
+
+        if j > 0:
+            D[j-1,j] = j/np.sqrt(maxpoly_rec_b[j])
+
+        if j > 1:
+            D[j-2,j] = (sum(maxpoly_rec_a[0:j]) - j*maxpoly_rec_a[j-1])/np.sqrt(maxpoly_rec_b[j]*maxpoly_rec_b[j-1])
+
+        if j > 2:
+            D[j-3,j] = (2.*np.sqrt(maxpoly_rec_b[j]*maxpoly_rec_b[j-1]) - np.sqrt(maxpoly_rec_b[j-1])*D[j-1,j] - maxpoly_rec_a[j-2]*D[j-2,j])/np.sqrt(maxpoly_rec_b[j-2])
+
+        if j > 3:
+            for i in range(4,j+1):
+                D[j-i,j] = - (np.sqrt(maxpoly_rec_b[j+2-i])*D[j+2-i,j] + maxpoly_rec_a[j+1-i]*D[j+1-i,j])/np.sqrt(maxpoly_rec_b[j+1-i])
+
+
+    return D
+
+def lift_matrix(n):
+
+    D = np.zeros([n+1, n+1])
+
+    D[0,0] = maxpoly_rec_a[0]
+    D[0,1] = maxpoly_rec_b[1]*np.sqrt(maxpoly_rec_n[0]/maxpoly_rec_n[1])
+
+    for j in range(1,n):
+
+        D[j,j-1] = np.sqrt(maxpoly_rec_n[j]/maxpoly_rec_n[j-1])
+        D[j,j]   = maxpoly_rec_a[j]
+        D[j,j+1] = maxpoly_rec_b[j+1]*np.sqrt(maxpoly_rec_n[j]/maxpoly_rec_n[j+1])
+
+    D[n,n-1] = np.sqrt(maxpoly_rec_n[n]/maxpoly_rec_n[n-1])
+    D[n,n] = maxpoly_rec_a[n]
+
+    return D
+
 # quick and dirty 
 # probably should reimplement this using ABCPolyBase
 class basis:

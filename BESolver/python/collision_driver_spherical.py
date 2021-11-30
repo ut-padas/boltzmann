@@ -142,7 +142,7 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
     print("Total ts time : (s): ",t_ts.seconds)
 
 
-def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpSP,col_list, h_init, maxwellian, vth, t_end, dt):
+def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpSP,col_list, h_init, maxwellian, vth, t_end, dt,t_tol):
     spec_sp = collOp._spec
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
@@ -174,18 +174,19 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     t_L.stop()
     print("Assembled the collision op. for Vth : ", vth_curr)
     print("Collision Operator assembly time (s): ",t_L.snap)
-
+    
     def f_rhs(t,y):
         return np.matmul(FOp,y)
 
     from scipy.integrate import ode
-    ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1)
+    ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1,rtol=t_tol)
     #ode_solver = ode(f_rhs,jac=None).set_integrator("lsoda",method='bdf',rtol=1e-12)
     ode_solver.set_initial_value(h_init,t=0.0)
 
     fout   = open(OUTPUT_FILE_NAME, "w")
     t_step = 0
-    while ode_solver.successful() and t_step < CONV_STEPS[rank]: #ode_solver.t < t_end:
+    total_steps = int(t_end/dt)
+    while ode_solver.successful() and t_step < total_steps: 
         t_curr = ode_solver.t
         if(t_step % IO_COUT_FEQ == 0):
             ht     = ode_solver.y
@@ -218,50 +219,38 @@ def restore_solver(fname):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-Nr", "--NUM_P_RADIAL", help="Number of polynomials in radial direction", type=int, default=4)
-parser.add_argument("-Te", "--T_END", help="Simulation time", type=float, default=1e-14)
-parser.add_argument("-dt", "--T_DT", help="Simulation time step size ", type=float, default=1e-15)
+parser.add_argument("-Nr", "--NUM_P_RADIAL", help="Number of polynomials in radial direction", nargs='+', type=int, default=[4,8,16,32,64])
+parser.add_argument("-Te", "--T_END", help="Simulation time", type=float, default=1e-6)
+parser.add_argument("-dt", "--T_DT", help="Simulation time step size ", type=float, default=1e-10)
 parser.add_argument("-o",  "--out_fname", help="output file name", type=str, default='.')
-parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-6)
+parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", nargs='+', type=float, default=[1e-4,1e-4/2,1e-4/4,1e-4/8,1e-4/16])
 parser.add_argument("-c", "--collision_mode", help="collision mode", type=str, default="g0")
 parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type=float, default=1.0)
 parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
 
-q_mode= sp.QuadMode.SIMPSON
-params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL
-params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
-params.BEVelocitySpace.NUM_Q_VR  = 1601
-params.BEVelocitySpace.NUM_Q_VT  = 2
-params.BEVelocitySpace.NUM_Q_VP  = 2
-params.BEVelocitySpace.NUM_Q_CHI = 2
-params.BEVelocitySpace.NUM_Q_PHI = 2
-params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
-NUM_T_STEPS      = int(args.T_END/args.T_DT)
-OUTPUT_FILE_NAME = args.out_fname
-
 ### mpi to run multiple convergence study runs. 
 ## ============================================
-base_steps   = 1e4
-CONV_NR      = np.array([4,8,16,32,64])
-CONV_STEPS   = np.array([base_steps,base_steps*2,base_steps*4,base_steps*8,base_steps*16])
-CONV_DT    = args.T_END/CONV_STEPS
-RESTORE_SOLVER = args.restore
-INIT_EV    = args.electron_volt
-
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 npes = comm.Get_size()
 
-IO_COUT_FEQ  = (1<<rank) * 100
+q_mode= sp.QuadMode.GMX
+params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL[rank]
+params.BEVelocitySpace.SPH_HARM_LM = [[0,0],[1,0],[1,1]]
+params.BEVelocitySpace.NUM_Q_VR  = 118
+params.BEVelocitySpace.NUM_Q_VT  = 16
+params.BEVelocitySpace.NUM_Q_VP  = 16
+params.BEVelocitySpace.NUM_Q_CHI = 16
+params.BEVelocitySpace.NUM_Q_PHI = 16
+params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
+OUTPUT_FILE_NAME = args.out_fname
+RESTORE_SOLVER = args.restore
+INIT_EV    = args.electron_volt
+IO_COUT_FEQ  = 10 #(1<<rank) * 100
 #args.T_DT         = CONV_DT[rank%len(CONV_DT)]
 #args.NUM_P_RADIAL = CONV_NR[rank//len(CONV_DT)]
-args.T_DT         = CONV_DT[rank]
-args.NUM_P_RADIAL = CONV_NR[rank]
-params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=args.NUM_P_RADIAL
-params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
-print(params.BEVelocitySpace.VELOCITY_SPACE_DT)
 ## ============================================
 
 if(not rank):
@@ -325,11 +314,11 @@ def g0_test():
     print("Mass assembly time (s): ", t_M.seconds)
     
     global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g0_dt_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,params.BEVelocitySpace.VELOCITY_SPACE_DT,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    OUTPUT_FILE_NAME = f"%s/g0_dt_tol_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,args.ts_tol[rank],params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     print(OUTPUT_FILE_NAME)
 
     #ode_numerical_solve(cf,[col_g0],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
-    ode_numerical_solve_no_reassembly_and_projection(cf, [col_g0], h_vec, maxwellian, VTH, args.T_END, args.T_DT)
+    ode_numerical_solve_no_reassembly_and_projection(cf, [col_g0], h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol[rank])
 
 def g1_test():
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)

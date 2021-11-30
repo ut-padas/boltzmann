@@ -881,7 +881,7 @@ def q_mode_gmx_simpson_test(collision,ev=1.0):
     print("||L_smp-L_gmx||/||L_gmx|| = %.16E "%(np.linalg.norm(L_smp-L_gmx)/np.linalg.norm(L_gmx)))
 
 def plot_synthetic_cs():
-
+    import matplotlib.pyplot as plt
     collisions.AR_NEUTRAL_N=3.22e22
     collisions.MAXWELLIAN_N=1e18
     collisions.AR_IONIZED_N=1e18
@@ -891,13 +891,13 @@ def plot_synthetic_cs():
     VTH = collisions.ELECTRON_THEMAL_VEL
 
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    gx,gw      = basis.uniform_simpson((1e-8,10),1601)
+    gx,gw      = basis.uniform_simpson((0,10),1601)
     v          = gx * VTH
     energy_ev  = (0.5 * collisions.MASS_ELECTRON * (v**2))/collisions.ELECTRON_VOLT
     # with np.printoptions(threshold=np.inf):
     #     print(energy_ev)
-    
-    import matplotlib.pyplot as plt
+    t_cs       = g0._total_cs_interp1d(energy_ev)
+    plt.plot(energy_ev,t_cs,label="ar")
     for m in range(0,10):
         t_cs       = collisions.Collisions.synthetic_tcs(energy_ev,m)
         plt.plot(energy_ev,t_cs,label="f_%d"%m)
@@ -1003,7 +1003,7 @@ g0_p = collisions.eAr_G0_NoEnergyLoss()
 
 plot_synthetic_cs()
 #plot_maxwell_poly()
-test_scattering()
+#test_scattering()
 
 
 

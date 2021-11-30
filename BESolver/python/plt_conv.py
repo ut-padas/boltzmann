@@ -983,11 +983,11 @@ def g0_conv_plot():
         maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
 
         f_names=[
-                    DATA_FOLDER_NAME+"/g0_dt_1.00000000E-10_Nr_4.dat",
-                    DATA_FOLDER_NAME+"/g0_dt_5.00000000E-11_Nr_8.dat",
-                    DATA_FOLDER_NAME+"/g0_dt_2.50000000E-11_Nr_16.dat",
-                    DATA_FOLDER_NAME+"/g0_dt_1.25000000E-11_Nr_32.dat",
-                    DATA_FOLDER_NAME+"/g0_dt_6.25000000E-12_Nr_64.dat" 
+                    DATA_FOLDER_NAME+"/g0_dt_1.00000000E-14_Nr_4.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_5.00000000E-15_Nr_8.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_2.50000000E-15_Nr_16.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_1.25000000E-15_Nr_32.dat",
+                    DATA_FOLDER_NAME+"/g0_dt_6.25000000E-16_Nr_64.dat" 
                 ]
         
         TIME_INDEX=0
@@ -1016,6 +1016,7 @@ def g0_conv_plot():
         plt.grid()
         fname=DATA_FOLDER_NAME+"_tail.png"
         plt.savefig(fname)
+        plt.show()
         plt.close()
 
         temperature = np.zeros((len(NR),data[0].shape[0]))

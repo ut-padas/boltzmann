@@ -63,7 +63,7 @@ class Collisions(abc.ABC):
         np_data      = cross_section.lxcat_cross_section_to_numpy(self._cs_fname, self._cs_fields)
         self._energy   = np_data[0]
         self._total_cs = np_data[1]
-        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear',bounds_error=False,fill_value=0.0)
+        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='cubic',bounds_error=False,fill_value=0.0)
         return
 
     @staticmethod
@@ -380,9 +380,9 @@ class Collisions(abc.ABC):
             """
             tcs = np.zeros_like(ev)
             
-            x0  = 4.03503909e+00
-            e0  = 2.20e-28
-            tcs = 3.22e-22 * (ev-x0)**2 + e0
+            x0  = 0.2 
+            e0  = 5.20e-26
+            tcs = 3.22e-18 * (ev-x0)**2 -3.22e-24 * (ev-x0)  + e0
             return tcs
 
         elif mode==9:
@@ -391,9 +391,9 @@ class Collisions(abc.ABC):
             """
             tcs = np.zeros_like(ev)
             
-            x0  = 10.03503909e+00
-            e0  = 2.20e-28
-            tcs = 3.22e-22 * (ev-x0)**2 + e0
+            x0  = 0.2 
+            e0  = 5.20e-26
+            tcs = 3.22e-21 * (ev-x0)**2 + e0
             return tcs
 
 
@@ -405,10 +405,10 @@ class Collisions(abc.ABC):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        #total_cs  = self._total_cs_interp1d(energy_ev)
+        total_cs  = self._total_cs_interp1d(energy_ev)
         #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev,3)
-        diff_cs    = total_cs / np.pi
+        #total_cs   = Collisions.synthetic_tcs(energy_ev,8)
+        diff_cs    = total_cs / (4*np.pi)
         return diff_cs
     
     @abc.abstractmethod

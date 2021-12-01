@@ -100,21 +100,22 @@ def collision_op_test(ev=1.0):
 
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER=2
     params.BEVelocitySpace.SPH_HARM_LM = [[0,0]]
-    params.BEVelocitySpace.NUM_Q_VR    = 118
-    params.BEVelocitySpace.NUM_Q_VT    = 8
-    params.BEVelocitySpace.NUM_Q_VP    = 4
-    params.BEVelocitySpace.NUM_Q_CHI   = 16
+    params.BEVelocitySpace.NUM_Q_VR    = 2
+    params.BEVelocitySpace.NUM_Q_VT    = 2
+    params.BEVelocitySpace.NUM_Q_VP    = 2
+    params.BEVelocitySpace.NUM_Q_CHI   = 2
     params.BEVelocitySpace.NUM_Q_PHI   = 2
     
     cf_sp    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     g0.reset_scattering_direction_sp_mat()
     t1 = time.time()
-    L_loop = cf_sp._Lp_l(g0,maxwellian,VTH) - cf_sp._Lm_l(g0,maxwellian,VTH)
+    L_loop = cf_sp._LOp_l(g0,maxwellian,VTH) #- cf_sp._Lm_l(g0,maxwellian,VTH)
     t2 = time.time()
     print("loop based (s) : %.10f" %(t2-t1))
-
+    
+    g0.reset_scattering_direction_sp_mat()
     t1 = time.time()
-    L_np   = cf_sp._Lp(g0,maxwellian,VTH) - cf_sp._Lm(g0,maxwellian,VTH)
+    L_np   = cf_sp._LOp(g0,maxwellian,VTH) #cf_sp._Lp(g0,maxwellian,VTH) - cf_sp._Lm(g0,maxwellian,VTH)
     t2 = time.time()
     print("np(tensor) based (s) : %.10f" %(t2-t1))
     print("np(tensor) based |L_np| : %.10f" %(np.linalg.norm(L_np)))
@@ -1001,9 +1002,11 @@ g0_p = collisions.eAr_G0_NoEnergyLoss()
 #collision_op_conv([g0],1.0)    
 #spec_convergence_collision_op([g0],1.0)
 
-plot_synthetic_cs()
+#plot_synthetic_cs()
 #plot_maxwell_poly()
 #test_scattering()
+
+collision_op_test(1.0)
 
 
 

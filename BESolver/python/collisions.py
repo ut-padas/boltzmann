@@ -99,9 +99,9 @@ class Collisions(abc.ABC):
         if self._is_scattering_mat_assembled :
             return self._sc_direction_mat
         
-        v_phi[np.isclose(v_phi,0)] +=1e-6
-        v_phi[np.isclose(v_phi,np.pi)] +=1e-6
-        v_phi[np.isclose(v_phi,2*np.pi)] -=1e-6
+        # v_phi[np.isclose(v_phi,0)] +=1e-6
+        # v_phi[np.isclose(v_phi,np.pi)] +=1e-6
+        # v_phi[np.isclose(v_phi,2*np.pi)] -=1e-6
 
         E0        = np.zeros(v_r.shape+tuple([3]))
         index_set = v_r>=0
@@ -210,7 +210,9 @@ class Collisions(abc.ABC):
         """
         computes the differential cross section from total cross section. 
         """
-        return (energy*total_cross_section)/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) )
+        # currently disabled the diff cs. 
+        return total_cross_section/(4*np.pi)
+        #return (energy*total_cross_section)/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) )
 
     @abc.abstractmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):

@@ -12,6 +12,8 @@ class QuadMode(enum.Enum):
     GMX     = 0 # default
     SIMPSON = 1
 
+
+MM_SIMPSON_NUM_Q_PTS=2049
 class SpectralExpansionSpherical:
     """
     Handles spectral decomposition with specified orders of expansion, w.r.t. basis_p
@@ -34,7 +36,9 @@ class SpectralExpansionSpherical:
         
         for deg in range(self._p+1):
             self._basis_1d.append(self._basis_p.Pn(deg,self._domain,self._window))
-    
+
+    def get_radial_basis_type(self):
+        return self._basis_p._basis_type   
 
     def _sph_harm_real(self, l, m, theta, phi):
         # in python's sph_harm phi and theta are swapped
@@ -52,13 +56,13 @@ class SpectralExpansionSpherical:
         """
         Evaluates 
         """
-        return self._basis_1d[k](r) * self._sph_harm_real(l, m, theta, phi)
+        return self.basis_eval_radial(r,k) * self._sph_harm_real(l, m, theta, phi)
     
     def basis_eval_radial(self,r,k):
         """
         Evaluates 
         """
-        return self._basis_1d[k](r)
+        return np.nan_to_num(self._basis_1d[k](r))
     
     def basis_eval_spherical(self, theta, phi,l,m):
         """
@@ -92,9 +96,16 @@ class SpectralExpansionSpherical:
         """
         num_p  = self._p+1
         num_sh = len(self._sph_harm_lm)
-        [gx, gw] = self._basis_p.Gauss_Pn(num_p)
-        Vr = self.Vq_r(gx)
-        mr = np.ones_like(gx) #((gx**2) * maxwellian(gx) * (v_th**3))
+        
+        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+            [gx, gw] = self._basis_p.Gauss_Pn(num_p)
+            Vr = self.Vq_r(gx)
+            mr = np.ones_like(gx) 
+        elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
+            [gx, gw] = self._basis_p.Gauss_Pn(MM_SIMPSON_NUM_Q_PTS,False)
+            Vr = self.Vq_r(gx)
+            mr = gx**2 
+        
         mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
         mm = np.dot(mm,gw).reshape(num_p,num_p)
         Lm = np.eye(num_sh)
@@ -108,9 +119,16 @@ class SpectralExpansionSpherical:
         """
         num_p = self._p+1
         num_sh = len(self._sph_harm_lm)
-        [gx, gw] = self._basis_p.Gauss_Pn(num_p)
-        Vr = self.Vq_r(gx)
-        mr = np.ones_like(gx) #((gx**2) * maxwellian(gx) * (v_th**3))
+        
+        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+            [gx, gw] = self._basis_p.Gauss_Pn(num_p)
+            Vr = self.Vq_r(gx)
+            mr = np.ones_like(gx) 
+        elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
+            [gx, gw] = self._basis_p.Gauss_Pn(MM_SIMPSON_NUM_Q_PTS,False)
+            Vr = self.Vq_r(gx)
+            mr = np.exp(-gx**2) * (gx**2)
+
         mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
         mm = np.dot(mm,gw).reshape(num_p,num_p)
         Lm = np.eye(num_sh)

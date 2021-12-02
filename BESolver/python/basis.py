@@ -7,6 +7,7 @@ import enum
 import abc
 import maxpoly
 import lagpoly
+import scipy.interpolate
 
 class BasisType(enum.Enum):
     """
@@ -16,8 +17,9 @@ class BasisType(enum.Enum):
     HERMITE_POLY=1
     MAXWELLIAN_POLY=2
     SPHERICAL_HARMONIC=3
-    LEGENDRE=4
-    LAGUERRE=5
+    LEGENDRE = 4
+    LAGUERRE = 5
+    SPLINES  = 6
 
 
 class Basis(abc.ABC):
@@ -156,6 +158,36 @@ class Laguerre(Basis):
         """
         return lagpoly.lagpolyweight
 
+
+class BSpline(Basis):
+
+    def __init__(self,knots,spline_order, num_c_pts):
+        self._basis_type = BasisType.SPLINES
+        assert len(knots) == num_c_pts + (spline_order+1) + 1, "knots vector length does not match the spline order"
+        self._num_c_pts = num_c_pts
+        self._sp_order = spline_order
+        self._t        = knots
+        self._splines = [scipy.interpolate.BSpline.basis_element(knots[i:i+spline_order+2],False) for i in range(num_c_pts)]
+
+    def Pn(self,deg,domain=None,window=None):
+        return self._splines[deg]
+
+    def Gauss_Pn(self,deg,from_zero=True):
+        """
+        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
+        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
+        """
+        if from_zero:
+            return uniform_simpson((0,self._t[-1]),deg)
+        else:
+            return uniform_simpson((self._t[0],self._t[-1]),deg)
+    
+    def Wx(self):
+        """
+        Weight function w.r.t. the polynomials are orthogonal
+        """
+        I = lambda x: 1
+        return I
 
 def uniform_simpson(domain, pts):
     assert pts%2==1, "simpson requires even number of intervals"

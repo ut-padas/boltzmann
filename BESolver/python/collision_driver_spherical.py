@@ -166,6 +166,11 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     print("Initial Ev : " , temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
     tail_norm = lambda x, i: np.linalg.norm(x[i:],ord=2)/np.linalg.norm(x,ord=2)
 
+    t_M.start()
+    M  = spec_sp.compute_mass_matrix()
+    t_M.stop()
+    print("Mass assembly time (s): ", t_M.seconds)
+
     t_L.start()
     FOp    = spec_sp.create_mat()
     for g in col_list:
@@ -174,6 +179,9 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     t_L.stop()
     print("Assembled the collision op. for Vth : ", vth_curr)
     print("Collision Operator assembly time (s): ",t_L.snap)
+
+    FOp= np.matmul(np.linalg.inv(M),FOp)
+    #print(FOp)
     
     def f_rhs(t,y):
         return np.matmul(FOp,y)
@@ -236,14 +244,15 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 npes = comm.Get_size()
 
-q_mode= sp.QuadMode.GMX
+q_mode = sp.QuadMode.SIMPSON
+r_mode = basis.BasisType.SPLINES
 params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL[rank]
-params.BEVelocitySpace.SPH_HARM_LM = [[0,0],[1,0],[1,1]]
-params.BEVelocitySpace.NUM_Q_VR  = 118
-params.BEVelocitySpace.NUM_Q_VT  = 16
-params.BEVelocitySpace.NUM_Q_VP  = 16
-params.BEVelocitySpace.NUM_Q_CHI = 16
-params.BEVelocitySpace.NUM_Q_PHI = 16
+params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
+params.BEVelocitySpace.NUM_Q_VR  = 2049
+params.BEVelocitySpace.NUM_Q_VT  = 2
+params.BEVelocitySpace.NUM_Q_VP  = 2
+params.BEVelocitySpace.NUM_Q_CHI = 2
+params.BEVelocitySpace.NUM_Q_PHI = 2
 params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 OUTPUT_FILE_NAME = args.out_fname
 RESTORE_SOLVER = args.restore
@@ -261,7 +270,7 @@ collisions.MAXWELLIAN_TEMP_K   = INIT_EV * collisions.TEMP_K_1EV
 collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
     
 # instance of the collision operator
-cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode)
+cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode,r_mode)
 spec  = cf._spec
 VTH   = collisions.ELECTRON_THEMAL_VEL
 
@@ -308,11 +317,6 @@ def g0_test():
     hv         = lambda v,vt,vp : np.ones_like(v)
     h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
 
-    t_M.start()
-    M  = spec.compute_maxwellian_mm(maxwellian,VTH)
-    t_M.stop()
-    print("Mass assembly time (s): ", t_M.seconds)
-    
     global OUTPUT_FILE_NAME
     OUTPUT_FILE_NAME = f"%s/g0_dt_tol_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,args.ts_tol[rank],params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     print(OUTPUT_FILE_NAME)

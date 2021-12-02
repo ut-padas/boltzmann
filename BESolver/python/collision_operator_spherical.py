@@ -29,11 +29,32 @@ class CollisionOpSP():
     direc delta distribution function. 
     """
     
-    def __init__(self,dim,p_order,q_mode=sp.QuadMode.GMX) -> None:
+    def __init__(self,dim,p_order,q_mode=sp.QuadMode.GMX,poly_type=basis.BasisType.MAXWELLIAN_POLY) -> None:
         self._dim  = dim
         self._p    = p_order
-        self._spec = sp.SpectralExpansionSpherical(self._p,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM)
-        self._spec._q_mode = q_mode
+        self._r_basis_type = poly_type
+
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+
+            self._spec = sp.SpectralExpansionSpherical(self._p,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM)
+            self._spec._q_mode = q_mode
+        
+        elif self._r_basis_type == basis.BasisType.SPLINES:
+            spline_order =2
+            knots_vec    = np.linspace(-1,10,spline_order + (self._p+1) + 2)
+            splines      = basis.BSpline(knots_vec,spline_order,self._p+1)
+            self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
+            self._spec._q_mode = q_mode
+
+            # import matplotlib.pyplot as plt
+            # gx,gw= basis.uniform_simpson((0,8),1023)
+            # for i in range(self._p +1):
+            #     plt.plot(gx,splines.Pn(i)(gx),label="i=%d"%i)
+            
+            # plt.grid()
+            # plt.show()
+
+        
         self.__alloc_internal_vars()
 
     def __alloc_internal_vars(self):
@@ -47,11 +68,16 @@ class CollisionOpSP():
         self._num_p            = spec_sp._p +1
         self._num_sh           = len(spec_sp._sph_harm_lm)
 
-        if spec_sp._q_mode == sp.QuadMode.GMX:
-            [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-        elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
-            num_q                  = self._NUM_Q_VR
-            [self._gmx,self._gmw]  = basis.uniform_simpson((1e-8,10),num_q)
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+            if spec_sp._q_mode == sp.QuadMode.GMX:
+                [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+            elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+                num_q                  = self._NUM_Q_VR
+                [self._gmx,self._gmw]  = basis.uniform_simpson((1e-8,10),num_q)
+
+        elif self._r_basis_type == basis.BasisType.SPLINES:
+            [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR,True)
+
         
         weight_func            = spec_sp._basis_p.Wx()
 
@@ -263,13 +289,16 @@ class CollisionOpSP():
             P_kr    = spec_sp.Vq_r(scattering_mg[0])
             Y_lm    = spec_sp.Vq_sph(scattering_mg[1],scattering_mg[2])
 
-            if spec_sp._q_mode == sp.QuadMode.GMX:
-                Mp_r    = (scattering_mg[0])*V_TH
-            elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
-                Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
-            else:
-                Mr=None
-                print("Unknown quadrature mode- inner product weight function is set to none.")
+            if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+                if spec_sp._q_mode == sp.QuadMode.GMX:
+                    Mp_r    = (scattering_mg[0])*V_TH
+                elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+                    Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
+                else:
+                    Mr=None
+                    print("Unknown quadrature mode- inner product weight function is set to none.")
+            elif self._r_basis_type == basis.BasisType.SPLINES:
+                Mp_r    = (scattering_mg[0]**3) * V_TH
             
             Ap_klm = np.array([diff_cs * Mp_r* (Pp_kr[i] * Yp_lm[j] - P_kr[i]*Y_lm[j]) for i in range(num_p) for j in range(num_sh)])
             Ap_klm = Ap_klm.reshape(tuple([num_p,num_sh]) + scattering_mg[0].shape)

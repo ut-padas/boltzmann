@@ -92,6 +92,26 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode):
     plt.savefig(fname)
     plt.close()
 
+    for i in range(1,len(NR)):
+        temp_ev_0  = temperature[i-1]
+        temp_ev_1  = temperature[i]
+        assert np.allclose(np.abs(data[i][:,TIME_INDEX]-data[i-1][:,TIME_INDEX]),np.zeros_like(data[i][:,TIME_INDEX])), "mismatching time points in the temperature plot"
+        plt.plot(data[i-1][:,TIME_INDEX],np.abs(temp_ev_0-temp_ev_1)/temp_ev_1,label="Nr=%d vs. Nr=%d"%(NR[i-1],NR[i]))
+        
+        
+    plt.xlabel("time (s)")
+    plt.ylabel("error")
+    plt.legend()
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.grid()
+    plt.title("temperature relative error")
+    fname=DATA_FOLDER_NAME+"/temp_error.png"
+    plt.savefig(fname)
+    plt.close()
+
+
+
     for i in range(0,len(NR)):
         nr = NR[i]
         plt.plot(data[i][:,TIME_INDEX],mass[i]/mass[i,0],label="Nr=%d"%(NR[i]))
@@ -106,21 +126,19 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode):
     plt.close()
 
 
+    ev=np.linspace(0,30,300)
     for i in range(len(NR)):
         nr = NR[i]
         params.BEVelocitySpace().VELOCITY_SPACE_POLY_ORDER=nr
         cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=q_mode,poly_type=r_mode)
         spec_sp  = cf_sp._spec
 
-        ev=np.linspace(0,30,300)
         eedf_1 = BEUtils.get_eedf(ev,spec_sp,data[i][-1,C000_INDEX:],maxwellian,VTH,1)
-
-        #plt.plot(ev,eedf_0,label="Nr=%d t=%.2E"%(NR[i],data[i][0,TIME_INDEX]))
         plt.plot(ev,eedf_1,label="Nr=%d t=%.2E"%(NR[i],data[i][-1,TIME_INDEX]))
     
     plt.xlabel("energy (eV)")
     plt.ylabel("EEDF")
-    #plt.xscale("log")
+    plt.xscale("log")
     plt.yscale("log")
     plt.legend()
     plt.grid()
@@ -129,6 +147,30 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode):
     plt.savefig(fname)
     plt.close()
 
+    
+    for i in range(1,len(NR)):
+        cf_sp0    = colOpSp.CollisionOpSP(3,NR[i-1],q_mode=q_mode,poly_type=r_mode)
+        spec_sp0  = cf_sp0._spec
+
+        cf_sp1    = colOpSp.CollisionOpSP(3,NR[i],q_mode=q_mode,poly_type=r_mode)
+        spec_sp1  = cf_sp1._spec
+
+        eedf_0 = BEUtils.get_eedf(ev,spec_sp0,data[i-1][-1,C000_INDEX:],maxwellian,VTH,1)
+        eedf_1 = BEUtils.get_eedf(ev,spec_sp1,data[i][-1,C000_INDEX:],maxwellian,VTH,1)
+
+        plt.plot(ev,np.abs(eedf_0-eedf_1),label="Nr=%d vs Nr=%d t=%.2E"%(NR[i-1],NR[i], data[i][-1,TIME_INDEX]))
+    
+    plt.xlabel("energy (eV)")
+    plt.ylabel("error")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.grid()
+    plt.title("EEDF final error")
+    fname=DATA_FOLDER_NAME+"/eedf_final_error.png"
+    plt.savefig(fname)
+    plt.close()
+
 
     for i in range(len(NR)):
         nr = NR[i]
@@ -136,15 +178,13 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode):
         cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=q_mode,poly_type=r_mode)
         spec_sp  = cf_sp._spec
 
-        ev=np.linspace(0,30,300)
         eedf_0 = BEUtils.get_eedf(ev,spec_sp,data[i][0,C000_INDEX:],maxwellian,VTH,1)
-        
         plt.plot(ev,eedf_0,label="Nr=%d t=%.2E"%(NR[i],data[i][0,TIME_INDEX]))
         
     
     plt.xlabel("energy (eV)")
     plt.ylabel("EEDF")
-    #plt.xscale("log")
+    plt.xscale("log")
     plt.yscale("log")
     plt.legend()
     plt.grid()
@@ -153,14 +193,41 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode):
     plt.savefig(fname)
     plt.close()
 
-# folder="dat_1ev_g0_maxpoly"
-# fname_list=["g0_dt_tol_1.00000000E-12_Nr_4.dat",
-#             "g0_dt_tol_1.00000000E-12_Nr_8.dat",
-#             "g0_dt_tol_1.00000000E-12_Nr_16.dat",
-#             "g0_dt_tol_1.00000000E-12_Nr_32.dat",
-#             "g0_dt_tol_1.00000000E-12_Nr_64.dat"]
-# nr_list=[4,8,16,32,64]
-# plot_convgence(folder,fname_list, nr_list, 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY)
+
+    for i in range(1,len(NR)):
+        cf_sp0    = colOpSp.CollisionOpSP(3,NR[i-1],q_mode=q_mode,poly_type=r_mode)
+        spec_sp0  = cf_sp0._spec
+
+        cf_sp1    = colOpSp.CollisionOpSP(3,NR[i],q_mode=q_mode,poly_type=r_mode)
+        spec_sp1  = cf_sp1._spec
+
+        eedf_0 = BEUtils.get_eedf(ev,spec_sp0,data[i-1][0,C000_INDEX:],maxwellian,VTH,1)
+        eedf_1 = BEUtils.get_eedf(ev,spec_sp1,data[i][0,C000_INDEX:],maxwellian,VTH,1)
+
+        plt.plot(ev,np.abs(eedf_0-eedf_1),label="Nr=%d vs Nr=%d t=%.2E"%(NR[i-1],NR[i], data[i][-1,TIME_INDEX]))
+        
+    
+    plt.xlabel("energy (eV)")
+    plt.ylabel("error")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.grid()
+    plt.title("EEDF initial error")
+    fname=DATA_FOLDER_NAME+"/eedf_initial_error.png"
+    plt.savefig(fname)
+    plt.close()
+
+
+
+folder="dat_1ev_g0_maxpoly"
+fname_list=["g0_dt_tol_1.00000000E-12_Nr_4.dat",
+            "g0_dt_tol_1.00000000E-12_Nr_8.dat",
+            "g0_dt_tol_1.00000000E-12_Nr_16.dat",
+            "g0_dt_tol_1.00000000E-12_Nr_32.dat",
+            "g0_dt_tol_1.00000000E-12_Nr_64.dat"]
+nr_list=[4,8,16,32,64]
+plot_convgence(folder,fname_list, nr_list, 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY)
 
 
 folder="dat_1ev_g0_bspline"

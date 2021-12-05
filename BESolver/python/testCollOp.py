@@ -26,7 +26,7 @@ import maxpoly
 import time
 
 
-def plot_crosssection(collision: collisions.Collisions,num_q):
+def plot_crosssection(collision: collisions.Collisions,num_q,ev_q):
     """
     plot: how quadrature points hits the experimental cross section curve. 
     """
@@ -42,18 +42,18 @@ def plot_crosssection(collision: collisions.Collisions,num_q):
     tcs  = collision._total_cs
 
     [gmx,gmw]    = maxpoly.maxpolygauss(num_q-1)
-    print(gmx)
     weight_func  = maxpoly.maxpolyweight
 
-    MAXWELLIAN_TEMP_K   = 5*TEMP_K_1EV
+    MAXWELLIAN_TEMP_K   = ev_q * TEMP_K_1EV
     V_TH                = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/collisions.MASS_ELECTRON)
-    energy_ev = (0.5 * collisions.MASS_ELECTRON * ((gmx*V_TH)**2))/ELE_VOLT
+    energy_ev           = (0.5 * collisions.MASS_ELECTRON * ((gmx*V_TH)**2))/ELE_VOLT
+    
     tcs_q     = g.total_cross_section(energy_ev)
 
     # p1 = plt.plot(ev,tcs,'o-b')
     # p2 = plt.plot(energy_ev,tcs_q,'x-g')
     plt.plot(ev,tcs,'o-b',energy_ev,tcs_q,'x-g')
-    plt.legend(["LXCAT","V_thermal=1EV"])
+    plt.legend(["LXCAT","quadrature points"])
 
     # MAXWELLIAN_TEMP_K   = 5*TEMP_K_1EV
     # V_TH                = np.sqrt(2*BOLTZMANN_CONST*MAXWELLIAN_TEMP_K/collisions.MASS_ELECTRON)
@@ -74,10 +74,11 @@ def plot_crosssection(collision: collisions.Collisions,num_q):
     # p5 = plt.plot(energy_ev,tcs_q,'x-m',label='GMX-20eV')
 
     # plt.legend([p1,p2,p3,p4,p5],["lxcat",'GMX-1eV','GMX-5eV','GMX-10eV','GMX-20eV'])
-    plt.xlabel("eV")
-    plt.ylabel("total cs (m2)")
+    plt.xlabel("energy (eV)")
+    plt.ylabel("cross section (m2)")
     plt.xscale('log')
     plt.yscale('log')
+    plt.grid()
     plt.show()
 
 def collision_op_test(ev=1.0):
@@ -1006,7 +1007,8 @@ g0_p = collisions.eAr_G0_NoEnergyLoss()
 #plot_maxwell_poly()
 #test_scattering()
 
-collision_op_test(1.0)
+#collision_op_test(1.0)
+plot_crosssection(g2,118,1)
 
 
 

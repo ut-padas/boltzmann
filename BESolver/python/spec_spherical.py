@@ -13,7 +13,7 @@ class QuadMode(enum.Enum):
     SIMPSON = 1
 
 
-MM_SIMPSON_NUM_Q_PTS=2049
+MM_SIMPSON_NUM_Q_PTS=4049
 class SpectralExpansionSpherical:
     """
     Handles spectral decomposition with specified orders of expansion, w.r.t. basis_p

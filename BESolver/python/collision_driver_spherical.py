@@ -2,6 +2,7 @@
 @package Boltzmann collision operator solver. 
 """
 
+import enum
 import scipy
 import basis
 import spec_spherical as sp
@@ -16,9 +17,17 @@ import profiler
 import argparse
 import scipy.integrate
 import pyevtk
+from scipy.integrate import ode
 t_M = profiler.profile_t("mass_assembly")
 t_L = profiler.profile_t("collOp_assembly")
 t_ts = profiler.profile_t("ts")
+
+
+class CollissionMode(enum.Enum):
+    ELASTIC_ONLY=0
+    ELASTIC_W_EXCITATION=1
+    ELASTIC_W_IONIZATION=2
+    ELASTIC_W_EXCITATION_W_IONIZATION=3
 
 
 collisions.AR_NEUTRAL_N=3.22e22
@@ -29,7 +38,9 @@ if not os.path.exists('plots'):
     print("creating folder `plots`, output will be written into it")
     os.makedirs('plots')
 
-
+"""
+DO NOT USE DEPRECIATED
+"""
 def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwellian, vth, t_end, dt , ts_tol,restore=0,quasi_neutral=True):
     """
     Numerical integration of the collision operator, with 
@@ -142,14 +153,11 @@ def ode_numerical_solve(collOp:colOpSp.CollisionOpSP, col_list, h_init, maxwelli
     print("Total ts time : (s): ",t_ts.seconds)
 
 
-def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpSP,col_list, h_init, maxwellian, vth, t_end, dt,t_tol):
+def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, dt,t_tol, mode:CollissionMode):
     spec_sp = collOp._spec
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
-    TAIL_NORM_INDEX = (spec_sp._p+1) * len(spec_sp._sph_harm_lm) // 2
-    
-    dt_tau = 1/collisions.PLASMA_FREQUENCY
     print("==========================================================================")
 
     t_ts.start()
@@ -158,56 +166,95 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     t_curr = 0.0
     t_step = 0
 
-    mw_vth    = BEUtils.get_maxwellian_3d(vth,MNE)
+    ne_t      = MNE
+    mw_vth    = BEUtils.get_maxwellian_3d(vth,ne_t)
     m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
     temp_t0   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t0,1)
     vth_curr  = collisions.electron_thermal_velocity(temp_t0) 
-    m0_curr   = m0_t0
     print("Initial Ev : " , temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
-    tail_norm = lambda x, i: np.linalg.norm(x[i:],ord=2)/np.linalg.norm(x,ord=2)
-
+    
     t_M.start()
     M  = spec_sp.compute_mass_matrix()
     t_M.stop()
     print("Mass assembly time (s): ", t_M.seconds)
 
-    t_L.start()
-    FOp    = spec_sp.create_mat()
-    for g in col_list:
-        g.reset_scattering_direction_sp_mat()
-        FOp += collOp.assemble_mat(g,mw_vth,vth_curr)
-    t_L.stop()
-    print("Assembled the collision op. for Vth : ", vth_curr)
-    print("Collision Operator assembly time (s): ",t_L.snap)
-
-    FOp= np.matmul(np.linalg.inv(M),FOp)
-    #print(FOp)
+    if(mode == CollissionMode.ELASTIC_ONLY):
+        g0  = collisions.eAr_G0()
+        g0.reset_scattering_direction_sp_mat()
+        FOp = collOp.assemble_mat(g0,mw_vth,vth_curr)
     
-    def f_rhs(t,y):
-        return np.matmul(FOp,y)
-
-    from scipy.integrate import ode
-    ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1,rtol=t_tol)
-    #ode_solver = ode(f_rhs,jac=None).set_integrator("lsoda",method='bdf',rtol=1e-12)
-    ode_solver.set_initial_value(h_init,t=0.0)
-
-    fout   = open(OUTPUT_FILE_NAME, "w")
-    t_step = 0
-    total_steps = int(t_end/dt)
-    while ode_solver.successful() and t_step < total_steps: 
-        t_curr = ode_solver.t
-        if(t_step % IO_COUT_FEQ == 0):
-            ht     = ode_solver.y
-            dat_ht = np.append(np.array([t_curr]),ht)
-            np.savetxt(fout,dat_ht,newline=" ")
-            print("",file=fout)
-
-        ode_solver.integrate(ode_solver.t + dt)
-        t_step+=1
+        FOp= np.matmul(np.linalg.inv(M),FOp)
+        #print(FOp)
+    
+        def f_rhs(t,y,n0):
+            return n0*np.matmul(FOp,y)
         
-    fout.close()
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1,rtol=t_tol)
+        #ode_solver = ode(f_rhs,jac=None).set_integrator("lsoda",method='bdf',rtol=1e-12)
+        ode_solver.set_initial_value(h_init,t=0.0)
+        ode_solver.set_f_params(collisions.AR_NEUTRAL_N)
 
+        fout   = open(OUTPUT_FILE_NAME, "w")
+        t_step = 0
+        total_steps = int(t_end/dt)
+        while ode_solver.successful() and t_step < total_steps: 
+            t_curr = ode_solver.t
+            if(t_step % IO_COUT_FEQ == 0):
+                ht     = ode_solver.y
+                dat_ht = np.append(np.array([t_curr]),ht)
+                np.savetxt(fout,dat_ht,newline=" ")
+                print("",file=fout)
 
+            ode_solver.integrate(ode_solver.t + dt)
+            t_step+=1
+            
+        fout.close()
+
+    elif(mode == CollissionMode.ELASTIC_W_IONIZATION):
+        g0  = collisions.eAr_G0()
+        g0.reset_scattering_direction_sp_mat()
+
+        g2  = collisions.eAr_G2()
+        g2.reset_scattering_direction_sp_mat()
+        t_L.start()
+        FOp_g0 = collOp.assemble_mat(g0,mw_vth,vth_curr) 
+        FOp_g2 = collOp.assemble_mat(g2,mw_vth,vth_curr)
+        t_L.stop()
+        print("Assembled the collision op. for Vth : ", vth_curr)
+        print("Collision Operator assembly time (s): ",t_L.snap)
+        
+        FOp_g0 = np.matmul(np.linalg.inv(M),FOp_g0)
+        FOp_g2 = np.matmul(np.linalg.inv(M),FOp_g2)
+
+        def f_rhs(t,y,n0,ni):
+            return n0*np.matmul(FOp_g0,y) + ni*np.matmul(FOp_g2,y)
+
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1,rtol=t_tol)
+        #ode_solver = ode(f_rhs,jac=None).set_integrator("lsoda",method='bdf',rtol=1e-12)
+        ode_solver.set_initial_value(h_init,t=0.0)
+
+        fout   = open(OUTPUT_FILE_NAME, "w")
+        t_step = 0
+        total_steps = int(t_end/dt)
+        while ode_solver.successful() and t_step < total_steps: 
+            t_curr = ode_solver.t
+            m0_t     = BEUtils.moment_n_f(spec_sp,ode_solver.y,mw_vth,vth,0,None,None,None,1)
+            #temp_t   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t,1)
+            ode_solver.set_f_params(collisions.AR_NEUTRAL_N,m0_t)
+            
+            if(t_step % IO_COUT_FEQ == 0):
+                ht     = ode_solver.y
+                dat_ht = np.append(np.array([t_curr]),ht)
+                np.savetxt(fout,dat_ht,newline=" ")
+                print("",file=fout)
+
+            ode_solver.integrate(ode_solver.t + dt)
+            t_step+=1
+        
+        fout.close()
+
+    else:
+        print("Not implemented ")
 
 
 def restore_solver(fname):
@@ -231,7 +278,7 @@ parser.add_argument("-Nr", "--NUM_P_RADIAL", help="Number of polynomials in radi
 parser.add_argument("-Te", "--T_END", help="Simulation time", type=float, default=1e-6)
 parser.add_argument("-dt", "--T_DT", help="Simulation time step size ", type=float, default=1e-10)
 parser.add_argument("-o",  "--out_fname", help="output file name", type=str, default='.')
-parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", nargs='+', type=float, default=[1e-4,1e-4/2,1e-4/4,1e-4/8,1e-4/16])
+parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-12)
 parser.add_argument("-c", "--collision_mode", help="collision mode", type=str, default="g0")
 parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type=float, default=1.0)
 parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
@@ -244,11 +291,16 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 npes = comm.Get_size()
 
-q_mode = sp.QuadMode.SIMPSON
-r_mode = basis.BasisType.SPLINES
+# q_mode = sp.QuadMode.SIMPSON
+# r_mode = basis.BasisType.SPLINES
+# params.BEVelocitySpace.NUM_Q_VR  = 4049
+
+q_mode = sp.QuadMode.GMX
+r_mode = basis.BasisType.MAXWELLIAN_POLY
+params.BEVelocitySpace.NUM_Q_VR  = 118
+
 params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL[rank]
 params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
-params.BEVelocitySpace.NUM_Q_VR  = 2049
 params.BEVelocitySpace.NUM_Q_VT  = 2
 params.BEVelocitySpace.NUM_Q_VP  = 2
 params.BEVelocitySpace.NUM_Q_CHI = 2
@@ -281,10 +333,10 @@ print("\tDT : ", params.BEVelocitySpace().VELOCITY_SPACE_DT, " s")
 print("""============================================================""")
 params.print_parameters()
 
-col_g0_no_E_loss = collisions.eAr_G0_NoEnergyLoss()
-col_g0 = collisions.eAr_G0()
-col_g1 = collisions.eAr_G1()
-col_g2 = collisions.eAr_G2()
+# col_g0_no_E_loss = collisions.eAr_G0_NoEnergyLoss()
+# col_g0 = collisions.eAr_G0()
+# col_g1 = collisions.eAr_G1()
+# col_g2 = collisions.eAr_G2()
 
 # maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
 # hv         = lambda v,vt,vp : np.ones_like(v) #+ v + v**2   #* collisions.MAXWELLIAN_N
@@ -318,11 +370,11 @@ def g0_test():
     h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
 
     global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g0_dt_tol_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,args.ts_tol[rank],params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    OUTPUT_FILE_NAME = f"%s/g0_dt_tol_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,args.ts_tol,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     print(OUTPUT_FILE_NAME)
 
     #ode_numerical_solve(cf,[col_g0],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
-    ode_numerical_solve_no_reassembly_and_projection(cf, [col_g0], h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol[rank])
+    ode_numerical_solve_no_reassembly_and_projection(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_ONLY)
 
 def g1_test():
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
@@ -339,7 +391,7 @@ def g1_test():
     print(OUTPUT_FILE_NAME)
 
 
-    ode_numerical_solve(cf,[col_g1],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
+    #ode_numerical_solve(cf,[col_g1],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
     
 
 
@@ -358,7 +410,7 @@ def g2_test():
     print(OUTPUT_FILE_NAME)
 
 
-    ode_numerical_solve(cf,[col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER,quasi_neutral=False)
+    #ode_numerical_solve(cf,[col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER,quasi_neutral=False)
 
 
 def g01_test():
@@ -375,7 +427,7 @@ def g01_test():
     OUTPUT_FILE_NAME = f"%s/g01_dt_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,params.BEVelocitySpace.VELOCITY_SPACE_DT,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     print(OUTPUT_FILE_NAME)
 
-    ode_numerical_solve(cf,[col_g0,col_g1],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
+    #ode_numerical_solve(cf,[col_g0,col_g1],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
 
 
 def g02_test():
@@ -383,17 +435,11 @@ def g02_test():
     hv         = lambda v,vt,vp : np.ones_like(v)
     h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
 
-    t_M.start()
-    M  = spec.compute_maxwellian_mm(maxwellian,VTH)
-    t_M.stop()
-    print("Mass assembly time (s): ", t_M.seconds)
-    
     global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g02_dt_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,params.BEVelocitySpace.VELOCITY_SPACE_DT,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
+    OUTPUT_FILE_NAME = f"%s/g02_dt_tol_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,args.ts_tol,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
     print(OUTPUT_FILE_NAME)
 
-
-    ode_numerical_solve(cf,[col_g0,col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER,quasi_neutral=True)
+    ode_numerical_solve_no_reassembly_and_projection(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_W_IONIZATION)
     
 
 if args.collision_mode  == "g0":

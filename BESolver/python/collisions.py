@@ -461,7 +461,7 @@ class eAr_G0_NoEnergyLoss(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return AR_NEUTRAL_N
+        return 1.0#AR_NEUTRAL_N
 
 """
 e + Ar -> e + Ar
@@ -507,7 +507,7 @@ class eAr_G0(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return AR_NEUTRAL_N
+        return 1.0#AR_NEUTRAL_N
 
 """
 e + Ar -> e + Ar^*
@@ -550,7 +550,7 @@ class eAr_G1(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return AR_NEUTRAL_N
+        return 1.0#AR_NEUTRAL_N
 
 """
 e + Ar -> e + Ar^+
@@ -664,7 +664,7 @@ class eAr_G2(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return AR_IONIZED_N
+        return 1.0#AR_IONIZED_N
 
     def reset_scattering_direction_sp_mat(self):
         self._is_scattering_mat_assembled=False

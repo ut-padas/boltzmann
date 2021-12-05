@@ -41,7 +41,7 @@ class CollisionOpSP():
         
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order =2
-            knots_vec    = np.linspace(-1,10,spline_order + (self._p+1) + 2)
+            knots_vec    = np.linspace(-2,8,spline_order + (self._p+1) + 2)
             splines      = basis.BSpline(knots_vec,spline_order,self._p+1)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode

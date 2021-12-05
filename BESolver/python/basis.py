@@ -178,7 +178,7 @@ class BSpline(Basis):
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
         if from_zero:
-            return uniform_simpson((0,self._t[-1]),deg)
+            return uniform_simpson((1e-10,self._t[-1]),deg)
         else:
             return uniform_simpson((self._t[0],self._t[-1]),deg)
     

@@ -71,7 +71,7 @@
 \newcommand{\reals}{\mathbb{R}}
 \newcommand{\myint}[2]{\int\limits_{#1}^{#2}}
 \newcommand{\norm}[1]{\left\lVert#1\right\rVert}
-
+\newcommand{\lxcat}{\texttt{LXCAT}}
 
 \DeclareMathOperator{\variance}{Var}
 
@@ -138,25 +138,25 @@
 			\item Evolution of species distribution function $f = f(\vect{x}, \vect{v}, t)$ obeys the \textbf{Boltzmann equation}
 			\small
 			\begin{align*}
-				\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  - \vect{E} \cdot \nabla_{\vect{v }}f = \sum_{a} C_a(f) 
+				\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  - \vect{E} \cdot \nabla_{\vect{v }}f = \sum_{a} C_a(f) + \sum_{b} C_b(f,f)
 			\end{align*}
 			where, $C_a$ denotes the collision term, for example, in case of $a=$ elastic collisions, with $\delta(0)$ for background distribution function, we can write,  
 			\begin{align*}
 				C_a(f) &= n_0\int_{S^2} |v| \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
-				\left(|J|f(v^{pre}(v,\omega)) - f(v) \right) \ud \omega 
+				\left(|J|f(v^{\mathrm{pre}}(v,\omega)) - f(v) \right) \ud \omega 
 			\end{align*}
-			\item \textbf{Challenges}: 6+1 dimensions, numerical issues,  HPC related challenges, ...
+			\item \textbf{Challenges}: 6+1 dimensions, numerical issues,  HPC, recombination term has additional integration in velocity space. 
 			% \item \textbf{Idea}: FEM in $\vect{x}$, spectral in $\vect{v}$
 			% \item \textbf{Currently (Y1)}: spatially homogeneous case $f = f(\vect{v}, t)$ to investigate efficient velocity-space discretizations
 			% \begin{align*}
 			% 	\partial_t f = \sum_{a} C_a(f)
 			% \end{align*}
 		\end{itemize}
-		Approach: Use FEM type discretization in space, and use \textcolor{orange}{spectral dirscretization} in velocity space.  
+		\textbullet~ Discretization: Petrov-Galerkin in $x$ and $v$ + time-marching (explicit for the time being)
 	\end{frame}
 
 	\begin{frame}
-		\frametitle{Velocity space discretization : Petrov-Galerkin approach}
+		\frametitle{Velocity-space discretization : Petrov-Galerkin approach}
 		\begin{itemize}
 
 		\item Weak formulation (currently $\bf E=0$):
@@ -166,7 +166,7 @@
 		\partial_t f = \sum_{a} C_a(f)
 		\quad \rightarrow \quad
 		\partial_t \myint{R^3}{} f \phi\of{\vect{v}} \ud \vect{v} = \sum_{a}
-		\myint{R^3}{} C_a(f) \phi\of{\vect{v}} \ud \vect{v}
+		\myint{R^3}{} C_a(f) \phi\of{\vect{v}} \ud \vect{v}, \forall\phi(\vect{v})
 		$
 
 		\item Solution as a perturbed Maxwellian:
@@ -196,7 +196,7 @@
 	\end{frame}
 
 	\begin{frame}
-		\frametitle{Collition operator (weak form)}
+		\frametitle{Collision operator (weak form)}
 		\small{
 		\begin{align*}
 			\myint{R^3}{} C \phi\of{\vect{v}_e} d{\vect{v}_e} 
@@ -229,34 +229,16 @@
 	\end{frame}
 
 
-	\begin{frame}
-		\frametitle{Computing collition operator (tensorized evaluation)}
-		\begin{itemize}
-			\item $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$ : Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity
-			\item $P^{r\theta\phi\chi\gamma}_{p}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
-			\item $Y^{r\theta\phi\chi\gamma}_{qs}$ - $qs$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-			\item $M^{r\theta\phi\chi\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-			\item $\sigma^{r\theta\phi\chi\gamma}$ - differential cross section broadcasted on scattering cross section angles. 
-			\item $P^{r\theta\phi}_{k}$ - radial polynomials evaluated at radial quadrature points. 
-			\item $Y_{lm}^{r\theta\phi}$ - spherical harmonics evaluated angular quadrature points. 
-		\end{itemize}
-		Re-computations are only needed if the quadrature grid is changed. Then we can write, 
-		\tiny
-		{
-			\begin{align*}
-				{L}_{k,l,m}^{p,q,s} &=P^{r\theta\phi}_{k} Y_{lm}^{r\theta\phi} \left( M^{r\theta\phi\chi\gamma} \left(P^{r\theta\phi\chi\gamma}_{p} (v^\prime_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v^\prime_\theta,v^{\prime}_\phi) - P^{r\theta\phi\chi\gamma}_{p} (v_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v_\theta,v_\phi) \right) W_\chi W_\gamma \right) W_\phi W_\theta W_r
-			\end{align*}
-		}%
-	\end{frame}
+	
 	
 	\begin{frame}
 		\frametitle{Problem setup}
 		\begin{itemize}
 			\item Set $\vect{E}=0$
-			\item Use experimental total cross-section, with constant differential cross-section function ($N_\theta=1,N_\phi=1$)
+			\item Use \lxcat~ cross-section data %, with constant differential cross-section function ($N_\theta=1,N_\phi=1$)
 			\item Experiment with Maxwell vs. BSpline polynomials in radial direction. 
-			\item Initially start with Maxwellian distribution, i.e., $f(v)= M(v)h(v)$, where $h(v)=1$, with 1eV temperature.
-			\item Reactions considered, 
+			\item Initial condition $f(v,t=0) = M(v)$ with $T_e(0)=1ev$ %Initially start with Maxwellian distribution, i.e., $f(v)= M(v)h(v)$, where $h(v)=1$, with 1eV temperature.
+			\item Collisions considered, 
 			\begin{itemize}
 				\item G0 : $e + Ar \rightarrow e + Ar$
 				\item G2 : $e + Ar \rightarrow e + Ar^+ + e$ with G0
@@ -270,7 +252,14 @@
 
 	\begin{frame}
 		\frametitle{G0 : $e + Ar \rightarrow e + Ar$ (Maxwell polynomials)}
+		\textbullet~ Uses \lxcat~ cross-section data.
 		\begin{figure}
+			\only<+>
+			{	
+				\centering
+				\includegraphics[width=0.5\textwidth]{g0_tcs.png}
+			}
+
 			\only<+>
 			{
 				\includegraphics[width=0.48\textwidth]{g0_mw_temp.png}
@@ -297,6 +286,7 @@
 						\item Experimental cross-section data is not smooth. 
 						\item Quadrature issues.
 					\end{itemize}
+					\item Quantities of interests temperature, mass, seem to converge nicely. 
 				\end{itemize}
 			\end{column}
 			\begin{column}{0.48\textwidth}
@@ -311,6 +301,7 @@
 
 	\begin{frame}
 		\frametitle{G0 convergence with constant cross-section}
+		\textbullet~  $\sigma(x) = 2\times 10^{-20} \mathrm{m}^{2}$
 		\begin{figure}
 			\includegraphics[width=0.48\textwidth]{g0_mw_m0_temp.png}
 			\includegraphics[width=0.48\textwidth]{g0_mw_m0_tails.png}
@@ -320,6 +311,7 @@
 
 	\begin{frame}
 		\frametitle{G0 convergence with linear cross-section}
+		\textbullet~ $\sigma(x) = 2.116 \times 10^{-20} x + 1.24\times 10^{-21}$
 		\begin{figure}
 			\includegraphics[width=0.48\textwidth]{g0_mw_m1_temp.png}
 			\includegraphics[width=0.48\textwidth]{g0_mw_m1_tails.png}
@@ -328,6 +320,7 @@
 	
 	\begin{frame}
 		\frametitle{G0 : $e + Ar \rightarrow e + Ar$ (BSplines)}
+		\textbullet~ Uses \lxcat~ cross-section data. 
 		\begin{figure}
 			\only<+>
 			{
@@ -344,16 +337,19 @@
 
 	\begin{frame}
 		\frametitle{Maxwell Vs. Bsplines : Elastic collisions (G0)}
+		\textbullet~ Uses \lxcat~ cross-section data. 
+		\begin{figure}
 		\includegraphics[width=0.48\textwidth]{g0_mw_bs_temp_error.png}
 		\includegraphics[width=0.48\textwidth]{g0_mw_bs_eedf_final_error.png}
+		\end{figure}
 	\end{frame}
 
 
 	\begin{frame}
-		\frametitle{Elastic with ionization (G0+G2)(Maxwell polynomials)}
+		\frametitle{Elastic with ionization (G0+G2)(Maxwell + \lxcat~ cross-section)}
 		\begin{itemize}
-			\item Quasi-neutrality enforces (problem becomes non-linear), $n_i=n_e$, $\partial_t f = n_0 C_{G0}(f) + n_i C_{G2}(f)$
-			\item RK45 used for each linearized solve. 
+			\item Quasi-neutrality, $n_i=n_e$, $\partial_t f = n_0 C_{0}(f) + n_i C_{2}(f)$
+			%\item RK45 used for each linearized solve. 
 		\end{itemize}
 		\begin{figure}
 			\only<+>
@@ -432,5 +428,24 @@
 		\end{center}
 	\end{frame}
 
+	\begin{frame}
+		\frametitle{Computing collision operator}
+		\begin{itemize}
+			\item $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$ : Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity
+			\item $P^{r\theta\phi\chi\gamma}_{p}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
+			\item $Y^{r\theta\phi\chi\gamma}_{qs}$ - $qs$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+			\item $M^{r\theta\phi\chi\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+			\item $\sigma^{r\theta\phi\chi\gamma}$ - differential cross section broadcasted on scattering cross section angles. 
+			\item $P^{r\theta\phi}_{k}$ - radial polynomials evaluated at radial quadrature points. 
+			\item $Y_{lm}^{r\theta\phi}$ - spherical harmonics evaluated angular quadrature points. 
+		\end{itemize}
+		Re-computations are only needed if the quadrature grid is changed. Then we can write, 
+		\tiny
+		{
+			\begin{align*}
+				{L}_{k,l,m}^{p,q,s} &=P^{r\theta\phi}_{k} Y_{lm}^{r\theta\phi} \left( M^{r\theta\phi\chi\gamma} \left(P^{r\theta\phi\chi\gamma}_{p} (v^\prime_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v^\prime_\theta,v^{\prime}_\phi) - P^{r\theta\phi\chi\gamma}_{p} (v_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v_\theta,v_\phi) \right) W_\chi W_\gamma \right) W_\phi W_\theta W_r
+			\end{align*}
+		}%
+	\end{frame}
 
 \end{document}

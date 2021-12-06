@@ -522,45 +522,261 @@ But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\p
 
 \clearpage
 \section{Advection term}
-
+Advection (acceleration) term
 \begin{align*}
 \vect{E}\cdot \nabla_{\vect{v}} f
 \end{align*}
 
+In spherical coordinates
 \begin{align*}
-f = M\of{\textstyle\frac{v}{\vth}} \sum_{klm} a_{klm} P_k\of{\textstyle\frac{v}{\vth}} Y_{lm}\of{\theta,\phi}
+\nabla_{\vect{v}} 
+= \hat{\vect{v}} \frac{\partial}{\partial v}
++ \hat{\vect{\theta}}_{\vect{v}} \frac{1}{v} \frac{\partial}{\partial \vect{\theta}_{\vect{v}}}
++ \hat{\vect{\varphi}}_{\vect{v}} \frac{1}{v \sin\of{\vect{\varphi}_{\vect{v}}}} \frac{\partial}{\partial \vect{\varphi}_{\vect{v}}}
 \end{align*}
 
 \begin{align*}
-\nabla_{\vect{v}} f = \sum_{klm} a_{klm} 
-\left(
-\frac{d \left(M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}} \right)}{dv}  \vect{Y}_{lm}\of{\theta,\phi}
-+
-\frac{\left(M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}} \right)}{v}  \vect{\Psi}_{lm}\of{\theta,\phi}
-\right)
+\vect{E} 
+= E \hat{\vect{z}} 
+= E \left( \cos\of{\theta_\vect{v}} \hat{\vect{v}} - \sin\of{\theta_\vect{v}} \hat{\vect{\theta}}_\vect{v} \right)
 \end{align*}
 
 
 \begin{align*}
-\nabla_{\vect{v}} f = 
-\sum_{klm} 
-b_{klm} 
-M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}}  \hat{\vect{v}} Y_{lm}\of{\theta,\phi} 
-+
-\sum_{klm} 
-a_{klm}
-M\of{\textstyle\frac{v}{\vth}} P_k\of{\textstyle\frac{v}{\vth}} 
-\nabla_{\vect{v}} Y_{lm}\of{\theta,\phi}
+\vect{E}\cdot \nabla_{\vect{v}} f
+= E 
+\left( \cos\of{\theta_\vect{v}} \frac{\partial f}{\partial v} 
+- \sin\of{\theta_\vect{v}} \frac{1}{v} \frac{\partial f}{\partial \vect{\theta}_{\vect{v}}} \right)
 \end{align*}
 
+Expansion in terms of Maxwell polynomials and spherical harmonics
 \begin{align*}
-\vect{Y}_{lm}\of{\theta,\phi} &= \hat{\vect{v}} Y_{lm}\of{\theta,\phi} 
+f = A \exp\of{\textstyle\frac{v}{\vth}} \sum_{klm} a_{klm} P_k\of{\textstyle\frac{v}{\vth}} Y_{lm}\of{\theta_{\vect{v}},\varphi_{\vect{v}}}
+\end{align*}
+
+Differentiation and lifting matrices
+\begin{align*}
+P^\prime_k\of{x} &= \sum_{j=0}^{N_r} d_{kj} P_j\of{x}
+&
+&\rightarrow \quad
+\sum_{k=0}^{N_r} a_k P^\prime_k\of{x} 
+= \sum_{k=0}^{N_r} \sum_{j=0}^{N_r} a_k d_{kj} P_j\of{x}
+= \sum_{j=0}^{N_r} \left( \sum_{k=0}^{N_r}  a_k d_{kj} \right) P_j\of{x}
 \\
-\vect{\Psi}_{lm}\of{\theta,\phi} &= v \nabla_{\vect{v}} Y_{lm}\of{\theta,\phi}
+x P_k\of{x} &= \sum_{j=0}^{N_r} l_{kj} P_k\of{x}
+&
+&\rightarrow \quad
+\sum_{k=0}^{N_r} a_k x P_k\of{x} 
+= \sum_{k=0}^{N_r} \sum_{j=0}^{N_r} a_k l_{kj} P_j\of{x}
+= \sum_{j=0}^{N_r} \left( \sum_{k=0}^{N_r}  a_k l_{kj} \right) P_j\of{x}
+\end{align*}
+where $d_{kj}$ and $l_{kj}$ are calculated from recursive coefficients generating polynomials
+
+\begin{align*}
+\left( e^{-x^2} P_k\of{x} \right)^\prime
+= - 2 x e^{-x^2} P_k\of{x} + e^{-x^2} P^\prime_k\of{x}
+&= e^{-x^2} \sum_{j=0}^{N_r} \left( d_{kj} - 2 l_{kj} \right)P_j\of{x}
+\\
+&= e^{-x^2} \sum_{j=0}^{N_r} g_{kj} P_j\of{x}
 \end{align*}
 
 \begin{align*}
+\frac{\partial f}{\partial v}
+=
+\frac{1}{\vth}
+A \exp\of{\textstyle\frac{v}{\vth}} \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} a_{klm} g_{kj} \right) P_j\of{\textstyle\frac{v}{\vth}} Y_{lm}\of{\theta_{\vect{v}},\varphi_{\vect{v}}}
+\end{align*}
+
+\begin{align*}
+\frac{1}{v}\frac{\partial f}{\partial \vect{\theta}_{\vect{v}}}
+=
+\frac{1}{v} A \exp\of{\textstyle\frac{v}{\vth}} \sum_{klm} a_{klm} P_k\of{\textstyle\frac{v}{\vth}} \frac{\partial }{\partial \vect{\theta}_{\vect{v}}} Y_{lm}\of{\theta_{\vect{v}},\varphi_{\vect{v}}}
+\end{align*}
+
+\begin{multline*}
+\myint \cos\of{\theta_\vect{v}} \frac{\partial f}{\partial v} P_p\of{\textstyle\frac{v}{\vth}} Y_{qs}\of{\theta,\phi} v^2 \diff{v} \diff{\omega_{\vect{v}}}
+\\
+=
+\frac{1}{\vth}
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} a_{klm} g_{kj} \right) 
+\left(
+\int 
+\exp\of{\textstyle\frac{v}{\vth}} P_j\of{\textstyle\frac{v}{\vth}} P_p\of{\textstyle\frac{v}{\vth}} v^2 
+\diff{v}
+\right)
+\left(
+\int
+\cos\of{\theta_\vect{v}} 
+Y_{lm}\of{\theta_{\vect{v}},\varphi_{\vect{v}}}
+Y_{qs}\of{\theta_{\vect{v}},\varphi_{\vect{v}}}
+\diff{\omega_{\vect{v}}}
+\right)
+\\
+=
+\vth^2
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} a_{klm} g_{kj} \right) 
+M_{p} \delta_{j,p}
+\Psi_{lmqs}
+=
+\vth^2
+A \sum_{lm} \left(\sum_{k=0}^{N_r} a_{klm} g_{kp} \right) 
+M_{p}
+\Psi_{lmqs}
+\end{multline*}
+
+\begin{multline*}
+\myint \sin\of{\theta_\vect{v}} \frac{1}{v} \frac{\partial f}{\partial \vect{\theta}_{\vect{v}}} P_p\of{\textstyle\frac{v}{\vth}} Y_{qs}\of{\theta,\phi} v^2 \diff{v} \diff{\omega_{\vect{v}}}
+=
+\\
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} a_{klm} g_{kj} \right) 
+\left(
+\int 
+\exp\of{\textstyle\frac{v}{\vth}} P_j\of{\textstyle\frac{v}{\vth}} P_p\of{\textstyle\frac{v}{\vth}} v
+\diff{v}
+\right)
+\left(
+\int
+\sin\of{\theta_\vect{v}} 
+Y_{qs}\of{\theta_{\vect{v}},\varphi_{\vect{v}}}
+\frac{\partial }{\partial \vect{\theta}_{\vect{v}}}
+Y_{lm}\of{\theta_{\vect{v}},\varphi_{\vect{v}}}
+\diff{\omega_{\vect{v}}}
+\right)
+\end{multline*}
+
+\begin{multline*}
+\int 
+\exp\of{\textstyle\frac{v}{\vth}} P_j\of{\textstyle\frac{v}{\vth}} P_p\of{\textstyle\frac{v}{\vth}} v
+\diff{v}
+=
+\vth^2
+\int 
+e^{-x^2} P_j\of{x} P_p\of{x} x
+\diff{x}
+\\
+=
+-
+\frac{\vth^2}{2}
+\int 
+x^2
+\left(
+e^{-x^2} P_j\of{x} P_p\of{x}
+\right)'
+\diff{x}
+\\
+=
+-
+\frac{\vth^2}{2}
+\int 
+x^2
+e^{-x^2} 
+\left(
+-2x
+P_j\of{x} P_p\of{x}
++
+P^\prime_j\of{x} P_p\of{x}
++
+P_j\of{x} P^\prime_p\of{x}
+\right)
+\diff{x}
+\\
+=
+\frac{\vth^2}{2}
+\int 
+x^2
+e^{-x^2} 
+\left(
+\sum_{k} 2l_{jk} P_k\of{x} P_p\of{x}
+-
+\sum_{k} d_{jk} P_k\of{x} P_p\of{x}
+-
+\sum_{k} d_{pk} P_j\of{x} P_k\of{x}
+\right)
+\diff{x}
+\\
+=
+\frac{\vth^2}{2}
+\left(
+\sum_{k} 2l_{jk} \int x^2 e^{-x^2} P_k\of{x} P_p\of{x} \diff{x}
+-
+\sum_{k} d_{jk} \int x^2 e^{-x^2} P_k\of{x} P_p\of{x} \diff{x}
+-
+\sum_{k} d_{pk} \int x^2 e^{-x^2} P_j\of{x} P_k\of{x} \diff{x}
+\right)
+\\
+=
+-
+\frac{\vth^2}{2}
+\left(
+\sum_{k} g_{jk} M_p \delta_{k,p}
++
+\sum_{k} d_{pk} M_j \delta_{k,j} 
+\right)
+=
+-
+\frac{\vth^2}{2}
+\left(
+g_{jp} M_p
++
+d_{pj} M_j
+\right)
+\end{multline*}
+
+\begin{multline*}
+\myint \sin\of{\theta_\vect{v}} \frac{1}{v} \frac{\partial f}{\partial \vect{\theta}_{\vect{v}}} P_p\of{\textstyle\frac{v}{\vth}} Y_{qs}\of{\theta,\phi} v^2 \diff{v} \diff{\omega_{\vect{v}}}
+=
+\\
+-
+\frac{\vth^2}{2}
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} a_{klm} g_{kj} \right) 
+\left(
+g_{jp} M_p
++
+d_{pj} M_j
+\right)
+\Phi_{lmqs}
+\end{multline*}
+
+\begin{multline*}
 \myint \vect{E}\cdot \nabla_{\vect{v}} f P_p\of{\textstyle\frac{v}{\vth}} Y_{qs}\of{\theta,\phi} v^2 \diff{v} \diff{\omega_{\vect{v}}}
+\\
+=
+E
+\vth^2
+A \sum_{lm} \left(\sum_{k=0}^{N_r} a_{klm} g_{kp} \right) 
+M_{p}
+\Psi_{lmqs}
++
+\frac{\vth^2}{2}
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} a_{klm} g_{kj} \right) 
+\left(
+g_{jp} M_p
++
+d_{pj} M_j
+\right)
+\Phi_{lmqs}
+\\
+=
+E
+\sum_{klm}
+\epsilon_{pqsklm} a_{klm}
+\end{multline*}
+
+\begin{align*}
+\epsilon_{pqsklm} =
+\vth^2 A 
+\left(
+g_{kp} M_{p} \Psi_{lmqs}
++
+\frac{1}{2}
+\sum_{j=0}^{N_r} g_{kj} 
+\left(
+g_{jp} M_p
++
+d_{pj} M_j
+\right)
+\Phi_{lmqs}
+\right)
 \end{align*}
 
 \newpage

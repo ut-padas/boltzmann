@@ -278,9 +278,10 @@
 		\begin{columns}
 			\begin{column}{0.48\textwidth}
 				\begin{itemize}
+					\item Uses \lxcat~ cross-section data. 
 					\item Convergence of $f(v) = M(v) h(v)$,  $\rightarrow$ $\norm{f_{m}- f_{n}} \leq \norm{M(v)} \norm{h_m-h_n}$
 					\item Tails of the correction term should decay with increasing $N_r$ polynomials.
-					\item Reason ? \textcolor{orange}{We don't know yet.}
+					\item Tails do converge with a low rate, Reason ?% \textcolor{orange}{We don't know yet.}
 					\begin{itemize}
 						\item May be we need more $N_r$ (Computation of Maxwell poly becomes unstable)
 						\item Experimental cross-section data is not smooth. 
@@ -296,6 +297,29 @@
 				\end{figure}
 			\end{column}
 		\end{columns}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Smoothed \lxcat~ dat for G0 with Maxwell polynomials}
+		\textbullet~ Uses Gaussian filter with $\sigma=0.5$, 
+		\begin{figure}
+			\only<+>
+			{	
+				\includegraphics[width=0.48\textwidth]{g0_tcs_sigma_0.5.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_tails.png}
+			}
+
+			\only<+>
+			{
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_temp.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_temp_error.png}
+			}
+			\only<+>
+			{
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_eedf_final.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_eedf_final_error.png}
+			}
+		\end{figure}
 	\end{frame}
 
 

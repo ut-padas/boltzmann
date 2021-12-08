@@ -13,7 +13,7 @@ class QuadMode(enum.Enum):
     SIMPSON = 1
 
 
-MM_SIMPSON_NUM_Q_PTS=4049
+MM_SIMPSON_PTS_PER_SPLINE=31
 class SpectralExpansionSpherical:
     """
     Handles spectral decomposition with specified orders of expansion, w.r.t. basis_p
@@ -102,7 +102,7 @@ class SpectralExpansionSpherical:
             Vr = self.Vq_r(gx)
             mr = np.ones_like(gx) 
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            [gx, gw] = self._basis_p.Gauss_Pn(MM_SIMPSON_NUM_Q_PTS,False)
+            [gx, gw] = self._basis_p.Gauss_Pn(MM_SIMPSON_PTS_PER_SPLINE*num_p,False)
             Vr = self.Vq_r(gx)
             mr = gx**2 
         
@@ -125,7 +125,7 @@ class SpectralExpansionSpherical:
             Vr = self.Vq_r(gx)
             mr = np.ones_like(gx) 
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            [gx, gw] = self._basis_p.Gauss_Pn(MM_SIMPSON_NUM_Q_PTS,False)
+            [gx, gw] = self._basis_p.Gauss_Pn(MM_SIMPSON_PTS_PER_SPLINE*num_p,False)
             Vr = self.Vq_r(gx)
             mr = np.exp(-gx**2) * (gx**2)
 

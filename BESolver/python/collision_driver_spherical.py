@@ -291,16 +291,17 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 npes = comm.Get_size()
 
+params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL[rank]
+params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
+
 # q_mode = sp.QuadMode.SIMPSON
 # r_mode = basis.BasisType.SPLINES
-# params.BEVelocitySpace.NUM_Q_VR  = 4049
+# params.BEVelocitySpace.NUM_Q_VR  = sp.MM_SIMPSON_PTS_PER_SPLINE * (params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER + 1)
 
 q_mode = sp.QuadMode.GMX
 r_mode = basis.BasisType.MAXWELLIAN_POLY
 params.BEVelocitySpace.NUM_Q_VR  = 118
 
-params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL[rank]
-params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
 params.BEVelocitySpace.NUM_Q_VT  = 2
 params.BEVelocitySpace.NUM_Q_VP  = 2
 params.BEVelocitySpace.NUM_Q_CHI = 2

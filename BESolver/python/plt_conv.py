@@ -5,6 +5,7 @@ import matplotlib as mpl
 #mpl.rcParams['text.usetex'] = True
 #mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 import matplotlib.pyplot as plt
+from numpy.lib.polynomial import poly
 import spec_spherical as sp
 import argparse
 import numpy as np
@@ -20,13 +21,53 @@ import glob
 TIME_INDEX=0
 C000_INDEX=1
 
+def plot_eedf(folder, file_name, nr, ev_init, q_mode, r_mode, fname_prefix):
 
-def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""):
+    DATA_FOLDER_NAME = folder
+    EV = ev_init
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
+    params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE *(nr+1)
+    params.BEVelocitySpace.NUM_Q_VT    = 2
+    params.BEVelocitySpace.NUM_Q_VP    = 2
+    params.BEVelocitySpace.NUM_Q_CHI   = 2
+    params.BEVelocitySpace.NUM_Q_PHI   = 2
+    
+    collisions.AR_NEUTRAL_N=3.22e22
+    collisions.MAXWELLIAN_N=1e18
+    collisions.AR_IONIZED_N=1e18
+    collisions.MAXWELLIAN_TEMP_K   = EV * collisions.TEMP_K_1EV
+    collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+    VTH = collisions.ELECTRON_THEMAL_VEL
+    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+
+    ev=np.linspace(0,30,300)
+    params.BEVelocitySpace().VELOCITY_SPACE_POLY_ORDER=nr
+    cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=q_mode,poly_type=r_mode)
+    spec_sp  = cf_sp._spec
+
+    data    = np.loadtxt(DATA_FOLDER_NAME+"/"+file_name)
+    eedf_1  = BEUtils.get_eedf(ev,spec_sp,data[-1,C000_INDEX:],maxwellian,VTH,1)
+    plt.plot(ev,eedf_1,label="Nr=%d t=%.2E"%(nr,data[-1,TIME_INDEX]))
+    
+    plt.xlabel("energy (eV)")
+    plt.ylabel("EEDF")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.grid()
+    plt.title("EEDF T=%.2E"%data[-1,TIME_INDEX])
+    fname=DATA_FOLDER_NAME+"/"+fname_prefix+"_nr"+str(nr)+"_eedf.png"
+    plt.savefig(fname)
+    plt.close()
+
+
+
+
+def plot_convgence(folder, fnames_list, nr_list,ev_int, q_mode,r_mode,fname_prefix=""):
     DATA_FOLDER_NAME = folder
     #DATA_FOLDER_NAME="dat_1ev_cs_m"+str(mm)
-    EV = 1.0
+    EV = ev_int
     params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
-    params.BEVelocitySpace.NUM_Q_VR    = 4097
     params.BEVelocitySpace.NUM_Q_VT    = 2
     params.BEVelocitySpace.NUM_Q_VP    = 2
     params.BEVelocitySpace.NUM_Q_CHI   = 2
@@ -57,6 +98,7 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     
     plt.xlabel("time (s)")
     plt.ylabel("tail norm")
+    #plt.title("spectral tails (smoothed LXCAT data)")
     plt.title("spectral tails")
     plt.yscale("log")
     plt.legend()
@@ -71,6 +113,7 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     for i in range(len(NR)):
         nr = NR[i]
         params.BEVelocitySpace().VELOCITY_SPACE_POLY_ORDER=nr
+        params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (nr+1)
         cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=q_mode,poly_type=r_mode)
         spec_sp  = cf_sp._spec
 
@@ -132,6 +175,7 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     for i in range(len(NR)):
         nr = NR[i]
         params.BEVelocitySpace().VELOCITY_SPACE_POLY_ORDER=nr
+        params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (nr+1)
         cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=q_mode,poly_type=r_mode)
         spec_sp  = cf_sp._spec
 
@@ -144,16 +188,18 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     plt.yscale("log")
     plt.legend()
     plt.grid()
-    plt.title("EEDF final")
+    plt.title("EEDF T=%.2E"%data[0][-1,TIME_INDEX])
     fname=DATA_FOLDER_NAME+"/"+fname_prefix+"_eedf_final.png"
     plt.savefig(fname)
     plt.close()
 
     
     for i in range(1,len(NR)):
+        params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (NR[i-1]+1)
         cf_sp0    = colOpSp.CollisionOpSP(3,NR[i-1],q_mode=q_mode,poly_type=r_mode)
         spec_sp0  = cf_sp0._spec
 
+        params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (NR[i]+1)
         cf_sp1    = colOpSp.CollisionOpSP(3,NR[i],q_mode=q_mode,poly_type=r_mode)
         spec_sp1  = cf_sp1._spec
 
@@ -168,7 +214,7 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     plt.yscale("log")
     plt.legend()
     plt.grid()
-    plt.title("EEDF final error")
+    plt.title("EEDF T=%.2E error"%data[0][-1,TIME_INDEX])
     fname=DATA_FOLDER_NAME+"/"+fname_prefix+"_eedf_final_error.png"
     plt.savefig(fname)
     plt.close()
@@ -177,6 +223,7 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     for i in range(len(NR)):
         nr = NR[i]
         params.BEVelocitySpace().VELOCITY_SPACE_POLY_ORDER=nr
+        params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (nr+1)
         cf_sp    = colOpSp.CollisionOpSP(3,nr,q_mode=q_mode,poly_type=r_mode)
         spec_sp  = cf_sp._spec
 
@@ -190,23 +237,25 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     plt.yscale("log")
     plt.legend()
     plt.grid()
-    plt.title("EEDF initial")
+    plt.title("EEDF T=%.2E"%data[0][0,TIME_INDEX])
     fname=DATA_FOLDER_NAME+"/"+fname_prefix+"_eedf_initial.png"
     plt.savefig(fname)
     plt.close()
 
 
     for i in range(1,len(NR)):
+        params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (NR[i-1] + 1)
         cf_sp0    = colOpSp.CollisionOpSP(3,NR[i-1],q_mode=q_mode,poly_type=r_mode)
         spec_sp0  = cf_sp0._spec
 
+        params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (NR[i] + 1)
         cf_sp1    = colOpSp.CollisionOpSP(3,NR[i],q_mode=q_mode,poly_type=r_mode)
         spec_sp1  = cf_sp1._spec
 
         eedf_0 = BEUtils.get_eedf(ev,spec_sp0,data[i-1][0,C000_INDEX:],maxwellian,VTH,1)
         eedf_1 = BEUtils.get_eedf(ev,spec_sp1,data[i][0,C000_INDEX:],maxwellian,VTH,1)
 
-        plt.plot(ev,np.abs(eedf_0-eedf_1),label="Nr=%d vs Nr=%d t=%.2E"%(NR[i-1],NR[i], data[i][-1,TIME_INDEX]))
+        plt.plot(ev,np.abs(eedf_0-eedf_1),label="Nr=%d vs Nr=%d t=%.2E"%(NR[i-1],NR[i], data[i][0,TIME_INDEX]))
         
     
     plt.xlabel("energy (eV)")
@@ -215,10 +264,53 @@ def plot_convgence(folder, fnames_list, nr_list,ev,q_mode,r_mode,fname_prefix=""
     plt.yscale("log")
     plt.legend()
     plt.grid()
-    plt.title("EEDF initial error")
+    plt.title("EEDF T=%.2E error"%data[0][0,TIME_INDEX])
     fname=DATA_FOLDER_NAME+"/"+fname_prefix+"_eedf_initial_error.png"
     plt.savefig(fname)
     plt.close()
+
+
+    
+
+    # for i in range(1,len(NR)):
+    #     params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (NR[i-1] + 1)
+    #     cf_sp0    = colOpSp.CollisionOpSP(3,NR[i-1],q_mode=q_mode,poly_type=r_mode)
+    #     spec_sp0  = cf_sp0._spec
+
+    #     params.BEVelocitySpace.NUM_Q_VR    = sp.MM_SIMPSON_PTS_PER_SPLINE * (NR[i] + 1)
+    #     cf_sp1    = colOpSp.CollisionOpSP(3,NR[i],q_mode=q_mode,poly_type=r_mode)
+    #     spec_sp1  = cf_sp1._spec
+
+    #     if(r_mode == basis.BasisType.MAXWELLIAN_POLY):
+    #         gmx,gmw   = cf_sp1._spec._basis_p.Gauss_Pn(118)
+    #         ev        = (0.5*collisions.MASS_ELECTRON * (gmx*VTH)**2)/collisions.ELECTRON_VOLT
+    #         w_fac = 1.0 / (np.exp(-gmx**2) * (gmx**2) * (4/np.sqrt(np.pi)))
+    #     elif (r_mode == basis.BasisType.SPLINES):
+    #         gmx,gmw   = cf_sp1._spec._basis_p.Gauss_Pn(params.BEVelocitySpace.NUM_Q_VR,True)
+    #         ev        = (0.5*collisions.MASS_ELECTRON * (gmx*VTH)**2)/collisions.ELECTRON_VOLT
+    #         w_fac = 1.0 
+
+    #     eedf_0    = np.transpose(BEUtils.get_eedf(ev,spec_sp0,np.transpose(data[i-1][:,C000_INDEX:]),maxwellian,VTH,1))
+    #     eedf_1    = np.transpose(BEUtils.get_eedf(ev,spec_sp1,np.transpose(data[i][:,C000_INDEX:]),maxwellian,VTH,1))
+
+    #     assert np.allclose(np.abs(data[i][:,TIME_INDEX]-data[i-1][:,TIME_INDEX]),np.zeros_like(data[i][:,TIME_INDEX])), "mismatching time points in the temperature plot"
+    #     #eedf_error= np.linalg.norm(eedf_0-eedf_1,axis=1)/np.linalg.norm(eedf_1,axis=1)
+    #     eedf_error = ((eedf_0-eedf_1)**2) * w_fac
+    #     eedf_error = np.sqrt(np.dot(eedf_error,gmw))
+    #     plt.plot(data[i][:,TIME_INDEX],eedf_error,label="Nr=%d vs Nr=%d"%(NR[i-1],NR[i]))
+        
+    # plt.xlabel("time (s)")
+    # plt.ylabel("error")
+    # plt.xscale("log")
+    # plt.yscale("log")
+    # plt.legend()
+    # plt.grid()
+    # plt.title("EEDF L2 error")
+    # fname=DATA_FOLDER_NAME+"/"+fname_prefix+"_eedf_error.png"
+    # plt.savefig(fname)
+    # plt.close()
+
+
 
 
 def plot_maxwell_vs_bspline(mw_folder,mw_fname,bs_folder,bs_fname,mw_nr,bs_nr,file_prefix):
@@ -337,67 +429,91 @@ def plot_maxwell_vs_bspline(mw_folder,mw_fname,bs_folder,bs_fname,mw_nr,bs_nr,fi
 
 
 
-folder_g0_mw_m0     = "dat_1ev_cs_m0"
-fname_list_g0_mw_m0 = [ "g0_dt_tol_1.00000000E-12_Nr_4.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_8.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_16.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_32.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_64.dat"]
-
-plot_convgence(folder_g0_mw_m0, fname_list_g0_mw_m0, [4,8,16,32,64], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw_m0")
-
-folder_g0_mw_m1     = "dat_1ev_cs_m1"
-fname_list_g0_mw_m1 = [ "g0_dt_tol_1.00000000E-12_Nr_4.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_8.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_16.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_32.dat",
-                        "g0_dt_tol_1.00000000E-12_Nr_64.dat"]
-plot_convgence(folder_g0_mw_m1, fname_list_g0_mw_m1, [4,8,16,32,64], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw_m1")
+folder_g0_mw_m0         = "dat_1ev_cs_m0"
+fname_list_g0_mw_m0     = [ "g0_dt_tol_1.00000000E-12_Nr_4.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_8.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_16.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_32.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_64.dat"]
 
 
+folder_g0_mw_m1         = "dat_1ev_cs_m1"
+fname_list_g0_mw_m1     = [ "g0_dt_tol_1.00000000E-12_Nr_4.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_8.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_16.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_32.dat",
+                            "g0_dt_tol_1.00000000E-12_Nr_64.dat"]
 
+folder_g0_mw_smoothed     =  "dat_1ev_g0_maxpoly_smoothed_cs"
+fname_list_g0_mw_smoothed =  ["g0_dt_tol_1.00000000E-12_Nr_4.dat",
+                              "g0_dt_tol_1.00000000E-12_Nr_8.dat",
+                              "g0_dt_tol_1.00000000E-12_Nr_16.dat",
+                              "g0_dt_tol_1.00000000E-12_Nr_32.dat",
+                              "g0_dt_tol_1.00000000E-12_Nr_64.dat",
+                              "g0_dt_tol_1.00000000E-12_Nr_100.dat"]
 
 folder_g0_mw     = "dat_1ev_g0_maxpoly"
-fname_list_g0_mw = ["g0_dt_tol_1.00000000E-12_Nr_4.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_8.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_16.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_32.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_64.dat"]
-
-#plot_convgence(folder_g0_mw,fname_list_g0_mw, [4,8,16,32,64], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw")
-
+fname_list_g0_mw = ["g0_dt_tol_1.00000000E-14_Nr_4.dat",
+                    "g0_dt_tol_1.00000000E-14_Nr_8.dat",
+                    "g0_dt_tol_1.00000000E-14_Nr_16.dat",
+                    "g0_dt_tol_1.00000000E-14_Nr_32.dat",
+                    "g0_dt_tol_1.00000000E-14_Nr_64.dat",
+                    "g0_dt_tol_1.00000000E-14_Nr_100.dat",
+                    "g0_dt_tol_1.00000000E-14_Nr_118.dat"]
 
 folder_g02_mw     = "dat_1ev_g02_maxpoly"
-fname_list_g02_mw = ["g02_dt_tol_1.00000000E-12_Nr_4.dat",
-            "g02_dt_tol_1.00000000E-12_Nr_8.dat",
-            "g02_dt_tol_1.00000000E-12_Nr_16.dat",
-            "g02_dt_tol_1.00000000E-12_Nr_32.dat",
-            "g02_dt_tol_1.00000000E-12_Nr_64.dat"]
-#plot_convgence(folder_g02_mw,fname_list_g02_mw, [4,8,16,32,64], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g02_mw")
+fname_list_g02_mw = [ "g02_dt_tol_1.00000000E-12_Nr_4.dat",
+                      "g02_dt_tol_1.00000000E-12_Nr_8.dat",
+                      "g02_dt_tol_1.00000000E-12_Nr_16.dat",
+                      "g02_dt_tol_1.00000000E-12_Nr_32.dat",
+                      "g02_dt_tol_1.00000000E-12_Nr_64.dat",
+                      "g02_dt_tol_1.00000000E-12_Nr_100.dat"]
 
 
+folder_g0_bs     = "dat_1ev_g0_bspline"
+fname_list_g0_bs = ["g0_dt_tol_1.00000000E-12_Nr_16.dat",
+                    "g0_dt_tol_1.00000000E-12_Nr_32.dat",
+                    "g0_dt_tol_1.00000000E-12_Nr_64.dat",
+                    "g0_dt_tol_1.00000000E-12_Nr_128.dat",
+                    "g0_dt_tol_1.00000000E-12_Nr_256.dat"]
 
-folder_g0_bs    ="dat_1ev_g0_bspline"
-fname_list_g0_bs=["g0_dt_tol_1.00000000E-12_Nr_16.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_32.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_64.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_128.dat",
-            "g0_dt_tol_1.00000000E-12_Nr_256.dat"]
-#plot_convgence(folder_g0_bs,fname_list_g0_bs, [16,32,64,128,256], 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
-
-
-folder_g02_bs     ="dat_1ev_g02_bspline"
+folder_g02_bs     = "dat_1ev_g02_bspline"
 fname_list_g02_bs =["g02_dt_tol_1.00000000E-12_Nr_16.dat",
                     "g02_dt_tol_1.00000000E-12_Nr_32.dat",
                     "g02_dt_tol_1.00000000E-12_Nr_64.dat",
                     "g02_dt_tol_1.00000000E-12_Nr_128.dat",
                     "g02_dt_tol_1.00000000E-12_Nr_256.dat"]
-#plot_convgence(folder_g02_bs,fname_list_g02_bs, [16,32,64,128,256], 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g02_bs")
+
+
+# plot_convgence(folder_g0_mw_m0, fname_list_g0_mw_m0, [4,8,16,32,64], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw_m0")
+# plot_convgence(folder_g0_mw_m1, fname_list_g0_mw_m1, [4,8,16,32,64], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw_m1")
+
+# plot_convgence(folder_g0_mw_smoothed,fname_list_g0_mw_smoothed, [4,8,16,32,64,100], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw_smoothed")
+#plot_convgence(folder_g0_mw,fname_list_g0_mw, [4,8,16,32,64,100,118], 1.0,sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw")
+
+# plot_eedf(folder_g0_mw,"g0_dt_tol_1.00000000E-14_Nr_16.dat",16, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw")
+# plot_eedf(folder_g0_mw,"g0_dt_tol_1.00000000E-14_Nr_32.dat",32, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw")
+# plot_eedf(folder_g0_mw,"g0_dt_tol_1.00000000E-14_Nr_64.dat",64, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw")
+# plot_eedf(folder_g0_mw,"g0_dt_tol_1.00000000E-14_Nr_100.dat",100, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g0_mw")
+
+
+#plot_convgence(folder_g02_mw,fname_list_g02_mw, [4,8,16,32,64,100]    , 1.0, sp.QuadMode.GMX    , basis.BasisType.MAXWELLIAN_POLY,"g02_mw")
+# plot_eedf(folder_g02_mw,"g02_dt_tol_1.00000000E-12_Nr_8.dat",8, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g2_mw")
+# plot_eedf(folder_g02_mw,"g02_dt_tol_1.00000000E-12_Nr_16.dat",16, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g2_mw")
+# plot_eedf(folder_g02_mw,"g02_dt_tol_1.00000000E-12_Nr_32.dat",32, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g2_mw")
+# plot_eedf(folder_g02_mw,"g02_dt_tol_1.00000000E-12_Nr_64.dat",64, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g2_mw")
+# plot_eedf(folder_g02_mw,"g02_dt_tol_1.00000000E-12_Nr_100.dat",100, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g2_mw")
+
+plot_convgence(folder_g0_bs,fname_list_g0_bs,   [16,32,64,128,256], 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
+plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_16.dat" , 16, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
+plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_32.dat" , 32, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
+plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_64.dat" , 64, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
+plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_128.dat", 128, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
+plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_256.dat", 256, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
+
 
 
 #plot_maxwell_vs_bspline(folder_g0_mw,fname_list_g0_mw,folder_g0_bs,fname_list_g0_bs,[4,8,16,32,64],[16,32,64,128,256],"g0_mw_bs")
-
-
 # did you change the correct bounds
 # folder="dat_1ev_g02_bspline1"
 # fname_list=["g02_dt_tol_1.00000000E-12_Nr_32.dat",

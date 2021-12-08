@@ -69,8 +69,8 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     if NUM_Q_VR is None:
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
-        else:
-            NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+        elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+            NUM_Q_VR     =  spec_spherical.MM_SIMPSON_PTS_PER_SPLINE * (spec_sp._p+1)
         
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -148,8 +148,8 @@ def compute_func_projection_coefficients(spec_sp: spec_spherical.SpectralExpansi
     if NUM_Q_VR is None:
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
-        else:
-            NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+        elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+            NUM_Q_VR     =  spec_spherical.MM_SIMPSON_PTS_PER_SPLINE * (spec_sp._p+1)
     
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -293,8 +293,8 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
 
     if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
-    else:
-        NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+    elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        NUM_Q_VR     =  spec_spherical.MM_SIMPSON_PTS_PER_SPLINE * (spec_sp._p+1)
     
     NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
     NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
@@ -325,14 +325,14 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
         MP_klm = np.dot(MP_klm,WVPhi_q)
         MP_klm = np.dot(MP_klm,glw)
 
-        return np.matmul(np.transpose(MP_klm),cf)
+        return np.dot(np.transpose(MP_klm),cf) 
 
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
         MP_klm = np.array([P_kr[i] * Y_lm[j] for i in range(num_p) for j in range(num_sph_harm)])
         MP_klm = np.dot(MP_klm,WVPhi_q)
         MP_klm = np.dot(MP_klm,glw)
-
-        return np.matmul(np.transpose(MP_klm),cf)
+        
+        return np.dot(np.transpose(MP_klm),cf) 
 
     
 

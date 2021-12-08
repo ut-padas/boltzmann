@@ -177,10 +177,24 @@ class BSpline(Basis):
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
+        assert deg % self._num_c_pts ==0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,self._num_c_pts)
+        pts_p_spline = deg//self._num_c_pts
+        qx = np.zeros(pts_p_spline*self._num_c_pts)
+        qw = np.zeros(pts_p_spline*self._num_c_pts)
         if from_zero:
-            return uniform_simpson((1e-10,self._t[-1]),deg)
+            t_i=np.argmax(self._t>0)
+            if (t_i)%2==0:
+                t_i+=1
+
+            for i in range(t_i,self._num_c_pts,self._sp_order+2):
+                qx[i*pts_p_spline: i*pts_p_spline + pts_p_spline], qw[i*pts_p_spline: i*pts_p_spline + pts_p_spline] = uniform_simpson((self._t[i], self._t[i+self._sp_order+2]),pts_p_spline)
+
+            qx[0:t_i*pts_p_spline], qw[0:t_i*pts_p_spline] = uniform_simpson((1e-8, self._t[t_i]),t_i*pts_p_spline)
         else:
-            return uniform_simpson((self._t[0],self._t[-1]),deg)
+            for i in range(0,self._num_c_pts,self._sp_order+2):
+                qx[i*pts_p_spline: i*pts_p_spline + pts_p_spline], qw[i*pts_p_spline: i*pts_p_spline + pts_p_spline] = uniform_simpson((self._t[i], self._t[i+self._sp_order+2]),pts_p_spline)
+
+        return qx,qw
     
     def Wx(self):
         """

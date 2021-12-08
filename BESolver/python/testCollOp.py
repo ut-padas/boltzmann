@@ -1008,7 +1008,7 @@ g0_p = collisions.eAr_G0_NoEnergyLoss()
 #test_scattering()
 
 #collision_op_test(1.0)
-plot_crosssection(g2,118,1)
+plot_crosssection(g0,118,1)
 
 
 

@@ -229,12 +229,10 @@
 	\end{frame}
 
 
-	
-	
 	\begin{frame}
-		\frametitle{Problem setup}
+		\frametitle{Experimental setup}
 		\begin{itemize}
-			\item Set $\vect{E}=0$
+			\item Set $\vect{E}=0$, $\rightarrow$ $\partial_t f = \sum_{a} C_a(f)$
 			\item Use \lxcat~ cross-section data %, with constant differential cross-section function ($N_\theta=1,N_\phi=1$)
 			\item Experiment with Maxwell vs. BSpline polynomials in radial direction. 
 			\item Initial condition $f(v,t=0) = M(v)$ with $T_e(0)=1ev$ %Initially start with Maxwellian distribution, i.e., $f(v)= M(v)h(v)$, where $h(v)=1$, with 1eV temperature.
@@ -244,7 +242,7 @@
 				\item G2 : $e + Ar \rightarrow e + Ar^+ + e$ with G0
 			\end{itemize}
 			\item Use RK45 with adaptive time step size control with specified tolerance, $\mathcal{O}(\Delta t ^4)$
-			\item Convergence of $f(v) = M(v) h(v)$,  $\rightarrow$ $\norm{f_{m}- f_{n}} \leq \norm{M(v)} \norm{h_m-h_n}$
+			\item Convergence of $f(v) = M(v) h(v)$,  $\rightarrow$ $\norm{f_{m}- f_{n}} \leq \norm{M(v)} \norm{h_m-h_n}$ with increasing $N_r$ polynomials
 			\item Temperature $T \sim \int_{R^3} v^2 f(v) dv$
 			\item EEDF, for given energy $\epsilon$, $\int_{S^2} \frac{1}{n_e} f(\sqrt{\frac{2\epsilon}{m}},\theta,\phi) d\omega$
 		\end{itemize}
@@ -254,12 +252,15 @@
 		\frametitle{G0 : $e + Ar \rightarrow e + Ar$ (Maxwell polynomials)}
 		\textbullet~ Uses \lxcat~ cross-section data.
 		\begin{figure}
-			\only<+>
-			{	
 				\centering
 				\includegraphics[width=0.5\textwidth]{g0_tcs.png}
-			}
+		\end{figure}
+	\end{frame}
 
+	\begin{frame}
+		\frametitle{G0 : $e + Ar \rightarrow e + Ar$ (Maxwell polynomials)}
+		\textbullet~ Uses \lxcat~ cross-section data, increase $Nr$ with $N_\theta=1,N_\phi=1$
+		\begin{figure}
 			\only<+>
 			{
 				\includegraphics[width=0.48\textwidth]{g0_mw_temp.png}
@@ -269,6 +270,16 @@
 			{
 				\includegraphics[width=0.48\textwidth]{g0_mw_eedf_final.png}
 				\includegraphics[width=0.48\textwidth]{g0_mw_eedf_final_error.png}
+			}
+			\only<+>
+			{
+				\includegraphics[width=0.48\textwidth]{g0_mw_nr16_eedf.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_nr32_eedf.png}
+			}
+			\only<+>
+			{
+				\includegraphics[width=0.48\textwidth]{g0_mw_nr64_eedf.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_nr100_eedf.png}
 			}
 		\end{figure}
 	\end{frame}
@@ -280,14 +291,15 @@
 				\begin{itemize}
 					\item Uses \lxcat~ cross-section data. 
 					\item Convergence of $f(v) = M(v) h(v)$,  $\rightarrow$ $\norm{f_{m}- f_{n}} \leq \norm{M(v)} \norm{h_m-h_n}$
+					\item tail norm = $\norm{h[N_r/2,:]} / \norm{h}$
 					\item Tails of the correction term should decay with increasing $N_r$ polynomials.
 					\item Tails do converge with a low rate, Reason ?% \textcolor{orange}{We don't know yet.}
 					\begin{itemize}
-						\item May be we need more $N_r$ (Computation of Maxwell poly becomes unstable)
-						\item Experimental cross-section data is not smooth. 
-						\item Quadrature issues.
+						\item We need more $N_r$ (Computation of Maxwell poly becomes unstable)
+						\item Experimental cross-section data. 
+						%\item Stability of the basis. 
 					\end{itemize}
-					\item Quantities of interests temperature, mass, seem to converge nicely. 
+					\item Quantities of interest (i.e., temperature, EEDF, mass) seem to converge nicely. 
 				\end{itemize}
 			\end{column}
 			\begin{column}{0.48\textwidth}
@@ -298,30 +310,6 @@
 			\end{column}
 		\end{columns}
 	\end{frame}
-
-	\begin{frame}
-		\frametitle{Smoothed \lxcat~ dat for G0 with Maxwell polynomials}
-		\textbullet~ Uses Gaussian filter with $\sigma=0.5$, 
-		\begin{figure}
-			\only<+>
-			{	
-				\includegraphics[width=0.48\textwidth]{g0_tcs_sigma_0.5.png}
-				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_tails.png}
-			}
-
-			\only<+>
-			{
-				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_temp.png}
-				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_temp_error.png}
-			}
-			\only<+>
-			{
-				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_eedf_final.png}
-				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_eedf_final_error.png}
-			}
-		\end{figure}
-	\end{frame}
-
 
 	\begin{frame}
 		\frametitle{G0 convergence with constant cross-section}
@@ -389,10 +377,60 @@
 			\only<+>
 			{
 				\includegraphics[width=0.48\textwidth]{g02_mw_mass.png}
+				\includegraphics[width=0.48\textwidth]{g02_mw_tails.png}
 			}
 		\end{figure}
 	\end{frame}
 
+
+	\begin{frame}{Current progress}
+		\begin{itemize}
+			\item Understand the Boltzmann collision operator with Jacobian for the collisions and how that relate to the weak form. 
+			\item Derivation and numerically computation of Maxwell polynomials, associated quadrature. 
+			\item \texttt{Python} based code for solving collission operator. 
+			\item Integration with \texttt{LXCAT} cross-section data, for elastic, ionization and excitation reactions. 
+			\item Supports Maxwell and BSplines for radial direction, other radial polynomials can be added if needed. 
+			\item Tensoized version of the collision operator, (enables efficient GPU computations i.e., $\texttt{numpy} \rightarrow \texttt{cupy}$)
+			\item Re-projection with efficient recomputation of the collision operator. 
+		\end{itemize}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Future work}
+		\begin{itemize}
+			%\item Maxwell polynomials with experimental cross-section data, low convergence rate. 
+			\item Dealing with smoothness issues, discontinuities in experimental cross section data. 
+			%\item Develop error metrics, when to perform re-projections, (only needed when operate in large temperature range.) , and numerical issues associated.
+			\item Work on velocity space advection term. 
+			\item Once, finalized,GPU implementation of the collision operator. 
+			\item Work on adding the spatial dimensions. 
+		\end{itemize}
+		\pause
+		\begin{center}
+			\Large Questions ? \\
+			\Large Thank You. 
+		\end{center}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Computing collision operator}
+		\begin{itemize}
+			\item $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$ : Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity
+			\item $P^{r\theta\phi\chi\gamma}_{p}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
+			\item $Y^{r\theta\phi\chi\gamma}_{qs}$ - $qs$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+			\item $M^{r\theta\phi\chi\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+			\item $\sigma^{r\theta\phi\chi\gamma}$ - differential cross section broadcasted on scattering cross section angles. 
+			\item $P^{r\theta\phi}_{k}$ - radial polynomials evaluated at radial quadrature points. 
+			\item $Y_{lm}^{r\theta\phi}$ - spherical harmonics evaluated angular quadrature points. 
+		\end{itemize}
+		Re-computations are only needed if the quadrature grid is changed. Then we can write, 
+		\tiny
+		{
+			\begin{align*}
+				{L}_{k,l,m}^{p,q,s} &=P^{r\theta\phi}_{k} Y_{lm}^{r\theta\phi} \left( M^{r\theta\phi\chi\gamma} \left(P^{r\theta\phi\chi\gamma}_{p} (v^\prime_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v^\prime_\theta,v^{\prime}_\phi) - P^{r\theta\phi\chi\gamma}_{p} (v_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v_\theta,v_\phi) \right) W_\chi W_\gamma \right) W_\phi W_\theta W_r
+			\end{align*}
+		}%
+	\end{frame}
 
 	\begin{frame}
 		\frametitle{Projection operator}
@@ -424,52 +462,50 @@
 			\end{column}
 		\end{columns}
 	\end{frame}
-	
-	\begin{frame}{Current progress}
-		\begin{itemize}
-			\item Understand the Boltzmann collision operator with Jacobian for the collisions and how that relate to the weak form. 
-			\item Derivation and numerically computation of Maxwell polynomials, associated quadrature. 
-			\item \texttt{Python} based code for solving collission operator. 
-			\item Integration with \texttt{LXCAT} cross-section data, for elastic, ionization and excitation reactions. 
-			\item Supports Maxwell and BSplines for radial direction, other radial polynomials can be added if needed. 
-			\item Tensoized version of the collision operator, (enables efficient GPU computations i.e., $\texttt{numpy} \rightarrow \texttt{cupy}$)
-			\item Re-projection with efficient recomputation of the collision operator. 
-		\end{itemize}
-	\end{frame}
 
 	\begin{frame}
-		\frametitle{Conclusions and future work}
-		\begin{itemize}
-			\item Maxwell polynomials with experimental cross-section data, low convergence rate. 
-			\item Dealing with smoothness issues, discontinuities in experimental cross section data. 
-			\item Develop error metrics, when to perform re-projections, (only needed when operate in large temperature range.) , and numerical issues associated.
-			\item Move on to single GPU implementation.
-		\end{itemize}
-		\pause
-		\begin{center}
-			\Large Questions ? \\
-			\Large Thank You. 
-		\end{center}
+		\frametitle{Smoothed \lxcat~ dat for G0 with Maxwell polynomials}
+		\textbullet~ Uses Gaussian filter
+		\only<+>{
+		\begin{table}
+			\begin{tabular}{||c|c|c||}
+				\hline
+				$N_r$ & \lxcat & \lxcat~+ smoothing\\
+				\hline
+				4 & 5.47E-02 & 5.50E-02\\
+				8 & 1.17E-02 & 1.19E-02\\
+				16 & 4.17E-03 & 4.27E-03\\
+				32 & 2.47E-03 & 2.08E-03\\
+				64 & 2.27E-03 & 1.49E-03 \\
+				100 & 7.02E-04 & 4.51E-04 \\
+				\hline
+			\end{tabular}
+			\caption{spectral norms at $T=1e-6$}
+		\end{table}
+		}
+		\begin{figure}
+			\only<+>
+			{	\centering
+				\includegraphics[width=0.48\textwidth]{g0_tcs_sigma_0.5.png}
+				
+			}
+			\only<+>
+			{	
+				\includegraphics[width=0.48\textwidth]{g0_mw_tails.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_tails.png}
+			}
+			\only<+>
+			{
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_temp.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_temp_error.png}
+			}
+			\only<+>
+			{
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_eedf_final.png}
+				\includegraphics[width=0.48\textwidth]{g0_mw_smoothed_eedf_final_error.png}
+			}
+		\end{figure}
 	\end{frame}
 
-	\begin{frame}
-		\frametitle{Computing collision operator}
-		\begin{itemize}
-			\item $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$ : Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity
-			\item $P^{r\theta\phi\chi\gamma}_{p}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
-			\item $Y^{r\theta\phi\chi\gamma}_{qs}$ - $qs$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-			\item $M^{r\theta\phi\chi\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-			\item $\sigma^{r\theta\phi\chi\gamma}$ - differential cross section broadcasted on scattering cross section angles. 
-			\item $P^{r\theta\phi}_{k}$ - radial polynomials evaluated at radial quadrature points. 
-			\item $Y_{lm}^{r\theta\phi}$ - spherical harmonics evaluated angular quadrature points. 
-		\end{itemize}
-		Re-computations are only needed if the quadrature grid is changed. Then we can write, 
-		\tiny
-		{
-			\begin{align*}
-				{L}_{k,l,m}^{p,q,s} &=P^{r\theta\phi}_{k} Y_{lm}^{r\theta\phi} \left( M^{r\theta\phi\chi\gamma} \left(P^{r\theta\phi\chi\gamma}_{p} (v^\prime_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v^\prime_\theta,v^{\prime}_\phi) - P^{r\theta\phi\chi\gamma}_{p} (v_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v_\theta,v_\phi) \right) W_\chi W_\gamma \right) W_\phi W_\theta W_r
-			\end{align*}
-		}%
-	\end{frame}
 
 \end{document}

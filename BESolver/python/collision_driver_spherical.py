@@ -178,19 +178,33 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     t_M.stop()
     print("Mass assembly time (s): ", t_M.seconds)
 
+    #u,s,v = np.linalg.svd(M)
+    #w,v=np.linalg.eig(M)
+    #print("eig of M: ", w)
+    print("Condition number of M= %.8E"%np.linalg.cond(M))
+
+    Minv = np.linalg.inv(M)
+    
     if(mode == CollissionMode.ELASTIC_ONLY):
         g0  = collisions.eAr_G0()
         g0.reset_scattering_direction_sp_mat()
+        t_L.start()
         FOp = collOp.assemble_mat(g0,mw_vth,vth_curr)
-    
-        FOp= np.matmul(np.linalg.inv(M),FOp)
-        #print(FOp)
+        t_L.stop()
+        print("Assembled the collision op. for Vth : ", vth_curr)
+        print("Collision Operator assembly time (s): ",t_L.snap)
+        #print("FOp: ",FOp)
+        #print("Condition number of C= %.8E"%np.linalg.cond(FOp))
+        FOp= np.matmul(Minv,FOp)
+        #print("Condition number of n0 x (M^-1 x C)= ",np.linalg.cond(FOp))
+        # u,s,v = np.linalg.svd(FOp)
+        # print("Singular values of FOp:", s)
     
         def f_rhs(t,y,n0):
             return n0*np.matmul(FOp,y)
         
         ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1,rtol=t_tol)
-        #ode_solver = ode(f_rhs,jac=None).set_integrator("lsoda",method='bdf',rtol=1e-12)
+        #ode_solver = ode(f_rhs,jac=None).set_integrator("dop853",verbosity=1,rtol=t_tol)
         ode_solver.set_initial_value(h_init,t=0.0)
         ode_solver.set_f_params(collisions.AR_NEUTRAL_N)
 
@@ -223,8 +237,8 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
         print("Assembled the collision op. for Vth : ", vth_curr)
         print("Collision Operator assembly time (s): ",t_L.snap)
         
-        FOp_g0 = np.matmul(np.linalg.inv(M),FOp_g0)
-        FOp_g2 = np.matmul(np.linalg.inv(M),FOp_g2)
+        FOp_g0 = np.matmul(Minv,FOp_g0)
+        FOp_g2 = np.matmul(Minv,FOp_g2)
 
         def f_rhs(t,y,n0,ni):
             return n0*np.matmul(FOp_g0,y) + ni*np.matmul(FOp_g2,y)
@@ -278,7 +292,7 @@ parser.add_argument("-Nr", "--NUM_P_RADIAL", help="Number of polynomials in radi
 parser.add_argument("-Te", "--T_END", help="Simulation time", type=float, default=1e-6)
 parser.add_argument("-dt", "--T_DT", help="Simulation time step size ", type=float, default=1e-10)
 parser.add_argument("-o",  "--out_fname", help="output file name", type=str, default='.')
-parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-12)
+parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-14)
 parser.add_argument("-c", "--collision_mode", help="collision mode", type=str, default="g0")
 parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type=float, default=1.0)
 parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
@@ -296,7 +310,7 @@ params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1
 
 # q_mode = sp.QuadMode.SIMPSON
 # r_mode = basis.BasisType.SPLINES
-# params.BEVelocitySpace.NUM_Q_VR  = sp.MM_SIMPSON_PTS_PER_SPLINE * (params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER + 1)
+# params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.BSPLINE_NUM_Q_PTS_PER_KNOT)
 
 q_mode = sp.QuadMode.GMX
 r_mode = basis.BasisType.MAXWELLIAN_POLY

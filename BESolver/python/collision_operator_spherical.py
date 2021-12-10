@@ -40,28 +40,26 @@ class CollisionOpSP():
             self._spec._q_mode = q_mode
         
         elif self._r_basis_type == basis.BasisType.SPLINES:
-            spline_order = 2
-            num_p        = self._p+1
-            num_p_1      = num_p // 2
-            num_p_2      = num_p - num_p_1   
-            k2           = np.logspace(5,4,num_p_2,base=2)
-            k2           = (k2[0] + k2[-1]) - k2
-            k1           = np.linspace(-2,k2[0], (num_p_1 + 1) + spline_order + 2)
-            knots_vec    = np.append(k1,k2[1:])
-            #print(knots_vec)
-            #knots_vec    = np.linspace(-2,30,spline_order + (self._p+1) + 2)
+            spline_order = basis.BSPLINE_BASIS_ORDER
+            assert spline_order%2==1, "spline order must be odd"
+            
+            k_domain     = (0,40)
+            num_k        = spline_order + (self._p+1) + 2
+            dk           = (k_domain[1]-k_domain[0])/(num_k-1)
+            knots_vec    = np.linspace(k_domain[0],k_domain[1] + dk , num_k)
+            knots_vec    = knots_vec - (knots_vec[(spline_order+1)//2]-knots_vec[0])
             splines      = basis.BSpline(knots_vec,spline_order,self._p+1)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
 
             # import matplotlib.pyplot as plt
-            # gx,gw= basis.uniform_simpson((0,32),1023)
+            # gx,gw= basis.uniform_simpson((knots_vec[0],knots_vec[-1]),1001)
             # for i in range(self._p +1):
             #     plt.plot(gx,splines.Pn(i)(gx),label="i=%d"%i)
             
             # plt.grid()
             # plt.show()
-            # exit(0)
+            #exit(0)
 
         
         self.__alloc_internal_vars()

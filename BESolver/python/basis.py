@@ -9,6 +9,10 @@ import maxpoly
 import lagpoly
 import scipy.interpolate
 
+# some parameters related to splines. 
+BSPLINE_NUM_Q_PTS_PER_KNOT     = 3
+BSPLINE_BASIS_ORDER            = 1
+
 class BasisType(enum.Enum):
     """
     Currently supported basis types. 
@@ -161,12 +165,17 @@ class Laguerre(Basis):
 
 class BSpline(Basis):
 
+    @staticmethod
+    def get_num_q_pts(p_order, s_order, pts_per_knot):
+        return pts_per_knot*(p_order+1 + s_order + 1  - (s_order+1)//2)
+
     def __init__(self,knots,spline_order, num_c_pts):
         self._basis_type = BasisType.SPLINES
         assert len(knots) == num_c_pts + (spline_order+1) + 1, "knots vector length does not match the spline order"
-        self._num_c_pts = num_c_pts
-        self._sp_order = spline_order
-        self._t        = knots
+        self._num_c_pts  = num_c_pts
+        self._sp_order   = spline_order
+        self._t          = knots
+        self._q_per_knot = BSPLINE_NUM_Q_PTS_PER_KNOT
         self._splines = [scipy.interpolate.BSpline.basis_element(knots[i:i+spline_order+2],False) for i in range(num_c_pts)]
 
     def Pn(self,deg,domain=None,window=None):
@@ -177,22 +186,18 @@ class BSpline(Basis):
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
-        assert deg % self._num_c_pts ==0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,self._num_c_pts)
-        pts_p_spline = deg//self._num_c_pts
-        qx = np.zeros(pts_p_spline*self._num_c_pts)
-        qw = np.zeros(pts_p_spline*self._num_c_pts)
-        if from_zero:
-            t_i=np.argmax(self._t>0)
-            if (t_i)%2==0:
-                t_i+=1
+        ti=(self._sp_order+1)//2
+        assert np.allclose(self._t[ti],0), "specified knot vector element %d is not aligned with zero"%(ti)
+        knots_len  = len(self._t) 
+        assert deg % (knots_len-1-ti) == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,self._num_c_pts)
+        pts_p_knot = deg // (knots_len-1-ti)
+        qx = np.zeros(pts_p_knot*(knots_len-1-ti))
+        qw = np.zeros(pts_p_knot*(knots_len-1-ti))
 
-            for i in range(t_i,self._num_c_pts,self._sp_order+2):
-                qx[i*pts_p_spline: i*pts_p_spline + pts_p_spline], qw[i*pts_p_spline: i*pts_p_spline + pts_p_spline] = uniform_simpson((self._t[i], self._t[i+self._sp_order+2]),pts_p_spline)
-
-            qx[0:t_i*pts_p_spline], qw[0:t_i*pts_p_spline] = uniform_simpson((1e-8, self._t[t_i]),t_i*pts_p_spline)
-        else:
-            for i in range(0,self._num_c_pts,self._sp_order+2):
-                qx[i*pts_p_spline: i*pts_p_spline + pts_p_spline], qw[i*pts_p_spline: i*pts_p_spline + pts_p_spline] = uniform_simpson((self._t[i], self._t[i+self._sp_order+2]),pts_p_spline)
+        for i in range(ti,knots_len-1):
+            qx[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot], qw[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot] = uniform_simpson((self._t[i], self._t[i+1]),pts_p_knot)
+        
+        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[ti])), "simpson weights computed for splines does not match the knots domain"
 
         return qx,qw
     

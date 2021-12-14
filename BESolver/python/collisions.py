@@ -29,6 +29,7 @@ def electron_temperature(vth):
     """
     return (0.5 * MASS_ELECTRON * vth**2)/BOLTZMANN_CONST
 
+ELECTRON_CHARGE     = scipy.constants.e
 MASS_ELECTRON       = scipy.constants.m_e
 MASS_ARGON          = 6.6335209E-26 
 MASS_R_EARGON       = MASS_ELECTRON/MASS_ARGON
@@ -627,7 +628,7 @@ class eAr_G2(Collisions):
             self._v0       = np.zeros(vr.shape + tuple([3]))
             self._v1       = np.zeros(vr.shape + tuple([3]))
             self._v2       = np.zeros(vr.shape + tuple([3]))
-            self._check_1  = vr>=0 
+            self._check_1  = vr>0 
         
             self._v0[self._check_1,0]   = np.sin(vt[self._check_1]) * np.cos(vp[self._check_1])
             self._v0[self._check_1,1]   = np.sin(vt[self._check_1]) * np.sin(vp[self._check_1])

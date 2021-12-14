@@ -6,7 +6,6 @@ import parameters as params
 import spec_spherical
 import basis
 import scipy.constants
-import collisions
 
 MAX_GMX_Q_VR_PTS=118
 
@@ -335,7 +334,7 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
         
         return np.dot(np.transpose(MP_klm),cf) 
 
-def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g:collisions.Collisions, cf, maxwellian, vth, scale=1):
+def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, maxwellian, vth, scale=1):
     """
     Compute the reaction rates for specified collision data, 
     """    

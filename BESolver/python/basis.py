@@ -167,7 +167,7 @@ class BSpline(Basis):
 
     @staticmethod
     def get_num_q_pts(p_order, s_order, pts_per_knot):
-        return pts_per_knot*(p_order+1 + s_order + 1  - (s_order+1)//2)
+        return pts_per_knot*(p_order+1 + s_order + 2  - 2*(s_order+1))
 
     def __init__(self,knots,spline_order, num_c_pts):
         self._basis_type = BasisType.SPLINES
@@ -186,19 +186,18 @@ class BSpline(Basis):
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
-        ti=(self._sp_order+1)//2
+        ti=(self._sp_order)
         assert np.allclose(self._t[ti],0), "specified knot vector element %d is not aligned with zero"%(ti)
         knots_len  = len(self._t) 
-        assert deg % (knots_len-1-ti) == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,self._num_c_pts)
-        pts_p_knot = deg // (knots_len-1-ti)
-        qx = np.zeros(pts_p_knot*(knots_len-1-ti))
-        qw = np.zeros(pts_p_knot*(knots_len-1-ti))
-
-        for i in range(ti,knots_len-1):
+        assert deg % (knots_len-2*(ti+1)) == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,self._num_c_pts)
+        pts_p_knot = deg // (knots_len-2*(ti+1))
+        qx = np.zeros(pts_p_knot*(knots_len-2*(ti+1)))
+        qw = np.zeros(pts_p_knot*(knots_len-2*(ti+1)))
+        for i in range(ti, ti + (knots_len-2*(ti+1))):
             qx[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot], qw[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot] = uniform_simpson((self._t[i], self._t[i+1]),pts_p_knot)
         
-        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[ti])), "simpson weights computed for splines does not match the knots domain"
-
+        # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
+        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0])), "simpson weights computed for splines does not match the knots domain"
         return qx,qw
     
     def Wx(self):

@@ -203,7 +203,7 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
         def f_rhs(t,y,n0):
             return n0*np.matmul(FOp,y)
         
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1,rtol=t_tol)
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, atol=t_tol,rtol=t_tol)
         #ode_solver = ode(f_rhs,jac=None).set_integrator("dop853",verbosity=1,rtol=t_tol)
         ode_solver.set_initial_value(h_init,t=0.0)
         ode_solver.set_f_params(collisions.AR_NEUTRAL_N)
@@ -243,7 +243,7 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
         def f_rhs(t,y,n0,ni):
             return n0*np.matmul(FOp_g0,y) + ni*np.matmul(FOp_g2,y)
 
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1,rtol=t_tol)
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, atol=t_tol,rtol=t_tol)
         #ode_solver = ode(f_rhs,jac=None).set_integrator("lsoda",method='bdf',rtol=1e-12)
         ode_solver.set_initial_value(h_init,t=0.0)
 

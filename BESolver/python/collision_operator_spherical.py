@@ -41,13 +41,13 @@ class CollisionOpSP():
         
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order = basis.BSPLINE_BASIS_ORDER
-            assert spline_order%2==1, "spline order must be odd"
-            
             k_domain     = (0,40)
             num_k        = spline_order + (self._p+1) + 2
-            dk           = (k_domain[1]-k_domain[0])/(num_k-1)
-            knots_vec    = np.linspace(k_domain[0],k_domain[1] + dk , num_k)
-            knots_vec    = knots_vec - (knots_vec[(spline_order+1)//2]-knots_vec[0])
+            knots_vec1    = np.zeros(basis.BSPLINE_BASIS_ORDER+1)
+            knots_vec2    = np.logspace(1e-2, np.log2(k_domain[1]) , num_k-2*basis.BSPLINE_BASIS_ORDER-2,base=2)
+            knots_vec     = np.append(knots_vec1,knots_vec2)
+            knots_vec     = np.append(knots_vec,knots_vec[-1]*np.ones(basis.BSPLINE_BASIS_ORDER+1))
+            
             splines      = basis.BSpline(knots_vec,spline_order,self._p+1)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode

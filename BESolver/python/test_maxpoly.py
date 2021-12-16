@@ -8,7 +8,7 @@ from scipy.signal import savgol_filter
 import scipy.fftpack
 
 # max dofs used for represenation
-max_dofs = 119
+max_dofs = 250
 
 # bolsig+ data will be extended up to this point (if needed)
 ehat_ext_max = 49
@@ -17,7 +17,7 @@ ehat_ext_max = 49
 use_gauss_for_proj = True
 
 # order of Gaussian quadrature used for projection
-gauss_q_order_proj = 119
+gauss_q_order_proj = 500
 
 # number of trapezoidal points used for projection
 trapz_num_q_points_proj = 100000
@@ -26,7 +26,7 @@ trapz_num_q_points_proj = 100000
 error_num_points = 10000
 
 # temperature scalling
-tscale = 0.8
+tscale = 1.0
 
  # fraction of point used to extend tails
 frac = 0.1
@@ -116,12 +116,13 @@ with open('bolsig_data/argon.out', 'r') as F:
 
 # specify which of data and with what number of dofs to plot 
 degrees_all = [3, 6, 10, 20]
+degrees_all = [20, 40, 60, 80]
 # degrees_all = [10, 20, 30, 40]
 which_all = [0, 8, 9, 10, 11, 30]
 which_all = [0, 2, 4, 6, 8, 10, 11, 35]
 which_all = [0, 6, 11, 12, 35]
 # which_all = [10]
-which_all = [101, 102, 103]
+# which_all = [101, 102, 103]
 
 fig_data = plt.figure()
 fig_data.set_size_inches(30, 20, forward=True)
@@ -223,10 +224,13 @@ for which_idx,which in enumerate(which_all):
         # get gaussian quadratures
         [xg, wg] = maxpolygauss(gauss_q_order_proj)
         fg = ftest(xg)
+        # plt.semilogy(xg,wg)
+        # plt.show()
 
         for i in range(max_dofs):
             maxwell_coeffs[i] = np.sum(maxpolyeval(xg, i)*fg*wg)
-            # laguerre_coeffs[i] = np.sum(lagpolyeval(xg**2, i)*fg*wg)
+            # laguerre_coeffs[i] = np.sum(maxpolyeval(xg, i)**2*wg)
+        
     else:
         xtrapz = np.linspace(0, 20, num=trapz_num_q_points_proj)
 
@@ -346,14 +350,8 @@ for which_idx,which in enumerate(which_all):
         plt.figure(fig_vis_log)
         if i in degrees_all:
             plt.subplot(len(which_all), len(degrees_all), which_idx*len(degrees_all)+degrees_all.index(i)+1)
-            plt.semilogy(x, f_approx[0,:]*np.exp(-x**2),'-')
-            plt.semilogy(x, f_approx[1,:]*np.exp(-x**2),'-')
-            plt.semilogy(x, f_approx[2,:]*np.exp(-x**2),'-')
-            plt.semilogy(x, f_approx[3,:]*np.exp(-x**2),'-')
-            plt.semilogy(x, f_approx[4,:],'-')
-            plt.semilogy(x, f_approx[5,:],'-')
-            plt.semilogy(x, ftest(x)*np.exp(-x**2),'k')
-            plt.semilogy(x, np.exp(-x**2),'k--')
+            plt.semilogy(x, abs(f_approx[0,:]*np.exp(-x**2)-ftest(x)*np.exp(-x**2)),'-')
+            plt.semilogy(x, abs(f_approx[2,:]*np.exp(-x**2)-ftest(x)*np.exp(-x**2)),'-')
             plt.xlim((0,np.sqrt(ehat_ext_max)))
 
             if degrees_all.index(i) == 0:
@@ -369,6 +367,32 @@ for which_idx,which in enumerate(which_all):
                 plt.legend(['Maxwell','Laguerre','Chebyshev','Chebyshev-Full','Linear','Linear-Full','Bolsig','Maxwellian'], loc='upper right')
 
             plt.grid()
+
+        # if i in degrees_all:
+        #     plt.subplot(len(which_all), len(degrees_all), which_idx*len(degrees_all)+degrees_all.index(i)+1)
+        #     plt.semilogy(x, f_approx[0,:]*np.exp(-x**2),'-')
+        #     plt.semilogy(x, f_approx[1,:]*np.exp(-x**2),'-')
+        #     plt.semilogy(x, f_approx[2,:]*np.exp(-x**2),'-')
+        #     plt.semilogy(x, f_approx[3,:]*np.exp(-x**2),'-')
+        #     plt.semilogy(x, f_approx[4,:],'-')
+        #     plt.semilogy(x, f_approx[5,:],'-')
+        #     plt.semilogy(x, ftest(x)*np.exp(-x**2),'k')
+        #     plt.semilogy(x, np.exp(-x**2),'k--')
+        #     plt.xlim((0,np.sqrt(ehat_ext_max)))
+
+        #     if degrees_all.index(i) == 0:
+        #         plt.ylabel('Density')
+
+        #     if which_idx == len(which_all)-1:
+        #         plt.xlabel('Speed')
+
+        #     if which_idx == 0:
+        #         plt.title('Num. of polys: '+str(i))
+
+        #     if which_idx == 0 and degrees_all.index(i) == 0:
+        #         plt.legend(['Maxwell','Laguerre','Chebyshev','Chebyshev-Full','Linear','Linear-Full','Bolsig','Maxwellian'], loc='upper right')
+
+        #     plt.grid()
 
     # convergence plots
     plt.figure(fig_conv)

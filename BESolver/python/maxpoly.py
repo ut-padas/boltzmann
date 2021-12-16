@@ -4,16 +4,16 @@ import numpy as np
 # organized as [a00, a10, a11, a20, a21, a22, ... ], that is 
 # coefficients of n-degree polynomial are given by max_poly_coeffs[n*(n+1)/2]
 
-maxpoly_nmax    = 119 # max degree allowed
-maxpoly_data    = np.genfromtxt('polynomials/maxpoly_upto119.dat',delimiter=',')
-maxpoly_coeffs  = maxpoly_data[:,0]
-maxpoly_nodes   = maxpoly_data[:,1]
-maxpoly_weights = maxpoly_data[:,2]
+maxpoly_nmax    = 554 # max degree allowed
+maxpoly_data    = np.genfromtxt('polynomials/maxpoly_upto555.dat',delimiter=',')
+# maxpoly_coeffs  = maxpoly_data[:,0]
+maxpoly_nodes   = maxpoly_data[:,0]
+maxpoly_weights = maxpoly_data[:,1]
 
-maxpoly_rec_data = np.genfromtxt('polynomials/maxpoly_upto119_recursive.dat',delimiter=',')
+maxpoly_rec_data = np.genfromtxt('polynomials/maxpoly_upto555_recursive.dat',delimiter=',')
 maxpoly_rec_a    = maxpoly_rec_data[:,0]
 maxpoly_rec_b    = maxpoly_rec_data[:,1]
-maxpoly_rec_n    = maxpoly_rec_data[:,2]
+# maxpoly_rec_n    = maxpoly_rec_data[:,2]
 
 def idx_s(p):
     return int(p*(p+1)/2)
@@ -35,6 +35,24 @@ def maxpolyeval_naive(x, p):
     return result
 
 def maxpolyeval(x, p):
+
+    if p == 0:
+        return np.ones(np.shape(x))/np.sqrt(np.sqrt(np.pi)/4.)
+
+    Bn   = 0
+    Bnp1 = 0
+    Bnp2 = 0
+    for i in range(p,0,-1):
+        Bnp2 = Bnp1
+        Bnp1 = Bn
+        if i == p:
+            Bn = np.ones(np.shape(x)) + (x-maxpoly_rec_a[i])*Bnp1/np.sqrt(maxpoly_rec_b[i+1]) - np.sqrt(maxpoly_rec_b[i+1]/maxpoly_rec_b[i+2])*Bnp2
+        else:
+            Bn = (x-maxpoly_rec_a[i])*Bnp1/np.sqrt(maxpoly_rec_b[i+1]) - np.sqrt(maxpoly_rec_b[i+1]/maxpoly_rec_b[i+2])*Bnp2
+
+    return Bn*(x-2./np.sqrt(np.pi))/np.sqrt(np.sqrt(np.pi)*(1.5-4./np.pi)/4.) - np.sqrt(maxpoly_rec_b[1]/maxpoly_rec_b[2])*Bnp1/np.sqrt(np.sqrt(np.pi)/4.)
+
+def maxpolyeval_non_norm(x, p):
 
     if p == 0:
         return np.ones(np.shape(x))

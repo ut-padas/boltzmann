@@ -64,7 +64,7 @@ class Collisions(abc.ABC):
         np_data      = cross_section.lxcat_cross_section_to_numpy(self._cs_fname, self._cs_fields)
         self._energy   = np_data[0]
         self._total_cs = np_data[1]
-        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='cubic',bounds_error=False,fill_value=0.0)
+        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear',bounds_error=False,fill_value=0.0)
         return
 
     @staticmethod
@@ -398,6 +398,21 @@ class Collisions(abc.ABC):
             e0  = 5.20e-26
             tcs = 3.22e-21 * (ev-x0)**2 + e0
             return tcs
+
+        elif mode == 10:
+            """
+            G0 cross section data fit with analytical function
+            """
+            ev=ev+1e-8
+            a0 =    0.008787
+            b0 =     0.07243
+            c  =    0.007048
+            d  =      0.9737
+            a1 =        3.27
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
 
 
     def assemble_diff_cs_mat(self,v,chi):

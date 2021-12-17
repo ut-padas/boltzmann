@@ -10,7 +10,7 @@ import lagpoly
 import scipy.interpolate
 
 # some parameters related to splines. 
-BSPLINE_NUM_Q_PTS_PER_KNOT     = 3
+BSPLINE_NUM_Q_PTS_PER_KNOT     = 7
 BSPLINE_BASIS_ORDER            = 1
 
 class BasisType(enum.Enum):

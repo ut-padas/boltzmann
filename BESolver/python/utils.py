@@ -7,7 +7,7 @@ import spec_spherical
 import basis
 import scipy.constants
 
-MAX_GMX_Q_VR_PTS=118
+MAX_GMX_Q_VR_PTS=278
 
 def maxwellian_normalized(v_abs):
     """
@@ -370,7 +370,7 @@ def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, ma
     P_kr = spec_sp.Vq_r(quad_grid[0]) 
     Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
 
-    ev_qx   =  (0.5 * scipy.constants.electron_mass * (quad_grid[0]*vth)**2 )/scipy.constants.electron_volt
+    ev_qx    =  (0.5 * scipy.constants.electron_mass * (quad_grid[0]*vth)**2 )/scipy.constants.electron_volt
     cs_total =  g.total_cross_section(ev_qx)
 
     gama_electron    = 1 #np.sqrt(2*collisions.ELECTRON_CHARGE/collisions.MASS_ELECTRON)

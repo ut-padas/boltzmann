@@ -99,15 +99,15 @@ def lift_matrix(n):
     D = np.zeros([n+1, n+1])
 
     D[0,0] = maxpoly_rec_a[0]
-    D[0,1] = maxpoly_rec_b[1]*np.sqrt(maxpoly_rec_n[0]/maxpoly_rec_n[1])
+    D[0,1] = np.sqrt(maxpoly_rec_b[1])
 
     for j in range(1,n):
 
-        D[j,j-1] = np.sqrt(maxpoly_rec_n[j]/maxpoly_rec_n[j-1])
+        D[j,j-1] = np.sqrt(maxpoly_rec_b[j])
         D[j,j]   = maxpoly_rec_a[j]
-        D[j,j+1] = maxpoly_rec_b[j+1]*np.sqrt(maxpoly_rec_n[j]/maxpoly_rec_n[j+1])
+        D[j,j+1] = np.sqrt(maxpoly_rec_b[j+1])
 
-    D[n,n-1] = np.sqrt(maxpoly_rec_n[n]/maxpoly_rec_n[n-1])
+    D[n,n-1] = np.sqrt(maxpoly_rec_b[n])
     D[n,n] = maxpoly_rec_a[n]
 
     return D

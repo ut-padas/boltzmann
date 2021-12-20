@@ -115,10 +115,12 @@ for k=2:500
     x = gaussnodes(q*(q - 1)/2 + 1 : q*(q - 1)/2 + q);
     f = sample_poly(a,b,k,x);
     f2 = f.^2;
+    numinfs(k) = sum(isinf(f2));
     f2(isinf(f2)) = 0;
     w = gaussweights(q*(q - 1)/2 + 1 : q*(q - 1)/2 + q);
 %     w(w < 1.e-30) = 0;
     pnorm(k) = f2*(w');
+    xmax(k) = max(x);
 end
 
 pnorm2(1) = sqrt(pi)/4.;
@@ -133,6 +135,11 @@ xlabel('Polynomial order');
 % hold on 
 % semilogy(pnorm2)
 % hold off
+
+plot(xmax);
+hold on
+plot(numinfs);
+hold off;
 
 
 %%

@@ -51,7 +51,7 @@ plt.subplot(1,2,1)
 plt.plot(xplot, xf(xplot),'-')
 plt.plot(xplot, xf_app,'*')
 plt.plot(xplot, fd(xplot),'-')
-plt.plot(xplot, fd_app,'*-')
+plt.plot(xplot, fd_app,'o')
 
 plt.subplot(1,2,2)
 # plt.semilogy(abs(xf_coeffs_exact),'-')

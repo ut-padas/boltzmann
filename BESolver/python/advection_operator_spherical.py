@@ -1,19 +1,16 @@
-# import abc
-# from BESolver.python.maxpoly import diff_matrix, lift_matrix
 import basis
 import spec_spherical as sp
-# import collisions
 import scipy.integrate
 import numpy as np
-# import parameters as params
-# import time
 import maxpoly
 import matplotlib.pyplot as plt
+import profiler
 
+t_adv_mat = profiler.profile_t("v_adv")
 phimat = np.genfromtxt('sph_harm_del/phimat.dat',delimiter=',')
 psimat = np.genfromtxt('sph_harm_del/psimat.dat',delimiter=',')
 
-def assemble_advection_matix(Nr, sph_harm_lm):
+def assemble_advection_matix_lp(Nr, sph_harm_lm):
 
     num_sh = len(sph_harm_lm)
     num_total = (Nr+1)*num_sh
@@ -36,7 +33,27 @@ def assemble_advection_matix(Nr, sph_harm_lm):
                         0.5*(sum(g_mat[:,k]*g_mat[p,:])+sum(g_mat[:,k]*diff_mat[:,p])) * phimat[lm_mat,qs_mat]
 
     return adv_mat
+
+def assemble_advection_matrix(Nr,sph_harm_lm):
+    num_sh = len(sph_harm_lm)
+    num_total = (Nr+1)*num_sh
+
+    l_max = sph_harm_lm[-1][0]
+
+    diff_mat = maxpoly.diff_matrix(Nr)
+    lift_mat = maxpoly.lift_matrix(Nr)
+
+    g_mat = diff_mat - 2*lift_mat
     
+    gg_pk  = np.matmul(g_mat, g_mat)
+    dg_pk  = np.matmul(np.transpose(diff_mat),g_mat)
+
+    psimat_local= np.transpose(psimat[0:(l_max+1)**2, 0:(l_max+1)**2])
+    phimat_local= np.transpose(phimat[0:(l_max+1)**2, 0:(l_max+1)**2])
+
+    adv_mat= np.kron(g_mat,psimat_local).reshape(num_total,num_total) + 0.5*(np.kron((gg_pk+dg_pk),phimat_local).reshape(num_total,num_total)) 
+    return adv_mat
+
 Nr = 5
 lmax = 10
 Ntotal = (Nr+1)*(lmax+1)**2
@@ -53,24 +70,28 @@ num_sph = len(lm_all)
 coeffs = np.zeros(Ntotal)
 coeffs[0] = 1
 
-advmat = assemble_advection_matix(Nr, lm_all)
+t_adv_mat.start()
+#advmat1   = assemble_advection_matix_lp(Nr, lm_all)
+advmat    = assemble_advection_matrix(Nr,lm_all)
+t_adv_mat.stop()
+print("time for advection op assembly: ",t_adv_mat.seconds)
+#print(np.linalg.norm(advmat-advmat1))
 
-print(advmat)
 
 func = lambda t,a: -np.matmul(advmat,a)
 
-t_end = 5e-2
+t_end = 1
 sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs)
 
-print(coeffs)
-print(sol.y[:,-1])
+#print(coeffs)
+#print(sol.y[:,-1])
 
 coeffs_new = sol.y[:,-1]
 
 maxpolybasis = basis.Maxwell()
 sph_basis = sp.SpectralExpansionSpherical(Nr, maxpolybasis, lm_all)
 
-x = np.linspace(0,3,100)
+x = np.linspace(0,8,100)
 f = np.zeros(np.shape(x))
 f_in = np.zeros(np.shape(x))
 f_ex = np.zeros(np.shape(x))

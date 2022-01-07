@@ -37,6 +37,10 @@ fd_coeffs_app = np.matmul(D, f_coeffs)
 L = lift_matrix(max_dofs-1)
 xf_coeffs_app = np.matmul(L, f_coeffs)
 
+# for i in range(max_dofs):
+#     fd_coeffs_app[i] = sum(D[i,:]*f_coeffs)
+#     xf_coeffs_app[i] = sum(L[i,:]*f_coeffs)
+
 xplot = linspace(0,5,100)
 f_app = np.zeros(len(xplot))
 fd_app = np.zeros(len(xplot))

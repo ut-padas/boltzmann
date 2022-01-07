@@ -28,17 +28,17 @@ def assemble_advection_matix(Nr, sph_harm_lm):
         for k in range(Nr+1):
             for lm_idx,lm in enumerate(sph_harm_lm):
                 for qs_idx,qs in enumerate(sph_harm_lm):
-                    lm_mat = lm[0]**2+1+lm[0]+lm[1]
-                    qs_mat = qs[0]**2+1+qs[0]+qs[1]
+                    lm_mat = lm[0]**2+lm[0]+lm[1]
+                    qs_mat = qs[0]**2+qs[0]+qs[1]
                     klm = k*num_sh + lm_idx
                     pqs = p*num_sh + qs_idx
-                    adv_mat[pqs,klm] = g_mat[k,p]*psimat[lm_mat,qs_mat] + \
-                        .5*(sum(g_mat[k,:]*g_mat[:,p])+sum(g_mat[k,:]*diff_mat[p,:])*phimat[lm_mat,qs_mat])
+                    adv_mat[pqs,klm] = g_mat[p,k]*psimat[lm_mat,qs_mat] + \
+                        0.5*(sum(g_mat[:,k]*g_mat[p,:])+sum(g_mat[:,k]*diff_mat[:,p])) * phimat[lm_mat,qs_mat]
 
     return adv_mat
     
-Nr = 20
-lmax = 5
+Nr = 5
+lmax = 10
 Ntotal = (Nr+1)*(lmax+1)**2
 
 lm_all = []
@@ -55,11 +55,11 @@ coeffs[0] = 1
 
 advmat = assemble_advection_matix(Nr, lm_all)
 
-print(np.shape(advmat))
+print(advmat)
 
 func = lambda t,a: -np.matmul(advmat,a)
 
-t_end = 1e-2
+t_end = 5e-2
 sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs)
 
 print(coeffs)
@@ -72,13 +72,18 @@ sph_basis = sp.SpectralExpansionSpherical(Nr, maxpolybasis, lm_all)
 
 x = np.linspace(0,3,100)
 f = np.zeros(np.shape(x))
+f_in = np.zeros(np.shape(x))
 f_ex = np.zeros(np.shape(x))
 
 for k in range(Nr+1):
     for lm_idx, lm in enumerate(lm_all):
         f += coeffs_new[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(0,0, lm[0], lm[1])*maxpoly.maxpolyeval(x,k)*np.exp(-x**2)
+        f_in += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(0,0, lm[0], lm[1])*maxpoly.maxpolyeval(x,k)*np.exp(-(x)**2)
         f_ex += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(0,0, lm[0], lm[1])*maxpoly.maxpolyeval(x-t_end,k)*np.exp(-(x-t_end)**2)
 
-plt.plot(x,f)
+plt.semilogy(x,f_in)
 plt.plot(x,f_ex)
+plt.plot(x,f,'o')
+plt.grid()
+plt.legend(['Initial Conditions', 'Exact', 'Nr=5, l_max=10'])
 plt.show()

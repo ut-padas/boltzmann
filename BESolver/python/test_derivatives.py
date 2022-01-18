@@ -25,16 +25,18 @@ gauss_q_order_proj = 100
 
 [xg, wg] = maxpolygauss(gauss_q_order_proj)
 
+G = 16
+
 for i in range(max_dofs):
-    f_coeffs[i] = np.sum(maxpolyeval(xg, i)*f(xg)*wg)
-    fd_coeffs_exact[i] = np.sum(maxpolyeval(xg, i)*fd(xg)*wg)
-    xf_coeffs_exact[i] = np.sum(maxpolyeval(xg, i)*xf(xg)*wg)
+    f_coeffs[i] = np.sum(maxpolyeval(G, xg, i)*f(xg)*wg*xg**(G-2))
+    fd_coeffs_exact[i] = np.sum(maxpolyeval(G, xg, i)*fd(xg)*wg*xg**(G-2))
+    xf_coeffs_exact[i] = np.sum(maxpolyeval(G, xg, i)*xf(xg)*wg*xg**(G-2))
 
 # assemble matrix
-D = diff_matrix(max_dofs-1)
+D = diff_matrix(G, max_dofs-1)
 fd_coeffs_app = np.matmul(D, f_coeffs)
 
-L = lift_matrix(max_dofs-1)
+L = lift_matrix(G, max_dofs-1)
 xf_coeffs_app = np.matmul(L, f_coeffs)
 
 # for i in range(max_dofs):
@@ -46,16 +48,23 @@ f_app = np.zeros(len(xplot))
 fd_app = np.zeros(len(xplot))
 xf_app = np.zeros(len(xplot))
 
-for i in range(max_dofs):
-    f_app += f_coeffs[i]*maxpolyeval(xplot, i)
-    fd_app += fd_coeffs_app[i]*maxpolyeval(xplot, i)
-    xf_app += xf_coeffs_app[i]*maxpolyeval(xplot, i)
+# for i in range(max_dofs):
+#     f_app += f_coeffs[i]*maxpolyeval(G, xplot, i)
+#     fd_app += fd_coeffs_app[i]*maxpolyeval(G, xplot, i)
+#     xf_app += xf_coeffs_app[i]*maxpolyeval(G, xplot, i)
+
+
+f_app = maxpolyserieseval(G, xplot, f_coeffs)
+fd_app = maxpolyserieseval(G, xplot, fd_coeffs_app)
+xf_app = maxpolyserieseval(G, xplot, xf_coeffs_app)
 
 plt.subplot(1,2,1)
 plt.plot(xplot, xf(xplot),'-')
 plt.plot(xplot, xf_app,'*')
 plt.plot(xplot, fd(xplot),'-')
 plt.plot(xplot, fd_app,'o')
+plt.plot(xplot, f(xplot),'-')
+plt.plot(xplot, f_app,'^')
 
 plt.subplot(1,2,2)
 # plt.semilogy(abs(xf_coeffs_exact),'-')

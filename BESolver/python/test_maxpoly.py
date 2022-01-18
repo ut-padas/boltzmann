@@ -228,14 +228,14 @@ for which_idx,which in enumerate(which_all):
         # plt.show()
 
         for i in range(max_dofs):
-            maxwell_coeffs[i] = np.sum(maxpolyeval(xg, i)*fg*wg)
+            maxwell_coeffs[i] = np.sum(maxpolyeval(2, xg, i)*fg*wg)
             # laguerre_coeffs[i] = np.sum(maxpolyeval(xg, i)**2*wg)
         
     else:
         xtrapz = np.linspace(0, 20, num=trapz_num_q_points_proj)
 
         for i in range(max_dofs):
-            maxwell_coeffs[i] = np.trapz(maxpolyeval(xtrapz, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
+            maxwell_coeffs[i] = np.trapz(maxpolyeval(2, xtrapz, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
                 / np.sqrt(np.pi) * 4.
             # laguerre_coeffs[i] = np.trapz(lagpolyeval(xtrapz**2, i)*ftest(xtrapz)*np.exp(-xtrapz**2)*xtrapz**2,x=xtrapz) \
                 # / np.sqrt(np.pi) * 4.
@@ -268,7 +268,7 @@ for which_idx,which in enumerate(which_all):
     # error calculations
     for i in range(max_dofs):
 
-        f_approx[0,:] += maxwell_coeffs[i]*maxpolyeval(x, i)
+        f_approx[0,:] += maxwell_coeffs[i]*maxpolyeval(2, x, i)
         # f_approx[1,:] += laguerre_coeffs[i]*lagpolyeval(x**2, i)
         f_approx[2,:] = np.polynomial.chebyshev.chebval(2*(x-min(x))/(max(x)-min(x))-1., cheb_coeffs[0:i+1])
         f_approx[4,:] = np.polynomial.chebyshev.chebval(2*(x-min(x))/(max(x)-min(x))-1., cheb_coeffs_full[0:i+1])
@@ -278,7 +278,7 @@ for which_idx,which in enumerate(which_all):
         f_approx[3,:] = np.interp(x, x_lin, y_lin)
         f_approx[5,:]  = np.interp(x, x_lin, y_lin_full)
 
-        f_approx_at_err_pts[0,:] += maxwell_coeffs[i]*maxpolyeval(xerror, i)
+        f_approx_at_err_pts[0,:] += maxwell_coeffs[i]*maxpolyeval(2, xerror, i)
         # f_approx_at_err_pts[1,:] += laguerre_coeffs[i]*lagpolyeval(xerror**2, i)
         f_approx_at_err_pts[2,:] = np.polynomial.chebyshev.chebval(2*(xerror-min(x))/(max(x)-min(x))-1., cheb_coeffs[0:i+1])
         f_approx_at_err_pts[4,:] = np.polynomial.chebyshev.chebval(2*(xerror-min(x))/(max(x)-min(x))-1., cheb_coeffs_full[0:i+1])

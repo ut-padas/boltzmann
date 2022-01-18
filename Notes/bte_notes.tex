@@ -725,6 +725,755 @@ d_{jp} M_j
 \right)
 \end{align*}
 
+
+\clearpage
+\section{Advection term (Revisited)}
+Advection (acceleration) term
+\begin{align*}
+\partial_t f + \vect{E}\cdot \nabla_{\vect{v}} f = 0
+\end{align*}
+In spherical coordinates
+\begin{align*}
+\nabla_{\vect{v}} 
+= \vrunit \frac{\partial}{\partial \vr}
++ \vthetaunit \frac{1}{\vr} \frac{\partial}{\partial \vtheta}
++ \vphiunit \frac{1}{\vr \sin\of{\vtheta}} \frac{\partial}{\partial \vphi}
+\end{align*}
+\begin{align*}
+\vect{E} 
+= E \hat{\vect{z}} 
+= E \left( \cos\of{\vtheta} \vrunit - \sin\of{\vtheta} \vthetaunit \right)
+\end{align*}
+\begin{align*}
+\vect{E}\cdot \nabla_{\vect{v}} f
+= E 
+\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
+- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right)
+\end{align*}
+Expansion in terms of Maxwell polynomials and spherical harmonics
+\begin{align*}
+f = 
+\sum_{klm} a_{klm} \Phi_{kl}\of{\frac{v}{\vth}} Y_{lm}\of{\vtheta,\vphi}
+\end{align*}
+Spherical harmonics
+\begin{align*}
+Y_{lm}\of{\vtheta,\vphi} = U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\end{align*}
+\begin{align*}
+U_{lm} &= 
+\begin{cases}
+(-1)^m \sqrt{2} \sqrt{\frac{2l+1}{4\pi} \frac{(l-|m|)!}{(l+|m|!}}, &m\neq 0 \\
+\sqrt{\frac{2l+1}{4\pi}}, &m = 0
+\end{cases}
+\\
+\alpha_m\of{\vphi}
+&=
+\begin{cases}
+\sin\of{|m|\phi}, &m < 0 \\
+1, &m = 0\\
+\cos\of{m\phi}, &m > 0
+\end{cases}
+\end{align*}
+Useful relationships
+\begin{align*}
+x P^m_l\of{x} 
+&= \frac{l+m}{2l+1} P^m_{l-1}\of{x}
++ \frac{l-m+1}{2l+1} P^m_{l+1}\of{x}
+\\
+&= \alpha_M\of{l,m} P^m_{l-1}\of{x}
++ \beta_M\of{l,m} P^m_{l+1}\of{x}
+\\
+(1-x^2) \frac{d}{dx} P^m_l\of{x} 
+&= \frac{(l+1)(l+m)}{2l+1} P^m_{l-1}\of{x} 
+- \frac{l(l-m+1)}{2l+1} P^m_{l+1}\of{x}
+\\
+&= \alpha_D\of{l,m} P^m_{l-1}\of{x} 
++ \beta_D\of{l,m} P^m_{l+1}\of{x}
+\end{align*}
+Now we can show
+\begin{align*}
+\cos\of{\vtheta} Y_{lm}\of{\vtheta,\vphi}
+&=
+\cos\of{\vtheta} U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+\cos\of{\vtheta} U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+U_{lm} \left( \alpha_M\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} 
++ \beta_M\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} \right) \alpha_m\of{\vphi}
+\\
+&=
+\alpha_M\of{l,|m|} \frac{U_{lm}}{U_{(l-1)m}} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ \beta_M\of{l,|m|} \frac{U_{lm}}{U_{(l+1)m}} Y_{(l+1)m}\of{\vtheta,\vphi}
+\\
+&=
+A_M\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ 
+B_M\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi}
+\end{align*}
+
+\begin{align*}
+-\sin\of{\vtheta} \frac{d}{d\vtheta} Y_{lm}\of{\vtheta,\vphi}
+&=
+-\sin\of{\vtheta} U_{lm} \frac{d}{d\vtheta} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+\left(\sin\of{\vtheta}\right)^2 U_{lm} \frac{d}{d\cos\of{\vtheta}} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+\left(1 - \left(\cos\of{\vtheta}\right)^2\right) U_{lm} \frac{d}{d\cos\of{\vtheta}} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+U_{lm} \left( \alpha_D\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} 
++ \beta_D\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} \right) \alpha_m\of{\vphi}
+\\
+&=
+\alpha_D\of{l,|m|} \frac{U_{lm}}{U_{(l-1)m}} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ \beta_D\of{l,|m|} \frac{U_{lm}}{U_{(l+1)m}} Y_{(l+1)m}\of{\vtheta,\vphi}
+\\
+&=
+A_D\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ 
+B_D\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi}
+\end{align*}
+Substituting into advection term
+\begin{align*}
+\vect{E}\cdot \nabla_{\vect{v}} f
+&= E 
+\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
+- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right)
+\\
+&= E 
+\sum_{klm} a_{klm} 
+\Bigg(
+\frac{d}{d\vr}\Phi_{kl}\of{\frac{v}{\vth}}
+\left( A_M\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ B_M\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi} \right)
+\\
+&+
+\frac{1}{\vr}\Phi_{kl}\of{\frac{v}{\vth}}
+\left( A_D\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ B_D\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi} \right) 
+\Bigg)
+\\
+&= E 
+\sum_{klm} a_{klm} 
+\Bigg(
+\left( A_M\of{l,m} \frac{d}{d\vr}\Phi_{kl}\of{\frac{v}{\vth}} 
++ A_D\of{l,m} \frac{1}{\vr}\Phi_{kl}\of{\frac{v}{\vth}} \right)
+Y_{(l-1)m}\of{\vtheta,\vphi} 
+\\
+&+
+\left( B_M\of{l,m} \frac{d}{d\vr}\Phi_{kl}\of{\frac{v}{\vth}} 
++ B_D\of{l,m} \frac{1}{\vr}\Phi_{kl}\of{\frac{v}{\vth}} \right)
+Y_{(l+1)m}\of{\vtheta,\vphi} 
+\Bigg)
+\end{align*}
+Projecting onto test functions
+\begin{multline*}
+\myint \vect{E}\cdot \nabla_{\vect{v}} f \Psi_{pq}\of{\textstyle\frac{\vr}{\vth}} Y_{qs}\of{\theta,\phi} 
+\vr^2 \diff{\vr} \diff{\vomega}\\
+= E 
+\myint 
+\sum_{k}
+\Bigg(
+a_{k(q+1)s} 
+\left( A_M\of{q+1,s} \frac{d}{d\vr}\Phi_{k(q+1)}\of{\frac{v}{\vth}} 
++ A_D\of{q+1,s} \frac{1}{\vr}\Phi_{k(q+1)}\of{\frac{v}{\vth}} \right)
+\\
++ a_{k(q-1)s} \left( B_M\of{q-1,s} \frac{d}{d\vr}\Phi_{k(q-1)}\of{\frac{v}{\vth}} 
++ B_D\of{q-1,s} \frac{1}{\vr}\Phi_{k(q-1)}\of{\frac{v}{\vth}} \right)
+\Bigg)
+\Psi_{pq}\of{\textstyle\frac{\vr}{\vth}}
+\vr^2 \diff{\vr}
+\end{multline*}
+Non-dimensionalizing integrands
+\begin{multline*}
+= E \vth^2
+\myint 
+\sum_{k}
+\Bigg(
+a_{k(q+1)s} 
+\left( A_M\of{q+1,s} \frac{d}{dx}\Phi_{k(q+1)}\of{x} 
++ A_D\of{q+1,s} \frac{1}{x}\Phi_{k(q+1)}\of{x} \right)
+\\
++ a_{k(q-1)s} \left( B_M\of{q-1,s} \frac{d}{dx}\Phi_{k(q-1)}\of{x} 
++ B_D\of{q-1,s} \frac{1}{x}\Phi_{k(q-1)}\of{x} \right)
+\Bigg)
+\Psi_{pq}\of{x}
+x^2 \diff{x}
+\end{multline*}
+Differentiating by parts
+\begin{multline*}
+= E \vth^2
+\myint 
+\sum_{k}
+\Bigg(
+a_{k(q+1)s} \Bigg( 
+\left( A_M\of{q+1,s} - \frac12 A_D\of{q+1,s} \right) 
+\Psi_{pq}\of{x} \frac{d}{dx}\Phi_{k(q+1)}\of{x} 
+\\
+- \frac12 A_D\of{q+1,s} \Phi_{k(q+1)}\of{x} \frac{d}{dx} \Psi_{pq}\of{x} \Bigg)
+\\
++ a_{k(q-1)s} \Bigg( 
+\left( B_M\of{q-1,s} - \frac12 B_D\of{q-1,s} \right) \Psi_{pq}\of{x} \frac{d}{dx}\Phi_{k(q-1)}\of{x} 
+\\
+- \frac12 B_D\of{q-1,s} \Phi_{k(q-1)}\of{x} \frac{d}{dx}\Psi_{pq}\of{x}
+\Bigg)
+\Bigg)
+x^2 \diff{x}
+\end{multline*}
+Writing in a more compact form
+\begin{multline*}
+= E \vth^2 \sum_{k}
+a_{k,q+1,s} \Bigg( 
+\left( A_M\of{q+1,s} - \frac12 A_D\of{q+1,s} \right) 
+C^{q,\Psi d\Phi+}_{p,k} 
+- \frac12 A_D\of{q+1,s} C^{q,\Phi d\Psi+}_{p,k} \Bigg)
+\\
++ E \vth^2 \sum_{k}
+a_{k,q-1,s} \Bigg( 
+\left( B_M\of{q-1,s} - \frac12 B_D\of{q-1,s} \right) C^{q,\Psi d\Phi-}_{p,k}
+- \frac12 B_D\of{q-1,s} C^{q,\Phi d\Psi-}_{p,k}
+\Bigg)
+\end{multline*}
+where
+\begin{align*}
+C^{q,\Psi d\Phi+}_{p,k} 
+&= \myint \Psi_{p,q}\of{x} \frac{d}{dx} \Phi_{k,q+1}\of{x} x^2 \diff{x}
+\\
+C^{q,\Psi d\Phi-}_{p,k} 
+&= \myint \Psi_{p,q}\of{x} \frac{d}{dx} \Phi_{k,q-1}\of{x} x^2 \diff{x}
+\\
+C^{q,\Phi d\Psi+}_{p,k} 
+&= \myint \Phi_{k,q+1}\of{x} \frac{d}{dx} \Psi_{p,q}\of{x} x^2 \diff{x}
+\\
+C^{q,\Phi d\Psi-}_{p,k} 
+&= \myint \Phi_{k,q-1}\of{x} \frac{d}{dx} \Psi_{p,q}\of{x} x^2 \diff{x}
+\end{align*}
+Potentially these can be found analytically and tried to do that for Laguerre polynomials but the results are quite messy. So, it seems to be more convenient just to compute those numerically.
+\subsection{Case of Maxwell polynomials}
+
+\begin{align*}
+\Phi_{kl}\of{x} &= e^{-x^2} x^l \maxp{2l+2}{k}\of{x^2} \\
+\Psi_{pq}\of{x} &= x^q \maxp{2q+2}{p}\of{x^2} 
+\end{align*}
+
+\begin{align*}
+\myint_0^\infty \Phi_{kq}\of{x} \Psi_{pq}\of{x} x^2 \diff{x} 
+&= \myint_0^\infty e^{-x^2} x^{2q+2}\maxp{2q+2}{k}\of{x} \maxp{2q+2}{p}\of{x} \diff{x}
+= \delta_{k,p}
+\end{align*}
+
+\begin{align*}
+\Psi_{p,q}\of{x} \frac{d}{dx} \Phi_{k,q+1}\of{x} 
+&= e^{-x^2} x^{2q} \maxp{2q+2}{p}\of{x} 
+\left( \left( (q+1) - 2x^2 \right) \maxp{2q+4}{k} + x \sum_{j=0}^{k-1} \diffm{2q+4}{j}{k} \maxp{2q+4}{j} \right)
+\\
+\Psi_{p,q}\of{x} \frac{d}{dx} \Phi_{k,q-1}\of{x} 
+&= e^{-x^2} x^{2q-2} \maxp{2q+2}{p}\of{x} 
+\left( \left( (q-1) - 2x^2 \right) \maxp{2q}{k} + x \sum_{j=0}^{k-1} \diffm{2q}{j}{k} \maxp{2q}{j} \right)
+\\
+\Phi_{k,q+1}\of{x} \frac{d}{dx} \Psi_{p,q}\of{x}
+&= e^{-x^2} x^{2q} \maxp{2q+4}{k}\of{x} 
+\left( q \maxp{2q+2}{p} + x \sum_{j=0}^{p-1} \diffm{2q+2}{j}{p} \maxp{2q+2}{j} \right)
+\\
+\Phi_{k,q-1}\of{x} \frac{d}{dx} \Psi_{p,q}\of{x}
+&= e^{-x^2} x^{2q-2} \maxp{2q}{k}\of{x} 
+\left( q \maxp{2q+2}{p} + x \sum_{j=0}^{p-1} \diffm{2q+2}{j}{p} \maxp{2q+2}{j} \right)
+\end{align*}
+where differentiation  matrices
+\begin{align*}
+\frac{d}{dx} \maxp{l}{k} \of{x} &= \sum_{j=0}^{k-1} \diffm{l}{j}{k} \maxp{l}{j}\of{x}
+\end{align*}
+are assembled as
+\begin{align*}
+\diffm{l}{k-1}{k} &= \frac{k}{\beta^{(l)}_k}
+\\
+\diffm{l}{k-2}{k} &= \frac{\sum_{j=0}^{k-1} \alpha^{(l)}_j - k \alpha^{(l)}_{k-1}}{\sqrt{\beta^{(l)}_k \beta^{(l)}_{k-1}}} 
+\\
+\diffm{l}{k-3}{k} &= \frac{2 \sqrt{\beta^{(l)}_{k-1} \beta^{(l)}_{k}} - \sqrt{\beta^{(l)}_{k-1}} \diffm{l}{k-1}{k} - \alpha^{(l)}_{k-2} \diffm{l}{k-2}{k} }{\sqrt{\beta^{(l)}_{k-2}}} 
+\\
+\diffm{l}{j}{k} &= -\frac{\sqrt{\beta^{(l)}_{j+2}} \diffm{l}{j+2}{k} + \alpha^{(l)}_{j+1} \diffm{l}{j+1}{k} }{\sqrt{\beta^{(l)}_{j+1}}}
+,\quad 0 \leq j \leq k-4 
+\end{align*}
+\subsection{Case of Laguerre polynomials}
+
+\begin{align*}
+\lp{l}{0}\of{x} &= 1 \\
+\lp{l}{1}\of{x} &= 1 + l - x \\
+\lp{l}{k+1}\of{x} &= \frac{(2k+1+l-x) \lp{l}{k}\of{x} - (k+l) \lp{l}{k-1}\of{x}}{k+1}
+\end{align*}
+
+\begin{align*}
+\myint_0^\infty e^{-x} x^l \lp{l}{k}\of{x} \lp{l}{p}\of{x} \diff{x} = \frac{\Gamma\of{p + l + 1}}{n!} \delta_{k,p}
+\end{align*}
+
+\begin{align*}
+\lph{l}{k} = \lp{l+1/2}{k}
+\end{align*}
+
+\begin{align*}
+\Phi_{kl}\of{x} &= e^{-x^2} x^l \lph{l}{k}\of{x^2} \\
+\Psi_{pq}\of{x} &= x^q \lph{q}{p}\of{x^2} 
+\end{align*}
+
+\begin{align*}
+\myint_0^\infty \Phi_{kq}\of{x} \Psi_{pq}\of{x} x^2 \diff{x} 
+&= \myint_0^\infty e^{-x^2} x^{2q+2}\lph{q}{k}\of{x^2} \lph{q}{p}\of{x^2} \diff{x}
+\\
+&= \frac12 \myint_0^\infty e^{-y} y^{q+1/2}\lph{q}{k}\of{y} \lph{q}{p}\of{y} \diff{x}
+\\
+&= N_{p,q} \delta_{k,p}
+\end{align*}
+
+Useful formulae
+\begin{align*}
+\lph{l+1}{k} \of{x^2} &= \sum_{j=0}^{k} \lph{l}{j}\of{x^2}
+\\
+\lph{l}{k} \of{x^2} &= \lph{l+1}{k} \of{x^2} - \lph{l+1}{k-1} \of{x^2}
+\\
+x^2 \lph{l+1}{k} \of{x^2} 
+&= (k+l+3/2) \lph{l}{k}\of{x^2} - (k+1) \lph{l}{k+1}\of{x^2}
+\\
+%x^2 L^{(l+2)}_k \of{x^2} 
+%&= (k+l+2) \lp{l+1}{k}\of{x^2} - (k+1) \lp{l+1}{k+1}\of{x^2}
+%\\
+%&= (k+l+2) \sum_{j=0}^{k} \lp{l}{j}\of{x^2} - (k+1) \sum_{j=0}^{k+1} \lp{l}{j}\of{x^2}
+%\\
+%&= (l+1) \sum_{j=0}^{k} \lp{l}{j}\of{x^2} - (k+1) \lp{l}{k+1}\of{x^2}
+%\\
+\frac{d}{dx^2} \lph{l}{k} \of{x^2} &= - \lph{l+1}{k-1} \of{x^2}
+\\
+\frac{d}{dx} \lph{l}{k} \of{x^2} 
+&= 2 x \frac{d}{dx^2} \lph{l}{k}\of{x^2} = - 2 x \lph{l+1}{k-1}\of{x^2}
+%\\
+%x \frac{d}{dx} \lp{l+1}{k} \of{x^2} 
+%&= 2 x^2 \frac{d}{dx^2} \lp{l+1}{k}\of{x^2} = - 2 x^2 \lp{l+2}{k-1}\of{x^2}
+%\\
+%&= -2(l+1) \sum_{j=0}^{k-1} \lp{l}{j}\of{x^2} 
+%+ 2 k \lp{l}{k}\of{x^2}
+\end{align*}
+
+%\begin{align*}
+%\frac{d}{dx}\Phi_{k,q+1}\of{x} 
+%&= - 2 e^{-x^2} x^{q+2} L^{(q+1)}_k\of{x^2}
+%+ (q+1) e^{-x^2} x^{q} L^{(q+1)}_k\of{x^2}
+%+ e^{-x^2} x^{q+1} \frac{d}{dx} L^{(q+1)}_k\of{x^2}
+%\\
+%&= e^{-x^2} x^{q} \Big( 
+%- 2 (k+q+1) L^{(q)}_k\of{x^2} + 2 (k+1) L^{(q)}_{k+1}\of{x^2} 
+%\\&
+%+ (q+1) \sum_{j=0}^{k} L^{(q)}_j\of{x^2}
+%- 2(q+1) \sum_{j=0}^{k-1} \lp{q}{j}\of{x^2} 
+%+ 2 k \lp{q}{k}\of{x^2}
+%\Big)
+%\\
+%&= e^{-x^2} x^{q} \Big( 
+%2 (k+1) L^{(q)}_{k+1}\of{x^2} 
+%- (q+1) \sum_{j=0}^{k} \lp{q}{j}\of{x^2} 
+%\Big)
+%\\
+%&= 2 (k+1) \Phi_{k+1,q}\of{x}
+%- (q+1) \sum_{j=0}^{k} \Phi_{j,q}\of{x} 
+%\end{align*}
+
+%\begin{align*}
+%\myint_0^\infty \Psi_{p,q}\of{x} \frac{d}{dx}\Phi_{k,q+1}\of{x}  x^2 \diff{x}
+%&= 2 (k+1) N_{p,q} \delta_{p,k+1}  - (q+1) \sum_{j=0}^{k} N_{p,q} \delta_{p,j} 
+%\\
+%&= N_{p,q} \sum_{j=0}^{k+1} \Omega \delta_{p,j} 
+%\end{align*}
+
+\begin{multline*}
+\tfun{q}{p}\of{x} \frac{d}{dx} \bfun{q+1}{k}\of{x} 
+= x^q \lph{q}{p} \frac{d}{dx} e^{-x^2} x^{q+1} \lph{q+1}{k}
+\\
+= x^q \lph{q}{p} \left( 
+- 2 e^{-x^2} x^{q+2} \lph{q+1}{k}\of{x^2}
++ (q+1) e^{-x^2} x^{q} \lph{q+1}{k}\of{x^2}
+- 2 e^{-x^2} x^{q+2} \lph{q+2}{k-1}\of{x^2}
+\right)
+\\ 
+= 
+-2 x^q \lph{q}{p} e^{-x^2} x^q \left( (k+q+3/2) \lph{q}{k} - (k+1) \lph{q}{k+1} \right) 
+\\
++ (q+1) x^q \lph{q}{p} e^{-x^2} x^q \sum_{j=0}^{k} \lph{q}{j}
+-2 x^{q+1} \left( \lph{q+1}{p} - \lph{q+1}{p-1} \right) e^{-x^2} x^{q+1} \sum_{j=0}^{k-1} \lph{q+1}{j}
+\\ 
+= 
+-2 \tfun{q}{p} \left( (k+q+3/2) \bfun{q}{k} - (k+1) \bfun{q}{k+1} \right) 
++ (q+1)\tfun{q}{p} \sum_{j=0}^{k} \bfun{q}{j}
+-2\left( \tfun{q+1}{p} - \tfun{q+1}{p-1} \right) \sum_{j=0}^{k-1} \bfun{q+1}{j}
+\end{multline*}
+
+
+\begin{multline*}
+\myint_0^\infty \tfun{q}{p}\of{x} \frac{d}{dx} \bfun{q+1}{k}\of{x} 
+= 
+-2 \nfun{q}{p} \left( (k+q+3/2)\delta_{p,k} - (k+1) \delta_{p,k+1} \right) 
++ (q+1)\nfun{q}{p} \sum_{j=0}^{k} \delta_{p,j}
+\\
+-2\left( \nfun{q+1}{p} \sum_{j=0}^{k-1} \delta_{p,j} - \nfun{q+1}{p-1} \sum_{j=0}^{k-1} \delta_{p-1,j} \right)  
+\end{multline*}
+
+Warning: what's below is not correct (forgot 1/2 in Laguerre index)
+\begin{align*}
+\Phi_{k,q+1}\of{x} \frac{d}{dx}\Psi_{p,q}\of{x} 
+&= 
+e^{-x^2} x^{q+1} L^{(q+1)}_k\of{x^2}
+\left(
+q x^{q-1} L^{(q)}_p\of{x^2}
++ x^{q} \frac{d}{dx} L^{(q)}_p\of{x^2}
+\right)
+\\
+&= e^{-x^2} x^{q} \sum_{j=0}^{k} \lp{q}{j}\of{x^2} q x^{q} L^{(q)}_p\of{x^2}
+- \Phi_{k,q+1}\of{x} 2 x^{q+1} L^{(q+1)}_{p-1}\of{x^2}
+\\
+&= q \sum_{j=0}^{k} \Phi_{j,q}\of{x} \Psi_{p,q}\of{x}
+- 2\Phi_{k,q+1}\of{x} \Psi_{p-1,q+1}\of{x}
+\end{align*}
+
+\begin{align*}
+\myint_0^\infty \Phi_{k,q+1}\of{x} \frac{d}{dx}\Psi_{p,q}\of{x} x^2 \diff{x}
+&= q \sum_{j=0}^{k} N_{p,q} \delta_{p,j} 
+- 2 N_{p,q+1} \delta_{p-1,k} 
+\\
+&= q \sum_{j=0}^{k} N_{p,q} \delta_{p,j} 
+- 2 N_{p,q+1} \delta_{p,k+1} 
+\end{align*}
+
+\begin{align*}
+\Phi_{k, q-1}\of{x} \frac{d}{dx}\Psi_{pq}\of{x}
+&= e^{-x^2} x^{q-1} \lp{q-1}{k}\of{x^2} \frac{d}{dx} x^{q} \lp{q}{p}\of{x^2}
+\\
+&= e^{-x^2} x^{q-1} \lp{q-1}{k}\of{x^2} 
+\left(
+q x^{q-1} L^{(q)}_p\of{x^2}
++ x^{q} \frac{d}{dx} L^{(q)}_p\of{x^2}
+\right)
+\\
+&= q \Phi_{k, q-1}\of{x} \sum_{j=0}^p \Psi_{j,q-1}\of{x}
+- 2 e^{-x^2} x^{q-1} \lp{q-1}{k}\of{x^2}  x^{q+1} \lp{q+1}{p-1}\of{x^2}
+\\
+&= q \Phi_{k, q-1}\of{x} \sum_{j=0}^p \Psi_{j,q-1}\of{x}
+- 2 e^{-x^2} x^{q} \left( \lp{q}{k}\of{x^2} - \lp{q}{k-1}\of{x^2}\right)  x^{q} \sum_{j=0}^{p-1}\lp{q}{j}\of{x^2}
+\\
+&= q \sum_{j=0}^p \Phi_{k, q-1}\of{x} \Psi_{j,q-1}\of{x}
+- 2 \sum_{j=0}^{p-1} \left( \Phi_{k,q}\of{x^2} - \Phi_{k-1,q}\of{x^2}\right) \Psi_{j,q}\of{x^2}
+\end{align*}
+
+\begin{align*}
+\myint_0^\infty \Phi_{k, q-1}\of{x} \frac{d}{dx}\Psi_{pq}\of{x} x^2 \diff{x}
+&= q \sum_{j=0}^{p} N_{k,q-1} \delta_{k,j} 
+- 2 \sum_{j=0}^{p-1} \left( N_{k,q} \delta_{k,j} - N_{k-1,q} \delta_{k-1,j}  \right)
+\end{align*}
+
+%\begin{multline*}
+%\Psi_{pq}\of{x} \frac{d}{dx}\Phi_{k, q-1}\of{x} 
+%= x^q \lp{q}{p}\of{x^2} \frac{d}{dx} e^{-x^2} x^{q-1} \lp{q-1}{k}\of{x^2}
+%\\
+%= x^q \lp{q}{p}\of{x^2} \left(
+%- 2 e^{-x^2} x^{q} L^{(q-1)}_k\of{x^2}
+%+ (q-1) e^{-x^2} x^{q-2} L^{(q-1)}_k\of{x^2}
+%+ e^{-x^2} x^{q+1} \frac{d}{dx} L^{(q+1)}_k\of{x^2}
+%\right)
+%\\
+%= - x^{q-1} \left( (p+q) \lp{q-1}{p} - (p+1) \lp{q-1}{p+1} \right)
+%e^{-x^2} x^{q-1} L^{(q-1)}_k
+%\\
+%+ (q-1) x^{q-1} \sum_{j=0}^{p} \lp{q-1}{j} e^{-x^2} x^{q-1} \lp{q-1}{k} 
+%- 2 x^q \lp{q}{p} e^{-x^2} x^q \lp{q}{k-1}
+%\\
+%= - (p+q) \tfun{q-1}{p} \bfun{q-1}{k} 
+%+ (p+1) \tfun{q-1}{p+1} \bfun{q-1}{k}
+%+ (q-1) \sum_{j=0}^{p} \tfun{q-1}{j} \bfun{q-1}{k} 
+%- 2 \tfun{q}{p} \bfun{q}{k-1}
+%\end{multline*}
+
+
+\begin{multline*}
+\Psi_{pq}\of{x} \frac{d}{dx}\Phi_{k, q-1}\of{x} 
+= x^q \lp{q}{p}\of{x^2} \frac{d}{dx} e^{-x^2} x^{q-1} \lp{q-1}{k}\of{x^2}
+\\
+= x^q \lp{q}{p}\of{x^2} \left(
+- 2 e^{-x^2} x^{q} L^{(q-1)}_k\of{x^2}
++ (q-1) e^{-x^2} x^{q-2} L^{(q-1)}_k\of{x^2}
++ e^{-x^2} x^{q+1} \frac{d}{dx} L^{(q+1)}_k\of{x^2}
+\right)
+\\
+= - x^{q} \lp{q}{p} 
+e^{-x^2} x^{q} \left( \lp{q}{k} - \lp{q}{k-1} \right)
++ (q-1) x^{q-1} \sum_{j=0}^{p} \lp{q-1}{j} e^{-x^2} x^{q-1} \lp{q-1}{k} 
+- 2 x^q \lp{q}{p} e^{-x^2} x^q \lp{q}{k-1}
+\\
+= - \tfun{q}{p} \bfun{q}{k} 
++ \tfun{q}{p} \bfun{q}{k-1}
++ (q-1) \sum_{j=0}^{p} \tfun{q-1}{j} \bfun{q-1}{k} 
+- 2 \tfun{q}{p} \bfun{q}{k-1}
+\end{multline*}
+
+\begin{multline*}
+\myint_0^\infty \Psi_{pq}\of{x} \frac{d}{dx}\Phi_{k, q-1}\of{x} x^2 \diff{x}
+= -  \nfun{q}{p} \delta_{p,k} 
+- \nfun{q}{p} \delta_{p,k-1}
++ (q-1) \sum_{j=0}^{p} \nfun{q-1}{j} \delta_{j,k}
+\end{multline*}
+
+
+\clearpage
+Differentiation and lifting matrices
+\begin{align*}
+P^\prime_{kl}\of{x} &= \sum_{j=0}^{N_r} D^l_{jk} P_{jl}\of{x}
+&
+&\rightarrow \quad
+\sum_{k=0}^{N_r} a_k P^\prime_k\of{x} 
+= \sum_{k=0}^{N_r} \sum_{j=0}^{N_r} d_{jk} a_k P_j\of{x}
+= \sum_{j=0}^{N_r} \left( \sum_{k=0}^{N_r} d_{jk} a_k \right) P_j\of{x}
+\\
+x P_{kl}\of{x} &= \sum_{j=0}^{N_r} L^l_{jk} P_{kl}\of{x}
+&
+&\rightarrow \quad
+\sum_{k=0}^{N_r} a_k x P_k\of{x} 
+= \sum_{k=0}^{N_r} \sum_{j=0}^{N_r} L^l_{jk} a_k P_j\of{x}
+= \sum_{j=0}^{N_r} \left( \sum_{k=0}^{N_r} L^l_{jk} a_k \right) P_j\of{x}
+\end{align*}
+where $D^l_{jk}$ and $L^l_{jk}$ are calculated from recursive coefficients generating polynomials
+
+\begin{align*}
+\left( e^{-x^2} P_{kl}\of{x} \right)^\prime
+&= - 2 x e^{-x^2} P_{kl}\of{x} + e^{-x^2} P^\prime_{kl}\of{x}
+\\
+&= e^{-x^2} \sum_{j=0}^{N_r} \left( D^l_{jk} - 2 L^l_{jk} \right)P_{jl}\of{x}
+\\
+&= e^{-x^2} \sum_{j=0}^{N_r} G^l_{jk} P_{jl}\of{x}
+\end{align*}
+
+\begin{align*}
+\left( e^{-x^2} x^l P_{kl}\of{x} \right)^\prime
+&= - 2 x x^l e^{-x^2} P_{kl}\of{x} 
++ x^l e^{-x^2} P^\prime_{kl}\of{x}
++ l x^{l-1} e^{-x^2} P_{kl}\of{x}
+\\
+&= e^{-x^2} x^l\sum_{j=0}^{N_r} \left( D^l_{jk} - 2 L^l_{jk} \right)P_{jl}\of{x}
++ l x^{l-1} e^{-x^2} P_{kl}\of{x}
+\\
+&= e^{-x^2} \sum_{j=0}^{N_r} G^l_{jk} P_{jl}\of{x}
++ l x^{l-1} e^{-x^2} P_{kl}\of{x}
+\end{align*}
+
+\begin{align*}
+\frac{\partial f}{\partial v}
+=
+\frac{1}{\vth}
+A \exp\of{-\left(\frac{\vr}{\vth}\right)^2} 
+\sum_{lm} 
+\sum_{k=0}^{N_r} a_{klm} 
+\left( 
+\sum_{j=0}^{N_r} G^l_{jk} \left(\frac{\vr}{\vth}\right)^l P_{jl}\of{\frac{\vr}{\vth}}
++ l \left(\frac{\vr}{\vth}\right)^{l-1} P_{kl}\of{\frac{\vr}{\vth}} \right)
+ Y_{lm}\of{\vtheta,\vphi}
+\end{align*}
+
+\begin{multline*}
+\myint \cos\of{\vtheta} \frac{\partial f}{\partial \vr} \left(\frac{\vr}{\vth}\right)^q P_{pq}\of{\frac{\vr}{\vth}} Y_{qs}\of{\vtheta,\vphi} \vr^2 \diff{\vr} \diff{\vomega}
+\\
+=
+\frac{1}{\vth}
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} G^l_{jk} a_{klm} \right) 
+\left(
+\int 
+\exp\of{-\left(\frac{\vr}{\vth}\right)^2} P_j\of{\frac{v}{\vth}} P_p\of{\frac{\vr}{\vth}} \vr^2 
+\diff{v}
+\right)
+\\
+\times
+\left(
+\int
+\cos\of{\vtheta} 
+Y_{lm}\of{\vtheta,\vphi}
+Y_{qs}\of{\vtheta,\vphi}
+\diff{\vomega}
+\right)
+\\
+=
+\vth^2
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} G^l_{jk} a_{klm} \right) 
+M_{p} \delta_{j,p}
+\Psi_{lmqs}
+=
+\vth^2
+A \sum_{lm} \left(\sum_{k=0}^{N_r} G^l_{pk} a_{klm} \right) 
+M_{p}
+\Psi_{lmqs}
+\end{multline*}
+
+\begin{align*}
+\frac{1}{\vr}\frac{\partial f}{\partial \vtheta}
+=
+\frac{1}{\vr} A \exp\of{-\left(\frac{\vr}{\vth}\right)^2} 
+\sum_{klm} a_{klm} P_k\of{\frac{\vr}{\vth}} 
+\frac{\partial}{\partial \vtheta} Y_{lm}\of{\vtheta,\vphi}
+\end{align*}
+
+\begin{multline*}
+\myint \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} P_p\of{\frac{v}{\vth}} Y_{qs}\of{\vtheta,\vphi} \vr^2 \diff{\vr} \diff{\vomega}
+=
+\\
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} G^l_{jk} a_{klm} \right) 
+\left(
+\int 
+\exp\of{-\left(\frac{\vr}{\vth}\right)^2} P_j\of{\frac{\vr}{\vth}} P_p\of{\frac{\vr}{\vth}} \vr
+\diff{\vr}
+\right)
+\\
+\times
+\left(
+\int
+\sin\of{\vtheta} 
+Y_{qs}\of{\vtheta,\vphi}
+\frac{\partial}{\partial \vtheta}
+Y_{lm}\of{\vtheta,\vphi}
+\diff{\vomega}
+\right)
+\end{multline*}
+
+\begin{multline*}
+\int 
+\exp\of{-\left(\frac{\vr}{\vth}\right)^2} P_j\of{\frac{\vr}{\vth}} P_p\of{\frac{\vr}{\vth}} \vr
+\diff{\vr}
+=
+\vth^2
+\int 
+e^{-x^2} P_j\of{x} P_p\of{x} x
+\diff{x}
+\\
+=
+-
+\frac{\vth^2}{2}
+\int 
+x^2
+\left(
+e^{-x^2} P_j\of{x} P_p\of{x}
+\right)'
+\diff{x}
+\\
+=
+-
+\frac{\vth^2}{2}
+\int 
+x^2
+e^{-x^2} 
+\left(
+-2x
+P_j\of{x} P_p\of{x}
++
+P^\prime_j\of{x} P_p\of{x}
++
+P_j\of{x} P^\prime_p\of{x}
+\right)
+\diff{x}
+\\
+=
+\frac{\vth^2}{2}
+\int 
+x^2
+e^{-x^2} 
+\left(
+\sum_{k} 2L^l_{kj} P_k\of{x} P_p\of{x}
+-
+\sum_{k} D^l_{kj} P_k\of{x} P_p\of{x}
+-
+\sum_{k} D^l_{kp} P_j\of{x} P_k\of{x}
+\right)
+\diff{x}
+\\
+=
+\frac{\vth^2}{2}
+\left(
+\sum_{k} 2L^l_{kj} \int x^2 e^{-x^2} P_k\of{x} P_p\of{x} \diff{x}
+-
+\sum_{k} D^l_{kj} \int x^2 e^{-x^2} P_k\of{x} P_p\of{x} \diff{x}
+-
+\sum_{k} D^l_{kp} \int x^2 e^{-x^2} P_j\of{x} P_k\of{x} \diff{x}
+\right)
+\\
+=
+-
+\frac{\vth^2}{2}
+\left(
+\sum_{k} G^l_{kj} M_p \delta_{k,p}
++
+\sum_{k} D^l_{kp} M_j \delta_{k,j} 
+\right)
+=
+-
+\frac{\vth^2}{2}
+\left(
+G^l_{pj} M_p
++
+D^l_{jp} M_j
+\right)
+\end{multline*}
+
+\begin{multline*}
+\myint \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} P_p\of{\textstyle\frac{\vr}{\vth}} Y_{qs}\of{\vtheta,\vphi} \vr^2 \diff{\vr} \diff{\vomega}
+=
+\\
+-
+\frac{\vth^2}{2}
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} G^l_{jk} a_{klm} \right) 
+\left(
+G^l_{pj} M_p
++
+D^l_{jp} M_j
+\right)
+\Phi_{lmqs}
+\end{multline*}
+
+\begin{multline*}
+\myint \vect{E}\cdot \nabla_{\vect{v}} f P_p\of{\textstyle\frac{\vr}{\vth}} Y_{qs}\of{\theta,\phi} \vr^2 \diff{\vr} \diff{\vomega}
+\\
+=
+E
+\vth^2
+A \sum_{lm} \left(\sum_{k=0}^{N_r} G^l_{pk} a_{klm} \right) 
+M_{p}
+\Psi_{lmqs}
++
+\frac{\vth^2}{2}
+A \sum_{lm} \sum_{j=0}^{N_r} \left(\sum_{k=0}^{N_r} G^l_{jk} a_{klm} \right) 
+\left(
+G^l_{pj} M_p
++
+D^l_{jp} M_j
+\right)
+\Phi_{lmqs}
+\\
+=
+E
+\sum_{klm}
+\epsilon_{pqsklm} a_{klm}
+\end{multline*}
+
+\begin{align*}
+\epsilon_{pqsklm} =
+\vth^2 A 
+\left(
+G^l_{pk} M_{p} \Psi_{lmqs}
++
+\frac{1}{2}
+\sum_{j=0}^{N_r} G^l_{jk} 
+\left(
+G^l_{pj} M_p
++
+D^l_{jp} M_j
+\right)
+\Phi_{lmqs}
+\right)
+\end{align*}
+
 \newpage
 \section{Numerical evaluation}
 This section presents, a numerical evaluation of the spatially homogeneous Boltzmann equation without external force field. Recall, under the above assumptions we can write the collision source term as \eqref{eq:nr_be}, 

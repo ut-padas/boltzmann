@@ -10,6 +10,7 @@ import lagpoly
 import scipy.interpolate
 
 # some parameters related to splines. 
+XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 31
 BSPLINE_NUM_Q_PTS_PER_KNOT     = 7
 BSPLINE_BASIS_ORDER            = 1
 
@@ -204,8 +205,86 @@ class BSpline(Basis):
         """
         Weight function w.r.t. the polynomials are orthogonal
         """
-        I = lambda x: 1
+        I = lambda x: np.ones_like(x)
         return I
+
+    def diff(self,deg, dorder):
+        if deg== 0 or deg == len(self._splines)-1:
+            return np.poly1d(0)
+        else:
+            return self._splines[deg].derivative(dorder)
+
+class XlBSpline(Basis):
+    """
+    Scaled b-splines for advection. 
+    b_{kl}= b_k(x) x^l
+    
+    """
+    @staticmethod
+    def get_num_q_pts(p_order, s_order, pts_per_knot):
+        return pts_per_knot*(p_order+1 + s_order + 2  - 2*(s_order+1))
+
+    def __init__(self,knots,spline_order, num_c_pts):
+        self._basis_type = BasisType.SPLINES
+        assert len(knots) == num_c_pts + (spline_order+1) + 1, "knots vector length does not match the spline order"
+        self._num_c_pts  = num_c_pts
+        self._sp_order   = spline_order
+        self._t          = knots
+        self._q_per_knot = XLBSPLINE_NUM_Q_PTS_PER_KNOT
+        self._splines    = [scipy.interpolate.BSpline.basis_element(knots[i:i+spline_order+2],False) for i in range(num_c_pts)]
+        self._xlambda    = 1.0
+
+    def Pn(self,deg,domain=None,window=None):
+        # if deg <2:
+        #     return lambda l,x : self._splines[deg](x) * (x**(l/self._xlambda))
+        # else:
+        #     return lambda l,x :self._splines[deg](x)
+        
+        # the below will result large condition numbers in the mass matrix, we only need x**l factor for very first few splines. 
+        return lambda l,x : self._splines[deg](x) * (x**(l/self._xlambda))
+
+    def Gauss_Pn(self,deg,from_zero=True):
+        """
+        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
+        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
+        """
+        ti=(self._sp_order)
+        assert np.allclose(self._t[ti],0), "specified knot vector element %d is not aligned with zero"%(ti)
+        knots_len  = len(self._t) 
+        assert deg % (knots_len-2*(ti+1)) == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,self._num_c_pts)
+        pts_p_knot = deg // (knots_len-2*(ti+1))
+        qx = np.zeros(pts_p_knot*(knots_len-2*(ti+1)))
+        qw = np.zeros(pts_p_knot*(knots_len-2*(ti+1)))
+        for i in range(ti, ti + (knots_len-2*(ti+1))):
+            qx[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot], qw[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot] = uniform_simpson((self._t[i], self._t[i+1]),pts_p_knot)
+        
+        # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
+        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0])), "simpson weights computed for splines does not match the knots domain"
+        return qx,qw
+    
+    def Wx(self):
+        """
+        Weight function w.r.t. the polynomials are orthogonal
+        """
+        I = lambda x: np.ones_like(x)
+        return I
+
+    def diff(self,deg, dorder):
+        assert dorder==1, "not implemented for HO derivatives"
+        # if deg == 0:
+        #     return lambda l,x : np.zeros_like(x) if l==0 else (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
+        # elif deg<2:
+        #     return lambda l,x : self._splines[deg].derivative(dorder)(x) if l==0 else (x**(l/self._xlambda)) * self._splines[deg].derivative(dorder)(x) + (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
+        # elif deg == len(self._splines)-1:
+        #     return lambda l,x : np.zeros_like(x)
+        # else:
+        #     return lambda l,x : self._splines[deg].derivative(dorder)(x)
+        if deg== 0 or deg == len(self._splines)-1:
+            return lambda l,x : np.zeros_like(x) if l==0 else (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
+        else:
+            return lambda l,x : self._splines[deg].derivative(dorder)(x) if l==0 else (x**(l/self._xlambda)) * self._splines[deg].derivative(dorder)(x) + (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
+
+
 
 def uniform_simpson(domain, pts):
     assert pts%2==1, "simpson requires even number of intervals"

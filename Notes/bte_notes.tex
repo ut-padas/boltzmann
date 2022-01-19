@@ -725,6 +725,33 @@ d_{jp} M_j
 \right)
 \end{align*}
 
+Let the polynomials on the radial direction is defined as, 
+\begin{align}
+	P_{kl} = b_k(x) x^l
+\end{align} where $b_k$ be the $k^{th}$ bspline polynomial. 
+
+For expansion using bspline polynomials in the radial direction we can write, 
+\begin{align}
+f(\vect{v}) &= \sum_{klm} a_{klm} P_{kl}\of{\textstyle\frac{v}{\vth}} Y_{lm}\of{\vtheta,\vphi}\\
+\partial_v f &= \frac{1}{\vth} \sum_{klm} a_{klm} P^\prime_{kl}\of{\textstyle\frac{v}{\vth}} Y_{lm}\of{\vtheta,\vphi}\\
+\frac{1}{v}\partial_{v_\theta} f &= \sum_{klm} a_{klm} P_{kl}\of{\textstyle\frac{v}{\vth}} \partial_{v_\theta} Y_{lm}\of{\vtheta,\vphi}
+\end{align}
+
+\begin{multline}
+\myint \myint \cos\of{\vtheta} \frac{\partial f}{\partial \vr} P_{pq}\of{\frac{\vr}{\vth}} Y_{qs}\of{\vtheta,\vphi} \vr^2 \diff{\vr} \diff{\vomega}= \\
+\sum_{klm} a_{klm} \myint \myint \frac{v^2}{\vth}  P^\prime_{kl}\of{\frac{\vr}{\vth}} P_{pq}\of{\frac{\vr}{\vth}} \cos\of{\vtheta} Y_{lm}\of{\vtheta,\vphi} Y_{qs}\of{\vtheta,\vphi} \diff{v}\diff{v_\omega} =\\
+\sum_{klm} a_{klm} \myint \frac{v^2}{\vth}  P^\prime_{kl}\of{\frac{\vr}{\vth}} P_{pq}\of{\frac{\vr}{\vth}} \diff{v} \Psi_{lmqs}
+\end{multline}
+
+\begin{multline*}
+\myint \myint \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} P_{pq}\of{\textstyle\frac{\vr}{\vth}} Y_{qs}\of{\vtheta,\vphi} \vr^2 \diff{\vr} \diff{\vomega} = \\
+\sin\of{\vtheta}\left(\sum_{klm} a_{klm} P_{kl}\of{\textstyle\frac{v}{\vth}} \partial_{v_\theta} Y_{lm}\of{\vtheta,\vphi} \right) P_{pq}\of{\textstyle\frac{\vr}{\vth}} Y_{qs}\of{\vtheta,\vphi} \vr \diff{\vr} \diff{\vomega} = \\
+\sum_{klm} a_{klm} \myint v P_{pq}\of{\textstyle\frac{v}{\vth}} P_{kl}\of{\textstyle\frac{v}{\vth}} dv \myint \sin\of{\vtheta} \partial_{v_\theta} Y_{lm}\of{\vtheta,\vphi}  Y_{qs}\of{\vtheta,\vphi} \diff{v_{\omega}} = \\
+\sum_{klm} a_{klm} \myint v P_{pq}\of{\textstyle\frac{v}{\vth}} P_{kl}\of{\textstyle\frac{v}{\vth}} dv \phi_{lmqs}
+\end{multline*}
+
+
+
 \newpage
 \section{Numerical evaluation}
 This section presents, a numerical evaluation of the spatially homogeneous Boltzmann equation without external force field. Recall, under the above assumptions we can write the collision source term as \eqref{eq:nr_be}, 

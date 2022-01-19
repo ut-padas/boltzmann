@@ -74,13 +74,13 @@ for eps_idx, eps in enumerate(eps_all):
     eps_bwd = -eps/(1.+eps)
 
     for i in range(max_dofs):
-        norm = np.sum(maxpolyeval(xg, i)**2*wg)
+        norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
         for j in range(max_dofs):
-            proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd), i)*wg)/norm
-            proj_mat_fwd_over[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+overstep*eps_fwd), i)*wg)/norm
-            proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd)*(1.+overstep*eps_fwd), i)*wg)/norm
-            proj_mat_bwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_bwd), i)*wg)/norm
-            proj_mat_bwd2[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+2.*eps_bwd), i)*wg)/norm
+            proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd), i)*wg)/norm
+            proj_mat_fwd_over[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+overstep*eps_fwd), i)*wg)/norm
+            proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd)*(1.+overstep*eps_fwd), i)*wg)/norm
+            proj_mat_bwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_bwd), i)*wg)/norm
+            proj_mat_bwd2[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+2.*eps_bwd), i)*wg)/norm
 
     proj_mat_fwd_pen = np.matmul(np.transpose(proj_mat_bwd),proj_mat_bwd) + pen*np.eye(max_dofs,max_dofs)
     proj_mat_fwd_pen = np.matmul(np.linalg.inv(proj_mat_fwd_pen),np.transpose(proj_mat_bwd))
@@ -150,10 +150,10 @@ overstep = 10
 #         eps_fwd = (1.+eps)**(1/n) - 1.
 
 #         for i in range(max_dofs):
-#             norm = np.sum(maxpolyeval(xg, i)**2*wg)
+#             norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
 #             for j in range(max_dofs):
-#                 proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+overstep*eps_fwd), i)*wg)/norm
-#                 proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg*(1.+overstep*eps_fwd), i)*wg)/norm
+#                 proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+overstep*eps_fwd), i)*wg)/norm
+#                 proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg*(1.+overstep*eps_fwd), i)*wg)/norm
 
 #         for i in range(n):
 #             # for j in range(max_dofs):
@@ -175,9 +175,9 @@ for eps_idx, eps in enumerate(eps_all):
         eps_fwd = (1.+eps)**(1/n) - 1.
 
         for i in range(max_dofs):
-            norm = np.sum(maxpolyeval(xg, i)**2*wg)
+            norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
             for j in range(max_dofs):
-                proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd), i)*wg)/norm
+                proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd), i)*wg)/norm
 
         for i in range(n):
             for j in range(max_dofs):
@@ -186,8 +186,8 @@ for eps_idx, eps in enumerate(eps_all):
             c_exp_noise[eps_idx,:] = np.matmul(proj_mat_fwd, c_exp_noise[eps_idx,:])
 
     # for i in range(max_dofs):
-    #     f_exp[eps_idx,:] += b_exp[i]*maxpolyeval(x, i)*np.exp(-x**2)*x**2
-    #     f_noise[eps_idx,:] += b_noise[i]*maxpolyeval(x, i)*np.exp(-x**2)*x**2
+    #     f_exp[eps_idx,:] += b_exp[i]*maxpolyeval(2, x, i)*np.exp(-x**2)*x**2
+    #     f_noise[eps_idx,:] += b_noise[i]*maxpolyeval(2, x, i)*np.exp(-x**2)*x**2
 
 plt.subplot(1,4,1)
 plt.semilogy(np.transpose(eigs_fwd))
@@ -230,10 +230,10 @@ for eps_idx, eps in enumerate(eps_all):
     eps_bwd = -eps/(1.+eps)
 
     for i in range(max_dofs):
-        norm = np.sum(maxpolyeval(xg, i)**2*wg)
+        norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
         for j in range(max_dofs):
-            proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd), i)*wg)/norm
-            proj_mat_bwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.-eps_bwd), i)*wg)/norm
+            proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd), i)*wg)/norm
+            proj_mat_bwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.-eps_bwd), i)*wg)/norm
 
     w, v = np.linalg.eig(proj_mat_fwd)
 
@@ -250,8 +250,8 @@ for eps_idx, eps in enumerate(eps_all):
         eigviz_re = np.zeros(np.shape(x))
         eigviz_im = np.zeros(np.shape(x))
         for j in range(max_dofs):
-            eigviz_re += np.real(v[j,i])*maxpolyeval(x, j)*np.exp(-x**2)*x**2
-            eigviz_im += np.imag(v[j,i])*maxpolyeval(x, j)*np.exp(-x**2)*x**2
+            eigviz_re += np.real(v[j,i])*maxpolyeval(2, x, j)*np.exp(-x**2)*x**2
+            eigviz_im += np.imag(v[j,i])*maxpolyeval(2, x, j)*np.exp(-x**2)*x**2
         plt.plot(eigviz_re)
         plt.plot(eigviz_im)
         plt.title('$\lambda=$'+str(abs(w[i])))
@@ -272,10 +272,10 @@ coeffsum = np.zeros(len(eps_all))
 eps_step = 0.001
 
 for i in range(max_dofs):
-    norm = np.sum(maxpolyeval(xg, i)**2*wg)
+    norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
     for j in range(max_dofs):
-        proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_step), i)*wg)/norm
-        proj_mat_bwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.-eps_step), i)*wg)/norm
+        proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_step), i)*wg)/norm
+        proj_mat_bwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.-eps_step), i)*wg)/norm
 
 for eps_idx, eps in enumerate(eps_all):
 
@@ -297,7 +297,7 @@ for eps_idx, eps in enumerate(eps_all):
     fb = np.zeros(np.shape(x))
 
     for i in range(max_dofs):
-        fb += b[i]*maxpolyeval(x/(1+eps), i)*np.exp(-(x/(1+eps))**2)/(1+eps)**3*x**2
+        fb += b[i]*maxpolyeval(2, x/(1+eps), i)*np.exp(-(x/(1+eps))**2)/(1+eps)**3*x**2
     
     # plt.subplot(1,2,1)
     # plt.plot(x,(fa))
@@ -338,10 +338,10 @@ for eps_idx, eps in enumerate(eps_all):
     proj_mat_bwd = np.zeros([max_dofs, max_dofs])
 
     for i in range(max_dofs):
-        norm = np.sum(maxpolyeval(xg, i)**2*wg)
+        norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
         for j in range(max_dofs):
-            proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd), i)*wg)/norm
-            proj_mat_bwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_bwd), i)*wg)/norm
+            proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd), i)*wg)/norm
+            proj_mat_bwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_bwd), i)*wg)/norm
 
     x = np.linspace(0, 5, 200)
     b = np.matmul(proj_mat_fwd, a)
@@ -352,9 +352,9 @@ for eps_idx, eps in enumerate(eps_all):
     fc = np.zeros(np.shape(x))
 
     for i in range(max_dofs):
-        fa += a[i]*maxpolyeval(x, i)*np.exp(-x**2)*x**2
-        fb += b[i]*maxpolyeval(x/(1+eps_fwd), i)*np.exp(-(x/(1+eps_fwd))**2)/(1+eps_fwd)**3*x**2
-        fc += c[i]*maxpolyeval(x/(1+eps_bwd), i)*np.exp(-(x/(1+eps_bwd))**2)/(1+eps_bwd)**3*x**2
+        fa += a[i]*maxpolyeval(2, x, i)*np.exp(-x**2)*x**2
+        fb += b[i]*maxpolyeval(2, x/(1+eps_fwd), i)*np.exp(-(x/(1+eps_fwd))**2)/(1+eps_fwd)**3*x**2
+        fc += c[i]*maxpolyeval(2, x/(1+eps_bwd), i)*np.exp(-(x/(1+eps_bwd))**2)/(1+eps_bwd)**3*x**2
     
     # plt.subplot(1,2,1)
     # plt.plot(x,(fa))
@@ -407,10 +407,10 @@ for eps_idx, eps in enumerate(eps_all):
     proj_mat_bwd = np.zeros([max_dofs, max_dofs])
 
     for i in range(max_dofs):
-        norm = np.sum(maxpolyeval(xg, i)**2*wg)
+        norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
         for j in range(max_dofs):
-            proj_mat_fwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_fwd), i)*wg)/norm
-            proj_mat_bwd[i, j] = np.sum(maxpolyeval(xg, j)*maxpolyeval(xg/(1.+eps_bwd), i)*wg)/norm
+            proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd), i)*wg)/norm
+            proj_mat_bwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_bwd), i)*wg)/norm
 
     # proj_mat_fwd = np.linalg.inv(proj_mat_bwd)
     
@@ -425,9 +425,9 @@ for eps_idx, eps in enumerate(eps_all):
     fc = np.zeros(np.shape(x))
 
     for i in range(max_dofs):
-        fa += a[i]*maxpolyeval(x, i)*np.exp(-x**2)*x**2
-        fb += b[i]*maxpolyeval(x/(1+eps_fwd), i)*np.exp(-(x/(1+eps_fwd))**2)/(1+eps_fwd)**3*x**2
-        fc += c[i]*maxpolyeval(x/(1+eps_bwd), i)*np.exp(-(x/(1+eps_bwd))**2)/(1+eps_bwd)**3*x**2
+        fa += a[i]*maxpolyeval(2, x, i)*np.exp(-x**2)*x**2
+        fb += b[i]*maxpolyeval(2, x/(1+eps_fwd), i)*np.exp(-(x/(1+eps_fwd))**2)/(1+eps_fwd)**3*x**2
+        fc += c[i]*maxpolyeval(2, x/(1+eps_bwd), i)*np.exp(-(x/(1+eps_bwd))**2)/(1+eps_bwd)**3*x**2
     
     # plt.subplot(1,2,1)
     # plt.plot(x,(fa))
@@ -517,9 +517,9 @@ fb = np.zeros(np.shape(x))
 fc = np.zeros(np.shape(x))
 
 for i in range(max_dofs):
-    fa += a[i]*maxpolyeval(x, i)*np.exp(-x**2)*x**2
-    fb += b[i]*maxpolyeval(x*(1+eps_fwd), i)*np.exp(-(x*(1+eps_fwd))**2)*x**2
-    fc += c[i]*maxpolyeval(x*(1+eps_bwd), i)*np.exp(-(x*(1+eps_bwd))**2)*x**2
+    fa += a[i]*maxpolyeval(2, x, i)*np.exp(-x**2)*x**2
+    fb += b[i]*maxpolyeval(2, x*(1+eps_fwd), i)*np.exp(-(x*(1+eps_fwd))**2)*x**2
+    fc += c[i]*maxpolyeval(2, x*(1+eps_bwd), i)*np.exp(-(x*(1+eps_bwd))**2)*x**2
 
 plt.plot(x,(fa))
 plt.plot(x,(fb))

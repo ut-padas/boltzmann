@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.special import gamma
 
 # Coefficients of Maxwell polynomials up to 20th power
 # organized as [a00, a10, a11, a20, a21, a22, ... ], that is 
@@ -14,6 +15,9 @@ maxpoly_rec_data = np.genfromtxt('polynomials/maxpoly_upto555_recursive.dat',del
 maxpoly_rec_a    = maxpoly_rec_data[:,0]
 maxpoly_rec_b    = maxpoly_rec_data[:,1]
 # maxpoly_rec_n    = maxpoly_rec_data[:,2]
+
+maxpoly_alpha = np.genfromtxt('polynomials/maxpoly_alpha_upto300.dat',delimiter=',')
+maxpoly_beta = np.genfromtxt('polynomials/maxpoly_beta_upto300.dat',delimiter=',')
 
 def idx_s(p):
     return int(p*(p+1)/2)
@@ -34,10 +38,16 @@ def maxpolyeval_naive(x, p):
         result = result*x + maxpoly_coeffs[idx_e(p)-i-1]
     return result
 
-def maxpolyeval(x, p):
+def maxpolyeval(G, x, p):
+
+    idx = int(G/2)
+
+    g1 = gamma((1.+G)/2.)
+    g2 = gamma((2.+G)/2.)
+    g3 = gamma((3.+G)/2.)
 
     if p == 0:
-        return np.ones(np.shape(x))/np.sqrt(np.sqrt(np.pi)/4.)
+        return np.ones(np.shape(x))*np.sqrt(2./g1)
 
     Bn   = 0
     Bnp1 = 0
@@ -46,11 +56,37 @@ def maxpolyeval(x, p):
         Bnp2 = Bnp1
         Bnp1 = Bn
         if i == p:
-            Bn = np.ones(np.shape(x)) + (x-maxpoly_rec_a[i])*Bnp1/np.sqrt(maxpoly_rec_b[i+1]) - np.sqrt(maxpoly_rec_b[i+1]/maxpoly_rec_b[i+2])*Bnp2
+            Bn = np.ones(np.shape(x)) + (x-maxpoly_alpha[idx,i])*Bnp1/np.sqrt(maxpoly_beta[idx,i+1]) - np.sqrt(maxpoly_beta[idx,i+1]/maxpoly_beta[idx,i+2])*Bnp2
         else:
-            Bn = (x-maxpoly_rec_a[i])*Bnp1/np.sqrt(maxpoly_rec_b[i+1]) - np.sqrt(maxpoly_rec_b[i+1]/maxpoly_rec_b[i+2])*Bnp2
+            Bn = (x-maxpoly_alpha[idx,i])*Bnp1/np.sqrt(maxpoly_beta[idx,i+1]) - np.sqrt(maxpoly_beta[idx,i+1]/maxpoly_beta[idx,i+2])*Bnp2
 
-    return Bn*(x-2./np.sqrt(np.pi))/np.sqrt(np.sqrt(np.pi)*(1.5-4./np.pi)/4.) - np.sqrt(maxpoly_rec_b[1]/maxpoly_rec_b[2])*Bnp1/np.sqrt(np.sqrt(np.pi)/4.)
+    return Bn*(x-g2/g1)*np.sqrt(2)/np.sqrt(g3-g2**2/g1) - np.sqrt(maxpoly_beta[idx,1]/maxpoly_beta[idx,2])*Bnp1*np.sqrt(2./g1)
+
+def maxpolyserieseval(G, x, coeffs):
+
+    idx = int(G/2)
+
+    g1 = gamma((1.+G)/2.)
+    g2 = gamma((2.+G)/2.)
+    g3 = gamma((3.+G)/2.)
+
+    p = len(coeffs)
+
+    if p == 0:
+        return 0
+
+    if p == 1:
+        return coeffs[0]*np.sqrt(2./g1)*np.ones(np.shape(x))
+
+    Bn   = 0
+    Bnp1 = 0
+    Bnp2 = 0
+    for i in range(p-1,0,-1):
+        Bnp2 = Bnp1
+        Bnp1 = Bn
+        Bn = coeffs[i] + (x-maxpoly_alpha[idx,i])*Bnp1/np.sqrt(maxpoly_beta[idx,i+1]) - np.sqrt(maxpoly_beta[idx,i+1]/maxpoly_beta[idx,i+2])*Bnp2
+
+    return coeffs[0]*np.sqrt(2./g1) + Bn*(x-g2/g1)*np.sqrt(2)/np.sqrt(g3-g2**2/g1) - np.sqrt(maxpoly_beta[idx,1]/maxpoly_beta[idx,2])*Bnp1*np.sqrt(2./g1)
 
 def maxpolyeval_non_norm(x, p):
 
@@ -72,43 +108,47 @@ def maxpolyeval_non_norm(x, p):
 
 maxpolyweight = lambda x: 4/np.sqrt(np.pi)*x**2*np.exp(-x**2)
 
-def diff_matrix(n):
+def diff_matrix(G, n):
+
+    idx = int(G/2)
 
     D = np.zeros([n+1, n+1])
 
     for j in range(n+1):
 
         if j > 0:
-            D[j-1,j] = j/np.sqrt(maxpoly_rec_b[j])
+            D[j-1,j] = j/np.sqrt(maxpoly_beta[idx,j])
 
         if j > 1:
-            D[j-2,j] = (sum(maxpoly_rec_a[0:j]) - j*maxpoly_rec_a[j-1])/np.sqrt(maxpoly_rec_b[j]*maxpoly_rec_b[j-1])
+            D[j-2,j] = (sum(maxpoly_alpha[idx,0:j]) - j*maxpoly_alpha[idx,j-1])/np.sqrt(maxpoly_beta[idx,j]*maxpoly_beta[idx,j-1])
 
         if j > 2:
-            D[j-3,j] = (2.*np.sqrt(maxpoly_rec_b[j]*maxpoly_rec_b[j-1]) - np.sqrt(maxpoly_rec_b[j-1])*D[j-1,j] - maxpoly_rec_a[j-2]*D[j-2,j])/np.sqrt(maxpoly_rec_b[j-2])
+            D[j-3,j] = (2.*np.sqrt(maxpoly_beta[idx,j]*maxpoly_beta[idx,j-1]) - np.sqrt(maxpoly_beta[idx,j-1])*D[j-1,j] - maxpoly_alpha[idx,j-2]*D[j-2,j])/np.sqrt(maxpoly_beta[idx,j-2])
 
         if j > 3:
             for i in range(4,j+1):
-                D[j-i,j] = - (np.sqrt(maxpoly_rec_b[j+2-i])*D[j+2-i,j] + maxpoly_rec_a[j+1-i]*D[j+1-i,j])/np.sqrt(maxpoly_rec_b[j+1-i])
+                D[j-i,j] = - (np.sqrt(maxpoly_beta[idx,j+2-i])*D[j+2-i,j] + maxpoly_alpha[idx,j+1-i]*D[j+1-i,j])/np.sqrt(maxpoly_beta[idx,j+1-i])
 
 
     return D
 
-def lift_matrix(n):
+def lift_matrix(G, n):
+
+    idx = int(G/2)
 
     D = np.zeros([n+1, n+1])
 
-    D[0,0] = maxpoly_rec_a[0]
-    D[0,1] = np.sqrt(maxpoly_rec_b[1])
+    D[0,0] = maxpoly_alpha[idx,0]
+    D[0,1] = np.sqrt(maxpoly_beta[idx,1])
 
     for j in range(1,n):
 
-        D[j,j-1] = np.sqrt(maxpoly_rec_b[j])
-        D[j,j]   = maxpoly_rec_a[j]
-        D[j,j+1] = np.sqrt(maxpoly_rec_b[j+1])
+        D[j,j-1] = np.sqrt(maxpoly_beta[idx,j])
+        D[j,j]   = maxpoly_alpha[idx,j]
+        D[j,j+1] = np.sqrt(maxpoly_beta[idx,j+1])
 
-    D[n,n-1] = np.sqrt(maxpoly_rec_b[n])
-    D[n,n] = maxpoly_rec_a[n]
+    D[n,n-1] = np.sqrt(maxpoly_beta[idx,n])
+    D[n,n] = maxpoly_alpha[idx,n]
 
     return D
 
@@ -125,4 +165,4 @@ class basis:
         self._deg = deg
 
     def __call__(self, x):
-        return maxpolyeval(x, self._deg)
+        return maxpolyeval(2, x, self._deg)

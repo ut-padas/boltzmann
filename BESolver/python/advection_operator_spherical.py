@@ -1,14 +1,33 @@
-import basis
+import basis as bs
 import spec_spherical as sp
 import scipy.integrate
 import numpy as np
-import maxpoly
+from maxpoly import *
 import matplotlib.pyplot as plt
 import profiler
 
+import math
+
 t_adv_mat = profiler.profile_t("v_adv")
-phimat = np.genfromtxt('sph_harm_del/phimat.dat',delimiter=',')
-psimat = np.genfromtxt('sph_harm_del/psimat.dat',delimiter=',')
+phimat = np.genfromtxt('sph_harm_del/phimat16.dat',delimiter=',')
+psimat = np.genfromtxt('sph_harm_del/psimat16.dat',delimiter=',')
+
+def sph_harm_norm(l,m):
+    if m == 0:
+        return np.sqrt((2.*l+1)/(4.*np.pi))
+    else:
+        return (-1)**m * np.sqrt((2.*l+1)/(2.*np.pi)*math.factorial(l-abs(m))/math.factorial(l+abs(m)))
+
+AM = lambda l,m: (l+abs(m))/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l-1,m)
+BM = lambda l,m: (l-abs(m)+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l+1,m)
+
+AD = lambda l,m: (l+abs(m))*(l+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l-1,m)
+BD = lambda l,m: -l*(l-abs(m)+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l+1,m)
+
+CpsiDphiP = np.load('polynomials/maxpoly_CpsiDphiP.npy')
+CpsiDphiM = np.load('polynomials/maxpoly_CpsiDphiM.npy')
+CphiDpsiP = np.load('polynomials/maxpoly_CphiDpsiP.npy')
+CphiDpsiM = np.load('polynomials/maxpoly_CphiDpsiM.npy')
 
 def assemble_advection_matix_lp(Nr, sph_harm_lm):
 
@@ -16,95 +35,195 @@ def assemble_advection_matix_lp(Nr, sph_harm_lm):
     num_total = (Nr+1)*num_sh
     adv_mat = np.zeros([num_total, num_total])
 
-    diff_mat = maxpoly.diff_matrix(Nr)
-    lift_mat = maxpoly.lift_matrix(Nr)
+    for qs_idx,qs in enumerate(sph_harm_lm):
 
-    g_mat = diff_mat - 2*lift_mat
-    
-    for p in range(Nr+1):
-        for k in range(Nr+1):
-            for lm_idx,lm in enumerate(sph_harm_lm):
-                for qs_idx,qs in enumerate(sph_harm_lm):
-                    lm_mat = lm[0]**2+lm[0]+lm[1]
-                    qs_mat = qs[0]**2+qs[0]+qs[1]
+        lm = [qs[0]+1,qs[1]]
+        if lm in sph_harm_lm:
+            lm_idx = sph_harm_lm.index(lm)
+
+            for p in range(Nr+1):
+                for k in range(Nr+1):
                     klm = k*num_sh + lm_idx
                     pqs = p*num_sh + qs_idx
-                    adv_mat[pqs,klm] = g_mat[p,k]*psimat[lm_mat,qs_mat] + \
-                        0.5*(sum(g_mat[:,k]*g_mat[p,:])+sum(g_mat[:,k]*diff_mat[:,p])) * phimat[lm_mat,qs_mat]
+
+                    adv_mat[pqs,klm] += (AM(lm[0],lm[1]) - .5*AD(lm[0],lm[1]))*CpsiDphiP[qs[0],p,k] - .5*AD(lm[0],lm[1])*CphiDpsiP[qs[0],p,k]
+        
+        lm = [qs[0]-1,qs[1]]
+        if lm in sph_harm_lm:
+            lm_idx = sph_harm_lm.index(lm)
+
+            for p in range(Nr+1):
+                for k in range(Nr+1):
+                    klm = k*num_sh + lm_idx
+                    pqs = p*num_sh + qs_idx
+
+                    adv_mat[pqs,klm] += (BM(lm[0],lm[1]) - .5*BD(lm[0],lm[1]))*CpsiDphiM[qs[0],p,k] - .5*BD(lm[0],lm[1])*CphiDpsiM[qs[0],p,k]
 
     return adv_mat
 
-def assemble_advection_matrix(Nr,sph_harm_lm):
-    num_sh = len(sph_harm_lm)
-    num_total = (Nr+1)*num_sh
+# def assemble_advection_matrix(Nr,sph_harm_lm):
+#     num_sh = len(sph_harm_lm)
+#     num_total = (Nr+1)*num_sh
 
-    l_max = sph_harm_lm[-1][0]
+#     l_max = sph_harm_lm[-1][0]
 
-    diff_mat = maxpoly.diff_matrix(Nr)
-    lift_mat = maxpoly.lift_matrix(Nr)
+#     diff_mat = maxpoly.diff_matrix(Nr)
+#     lift_mat = maxpoly.lift_matrix(Nr)
 
-    g_mat = diff_mat - 2*lift_mat
+#     g_mat = diff_mat - 2*lift_mat
     
-    gg_pk  = np.matmul(g_mat, g_mat)
-    dg_pk  = np.matmul(np.transpose(diff_mat),g_mat)
+#     gg_pk  = np.matmul(g_mat, g_mat)
+#     dg_pk  = np.matmul(np.transpose(diff_mat),g_mat)
 
-    psimat_local= np.transpose(psimat[0:(l_max+1)**2, 0:(l_max+1)**2])
-    phimat_local= np.transpose(phimat[0:(l_max+1)**2, 0:(l_max+1)**2])
+#     psimat_local= np.transpose(psimat[0:(l_max+1)**2, 0:(l_max+1)**2])
+#     phimat_local= np.transpose(phimat[0:(l_max+1)**2, 0:(l_max+1)**2])
 
-    adv_mat= np.kron(g_mat,psimat_local).reshape(num_total,num_total) + 0.5*(np.kron((gg_pk+dg_pk),phimat_local).reshape(num_total,num_total)) 
-    return adv_mat
+#     adv_mat= np.kron(g_mat,psimat_local).reshape(num_total,num_total) + 0.5*(np.kron((gg_pk+dg_pk),phimat_local).reshape(num_total,num_total)) 
+#     return adv_mat
 
-Nr = 5
-lmax = 10
-Ntotal = (Nr+1)*(lmax+1)**2
+# num_dofs_all = [2, 4, 8, 16]
+# num_dofs_all = [8, 16, 32, 64]
+num_dofs_all = [2, 4,8]
+# num_dofs_all = [16]
 
-lm_all = []
+error_linf = np.zeros(len(num_dofs_all))
+error_l2 = np.zeros(len(num_dofs_all))
 
-for l in range(lmax+1):
-    for m in range(-l,l+1):
-        lm_idx = l**2+1+l+m
-        lm_all.append([l,m])
+x = np.linspace(-2,2,500)
+theta = 0.5*np.pi - np.sign(x)*0.5*np.pi
+f_num = np.zeros([len(num_dofs_all), len(x)])
+f_initial = np.zeros([len(num_dofs_all), len(x)])
+f_exact = np.zeros([len(num_dofs_all), len(x)])
 
-num_sph = len(lm_all)
+t_end = 0.5
+nsteps = 100000
+dt = t_end/nsteps
 
-coeffs = np.zeros(Ntotal)
-coeffs[0] = 1
+for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
 
-t_adv_mat.start()
-#advmat1   = assemble_advection_matix_lp(Nr, lm_all)
-advmat    = assemble_advection_matrix(Nr,lm_all)
-t_adv_mat.stop()
-print("time for advection op assembly: ",t_adv_mat.seconds)
-#print(np.linalg.norm(advmat-advmat1))
+    Nr = 64
+    lmax = num_dofs
+
+    lm_all = []
+
+    for l in range(lmax+1):
+        # for m in range(-l,l+1):
+        for m in range(1):
+            lm_idx = l**2+1+l+m
+            lm_all.append([l,m])
+
+    num_sph = len(lm_all)
+    Ntotal = (Nr+1)*num_sph
+
+    coeffs = np.zeros(Ntotal)
+    coeffs[0] = 1
+
+    t_adv_mat.start()
+    advmat   = assemble_advection_matix_lp(Nr, lm_all)
+    # advmat    = assemble_advection_matrix(Nr,lm_all)
+    t_adv_mat.stop()
+    print("time for advection op assembly: ",t_adv_mat.seconds)
+    #print(np.linalg.norm(advmat-advmat1))
+    
+
+    # func = lambda t,a: -np.matmul(advmat,a)
+    # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45')
+    # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='BDF')
+    # coeffs_num = sol.y[:,-1]
+
+    # backward Euler
+    solver = np.linalg.inv(np.eye(Ntotal) + dt*advmat)
+    coeffs_num = coeffs
+
+    for step in range(nsteps):
+        coeffs_num = np.matmul(solver, coeffs_num)
+
+    # coeff_decomp = np.zeros([(lmax+1)**2, Nr+1])
+
+    # for k in range(Nr+1):
+    #     for lm_idx in range(num_sph):
+    #         klm = k*num_sph + lm_idx
+    #         coeff_decomp[lm_idx, k] = coeffs_num[klm]
+
+    # for lm_idx,lm in enumerate(lm_all):
+    #     plt.subplot(lmax+1, 2*lmax+1, lm[0]*(2*lmax+1)+lm[1]+1+lm[0]+lmax-lm[0])
+    #     plt.semilogy(np.abs(coeff_decomp[lm_idx,:]))
+    #     plt.title("(" + str(lm[0]) + ", " + str(lm[1]) + ")")
+
+    # plt.show()
+    # sp._sph_harm_real(lm[0], lm[1], theta, 0)
+
+    maxpolybasis = bs.Maxwell()
+    sph_basis = sp.SpectralExpansionSpherical(Nr, maxpolybasis, lm_all)
 
 
-func = lambda t,a: -np.matmul(advmat,a)
+    for k in range(Nr+1):
+        for lm_idx, lm in enumerate(lm_all):
+            f_num[num_dofs_idx,:]     += coeffs_num[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(theta, 0, lm[0], lm[1])*maxpolyeval(2*lm[0]+2,np.abs(x),k)*np.exp(-x**2)*(np.abs(x)**lm[0])
+            f_initial[num_dofs_idx,:] += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(theta, 0, lm[0], lm[1])*maxpolyeval(2*lm[0]+2,np.abs(x),k)*np.exp(-(x)**2)*(np.abs(x)**lm[0])
+            f_exact[num_dofs_idx,:]   += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(theta, 0, lm[0], lm[1])*maxpolyeval(2*lm[0]+2,x-t_end,k)*np.exp(-(x-t_end)**2)*(np.abs(x)**lm[0])
 
-t_end = 1
-sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs)
+    error_linf[num_dofs_idx] = np.max(abs(f_num[num_dofs_idx,:]-f_exact[0,:]))
+    error_l2[num_dofs_idx] = np.linalg.norm(f_num[num_dofs_idx,:]-f_exact[0,:])
 
-#print(coeffs)
-#print(sol.y[:,-1])
+plt.subplot(2,2,1)
+plt.plot(x, f_initial[0,:])
+plt.plot(x, f_exact[0,:])
 
-coeffs_new = sol.y[:,-1]
+for num_dofs_idx,Nr in enumerate(num_dofs_all):
+    plt.plot(x, f_num[num_dofs_idx,:], '--')
 
-maxpolybasis = basis.Maxwell()
-sph_basis = sp.SpectralExpansionSpherical(Nr, maxpolybasis, lm_all)
-
-x = np.linspace(0,8,100)
-f = np.zeros(np.shape(x))
-f_in = np.zeros(np.shape(x))
-f_ex = np.zeros(np.shape(x))
-
-for k in range(Nr+1):
-    for lm_idx, lm in enumerate(lm_all):
-        f += coeffs_new[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(0,0, lm[0], lm[1])*maxpoly.maxpolyeval(x,k)*np.exp(-x**2)
-        f_in += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(0,0, lm[0], lm[1])*maxpoly.maxpolyeval(x,k)*np.exp(-(x)**2)
-        f_ex += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(0,0, lm[0], lm[1])*maxpoly.maxpolyeval(x-t_end,k)*np.exp(-(x-t_end)**2)
-
-plt.semilogy(x,f_in)
-plt.plot(x,f_ex)
-plt.plot(x,f,'o')
 plt.grid()
-plt.legend(['Initial Conditions', 'Exact', 'Nr=5, l_max=10'])
+plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+plt.ylabel('Distribution function')
+plt.xlabel('$v_z$')
+
+plt.subplot(2,2,2)
+plt.semilogy(x, f_initial[0,:])
+plt.plot(x, f_exact[0,:])
+
+for num_dofs_idx,Nr in enumerate(num_dofs_all):
+    plt.plot(x, f_num[num_dofs_idx,:], '--')
+
+plt.grid()
+plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+plt.ylabel('Distribution function')
+plt.xlabel('$v_z$')
+
+plt.subplot(2,2,3)
+
+for num_dofs_idx,Nr in enumerate(num_dofs_all):
+    plt.semilogy(x, abs(f_num[num_dofs_idx,:]-f_exact[0,:]), '--')
+
+plt.grid()
+plt.legend(['$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+plt.ylabel('Error in distribution function')
+plt.xlabel('$v_z$')
+
+plt.subplot(2,2,4)
+plt.semilogy(num_dofs_all, error_linf)
+plt.semilogy(num_dofs_all, error_l2)
+plt.ylabel('Error')
+plt.xlabel('$l_{\max}$')
+plt.grid()
+plt.legend(['$L_\inf$', '$L_2$'])
 plt.show()
+
+# plt.semilogy(x,np.abs(f_in-f))
+# # plt.semilogy(x,np.abs(f_ex-f))
+# plt.grid()
+# plt.legend(['Initial Conditions', 'Exact', 'Nr=5, l_max=10'])
+# plt.show()
+
+# vx = np.linspace(-5,5,100)
+# vy = np.linspace(-5,5,100)
+
+# f = np.zeros([100, 100])
+# f_sl = np.zeros([100, 100])
+# f_ex = np.zeros([100, 100])
+
+# for k in range(Nr+1):
+#     for lm_idx, lm in enumerate(lm_all):

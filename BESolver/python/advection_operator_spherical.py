@@ -5,6 +5,8 @@ import numpy as np
 from maxpoly import *
 import matplotlib.pyplot as plt
 import profiler
+from utils import *
+from mpl_toolkits import mplot3d
 
 import math
 
@@ -83,26 +85,52 @@ def assemble_advection_matix_lp(Nr, sph_harm_lm):
 
 # num_dofs_all = [2, 4, 8, 16]
 # num_dofs_all = [8, 16, 32, 64]
-num_dofs_all = [2, 4,8]
+# num_dofs_all = [2, 4,8]
+# num_dofs_all = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
+num_dofs_all = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
 # num_dofs_all = [16]
 
 error_linf = np.zeros(len(num_dofs_all))
 error_l2 = np.zeros(len(num_dofs_all))
+error_linf_2d = np.zeros(len(num_dofs_all))
+error_l2_2d = np.zeros(len(num_dofs_all))
 
-x = np.linspace(-2,2,500)
+t_end = 0.1
+# nsteps = 400000
+nsteps = 1000
+dt = t_end/nsteps
+
+x = np.linspace(-2,2,100)
+z = np.linspace(-2,2,100)
+quad_grid = np.meshgrid(x,z,indexing='ij')
+
+y = np.zeros_like(quad_grid[0])
+
+sph_coord_init = cartesian_to_spherical(quad_grid[0],y,quad_grid[1])
+sph_coord_end = cartesian_to_spherical(quad_grid[0],y,quad_grid[1]-t_end)
+
 theta = 0.5*np.pi - np.sign(x)*0.5*np.pi
 f_num = np.zeros([len(num_dofs_all), len(x)])
 f_initial = np.zeros([len(num_dofs_all), len(x)])
 f_exact = np.zeros([len(num_dofs_all), len(x)])
 
-t_end = 0.5
-nsteps = 100000
-dt = t_end/nsteps
+f_num_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+f_initial_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+f_exact_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+
+print(np.shape(sph_coord_init))
+
 
 for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
 
-    Nr = 64
+    Nr = 16
     lmax = num_dofs
+
+    # Nr = num_dofs
+    # lmax = 16
+
+    # Nr = num_dofs
+    # lmax = num_dofs
 
     lm_all = []
 
@@ -126,17 +154,17 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     #print(np.linalg.norm(advmat-advmat1))
     
 
-    # func = lambda t,a: -np.matmul(advmat,a)
-    # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45')
+    func = lambda t,a: -np.matmul(advmat,a)
+    sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45')
     # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='BDF')
-    # coeffs_num = sol.y[:,-1]
+    coeffs_num = sol.y[:,-1]
 
     # backward Euler
-    solver = np.linalg.inv(np.eye(Ntotal) + dt*advmat)
-    coeffs_num = coeffs
+    # solver = np.linalg.inv(np.eye(Ntotal) + dt*advmat)
+    # coeffs_num = coeffs
 
-    for step in range(nsteps):
-        coeffs_num = np.matmul(solver, coeffs_num)
+    # for step in range(nsteps):
+        # coeffs_num = np.matmul(solver, coeffs_num)
 
     # coeff_decomp = np.zeros([(lmax+1)**2, Nr+1])
 
@@ -156,17 +184,24 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     maxpolybasis = bs.Maxwell()
     sph_basis = sp.SpectralExpansionSpherical(Nr, maxpolybasis, lm_all)
 
-
     for k in range(Nr+1):
         for lm_idx, lm in enumerate(lm_all):
             f_num[num_dofs_idx,:]     += coeffs_num[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(theta, 0, lm[0], lm[1])*maxpolyeval(2*lm[0]+2,np.abs(x),k)*np.exp(-x**2)*(np.abs(x)**lm[0])
             f_initial[num_dofs_idx,:] += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(theta, 0, lm[0], lm[1])*maxpolyeval(2*lm[0]+2,np.abs(x),k)*np.exp(-(x)**2)*(np.abs(x)**lm[0])
             f_exact[num_dofs_idx,:]   += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(theta, 0, lm[0], lm[1])*maxpolyeval(2*lm[0]+2,x-t_end,k)*np.exp(-(x-t_end)**2)*(np.abs(x)**lm[0])
+            
+            f_num_2d[num_dofs_idx,:]     += coeffs_num[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(sph_coord_init[1], sph_coord_init[2], lm[0], lm[1])*maxpolyeval(2*lm[0]+2,sph_coord_init[0],k)*np.exp(-sph_coord_init[0]**2)*(sph_coord_init[0]**lm[0])
+            f_initial_2d[num_dofs_idx,:] += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(sph_coord_init[1], sph_coord_init[2], lm[0], lm[1])*maxpolyeval(2*lm[0]+2,sph_coord_init[0],k)*np.exp(-sph_coord_init[0]**2)*(sph_coord_init[0]**lm[0])
+            f_exact_2d[num_dofs_idx,:]   += coeffs[k*num_sph+lm_idx]*sph_basis.basis_eval_spherical(sph_coord_end[1], sph_coord_end[2], lm[0], lm[1])*maxpolyeval(2*lm[0]+2,sph_coord_end[0],k)*np.exp(-sph_coord_end[0]**2)*(sph_coord_end[0]**lm[0])
 
     error_linf[num_dofs_idx] = np.max(abs(f_num[num_dofs_idx,:]-f_exact[0,:]))
     error_l2[num_dofs_idx] = np.linalg.norm(f_num[num_dofs_idx,:]-f_exact[0,:])
 
-plt.subplot(2,2,1)
+    error_linf_2d[num_dofs_idx] = np.max(abs(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:]))
+    error_l2_2d[num_dofs_idx] = np.linalg.norm(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:])
+
+
+plt.subplot(2,3,1)
 plt.plot(x, f_initial[0,:])
 plt.plot(x, f_exact[0,:])
 
@@ -174,12 +209,13 @@ for num_dofs_idx,Nr in enumerate(num_dofs_all):
     plt.plot(x, f_num[num_dofs_idx,:], '--')
 
 plt.grid()
-plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
 # plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
 plt.ylabel('Distribution function')
 plt.xlabel('$v_z$')
 
-plt.subplot(2,2,2)
+plt.subplot(2,3,2)
 plt.semilogy(x, f_initial[0,:])
 plt.plot(x, f_exact[0,:])
 
@@ -187,29 +223,42 @@ for num_dofs_idx,Nr in enumerate(num_dofs_all):
     plt.plot(x, f_num[num_dofs_idx,:], '--')
 
 plt.grid()
-plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
 # plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
 plt.ylabel('Distribution function')
 plt.xlabel('$v_z$')
 
-plt.subplot(2,2,3)
+plt.subplot(2,3,4)
 
 for num_dofs_idx,Nr in enumerate(num_dofs_all):
     plt.semilogy(x, abs(f_num[num_dofs_idx,:]-f_exact[0,:]), '--')
 
 plt.grid()
-plt.legend(['$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
+# plt.legend(['$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
 # plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
 plt.ylabel('Error in distribution function')
 plt.xlabel('$v_z$')
 
-plt.subplot(2,2,4)
-plt.semilogy(num_dofs_all, error_linf)
-plt.semilogy(num_dofs_all, error_l2)
+plt.subplot(2,3,5)
+plt.semilogy(num_dofs_all, error_linf_2d, '-o')
+plt.semilogy(num_dofs_all, error_l2_2d, '-*')
 plt.ylabel('Error')
 plt.xlabel('$l_{\max}$')
 plt.grid()
 plt.legend(['$L_\inf$', '$L_2$'])
+
+plt.subplot(1,3,3)
+plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[-1,:,:], linestyles='solid', colors='grey', linewidths=1)
+plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[-1,:,:], linestyles='dashed', colors='red', linewidths=2)
+ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotted', colors='blue', linewidths=2)
+# ax.plot_surface(quad_grid[0], quad_grid[1], f_initial2[2,:,:], rstride=1, cstride=1,
+#                 cmap='viridis', edgecolor='none')
+# ax.set_title('surface');
+plt.gca().set_aspect('equal')
+
+
 plt.show()
 
 # plt.semilogy(x,np.abs(f_in-f))

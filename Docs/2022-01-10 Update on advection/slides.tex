@@ -312,17 +312,77 @@ f = A
 \begin{align*}
 f = A 
 \exp\of{-\left(\frac{\vr}{\vth}\right)^2} 
-\sum_{lm} \left(\sum_{k} h_{klm} v^l P_{kl}\of{\textstyle\frac{v}{\vth}}\right) Y_{lm}\of{\vtheta,\vphi}
+\sum_{lm} \left(\sum_{k} h_{klm} \left(\frac{v}{\vth}\right)^l P_{kl}\of{\frac{v}{\vth}}\right) Y_{lm}\of{\vtheta,\vphi}
 \end{align*}
 
 \item where (associated Maxwell polynomials?)
 \begin{align*}
-\myint_0^\infty  P_{kl}\of{v} P_{jl}\of{v} v^{2l} v^2 \ud v = \delta_{k,j}
+\myint_0^\infty  P_{kl}\of{x} P_{jl}\of{x} x^{2l+2} e^{-x^2} \ud x = \delta_{k,j}
 \end{align*}
 \end{itemize}
 %
 \end{frame}
 
+
+\begin{frame}
+\frametitle{\small Convergence test ($N_r = 16$ is fixed, $l_{\max}$ is increasing)}
+\begin{center}
+%\begin{itemize}
+%\item 
+%$\vect{E} = \text{const} \rightarrow f\of{t,\vect{v}} = f\of{0, \vect{v} + \vect{E}t}$
+%\item $N_r = 32$ is fixed, $l_{\max}$ is increasing
+%\end{itemize}
+\includegraphics[width=0.99\textwidth]{figures/advection_operator_changing_lmax}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{\small Convergence test ($N_r$ is increasing, $l_{\max} = 16$ is fixed)}
+\begin{center}
+%\begin{itemize}
+%\item 
+%$\vect{E} = \text{const} \rightarrow f\of{t,\vect{v}} = f\of{0, \vect{v} + \vect{E}t}$
+%\item $N_r = 32$ is fixed, $l_{\max}$ is increasing
+%\end{itemize}
+\includegraphics[width=0.99\textwidth]{figures/advection_operator_changing_nr}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{\small Convergence test ($N_r = 16$ is fixed, $l_{\max}$ is increasing)}
+\begin{center}
+%\begin{itemize}
+%\item 
+%$\vect{E} = \text{const} \rightarrow f\of{t,\vect{v}} = f\of{0, \vect{v} + \vect{E}t}$
+%\item $N_r = 32$ is fixed, $l_{\max}$ is increasing
+%\end{itemize}
+\includegraphics[width=0.99\textwidth]{figures/advection_operator_changing_lmax_0_1}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{\small Convergence test ($N_r = 16$ is fixed, $l_{\max}$ is increasing)}
+\begin{center}
+%\begin{itemize}
+%\item 
+%$\vect{E} = \text{const} \rightarrow f\of{t,\vect{v}} = f\of{0, \vect{v} + \vect{E}t}$
+%\item $N_r = 32$ is fixed, $l_{\max}$ is increasing
+%\end{itemize}
+\includegraphics[width=0.99\textwidth]{figures/advection_operator_changing_lmax_0_25}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{\small Convergence test ($N_r = 16$ is fixed, $l_{\max}$ is increasing)}
+\begin{center}
+%\begin{itemize}
+%\item 
+%$\vect{E} = \text{const} \rightarrow f\of{t,\vect{v}} = f\of{0, \vect{v} + \vect{E}t}$
+%\item $N_r = 32$ is fixed, $l_{\max}$ is increasing
+%\end{itemize}
+\includegraphics[width=0.99\textwidth]{figures/advection_operator_changing_lmax}
+\end{center}
+\end{frame}
 
 %===============================================================================
 \end{document}

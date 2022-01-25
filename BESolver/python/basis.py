@@ -218,47 +218,67 @@ class XlBSpline(Basis):
     """
     Scaled b-splines for advection. 
     b_{kl}= b_k(x) x^l
-    
+    b_0 and b_last are used as boundary splines with repeated knots. 
     """
     @staticmethod
     def get_num_q_pts(p_order, s_order, pts_per_knot):
-        return pts_per_knot*(p_order+1 + s_order + 2  - 2*(s_order+1))
+        return pts_per_knot*(p_order)
 
-    def __init__(self,knots,spline_order, num_c_pts):
+    def __init__(self,k_domain,spline_order, num_p):
         self._basis_type = BasisType.SPLINES
-        assert len(knots) == num_c_pts + (spline_order+1) + 1, "knots vector length does not match the spline order"
-        self._num_c_pts  = num_c_pts
+        """
+        x x x     | * * * * * * * * * * | x  x  x
+         sp + 1          num_p -2          sp+1   
+        """
+        # first and last splines have repeated knots, 
+        num_k            = 2*spline_order + (num_p -2) + 2
+        self._t          = (k_domain[0])*np.ones(spline_order+1)
+        self._t          = np.append(self._t,np.logspace(-2, np.log2(k_domain[1]-2) , num_k-2*spline_order -2 ,base=2))
+        #self._t          = np.append(self._t,np.linspace(0.25, (k_domain[1]-2) , num_k-2*spline_order -2))
+        self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
+        #print("len_t ",len(self._t) , " num_k ",num_k)
+        self._num_c_pts  = num_p
         self._sp_order   = spline_order
-        self._t          = knots
         self._q_per_knot = XLBSPLINE_NUM_Q_PTS_PER_KNOT
-        self._splines    = [scipy.interpolate.BSpline.basis_element(knots[i:i+spline_order+2],False) for i in range(num_c_pts)]
-        self._xlambda    = 1.0
+        self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(num_p)]
+        
+        # print(self._t)
+        # import matplotlib.pyplot as plt
+        # x=np.linspace(k_domain[0],4,10000)
+        # for i in range(1,2):
+        #     print(self._t[i:i+spline_order+2])
+        #     plt.plot(x,self.Pn(i)(0,x),label="b_i=%d"%i)
+        #     plt.plot(x,self.derivative(i,1)(x),label="b'_i=%d"%i)
+        #     plt.plot(x,self._splines[i].derivative(1)(x),label="python b'_i=%d"%i)
+        # #plt.xscale("log")
+        # plt.legend()
+        # plt.grid()
+        # plt.show()
+        
+
 
     def Pn(self,deg,domain=None,window=None):
-        # if deg <2:
-        #     return lambda l,x : self._splines[deg](x) * (x**(l/self._xlambda))
-        # else:
-        #     return lambda l,x :self._splines[deg](x)
+        return lambda l,x : np.nan_to_num(self._splines[deg](x)) * (x**(max(l-deg,0)))
         
-        # the below will result large condition numbers in the mass matrix, we only need x**l factor for very first few splines. 
-        return lambda l,x : self._splines[deg](x) * (x**(l/self._xlambda))
-
+        
+        
     def Gauss_Pn(self,deg,from_zero=True):
         """
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
-        ti=(self._sp_order)
-        assert np.allclose(self._t[ti],0), "specified knot vector element %d is not aligned with zero"%(ti)
-        knots_len  = len(self._t) 
-        assert deg % (knots_len-2*(ti+1)) == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,self._num_c_pts)
-        pts_p_knot = deg // (knots_len-2*(ti+1))
-        qx = np.zeros(pts_p_knot*(knots_len-2*(ti+1)))
-        qw = np.zeros(pts_p_knot*(knots_len-2*(ti+1)))
-        for i in range(ti, ti + (knots_len-2*(ti+1))):
-            qx[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot], qw[(i-ti)*pts_p_knot: (i-ti)*pts_p_knot + pts_p_knot] = uniform_simpson((self._t[i], self._t[i+1]),pts_p_knot)
+        assert np.allclose(self._t[self._sp_order],0), "specified knot vector element %d is not aligned with zero"%(self._sp_order)
+        num_intervals = self._num_c_pts -1
+        assert deg % num_intervals == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,num_intervals)
+        qx = np.zeros(deg)
+        qw = np.zeros(deg)
+        for i in range(self._sp_order, self._sp_order + num_intervals):
+            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = uniform_simpson((self._t[i], self._t[i+1]),self._q_per_knot)
         
         # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
+        # print(qx.shape)
+        # print(qx)
+        # print(np.sum(qw))
         assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0])), "simpson weights computed for splines does not match the knots domain"
         return qx,qw
     
@@ -269,20 +289,31 @@ class XlBSpline(Basis):
         I = lambda x: np.ones_like(x)
         return I
 
+    def derivative(self, deg, dorder):
+        assert dorder==1, "not implemented for HO derivatives"
+        i=deg
+        p=self._sp_order
+        c1 = self._t[i+p] - self._t[i]
+        c2 = self._t[i+p+1] - self._t[i+1]
+
+        if(c2!=0):
+            f_c2 = lambda x : - (p / c2) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i+1:i+1 + p+1],False)(x)) 
+        else:
+            f_c2 = lambda x : np.zeros_like(x)
+
+        if(c1!=0):
+            f_c1 = lambda x : (p / c1) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i:i + p + 1],False)(x))
+        else:
+            f_c1 = lambda x : np.zeros_like(x)
+
+        return lambda x : np.nan_to_num(f_c1(x)) + np.nan_to_num(f_c2(x))
+
     def diff(self,deg, dorder):
         assert dorder==1, "not implemented for HO derivatives"
-        # if deg == 0:
-        #     return lambda l,x : np.zeros_like(x) if l==0 else (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
-        # elif deg<2:
-        #     return lambda l,x : self._splines[deg].derivative(dorder)(x) if l==0 else (x**(l/self._xlambda)) * self._splines[deg].derivative(dorder)(x) + (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
-        # elif deg == len(self._splines)-1:
-        #     return lambda l,x : np.zeros_like(x)
-        # else:
-        #     return lambda l,x : self._splines[deg].derivative(dorder)(x)
-        if deg== 0 or deg == len(self._splines)-1:
-            return lambda l,x : np.zeros_like(x) if l==0 else (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
-        else:
-            return lambda l,x : self._splines[deg].derivative(dorder)(x) if l==0 else (x**(l/self._xlambda)) * self._splines[deg].derivative(dorder)(x) + (l/self._xlambda)* self._splines[deg](x) * ( x**((l/self._xlambda) -1) )
+        
+        b_deriv = self.derivative(deg,1)
+        return lambda l,x : b_deriv(x) if deg>=l else x**(l-deg) *b_deriv(x) + self.Pn(deg)(0,x) * (l-deg) * x**(l-deg-1)
+        #return lambda l,x : b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(0,x) * (l) * x**(l-1)
 
 
 

@@ -159,7 +159,8 @@ class SPEC_SPH:
         num_sh = len(self._sph_harm_lm)
         num_l  = len(self._lmodes)
         
-        [gx, gw] = self._basis_p.Gauss_Pn(basis.BSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+        print("q: ", basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot))
+        [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
         # note that, VTH**3 should be here but discarded, since they cancel out at C operator. 
         Vr = self.Vq_r(gx)
         mr = gx**2 
@@ -176,30 +177,22 @@ class SPEC_SPH:
         return mm_full
 
 def create_xlbspline_spec(spline_order, k_domain, Nr, lmax):
-    num_k       = spline_order + (Nr+1) + 2
-    knots_vec1  = np.zeros(spline_order+1)
-    knots_vec2  = np.logspace(-1e-6, np.log2(k_domain[1]) , num_k-2*spline_order-2,base=2)
-    #knots_vec2  = np.linspace(1, k_domain[1] , num_k-2*spline_order-2)
-    knots_vec   = np.append(knots_vec1,knots_vec2)
-    knots_vec   = np.append(knots_vec,knots_vec[-1]*np.ones(spline_order+1))
-    print("spline knots : ",knots_vec)
-    splines     = basis.XlBSpline(knots_vec,spline_order,Nr+1)
-    sph_harm_lm = [(l,m) for l in range(lmax+1) for m in range(-l,l+1)]
-    # xl spline spec
+    splines     = basis.XlBSpline(k_domain,spline_order,Nr+1)
+    sph_harm_lm   = [(l,m) for l in range(lmax+1) for m in range(-l,l+1)]
     spec        = SPEC_SPH(Nr,splines,sph_harm_lm)
     return spec
 
-def create_bspline_spec(spline_order, k_domain, Nr, lmax):
-    num_k         = spline_order + (Nr+1) + 2
-    knots_vec1    = np.zeros(spline_order+1)
-    knots_vec2    = np.logspace(1e-2, np.log2(k_domain[1]) , num_k-2*spline_order-2,base=2)
-    #knots_vec2  = np.linspace(1e-2, k_domain[1] , num_k-2*spline_order-2)
-    knots_vec     = np.append(knots_vec1,knots_vec2)
-    knots_vec     = np.append(knots_vec,knots_vec[-1]*np.ones(spline_order+1))
-    splines       = basis.BSpline(knots_vec,spline_order,Nr+1)
-    sph_harm_lm   = [(l,m) for l in range(lmax+1) for m in range(-l,l+1)]
-    spec          = sp.SpectralExpansionSpherical(Nr,splines,sph_harm_lm)
-    return spec
+# def create_bspline_spec(spline_order, k_domain, Nr, lmax):
+#     num_k         = spline_order + (Nr+1) + 2
+#     knots_vec1    = np.zeros(spline_order+1)
+#     knots_vec2    = np.logspace(1e-2, np.log2(k_domain[1]) , num_k-2*spline_order-2,base=2)
+#     #knots_vec2  = np.linspace(1e-2, k_domain[1] , num_k-2*spline_order-2)
+#     knots_vec     = np.append(knots_vec1,knots_vec2)
+#     knots_vec     = np.append(knots_vec,knots_vec[-1]*np.ones(spline_order+1))
+#     splines       = basis.BSpline(knots_vec,spline_order,Nr+1)
+#     sph_harm_lm   = [(l,m) for l in range(lmax+1) for m in range(-l,l+1)]
+#     spec          = sp.SpectralExpansionSpherical(Nr,splines,sph_harm_lm)
+#     return spec
 
 def expand_in_xlsplines(spec_sp,f,qr,qt,qp,mass_inverse=None):
 
@@ -253,7 +246,7 @@ def assemble_advection_matrix_lp(spec: SPEC_SPH):
     psimat= np.transpose(psimat[0:(l_max+1)**2, 0:(l_max+1)**2])
     phimat= np.transpose(phimat[0:(l_max+1)**2, 0:(l_max+1)**2])
 
-    [gx, gw] = spec._basis_p.Gauss_Pn(basis.BSpline.get_num_q_pts(spec._p,spec._basis_p._sp_order,spec._basis_p._q_per_knot),True)
+    [gx, gw] = spec._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(spec._p,spec._basis_p._sp_order,spec._basis_p._q_per_knot),True)
     Vr  = spec.Vq_r(gx)
     Vdr = spec.Vdq_r(gx)
     mr = gx**2 
@@ -273,7 +266,7 @@ def assemble_advection_matrix_lp(spec: SPEC_SPH):
                     lm_mat = lm[0]**2+lm[0]+lm[1]
                     pqs = p*num_sh + qs_idx
                     klm = k*num_sh + lm_idx
-                    advec_mat[pqs,klm] = mm1[p,k,qs[0],lm[0]] * psimat[qs_mat,lm_mat] + mm2[p,k,qs[0],lm[0]] * phimat[qs_mat,lm_mat]
+                    advec_mat[pqs,klm] = mm1[p,k,qs[0],lm[0]] * psimat[qs_mat,lm_mat] - mm2[p,k,qs[0],lm[0]] * phimat[qs_mat,lm_mat]
     
     return advec_mat
 
@@ -288,59 +281,48 @@ def backward_euler(FOp,y0,t_end,nsteps):
     return y0
 
 
-NR=16
+NR=64
 L_MODE_MAX=3
 V_DOMAIN = (0,40)
 VTH=1.0
+spline_order  = 3
 num_p = NR+1
 lm_all = [(l,m) for l in range(L_MODE_MAX+1) for m in range(-l, l+1)]
 num_sph=len(lm_all)
+t_end  = 5e-1
 
-spline_order  = 3
+basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT = 2*spline_order+1
 basis.BSPLINE_BASIS_ORDER=spline_order
+
 params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = NR
 params.BEVelocitySpace.SPH_HARM_LM = [(i,j) for i in range(L_MODE_MAX+1) for j in range(-i,i+1)]
-q_mode = sp.QuadMode.SIMPSON
-r_mode = basis.BasisType.SPLINES
-params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
-params.BEVelocitySpace.NUM_Q_VT  = 2
-params.BEVelocitySpace.NUM_Q_VP  = 2
+
+NUM_Q_VR = basis.XlBSpline.get_num_q_pts(NR,spline_order,basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+NUM_Q_VT = 32
+NUM_Q_VP = 8
+
+params.BEVelocitySpace.NUM_Q_VR  = NUM_Q_VR
+params.BEVelocitySpace.NUM_Q_VT  = NUM_Q_VT
+params.BEVelocitySpace.NUM_Q_VP  = NUM_Q_VP
 params.BEVelocitySpace.NUM_Q_CHI = 2
 params.BEVelocitySpace.NUM_Q_PHI = 2
 
 spec_xlbspline = create_xlbspline_spec(spline_order,V_DOMAIN,NR,L_MODE_MAX)
-spec_bspline   = create_bspline_spec(spline_order,V_DOMAIN,NR,L_MODE_MAX)
 M    = VTH * spec_xlbspline.compute_mass_matrix()
 Minv = np.linalg.inv(M)
 print("%.2E"%np.linalg.cond(M))
-print(np.allclose(np.matmul(Minv,M),np.eye(M.shape[0])))
-
+print("|I-M^{-1} M| = %.10E " %np.linalg.norm(np.matmul(Minv,M)-np.eye(M.shape[0])))
 
 hv         = lambda v,vt,vp : np.ones_like(v)
-h_vec      = expand_in_xlsplines(spec_xlbspline,hv,params.BEVelocitySpace.NUM_Q_VR,32,4,mass_inverse=Minv)
+h_vec      = expand_in_xlsplines(spec_xlbspline,hv,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,mass_inverse=Minv)
   
-# hh_vec = np.array([3.56147443e+00,  3.56305486e+00,  1.86743643e+00,  9.71440762e-01,
-#               8.18152676e-01,  6.83298248e-01,  5.52979748e-01,  4.37926181e-01,
-#               3.35571539e-01,  2.49068496e-01,  1.77720242e-01,  1.21562866e-01,
-#               7.91490080e-02,  4.87937044e-02,  2.82532522e-02,  1.52501727e-02,
-#               7.59758091e-03,  3.45839210e-03,  1.42020595e-03,  5.19213909e-04,
-#               1.66187860e-04,  4.57854318e-05,  1.06101874e-05,  2.02837441e-06,
-#               3.07418330e-07,  3.73267161e-08,  2.84968755e-09,  3.91153798e-10,
-#               -8.21055666e-11,  4.47201443e-11, -2.17239897e-11,  1.06169910e-11,
-#               -5.18767812e-12,  2.53481554e-12, -1.23856751e-12,  6.05191757e-13,
-#               -2.95710214e-13,  1.44490618e-13, -7.06013442e-14,  3.44973943e-14,
-#               -1.68561976e-14,  8.23631478e-15, -4.02444742e-15,  1.96643493e-15])
-
-# h_vec[0:hh_vec.shape[0]] = hh_vec
-
 coeffs_new=h_vec
 coeffs = h_vec
 
 
-t_end  = 5e-1
 L=assemble_advection_matrix_lp(spec_xlbspline)
 advmat=np.matmul(Minv,L)
-coeffs_new = backward_euler(advmat,h_vec,t_end,100)
+coeffs_new = backward_euler(advmat,h_vec,t_end,1000)
 # func   = lambda t,a: -np.matmul(advmat,a)
 # sol = scipy.integrate.solve_ivp(func, (0,t_end), h_vec,method='BDF',atol=1e-14,rtol=1e-14)
 # print(sol)
@@ -352,10 +334,9 @@ coeffs_new = backward_euler(advmat,h_vec,t_end,100)
 
 
 
-x = np.linspace(0,10,1000)
-#Vq_sph = spec_xlbspline.Vq_sph(np.array([0]),np.array([0]))
-Vq_r   = spec_xlbspline.Vq_r(x)
-Vq_rt  = spec_xlbspline.Vq_r(np.sqrt(x**2 + t_end**2 -2*x*t_end))
+x = np.linspace(0,20,1000)
+Vq_r   = spec_xlbspline.Vq_r(np.abs(x))
+Vq_rt  = spec_xlbspline.Vq_r(np.abs(x-t_end))
 f_eval_mat=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(0,0,lm[0],lm[1]) * Vq_r[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(lm_all)]).reshape(num_p*num_sph,-1))
 f_eval_mat_t=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(0,0,lm[0],lm[1]) * Vq_rt[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(lm_all)]).reshape(num_p*num_sph,-1))
 
@@ -380,6 +361,7 @@ f_ex = np.dot(f_eval_mat_t,coeffs)
 plt.plot(x,f_in)
 plt.plot(x,f_ex)
 plt.plot(x,f)
+# plt.plot(x,f-f_ex)
 #plt.yscale('log')
 plt.grid()
 plt.legend(['Initial Conditions', 'Exact', 'Nr=%d, l_max=%d'%(NR,L_MODE_MAX)])

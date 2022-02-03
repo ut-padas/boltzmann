@@ -8,7 +8,7 @@ import maxpoly
 import matplotlib.pyplot as plt
 import profiler
 from scipy.special import sph_harm
-import utils as BEUtils
+import utils as BEutils
 import parameters as params
 
 t_adv_mat = profiler.profile_t("v_adv")
@@ -176,9 +176,9 @@ class SPEC_SPH:
         
         return mm_full
 
-def create_xlbspline_spec(spline_order, k_domain, Nr, lmax):
+def create_xlbspline_spec(spline_order, k_domain, Nr, sph_harm_lm):
     splines     = basis.XlBSpline(k_domain,spline_order,Nr+1)
-    sph_harm_lm   = [(l,m) for l in range(lmax+1) for m in range(-l,l+1)]
+    #sph_harm_lm   = [(l,m) for l in range(lmax+1) for m in range(-l,l+1)]
     spec        = SPEC_SPH(Nr,splines,sph_harm_lm)
     return spec
 
@@ -260,14 +260,15 @@ def assemble_advection_matrix_lp(spec: SPEC_SPH):
     advec_mat = np.zeros((num_p*num_sh,num_p*num_sh))
     for p in range(num_p):
         for k in range(num_p):
-            for lm_idx,lm in enumerate(spec._sph_harm_lm):
-                for qs_idx,qs in enumerate(spec._sph_harm_lm):
+            for qs_idx,qs in enumerate(spec._sph_harm_lm):
+                for lm_idx,lm in enumerate([(max(qs[0]-1,0), qs[1]), (min(qs[0]+1,l_max), qs[1])]):#enumerate(spec._sph_harm_lm):
                     qs_mat = qs[0]**2+qs[0]+qs[1]
                     lm_mat = lm[0]**2+lm[0]+lm[1]
                     pqs = p*num_sh + qs_idx
-                    klm = k*num_sh + lm_idx
+                    klm = k*num_sh + spec._sph_harm_lm.index(lm)
                     advec_mat[pqs,klm] = mm1[p,k,qs[0],lm[0]] * psimat[qs_mat,lm_mat] - mm2[p,k,qs[0],lm[0]] * phimat[qs_mat,lm_mat]
-    
+
+    print("norm adv mat = %.8E"%np.linalg.norm(advec_mat))
     return advec_mat
 
     
@@ -281,98 +282,202 @@ def backward_euler(FOp,y0,t_end,nsteps):
     return y0
 
 
-NR=64
-L_MODE_MAX=3
+def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
+
+    NR            = nr
+    L_MODE_MAX    = sph_lm[-1][0]
+    V_DOMAIN      = v_doamin
+    VTH           = 1.0
+    spline_order  = sp_order
+    basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT = 11 #2*spline_order+1
+    basis.BSPLINE_BASIS_ORDER=spline_order
+
+    num_p = NR+1
+    num_sph=len(sph_lm)
+
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = NR
+    params.BEVelocitySpace.SPH_HARM_LM = sph_lm
+
+
+    NUM_Q_VR = basis.XlBSpline.get_num_q_pts(NR,spline_order,basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+    NUM_Q_VT = 128
+    NUM_Q_VP = 2
+
+    params.BEVelocitySpace.NUM_Q_VR  = NUM_Q_VR
+    params.BEVelocitySpace.NUM_Q_VT  = NUM_Q_VT
+    params.BEVelocitySpace.NUM_Q_VP  = NUM_Q_VP
+    params.BEVelocitySpace.NUM_Q_CHI = 2
+    params.BEVelocitySpace.NUM_Q_PHI = 2
+
+    spec_xlbspline = create_xlbspline_spec(spline_order,V_DOMAIN,NR,sph_lm)
+    M    = VTH * spec_xlbspline.compute_mass_matrix()
+    Minv = np.linalg.inv(M)
+    print(spec_xlbspline._sph_harm_lm)
+    print("mass mat condition number = %.2E"%np.linalg.cond(M))
+    print("|I-M^{-1} M| = %.10E " %np.linalg.norm(np.matmul(Minv,M)-np.eye(M.shape[0])))
+    #print(M[0,:])
+
+
+    hv         = lambda v,vt,vp : np.ones_like(v)
+    h_vec      = expand_in_xlsplines(spec_xlbspline,hv,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,mass_inverse=Minv)
+
+    coeffs_new=h_vec
+    coeffs = h_vec
+
+
+    L=assemble_advection_matrix_lp(spec_xlbspline)
+    advmat=np.matmul(Minv,L)
+
+    func = lambda t,a: -np.matmul(advmat,a)
+    sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45',atol=1e-12, rtol=1e-12)
+    # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='BDF')
+    coeffs_new = sol.y[:,-1]
+
+    
+    #coeffs_new = backward_euler(advmat,h_vec,t_end,1000)
+    # func   = lambda t,a: -np.matmul(advmat,a)
+    # sol = scipy.integrate.solve_ivp(func, (0,t_end), h_vec,method='BDF',atol=1e-14,rtol=1e-14)
+    # print(sol)
+    # coeffs_new=sol.y[:,-1]
+
+    return coeffs,coeffs_new,spec_xlbspline
+
+
+nr_max=32
+num_dofs_all = [(nr_max,l) for l in range(2,6)]
+num_dofs_all = [(1<<l,5) for l in range(4,7)]
+num_dofs_all = [(16,2), (32,3), (64,4)]
+#num_dofs_all = [(16,0), (32,0)]
+#num_dofs_all = [16]
+
+error_linf = np.zeros(len(num_dofs_all))
+error_l2 = np.zeros(len(num_dofs_all))
+error_linf_2d = np.zeros(len(num_dofs_all))
+error_l2_2d = np.zeros(len(num_dofs_all))
+
+t_end = 0.3
+# nsteps = 400000
+nsteps = 10000
+dt = t_end/nsteps
+
+x = np.linspace(-2,2,100)
+z = np.linspace(-2,2,100)
+quad_grid = np.meshgrid(x,z,indexing='ij')
+
+y = np.zeros_like(quad_grid[0])
+
+sph_coord_init = BEutils.cartesian_to_spherical(quad_grid[0],y,quad_grid[1])
+sph_coord_end  = BEutils.cartesian_to_spherical(quad_grid[0],y,quad_grid[1]-t_end)
+
+theta = 0.5*np.pi - np.sign(x)*0.5*np.pi
+f_num = np.zeros([len(num_dofs_all), len(x)])
+f_initial = np.zeros([len(num_dofs_all), len(x)])
+f_exact = np.zeros([len(num_dofs_all), len(x)])
+
+f_num_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+f_initial_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+f_exact_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+
+print(np.shape(sph_coord_init))
 V_DOMAIN = (0,40)
-VTH=1.0
-spline_order  = 3
-num_p = NR+1
-lm_all = [(l,m) for l in range(L_MODE_MAX+1) for m in range(-l, l+1)]
-num_sph=len(lm_all)
-t_end  = 5e-1
+SP_ORDER = 3
+for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
+    nr = num_dofs[0]
+    l_max = num_dofs[1]
+    
+    num_p   = nr+1
+    sph_lm  = [(l,0) for l in range(l_max+1)]
+    num_sph = len(sph_lm)
+    print("Nr=%d sph=%s"%(nr,sph_lm))
+    c,ct,spec_xlbspline = solve_advection(nr,sph_lm,SP_ORDER,V_DOMAIN,t_end)
 
-basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT = 2*spline_order+1
-basis.BSPLINE_BASIS_ORDER=spline_order
+    Vq_r_2d   = spec_xlbspline.Vq_r(sph_coord_init[0])
+    Vq_rt_2d  = spec_xlbspline.Vq_r(sph_coord_end[0])
 
-params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = NR
-params.BEVelocitySpace.SPH_HARM_LM = [(i,j) for i in range(L_MODE_MAX+1) for j in range(-i,i+1)]
+    Vq_r    = spec_xlbspline.Vq_r(np.abs(x))
+    Vq_rt  = spec_xlbspline.Vq_r(np.abs(x-t_end))
 
-NUM_Q_VR = basis.XlBSpline.get_num_q_pts(NR,spline_order,basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
-NUM_Q_VT = 32
-NUM_Q_VP = 8
+    f_eval_mat_2d = np.transpose(np.array([spec_xlbspline.basis_eval_spherical(sph_coord_init[1],sph_coord_init[2],lm[0],lm[1]) * Vq_r_2d[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
 
-params.BEVelocitySpace.NUM_Q_VR  = NUM_Q_VR
-params.BEVelocitySpace.NUM_Q_VT  = NUM_Q_VT
-params.BEVelocitySpace.NUM_Q_VP  = NUM_Q_VP
-params.BEVelocitySpace.NUM_Q_CHI = 2
-params.BEVelocitySpace.NUM_Q_PHI = 2
+    f_eval_mat_2d_t = np.transpose(np.array([spec_xlbspline.basis_eval_spherical(sph_coord_init[1],sph_coord_init[2],lm[0],lm[1]) * Vq_rt_2d[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
+    
+    f_eval_mat=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(theta,0,lm[0],lm[1]) * Vq_r[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
+    f_eval_mat_t=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(theta,0,lm[0],lm[1]) * Vq_rt[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
+    
+    f_num[num_dofs_idx,:]     = np.dot(f_eval_mat,ct)
+    f_initial[num_dofs_idx,:] = np.dot(f_eval_mat,c)
+    f_exact[num_dofs_idx,:]   = np.dot(f_eval_mat_t,c)
 
-spec_xlbspline = create_xlbspline_spec(spline_order,V_DOMAIN,NR,L_MODE_MAX)
-M    = VTH * spec_xlbspline.compute_mass_matrix()
-Minv = np.linalg.inv(M)
-print("%.2E"%np.linalg.cond(M))
-print("|I-M^{-1} M| = %.10E " %np.linalg.norm(np.matmul(Minv,M)-np.eye(M.shape[0])))
+    f_num_2d[num_dofs_idx,:]     = np.dot(f_eval_mat_2d,ct).reshape((len(x),len(z)))
+    f_initial_2d[num_dofs_idx,:] = np.dot(f_eval_mat_2d,c).reshape((len(x),len(z)))
+    f_exact_2d[num_dofs_idx,:]   = np.dot(f_eval_mat_2d_t,c).reshape((len(x),len(z)))
+    
+    error_linf[num_dofs_idx] = np.max(abs(f_num[num_dofs_idx,:]-f_exact[0,:]))
+    error_l2[num_dofs_idx] = np.linalg.norm(f_num[num_dofs_idx,:]-f_exact[0,:])
 
-hv         = lambda v,vt,vp : np.ones_like(v)
-h_vec      = expand_in_xlsplines(spec_xlbspline,hv,NUM_Q_VR,NUM_Q_VT,NUM_Q_VP,mass_inverse=Minv)
-  
-coeffs_new=h_vec
-coeffs = h_vec
+    error_linf_2d[num_dofs_idx] = np.max(abs(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:]))
+    error_l2_2d[num_dofs_idx] = np.linalg.norm(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:])
 
+plt.subplot(2,3,1)
+plt.plot(x, f_initial[0,:])
+plt.plot(x, f_exact[0,:])
 
-L=assemble_advection_matrix_lp(spec_xlbspline)
-advmat=np.matmul(Minv,L)
-coeffs_new = backward_euler(advmat,h_vec,t_end,1000)
-# func   = lambda t,a: -np.matmul(advmat,a)
-# sol = scipy.integrate.solve_ivp(func, (0,t_end), h_vec,method='BDF',atol=1e-14,rtol=1e-14)
-# print(sol)
-# coeffs_new=sol.y[:,-1]
+for num_dofs_idx,Nr in enumerate(num_dofs_all):
+    plt.plot(x, f_num[num_dofs_idx,:], '--')
 
-
-
-
-
-
-
-x = np.linspace(0,20,1000)
-Vq_r   = spec_xlbspline.Vq_r(np.abs(x))
-Vq_rt  = spec_xlbspline.Vq_r(np.abs(x-t_end))
-f_eval_mat=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(0,0,lm[0],lm[1]) * Vq_r[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(lm_all)]).reshape(num_p*num_sph,-1))
-f_eval_mat_t=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(0,0,lm[0],lm[1]) * Vq_rt[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(lm_all)]).reshape(num_p*num_sph,-1))
-
-# Vq_r   = spec_bspline.Vq_r(x)
-# Vq_rt  = spec_bspline.Vq_r(np.abs(x-t_end))
-# f_eval_mat=np.transpose(np.array([spec_bspline.basis_eval_spherical(0,0,lm[0],lm[1]) * Vq_r[k,:]   for k in range(num_p) for lm_idx, lm in enumerate(lm_all)]).reshape(num_p*num_sph,-1))
-# f_eval_mat_t=np.transpose(np.array([spec_bspline.basis_eval_spherical(0,0,lm[0],lm[1]) * Vq_rt[k,:]   for k in range(num_p) for lm_idx, lm in enumerate(lm_all)]).reshape(num_p*num_sph,-1))
-
-f    = np.dot(f_eval_mat,coeffs_new)
-f_in = np.dot(f_eval_mat,coeffs)
-f_ex = np.dot(f_eval_mat_t,coeffs)
-
-# f = np.zeros(np.shape(x))
-# f_in = np.zeros(np.shape(x))
-# f_ex = np.zeros(np.shape(x))
-# for k in range(num_p):
-#     for lm_idx, lm in enumerate(lm_all):
-#         f    += coeffs_new[k*num_sph+lm_idx]* Vq_sph[lm_idx] * spec_xlbspline.basis_eval_radial(x,k,lm[0]) 
-#         f_in += coeffs[k*num_sph+lm_idx]*spec_xlbspline.basis_eval_spherical(0,0, lm[0], lm[1]) * spec_xlbspline.basis_eval_radial(x,k,lm[0]) 
-#         f_ex += coeffs[k*num_sph+lm_idx]*spec_xlbspline.basis_eval_spherical(0,0, lm[0], lm[1]) * spec_xlbspline.basis_eval_radial(x-t_end,k,lm[0])
-
-plt.plot(x,f_in)
-plt.plot(x,f_ex)
-plt.plot(x,f)
-# plt.plot(x,f-f_ex)
-#plt.yscale('log')
 plt.grid()
-plt.legend(['Initial Conditions', 'Exact', 'Nr=%d, l_max=%d'%(NR,L_MODE_MAX)])
+plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+plt.ylabel('Distribution function')
+plt.xlabel('$v_z$')
+
+plt.subplot(2,3,2)
+plt.semilogy(x, f_initial[0,:])
+plt.plot(x, f_exact[0,:])
+
+for num_dofs_idx,Nr in enumerate(num_dofs_all):
+    plt.plot(x, f_num[num_dofs_idx,:], '--')
+
+plt.grid()
+plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+plt.ylabel('Distribution function')
+plt.xlabel('$v_z$')
+
+plt.subplot(2,3,4)
+
+for num_dofs_idx,Nr in enumerate(num_dofs_all):
+    plt.semilogy(x, abs(f_num[num_dofs_idx,:]-f_exact[0,:]), '--')
+
+plt.grid()
+# plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
+# plt.legend(['$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+plt.ylabel('Error in distribution function')
+plt.xlabel('$v_z$')
+
+plt.subplot(2,3,5)
+plt.semilogy([num_dofs[1] for num_dofs in num_dofs_all], error_linf_2d, '-o')
+plt.semilogy([num_dofs[1] for num_dofs in num_dofs_all], error_l2_2d, '-*')
+plt.ylabel('Error')
+plt.xlabel('$l_{\max}$')
+plt.grid()
+plt.legend(['$L_\inf$', '$L_2$'])
+
+plt.subplot(1,3,3)
+plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[-1,:,:], linestyles='solid', colors='grey', linewidths=1)
+plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[-1,:,:], linestyles='dashed', colors='red', linewidths=2)
+ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotted', colors='blue', linewidths=2)
+# ax.plot_surface(quad_grid[0], quad_grid[1], f_initial2[2,:,:], rstride=1, cstride=1,
+#                 cmap='viridis', edgecolor='none')
+# ax.set_title('surface');
+plt.gca().set_aspect('equal')
+fig = plt.gcf()
+fig.set_size_inches(16, 8)
+fig.savefig("nr_%d_to_%d_lmax_%d_to_%d.png"%(num_dofs_all[0][0],num_dofs_all[-1][0],num_dofs_all[0][1],num_dofs_all[-1][1]), dpi=100)
+
+#plt.savefig()
 plt.show()
 
-
-# import matplotlib.pyplot as plt
-# x=np.linspace(1e-6,2,1000)
-# for k in [0,1,2]:
-#     for l in [0,1,2]:
-#         fx=spec.basis_derivative_eval_radial(1,x,k,l)
-#         plt.plot(x,fx,label="l=%d,nr=%d"%(l,k))
-# plt.legend()
-# plt.show()

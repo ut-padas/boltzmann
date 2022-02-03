@@ -233,7 +233,10 @@ class XlBSpline(Basis):
         # first and last splines have repeated knots, 
         num_k            = 2*spline_order + (num_p -2) + 2
         self._t          = (k_domain[0])*np.ones(spline_order+1)
-        self._t          = np.append(self._t,np.logspace(-2, np.log2(k_domain[1]-2) , num_k-2*spline_order -2 ,base=2))
+        knot_base        = 1.5
+        self._t          = np.append(self._t,np.logspace(-2, np.log(k_domain[1]-2)/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base))
+        #x= np.linspace(-1, np.log2(k_domain[1]-2) , num_k-2*spline_order -2)
+        #print(2**x)
         #self._t          = np.append(self._t,np.linspace(0.25, (k_domain[1]-2) , num_k-2*spline_order -2))
         self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
         #print("len_t ",len(self._t) , " num_k ",num_k)
@@ -242,17 +245,19 @@ class XlBSpline(Basis):
         self._q_per_knot = XLBSPLINE_NUM_Q_PTS_PER_KNOT
         self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(num_p)]
         
-        # print(self._t)
+        #print(self._t)
         # import matplotlib.pyplot as plt
-        # x=np.linspace(k_domain[0],4,10000)
-        # for i in range(1,2):
-        #     print(self._t[i:i+spline_order+2])
-        #     plt.plot(x,self.Pn(i)(0,x),label="b_i=%d"%i)
-        #     plt.plot(x,self.derivative(i,1)(x),label="b'_i=%d"%i)
-        #     plt.plot(x,self._splines[i].derivative(1)(x),label="python b'_i=%d"%i)
+        # x=np.linspace(k_domain[0],2,1000)
+        # for i in range(1,5):
+        #     for l in range(0,3):
+        #         #print(self._t[i:i+spline_order+2])
+        #         plt.plot(x,self.Pn(i)(l,x),label="kl=(%d,%d)"%(i,l))
+        #         #plt.plot(x,self.derivative(i,1)(x),label="b'_i=%d"%i)
+        #         #plt.plot(x,self._splines[i].derivative(1)(x),label="python b'_i=%d"%i)
         # #plt.xscale("log")
         # plt.legend()
         # plt.grid()
+        # plt.savefig("splines.png")
         # plt.show()
         
 
@@ -279,6 +284,7 @@ class XlBSpline(Basis):
         # print(qx.shape)
         # print(qx)
         # print(np.sum(qw))
+        # print(qx)
         assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0])), "simpson weights computed for splines does not match the knots domain"
         return qx,qw
     
@@ -312,7 +318,7 @@ class XlBSpline(Basis):
         assert dorder==1, "not implemented for HO derivatives"
         
         b_deriv = self.derivative(deg,1)
-        return lambda l,x : b_deriv(x) if deg>=l else x**(l-deg) *b_deriv(x) + self.Pn(deg)(0,x) * (l-deg) * x**(l-deg-1)
+        return lambda l,x : b_deriv(x) if deg>=(l) else x**(l-deg) *b_deriv(x) + self.Pn(deg)(0,x) * (l-deg) * x**(l-deg-1)
         #return lambda l,x : b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(0,x) * (l) * x**(l-1)
 
 

@@ -87,15 +87,15 @@ def assemble_advection_matix_lp(Nr, sph_harm_lm):
 # num_dofs_all = [8, 16, 32, 64]
 # num_dofs_all = [2, 4,8]
 # num_dofs_all = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
-num_dofs_all = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
-# num_dofs_all = [16]
+# num_dofs_all = [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
+num_dofs_all = [16]
 
 error_linf = np.zeros(len(num_dofs_all))
 error_l2 = np.zeros(len(num_dofs_all))
 error_linf_2d = np.zeros(len(num_dofs_all))
 error_l2_2d = np.zeros(len(num_dofs_all))
 
-t_end = 0.1
+t_end = 0.5
 # nsteps = 400000
 nsteps = 1000
 dt = t_end/nsteps
@@ -123,14 +123,14 @@ print(np.shape(sph_coord_init))
 
 for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
 
-    Nr = 16
-    lmax = num_dofs
+    # Nr = 16
+    # lmax = num_dofs
 
     # Nr = num_dofs
     # lmax = 16
 
-    # Nr = num_dofs
-    # lmax = num_dofs
+    Nr = num_dofs
+    lmax = num_dofs
 
     lm_all = []
 
@@ -145,6 +145,13 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
 
     coeffs = np.zeros(Ntotal)
     coeffs[0] = 1
+    coeffs[1] = 1
+    coeffs[2] = 1
+    coeffs[3] = 1
+    coeffs[4] = 1
+    coeffs[5] = 1
+    coeffs[6] = 1
+    coeffs[7] = 1
 
     t_adv_mat.start()
     advmat   = assemble_advection_matix_lp(Nr, lm_all)
@@ -200,7 +207,21 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     error_linf_2d[num_dofs_idx] = np.max(abs(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:]))
     error_l2_2d[num_dofs_idx] = np.linalg.norm(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:])
 
+    v = np.linspace(0,5,100)
+    radial_part = np.zeros([num_sph, len(v)])
+    for lm_idx, lm in enumerate(lm_all):
+        for k in range(Nr+1):
+            radial_part[lm_idx,:] += coeffs_num[k*num_sph+lm_idx]*maxpolyeval(2*lm[0]+2,np.abs(x),k)*np.exp(-v**2)*(np.abs(v)**lm[0])
 
+        plt.subplot(int(np.round(np.sqrt(num_sph))), int(np.ceil(num_sph/int(np.round(np.sqrt(num_sph))))),lm_idx+1)
+        plt.plot(v, radial_part[lm_idx,:],'.-')
+
+    plt.show()
+
+
+
+plt.semilogy(abs(coeffs_num),'.-')
+plt.show()
 plt.subplot(2,3,1)
 plt.plot(x, f_initial[0,:])
 plt.plot(x, f_exact[0,:])

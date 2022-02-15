@@ -118,11 +118,11 @@ with open('bolsig_data/argon.out', 'r') as F:
 degrees_all = [3, 6, 10, 20]
 degrees_all = [20, 40, 60, 80]
 # degrees_all = [10, 20, 30, 40]
-which_all = [0, 8, 9, 10, 11, 30]
-which_all = [0, 2, 4, 6, 8, 10, 11, 35]
-which_all = [0, 6, 11, 12, 35]
+# which_all = [0, 8, 9, 10, 11, 30]
+# which_all = [0, 2, 4, 6, 8, 10, 11, 35]
+# which_all = [0, 6, 11, 12, 35]
 # which_all = [10]
-# which_all = [101, 102, 103]
+which_all = [101, 102, 103]
 
 fig_data = plt.figure()
 fig_data.set_size_inches(30, 20, forward=True)

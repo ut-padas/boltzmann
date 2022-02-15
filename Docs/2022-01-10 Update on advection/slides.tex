@@ -384,6 +384,45 @@ f = A
 \end{center}
 \end{frame}
 
+\begin{frame}
+\frametitle{\small Convergence test: Maxwell vs Laguerre ($N_r$ is increasing, $l_{\max} = 16$ is fixed) }
+\begin{center}
+%\begin{itemize}
+%\item 
+%$\vect{E} = \text{const} \rightarrow f\of{t,\vect{v}} = f\of{0, \vect{v} + \vect{E}t}$
+%\item $N_r = 32$ is fixed, $l_{\max}$ is increasing
+%\end{itemize}
+\includegraphics[width=0.9\textwidth]{figures/advection_operator_laguerre}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Dealing with advection term}
+
+\begin{columns}
+\column[t]{.5\textwidth}
+Eulerian
+\begin{align*}
+\partial_t f - \vect{E}\cdot \nabla f = C[f]
+\\
+\end{align*}
+\begin{itemize}
+\item[--] Might need more spherical harmonics
+\end{itemize}
+\column[t]{.5\textwidth}
+Lagrangian + operator splitting %$f = f\of{t, \vect{v} - \vect{v}_0} $
+\begin{align*}
+\partial_t f - \vect{E}\cdot \nabla f &= 0 
+\\
+\partial_t f  &= C[f]
+\end{align*}
+\begin{itemize}
+\item[--] Have to reassemble collision operator
+\item[--] Operator splitting error
+\end{itemize}
+\end{columns}
+\end{frame}
+
 %===============================================================================
 \end{document}
 

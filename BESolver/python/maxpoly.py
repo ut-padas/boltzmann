@@ -16,8 +16,8 @@ maxpoly_rec_a    = maxpoly_rec_data[:,0]
 maxpoly_rec_b    = maxpoly_rec_data[:,1]
 # maxpoly_rec_n    = maxpoly_rec_data[:,2]
 
-maxpoly_alpha = np.genfromtxt('polynomials/maxpoly_alpha_upto300.dat',delimiter=',')
-maxpoly_beta = np.genfromtxt('polynomials/maxpoly_beta_upto300.dat',delimiter=',')
+maxpoly_alpha = np.genfromtxt('polynomials/maxpoly_alpha_upto300_new.dat',delimiter=',')
+maxpoly_beta = np.genfromtxt('polynomials/maxpoly_beta_upto300_new.dat',delimiter=',')
 
 def idx_s(p):
     return int(p*(p+1)/2)

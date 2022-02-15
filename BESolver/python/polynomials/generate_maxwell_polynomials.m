@@ -1,4 +1,5 @@
 clear;
+digits(16)
 G_all = 0:2:130;
 ktarget = 300;
 kl = 1000;
@@ -14,10 +15,10 @@ for j = 1:length(G_all)
     
     kmax = kl + round((ku-kl)*(j-1)/length(G_all));
     
-    a = zeros(1,kmax);
-    b = zeros(1,kmax);
-    g = zeros(1,kmax);
-    Y = zeros(1,kmax);
+    a = (zeros(1,kmax));
+    b = (zeros(1,kmax));
+    g = (zeros(1,kmax));
+    Y = (zeros(1,kmax));
     
     a(1) = gamma(G/2.+1.)/gamma((G+1.)/2.);
     b(1) = 0;
@@ -32,10 +33,10 @@ for j = 1:length(G_all)
     
     g(2:krec) = b(2:krec) - Y(2:krec)/12;
     
-    C0 = 1./36. - G^2/8.;
-    C1 = 23./432. - 11./48.*G^2 + 3./32.*G^4;
-    C2 = 1189./2592. - 409./192.*G^2 + 75./64.*G^4 + 9./64.*G^6;
-    C3 = 196057./20736. - 153559./3456.*G^2 + 7111./256.*G^4 + 639./128.*G^6 + 135./512.*G^8;
+    C0 = (1./36. - G^2/8.);
+    C1 = (23./432. - 11./48.*G^2 + 3./32.*G^4);
+    C2 = (1189./2592. - 409./192.*G^2 + 75./64.*G^4 + 9./64.*G^6);
+    C3 = (196057./20736. - 153559./3456.*G^2 + 7111./256.*G^4 + 639./128.*G^6 + 135./512.*G^8);
     
     for k = krec:kmax-1
         Y(k + 1) = 2*k + G;
@@ -72,14 +73,19 @@ for j = 1:length(G_all)
         delta = F./Fp;
 %         g(2:kmax - 1) = g(2:kmax - 1) - delta;
         g(2:kmax - 1) = (g(2:kmax - 1).*Fp - F)./Fp;
-        semilogy(abs(delta))
+%         semilogy(abs(delta))
+%         drawnow
+        if max(abs(delta)) < 1.e-15
+            break;
+        end
+        delta(290)
     end
     
-%     semilogy(abs(g0-g));
-%     hold on 
-%     plot(abs(delta));
-%     hold off
-%     drawnow
+    semilogy(abs(g0-g)./abs(g));
+    hold on 
+    plot(abs(delta)./abs(g(2:kmax-1)));
+    hold off
+    drawnow
     
     error(j) = mean(abs(g0(end-20:end)-g(end-20:end)));
     res(j) = norm(delta);

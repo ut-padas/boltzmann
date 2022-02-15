@@ -1,8 +1,8 @@
 import numpy as np
 from maxpoly import *
 
-lmax = 64
-Nr_max = 70
+lmax = 33
+Nr_max = 33
 CpsiDphiP = np.zeros([lmax,Nr_max+1,Nr_max+1])
 CphiDpsiP = np.zeros([lmax,Nr_max+1,Nr_max+1])
 CpsiDphiM = np.zeros([lmax,Nr_max+1,Nr_max+1])

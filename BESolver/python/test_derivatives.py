@@ -21,11 +21,11 @@ fd_coeffs_exact = np.zeros(max_dofs)
 fd_coeffs_app = np.zeros(max_dofs)
 xf_coeffs_exact = np.zeros(max_dofs)
 xf_coeffs_app = np.zeros(max_dofs)
-gauss_q_order_proj = 100
+gauss_q_order_proj = 550
 
 [xg, wg] = maxpolygauss(gauss_q_order_proj)
 
-G = 16
+G = 48
 
 for i in range(max_dofs):
     f_coeffs[i] = np.sum(maxpolyeval(G, xg, i)*f(xg)*wg*xg**(G-2))
@@ -43,7 +43,7 @@ xf_coeffs_app = np.matmul(L, f_coeffs)
 #     fd_coeffs_app[i] = sum(D[i,:]*f_coeffs)
 #     xf_coeffs_app[i] = sum(L[i,:]*f_coeffs)
 
-xplot = linspace(0,5,100)
+xplot = linspace(0,10,100)
 f_app = np.zeros(len(xplot))
 fd_app = np.zeros(len(xplot))
 xf_app = np.zeros(len(xplot))
@@ -59,19 +59,19 @@ fd_app = maxpolyserieseval(G, xplot, fd_coeffs_app)
 xf_app = maxpolyserieseval(G, xplot, xf_coeffs_app)
 
 plt.subplot(1,2,1)
-plt.plot(xplot, xf(xplot),'-')
-plt.plot(xplot, xf_app,'*')
-plt.plot(xplot, fd(xplot),'-')
-plt.plot(xplot, fd_app,'o')
-plt.plot(xplot, f(xplot),'-')
-plt.plot(xplot, f_app,'^')
+plt.plot(xplot, xf(xplot)*xplot**G*np.exp(-xplot**2),'-')
+plt.plot(xplot, xf_app*xplot**G*np.exp(-xplot**2),'*')
+plt.plot(xplot, fd(xplot)*xplot**G*np.exp(-xplot**2),'-')
+plt.plot(xplot, fd_app*xplot**G*np.exp(-xplot**2),'o')
+plt.plot(xplot, f(xplot)*xplot**G*np.exp(-xplot**2),'-')
+plt.plot(xplot, f_app*xplot**G*np.exp(-xplot**2),'^')
 
 plt.subplot(1,2,2)
-# plt.semilogy(abs(xf_coeffs_exact),'-')
-# plt.semilogy(abs(xf_coeffs_app),'*')
-# plt.semilogy(abs(fd_coeffs_exact),'-')
-# plt.semilogy(abs(fd_coeffs_app),'*')
-plt.semilogy(abs(xf_coeffs_exact-xf_coeffs_app),'o-')
-plt.semilogy(abs(fd_coeffs_exact-fd_coeffs_app),'*-')
+plt.semilogy(abs(xf_coeffs_exact),'-')
+plt.semilogy(abs(xf_coeffs_app),'*')
+plt.semilogy(abs(fd_coeffs_exact),'-')
+plt.semilogy(abs(fd_coeffs_app),'*')
+# plt.semilogy(abs(xf_coeffs_exact-xf_coeffs_app),'o-')
+# plt.semilogy(abs(fd_coeffs_exact-fd_coeffs_app),'*-')
 
 plt.show()

@@ -504,12 +504,12 @@ fname_list_g02_bs =["g02_dt_tol_1.00000000E-12_Nr_16.dat",
 # plot_eedf(folder_g02_mw,"g02_dt_tol_1.00000000E-12_Nr_64.dat",64, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g2_mw")
 # plot_eedf(folder_g02_mw,"g02_dt_tol_1.00000000E-12_Nr_100.dat",100, 1.0, sp.QuadMode.GMX,basis.BasisType.MAXWELLIAN_POLY,"g2_mw")
 
-plot_convgence(folder_g0_bs,fname_list_g0_bs,   [16,32,64,128,256], 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
-plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_16.dat" , 16, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
-plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_32.dat" , 32, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
-plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_64.dat" , 64, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
-plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_128.dat", 128, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
-plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_256.dat", 256, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
+# plot_convgence(folder_g0_bs,fname_list_g0_bs,   [16,32,64,128,256], 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
+# plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_16.dat" , 16, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
+# plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_32.dat" , 32, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
+# plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_64.dat" , 64, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES ,"g0_bs")
+# plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_128.dat", 128, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
+# plot_eedf(folder_g0_bs,"g0_dt_tol_1.00000000E-12_Nr_256.dat", 256, 1.0, sp.QuadMode.SIMPSON, basis.BasisType.SPLINES,"g0_bs")
 
 
 

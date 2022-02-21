@@ -413,7 +413,60 @@ class Collisions(abc.ABC):
             x0 =      0.2347
             x1 =       11.71
             return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+        elif mode == 11:
+            """
+            Cross section data from Kevin. 
+            """
+            # Rydberg energy
+            R0 = 13.605693122994  # eV
+            # Bohr radius
+            a0 = 5.29177e-11     # m
+            # electron charge
+            qe = 1.60217662e-19  # C
+            # electron mass
+            me = 9.10938356e-31  # kg
+            # speed of light
+            c0 = 2.99792458e8    # m/s
+            # mc2 in eV
+            mc2 = me * c0 * c0 / qe
+            # hbar = h / 2pi
+            hbar = 6.62607004e-34 / 2.0 / np.pi   # m2 kg / s
+            # static polarizability
+            alpha = 11.08     # a0^3
+            # E (eV) from k^2 (a0^(-2))
+            Efromk2 = hbar * hbar / 2.0 / me / qe / a0 / a0
+            theta = [-1.4173003748675717, 62.56060131992609, -85.20199010031428, 0.7361486757602836, 0.4463721552135573, 1.6509904643360198, 2.001074057955869]
+            def elastic_shifted_MERT(theta,E_input,N=10):
+                NE = len(E_input)
+                E  = E_input#np.copy(E_input)
 
+                A, D, F, E1, t1, t2, t3 = theta
+
+                E *= 0.5*(1.+t1) - 0.5 * (1. - t1) * np.tanh( (E - t2) / t3 )
+
+                k = np.sqrt( E / Efromk2 ) # wavenumber in a0^(-1)
+                crs = np.zeros((NE,))
+
+                #     A, D, F, E1 = theta
+                eta0 = - A * ( 1. + 4. / 3. * alpha * k * k * np.log(k) ) - np.pi / 3. * alpha * k + D * k**2 + F * k**3
+                eta0 = np.arctan(eta0 * k)
+
+                eta1 = np.pi / 15. * alpha * k * ( 1. - np.sqrt(E/E1) )
+                eta1 = np.arctan(eta1 * k)
+
+                crs += np.sin(eta0 - eta1)**2
+
+                for L in range(1,N):
+                    eta0 = np.copy(eta1)
+                    L1 = L+1
+                    eta1 = np.pi * alpha * k / (2.*L1 + 3.) / (2.*L1 + 1.) / (2.*L1 - 1.)
+                    eta1 = np.arctan(eta1 * k)
+
+                    crs += (L + 1.) * np.sin(eta0 - eta1)**2
+
+                return crs * 4. * np.pi / k / k * a0 * a0
+
+            return elastic_shifted_MERT(theta,ev)
 
     def assemble_diff_cs_mat(self,v,chi):
         """
@@ -425,7 +478,7 @@ class Collisions(abc.ABC):
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
         total_cs  = self._total_cs_interp1d(energy_ev)
         #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        #total_cs   = Collisions.synthetic_tcs(energy_ev,8)
+        total_cs   = Collisions.synthetic_tcs(energy_ev,10)
         diff_cs    = total_cs / (4*np.pi)
         return diff_cs
     

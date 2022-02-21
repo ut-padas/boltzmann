@@ -177,10 +177,6 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     M  = spec_sp.compute_mass_matrix()
     t_M.stop()
     print("Mass assembly time (s): ", t_M.seconds)
-
-    #u,s,v = np.linalg.svd(M)
-    #w,v=np.linalg.eig(M)
-    #print("eig of M: ", w)
     print("Condition number of M= %.8E"%np.linalg.cond(M))
 
     Minv = np.linalg.inv(M)

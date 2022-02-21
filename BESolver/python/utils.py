@@ -54,6 +54,9 @@ def cartesian_to_spherical(vx,vy,vz):
     vr = v_abs
     vt[not_check_1_and_check_2] =  np.arccos(vz[not_check_1_and_check_2]/v_abs[not_check_1_and_check_2])
     vp[not_check_1_and_check_2] =  np.arctan(vy[not_check_1_and_check_2]/vx[not_check_1_and_check_2])
+
+    # to fix the range to 0-2pi
+    vp[vp < 0]+= (np.pi * 2)
     vp[check_2]                 =  np.pi/2
     
     return [vr,vt,vp]
@@ -127,8 +130,6 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
         MP_klm = np.dot(MP_klm,gmw)
         m_k    = (maxwellian_fac * (V_TH**(3+moment))) * scale * np.dot(MP_klm,cf)
         return m_k
-
-    
 
 def compute_avg_temp(particle_mass,spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, V_TH, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, m0=None, scale=1.0):
     if m0 is None:
@@ -281,7 +282,7 @@ def get_maxwellian_3d(vth,n_scale=1):
     M = lambda x: (n_scale / ((vth * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
     return M
 
-def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth, scale=1):
+def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth,scale=1):
     """
     Assumes spherical harmonic basis in vtheta vphi direction. 
     the integration over the spherical harmonics is done analytically. 
@@ -393,7 +394,6 @@ def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, ma
         
         reaction_rate = (np.dot(np.transpose(MP_klm),cf)/mass_m0) * gama_electron * scale
         return reaction_rate
-
 
 
 

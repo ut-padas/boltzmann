@@ -10,7 +10,7 @@ import scipy.constants
 import numpy as np
 import parameters as params
 import time
-
+import utils as BEUtils
 class CollissionOp(abc.ABC):
 
     def __init__(self,dim,p_order):
@@ -42,13 +42,7 @@ class CollisionOpSP():
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order = basis.BSPLINE_BASIS_ORDER
             k_domain     = (0,40)
-            num_k        = spline_order + (self._p+1) + 2
-            knots_vec1    = np.zeros(basis.BSPLINE_BASIS_ORDER+1)
-            knots_vec2    = np.logspace(1e-2, np.log2(k_domain[1]) , num_k-2*basis.BSPLINE_BASIS_ORDER-2,base=2)
-            knots_vec     = np.append(knots_vec1,knots_vec2)
-            knots_vec     = np.append(knots_vec,knots_vec[-1]*np.ones(basis.BSPLINE_BASIS_ORDER+1))
-            
-            splines      = basis.BSpline(knots_vec,spline_order,self._p+1)
+            splines      = basis.BSpline(k_domain,spline_order,self._p+1)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
 
@@ -261,8 +255,7 @@ class CollisionOpSP():
                 Lp_mat   += D_pqs_klm
             return Lp_mat
     
-    
-    def _LOp(self,collision,maxwellian, vth):
+    def _LOp(self,collision,maxwellian, vth, v0):
         """
         compute the collision operator without splitting, 
         more floating point friendly, computationally expensive. 
@@ -287,10 +280,26 @@ class CollisionOpSP():
         gmw           = self._gmw
         C_pqs         = self._C_pqs
 
-        diff_cs      = g.assemble_diff_cs_mat(scattering_mg[0]*V_TH , scattering_mg[3]) * g.get_cross_section_scaling()
+        scattering_mg_cart = BEUtils.spherical_to_cartesian(scattering_mg[0],scattering_mg[1],scattering_mg[2])
+        scattering_mg_cart[0] = scattering_mg_cart[0] + np.ones_like(scattering_mg_cart[0]) * v0[0]
+        scattering_mg_cart[1] = scattering_mg_cart[1] + np.ones_like(scattering_mg_cart[0]) * v0[1]
+        scattering_mg_cart[2] = scattering_mg_cart[2] + np.ones_like(scattering_mg_cart[0]) * v0[2]
+
+        scattering_mg_v0    = BEUtils.cartesian_to_spherical(scattering_mg_cart[0],scattering_mg_cart[1],scattering_mg_cart[2])
+        diff_cs      = g.assemble_diff_cs_mat(scattering_mg_v0[0]*V_TH , scattering_mg[3]) * g.get_cross_section_scaling()
+        
+        
         if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
-            Sd      = g.post_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])
-            Pp_kr   = spec_sp.Vq_r(Sd[0]/V_TH)
+            Sd      = g.post_scattering_velocity_sp(scattering_mg_v0[0]*V_TH,scattering_mg_v0[1],scattering_mg_v0[2],scattering_mg[3],scattering_mg[4])
+            Sd      = BEUtils.spherical_to_cartesian(Sd[0]/V_TH,Sd[1],Sd[2])
+
+            Sd[0]   = Sd[0] - np.ones_like(Sd[0]) * v0[0]
+            Sd[1]   = Sd[1] - np.ones_like(Sd[0]) * v0[1]
+            Sd[2]   = Sd[2] - np.ones_like(Sd[0]) * v0[2]
+
+            Sd      = BEUtils.cartesian_to_spherical(Sd[0],Sd[1],Sd[2])
+
+            Pp_kr   = spec_sp.Vq_r(Sd[0])
             Yp_lm   = spec_sp.Vq_sph(Sd[1],Sd[2])
             
             P_kr    = spec_sp.Vq_r(scattering_mg[0])
@@ -324,15 +333,27 @@ class CollisionOpSP():
             return D_pqs_klm
 
         elif(g._type == collisions.CollisionType.EAR_G2):
-
-            Sd_particles = g.post_scattering_velocity_sp(scattering_mg[0]*V_TH,scattering_mg[1],scattering_mg[2],scattering_mg[3],scattering_mg[4])         
+            Sd_particles = g.post_scattering_velocity_sp(scattering_mg_v0[0]*V_TH,scattering_mg_v0[1],scattering_mg_v0[2],scattering_mg[3],scattering_mg[4])         
             Sd1          = Sd_particles[0]
             Sd2          = Sd_particles[1]
 
-            Pp1_kr   = spec_sp.Vq_r(Sd1[0]/V_TH)
+            Sd1     = BEUtils.spherical_to_cartesian(Sd1[0]/V_TH,Sd1[1],Sd1[2])
+            Sd2     = BEUtils.spherical_to_cartesian(Sd2[0]/V_TH,Sd2[1],Sd2[2])
+
+            Sd1[0]   = Sd1[0] - np.ones_like(Sd1[0]) * v0[0]
+            Sd1[1]   = Sd1[1] - np.ones_like(Sd1[0]) * v0[1]
+            Sd1[2]   = Sd1[2] - np.ones_like(Sd1[0]) * v0[2]
+
+            Sd2[0]   = Sd2[0] - np.ones_like(Sd2[0]) * v0[0]
+            Sd2[1]   = Sd2[1] - np.ones_like(Sd2[0]) * v0[1]
+            Sd2[2]   = Sd2[2] - np.ones_like(Sd2[0]) * v0[2]
+
+            Sd2      = BEUtils.cartesian_to_spherical(Sd2[0],Sd2[1],Sd2[2])
+            
+            Pp1_kr   = spec_sp.Vq_r(Sd1[0])
             Yp1_lm   = spec_sp.Vq_sph(Sd1[1],Sd1[2])
 
-            Pp2_kr   = spec_sp.Vq_r(Sd2[0]/V_TH)
+            Pp2_kr   = spec_sp.Vq_r(Sd2[0])
             Yp2_lm   = spec_sp.Vq_sph(Sd2[1],Sd2[2])
             
             P_kr     = spec_sp.Vq_r(scattering_mg[0])
@@ -364,7 +385,6 @@ class CollisionOpSP():
             
             D_pqs_klm = D_pqs_klm.reshape((num_p*num_sh,num_p*num_sh))
             return D_pqs_klm
-
 
     def _Lm_l(self,collision,maxwellian, vth):
         """
@@ -607,9 +627,9 @@ class CollisionOpSP():
 
         return L_ij
 
-    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth):
+    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3)):
         #Lij = self._Lp(collision,maxwellian,vth)-self._Lm(collision,maxwellian,vth)
-        Lij  = self._LOp(collision,maxwellian,vth) 
+        Lij  = self._LOp(collision,maxwellian,vth,v0) 
         return Lij
         
         

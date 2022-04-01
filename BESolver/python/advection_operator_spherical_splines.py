@@ -346,7 +346,10 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
 nr_max=32
 num_dofs_all = [(nr_max,l) for l in range(2,6)]
 num_dofs_all = [(1<<l,5) for l in range(4,7)]
-num_dofs_all = [(16,2), (32,3), (64,4)]
+num_dofs_all = [(16,10), (32,10), (64,10)]
+num_dofs_all = [(16,2), (32,2), (64,2)]
+num_dofs_all = [(64,1), (64,2), (64,3), (64,4), (64,5), (48,5), (32,5), (16,5)]
+mid_idx = 4
 #num_dofs_all = [(16,0), (32,0)]
 #num_dofs_all = [16]
 
@@ -355,7 +358,7 @@ error_l2 = np.zeros(len(num_dofs_all))
 error_linf_2d = np.zeros(len(num_dofs_all))
 error_l2_2d = np.zeros(len(num_dofs_all))
 
-t_end = 0.3
+t_end = 0.2
 # nsteps = 400000
 nsteps = 10000
 dt = t_end/nsteps
@@ -418,65 +421,78 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     error_linf_2d[num_dofs_idx] = np.max(abs(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:]))
     error_l2_2d[num_dofs_idx] = np.linalg.norm(f_num_2d[num_dofs_idx,:]-f_exact_2d[0,:])
 
-plt.subplot(2,3,1)
-plt.plot(x, f_initial[0,:])
-plt.plot(x, f_exact[0,:])
+# plt.subplot(2,3,1)
+# plt.plot(x, f_initial[0,:])
+# plt.plot(x, f_exact[0,:])
 
-for num_dofs_idx,Nr in enumerate(num_dofs_all):
-    plt.plot(x, f_num[num_dofs_idx,:], '--')
+# for num_dofs_idx,Nr in enumerate(num_dofs_all):
+#     plt.plot(x, f_num[num_dofs_idx,:], '--')
 
-plt.grid()
-plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
-# plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
-# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
-plt.ylabel('Distribution function')
-plt.xlabel('$v_z$')
-
-plt.subplot(2,3,2)
-plt.semilogy(x, f_initial[0,:])
-plt.plot(x, f_exact[0,:])
-
-for num_dofs_idx,Nr in enumerate(num_dofs_all):
-    plt.plot(x, f_num[num_dofs_idx,:], '--')
-
-plt.grid()
-plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
-# plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
-# plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
-plt.ylabel('Distribution function')
-plt.xlabel('$v_z$')
-
-plt.subplot(2,3,4)
-
-for num_dofs_idx,Nr in enumerate(num_dofs_all):
-    plt.semilogy(x, abs(f_num[num_dofs_idx,:]-f_exact[0,:]), '--')
-
-plt.grid()
+# plt.grid()
 # plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
-# plt.legend(['$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# # plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# # plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+# plt.ylabel('Distribution function')
+# plt.xlabel('$v_z$')
+
+plt.subplot(1,4,1)
+plt.semilogy(x, f_initial[mid_idx,:])
+plt.plot(x, f_exact[mid_idx,:])
+
+# for num_dofs_idx,Nr in enumerate(num_dofs_all):
+    # plt.plot(x, f_num[num_dofs_idx,:], '--')
+plt.plot(x, f_num[mid_idx,:], '--')
+
+plt.grid()
+plt.legend(['Initial', 'Exact', 'B-splines'])
+# plt.legend(['Initial Conditions', 'Exact', '$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
 # plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
-plt.ylabel('Error in distribution function')
+plt.ylabel('Distribution function')
 plt.xlabel('$v_z$')
 
-plt.subplot(2,3,5)
-plt.semilogy([num_dofs[1] for num_dofs in num_dofs_all], error_linf_2d, '-o')
-plt.semilogy([num_dofs[1] for num_dofs in num_dofs_all], error_l2_2d, '-*')
-plt.ylabel('Error')
-plt.xlabel('$l_{\max}$')
-plt.grid()
-plt.legend(['$L_\inf$', '$L_2$'])
-
-plt.subplot(1,3,3)
-plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[-1,:,:], linestyles='solid', colors='grey', linewidths=1)
-plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[-1,:,:], linestyles='dashed', colors='red', linewidths=2)
-ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotted', colors='blue', linewidths=2)
+plt.subplot(1,4,2)
+plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[mid_idx,:,:], linestyles='solid', colors='grey', linewidths=1)
+plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[mid_idx,:,:], linestyles='dashed', colors='red', linewidths=2)
+ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[mid_idx,:,:], linestyles='dotted', colors='blue', linewidths=2)
 # ax.plot_surface(quad_grid[0], quad_grid[1], f_initial2[2,:,:], rstride=1, cstride=1,
 #                 cmap='viridis', edgecolor='none')
 # ax.set_title('surface');
 plt.gca().set_aspect('equal')
-fig = plt.gcf()
-fig.set_size_inches(16, 8)
-fig.savefig("nr_%d_to_%d_lmax_%d_to_%d.png"%(num_dofs_all[0][0],num_dofs_all[-1][0],num_dofs_all[0][1],num_dofs_all[-1][1]), dpi=100)
+
+# plt.subplot(1,3,4)
+
+# for num_dofs_idx,Nr in enumerate(num_dofs_all):
+#     plt.semilogy(x, abs(f_num[num_dofs_idx,:]-f_exact[0,:]), '--')
+
+# plt.grid()
+# # plt.legend(['Initial Conditions', 'Exact', 'Numerical'])
+# # plt.legend(['$N_r = 32, l_{max} = 2$', '$N_r = 32, l_{max} = 4$', '$N_r = 32, l_{max} = 8$', '$N_r = 32, l_{max} = 16$'])
+# # plt.legend(['Initial Conditions', 'Exact', '$N_r = 8, l_{max} = 8$', '$N_r = 16, l_{max} = 8$', '$N_r = 32, l_{max} = 8$', '$N_r = 64, l_{max} = 8$'])
+# plt.ylabel('Error in distribution function')
+# plt.xlabel('$v_z$')
+
+plt.subplot(1,4,3)
+plt.semilogy([num_dofs[0] for num_dofs in num_dofs_all[len(num_dofs_all)-1:mid_idx-1:-1]], error_linf_2d[len(num_dofs_all)-1:mid_idx-1:-1], '-o')
+# plt.loglog([num_dofs[0] for num_dofs in num_dofs_all[5:10]], error_l2_2d[5:10], '-*')
+plt.ylabel('Error')
+plt.xlabel('$N_r$')
+plt.grid()
+# plt.legend(['$L_\inf$', '$L_2$'])
+
+plt.subplot(1,4,4)
+plt.semilogy([num_dofs[1] for num_dofs in num_dofs_all[0:mid_idx+1]], error_linf_2d[0:mid_idx+1], '-o')
+# plt.loglog([num_dofs[0] for num_dofs in num_dofs_all[5:10]], error_l2_2d[5:10], '-*')
+plt.ylabel('Error')
+plt.xlabel('$l_{\max}$')
+plt.grid()
+# plt.legend(['$L_\inf$', '$L_2$'])
+
+
+
+
+# fig = plt.gcf()
+# fig.set_size_inches(16, 8)
+# fig.savefig("nr_%d_to_%d_lmax_%d_to_%d.png"%(num_dofs_all[0][0],num_dofs_all[-1][0],num_dofs_all[0][1],num_dofs_all[-1][1]), dpi=100)
 
 #plt.savefig()
 plt.show()

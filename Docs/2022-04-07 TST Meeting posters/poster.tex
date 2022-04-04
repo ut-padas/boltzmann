@@ -134,7 +134,8 @@ linewidth=2pt % Width of the border lines around content boxes
 %----------------------------------------------------------------------------------------
 
 \headerbox{Objectives}{name=objectives,column=0,row=0}{
-Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties of plasma
+Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties of plasma. 
+Need to couple plasma model with electron kinetics (planned for Y3).
 \begin{itemize}[leftmargin=*]
   \item[--] \textbf{Poster focus:} Discretization of collisional term of the Boltzmann equation. 
   \begin{itemize}
@@ -144,10 +145,9 @@ Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and k
     \item Capturing the \textit{tail} of $f$ correctly - important to trigger high energy reactions.  
   \end{itemize} 
   \item[--] \textbf{Y2 Goal:} Extend standalone electron Boltzmann solver from Y1 to support spatially inhomogeneous case and additional inelastic collisions
-  \item[--] \textbf{Y3 Goal:} Need to couple plasma model with electron kinetics (planned for Y3)
 \end{itemize}
 
-\vspace{6.5em} % When there are two boxes, some whitespace may need to be added if the one on the right has more content
+\vspace{3.0em} % When there are two boxes, some whitespace may need to be added if the one on the right has more content
 }
 
 %----------------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
 \item[--] \textbf{Main challenge}: 7 dimensions ( for time, space, and velocity)
 \item[--] \textbf{Current focus}: Spatially homogeneous case with $\vec{E}=0$ using Petrov-Galerkin approach. 
 \item[--] \textbf{Collisional Term}: 5, 8 dimensional integral in the variational form.
-\item[--] \textbf{Experimental data}: The use of experimental cross-section data can introduce additional numerical challenges.   
+%\item[--] \textbf{Experimental data}: The use of experimental cross-section data can introduce additional numerical challenges.   
 %\item[--] \textbf{Overall approach}: FEM in $\vect{x}$, spectral in $\vect{v}$
 
 
@@ -188,7 +188,7 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
 %----------------------------------------------------------------------------------------
 
 \headerbox{Results}{name=results,column=2,span=2,row=0}{
-  \begin{itemize}
+  \begin{itemize}[leftmargin=*]
     \item [--] Elastic collisions EEDF error with increasing radial polynomials
   \end{itemize}
   \begin{tabular}{ccc}
@@ -198,7 +198,7 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
     \includegraphics[width=0.3\textwidth]{img/g0_maxwell.png} \\
   \end{tabular}
 
-  \begin{itemize}
+  \begin{itemize}[leftmargin=*]
     \item [--] Elastic collisions EEDF final ($T=3\times 10^{-6}$ s) with increasing radial polynomials
   \end{itemize}
   \begin{tabular}{ccc}
@@ -277,7 +277,7 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
 \headerbox{Conclusion}{name=conclusion,column=2,span=2,row=0,below=results}{
 \begin{itemize}[leftmargin=*]
 \item[--] To reduce numerical noise in sampling from experimental cross-section data, we need analytical cross sections.
-\item[--] Maxwell polynomials tends to have faster convergence rate than B-splines. 
+\item[--] Maxwell polynomials tend to have faster convergence rate than B-splines. 
 \item[--] B-splines seem capture the tails better.
 %\item[--] Tensorized computation of the collision operator
 \end{itemize}
@@ -308,6 +308,7 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
 \begin{align*}
 f\of{\vect{v}} = \sum_{k,l,m} h_{k,l,m} \of{t} \Phi_{kl}\of{v} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}
 \end{align*}
+\vspace{-1.75em}
 \item[--] Choice of radial representation:
 \begin{align*}
 \Phi_{kl}\of{v} =
@@ -316,11 +317,11 @@ v^l B_{k}\of{v} & \text{(B-splines)} \\
 v^l M\of{v} P_{kl}\of{v} & \text{(Maxwell poly.)}
 \end{cases}
 \end{align*}
-\begin{align*}
-M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}
-\end{align*}
-\item[--] Weak formulation:\\
-\scalebox{0.99}{\vbox{
+\scalebox{0.75}{\vbox{where $M\of{v}$ is the Maxwellian distribution.}}
+%\begin{align*}
+%M\of{v} = n_e \left( \frac{m}{2 \pi kT }\right)^{\frac32} e^{-\frac{mv^2}{2kT}}
+%\end{align*}
+\item[--] Weak formulation:
 \begin{multline*}
 \myint_{R^3} C \phi\of{\vect{v}_e} d{\vect{v}_e} 
 =
@@ -333,21 +334,21 @@ f_e\of{\vect{v}_e}
 - \phi\of{\vect{v}_e} 
 \right) d{\vect{\omega}}
 d{\vect{v}_e}
-\end{multline*}}}
+\end{multline*}
 \item[--] Resulting system of ODEs
-% \begin{align*}
-% \sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  L_{p,q,s}^{k,l,m} h_{k,l,m}\of{t}
-% \end{align*}
-% \scalebox{0.75}{\vbox{
-% where
-% \begin{multline*}
-% {L}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} \int_{S^2} \int_{S^2}  
-% v^2 M(v_r) P_k \of{\frac{v_r}{\vth}} Y^{lm}\of{v_\theta, v_\phi} v_r\sigma(|v_r|,\chi) \\ \times   \left(
-% P_p\of{\frac{v^{\prime}_r}{\vth}} Y_{qs}\of{v^{\prime}_\theta, v^{\prime}_\phi} - 
-% P_p\of{\frac{v_r}{\vth}} Y_{qs}\of{v_\theta, v_\phi}
-% \right) d\omega d\omega_v dv 
-% \end{multline*}
-% }}
+ \begin{align*}
+ \sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  L_{p,q,s}^{k,l,m} h_{k,l,m}\of{t}
+ \end{align*}
+ \scalebox{0.75}{\vbox{
+ where
+ \begin{multline*}
+ {L}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} \int_{S^2} \int_{S^2}  
+ v^2 M(v_r) P_k \of{\frac{v_r}{\vth}} Y^{lm}\of{v_\theta, v_\phi} v_r\sigma(|v_r|,\chi) \\ \times   \left(
+ P_p\of{\frac{v^{\prime}_r}{\vth}} Y_{qs}\of{v^{\prime}_\theta, v^{\prime}_\phi} - 
+ P_p\of{\frac{v_r}{\vth}} Y_{qs}\of{v_\theta, v_\phi}
+ \right) d\omega d\omega_v dv 
+ \end{multline*}
+ }}
 \end{itemize}
 
 }

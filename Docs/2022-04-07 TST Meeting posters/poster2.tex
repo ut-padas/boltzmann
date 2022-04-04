@@ -135,12 +135,10 @@ linewidth=2pt % Width of the border lines around content boxes
 %----------------------------------------------------------------------------------------
 
 \headerbox{Objectives}{name=objectives,column=0,row=0}{
-
+Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties of plasma. Need to couple plasma model with electron kinetics (planned for Y3).
 \begin{itemize}[leftmargin=*]
-\item[--] Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties of plasma
-\item[--] Need to couple plasma model with electron kinetics (planned for Y3)
-\item[--] \textbf{Y2 Goal:} Extend standalone electron Boltzmann solver from Y1 to support spatially inhomogeneous case and additional inelastic collisions
 \item[--] \textbf{Poster focus:} acceleration due to electric field 
+\item[--] \textbf{Y2 Goal:} Extend standalone electron Boltzmann solver from Y1 to support spatially inhomogeneous case and additional inelastic collisions
 \end{itemize}
 
 \vspace{6.5em} % When there are two boxes, some whitespace may need to be added if the one on the right has more content
@@ -155,7 +153,7 @@ linewidth=2pt % Width of the border lines around content boxes
 \begin{itemize}[leftmargin=*]
 \item[--] \textbf{Boltzmann equation}
 \begin{align*}
-\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  - \overbrace{\mathcolorbox{green}{\vect{E} \cdot \nabla_{\vect{v}}f}}^{\text{focus}} = \sum_{a} C_a(f)
+\partial_t f + \overbrace{\vect{v}\cdot \nabla_{\vect{x}} f}^{\text{spatial advection}}  - \overbrace{\mathcolorbox{blue!20}{\vect{E} \cdot \nabla_{\vect{v}}f}}^{\text{acceleration}} = \overbrace{\sum_{a} C_a(f)}^{\text{collision operator}}
 \end{align*}
 for example, $a=$ elastic collisions:
 \begin{align*}
@@ -305,7 +303,7 @@ v^l M\of{v} L_{kl}\of{v^2} & \text{(Laguerre poly.)}
 where $A_{k,q,s}$ and $B_{k,q,s}$ are semi-analytically precomputed based on choice of $\Phi_{kl}\of{v}$ and $\Psi_{pq}\of{v}$
 \item[--] Projected Boltzmann equation ($\vect{h} = \left\{ h_{klm} \right\}$):
 \begin{align*}
-\partial_t \vect{h} - \mathcolorbox{green}{\mathbb{E} \vect{h}} = \mathbb{C}_{el} \vect{h} + \mathbb{C}_{ion} \vect{h} + \vect{h} \mathbb{C}_{rec} \vect{h} + \ldots
+\partial_t \vect{h} - \mathcolorbox{blue!20}{\mathbb{E} \vect{h}} = \mathbb{C}_{el} \vect{h} + \mathbb{C}_{ion} \vect{h} + \vect{h} \mathbb{C}_{rec} \vect{h} + \ldots
 \end{align*}
 
 \item[--] \textbf{Pro:} efficient approach (no reassembly)

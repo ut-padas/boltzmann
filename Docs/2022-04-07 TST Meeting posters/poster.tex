@@ -88,7 +88,6 @@
 \usepackage{xcolor}
 \usepackage{soul}
 \newcommand{\mathcolorbox}[2]{\colorbox{#1}{$\displaystyle #2$}}
-
 \usepackage{enumitem}
 \setlist{itemsep=0pt}
 
@@ -135,12 +134,17 @@ linewidth=2pt % Width of the border lines around content boxes
 %----------------------------------------------------------------------------------------
 
 \headerbox{Objectives}{name=objectives,column=0,row=0}{
-
+Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties of plasma
 \begin{itemize}[leftmargin=*]
-\item[--] Electron density function $f = f(\vect{x}, \vect{v}, t)$ defines transport and kinetic properties of plasma
-\item[--] Need to couple plasma model with electron kinetics (planned for Y3)
-\item[--] \textbf{Y2 Goal:} Extend standalone electron Boltzmann solver from Y1 to support spatially inhomogeneous case and additional inelastic collisions
-\item[--] \textbf{Poster focus:} discretization of collisional term
+  \item[--] \textbf{Poster focus:} Discretization of collisional term of the Boltzmann equation. 
+  \begin{itemize}
+    \item Efficient, yet accurate representation of $f$.
+    \item Study on the use of different basis representations for $f$. 
+    \item Efficient computation of the collision integrals. 
+    \item Capturing the \textit{tail} of $f$ correctly - important to trigger high energy reactions.  
+  \end{itemize} 
+  \item[--] \textbf{Y2 Goal:} Extend standalone electron Boltzmann solver from Y1 to support spatially inhomogeneous case and additional inelastic collisions
+  \item[--] \textbf{Y3 Goal:} Need to couple plasma model with electron kinetics (planned for Y3)
 \end{itemize}
 
 \vspace{6.5em} % When there are two boxes, some whitespace may need to be added if the one on the right has more content
@@ -155,16 +159,20 @@ linewidth=2pt % Width of the border lines around content boxes
 \begin{itemize}[leftmargin=*]
 \item[--] \textbf{Boltzmann equation}
 \begin{align*}
-\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  - \vect{E} \cdot \nabla_{\vect{v}}f = \overbrace{\mathcolorbox{green}{\sum_{a} C_a(f)}}^{\text{focus}}
+\partial_t f + \overbrace{\vect{v}\cdot \nabla_{\vect{x}} f}^{\text{spatial advection}}  - \overbrace{\vect{E} \cdot \nabla_{\vect{v}}f}^{\text{acceleration}} = \overbrace{\mathcolorbox{blue!20}{\sum_{a} C_a(f)}}^{\text{collision operator}}
 \end{align*}
 for example, $a=$ elastic collisions:
 \begin{align*}
 C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat. cross sec.}} 
 \left( f(v^\prime) - f(v) \right) d \omega 
 \end{align*}
-\item[--] \textbf{Main challenge}: 6+1 dimensions
-\item[--] \textbf{Overall approach}: FEM in $\vect{x}$, spectral in $\vect{v}$
-\item[--] \textbf{Collisional Term}: Choice of basis?
+\item[--] Governing equation for the electron distribution function
+\item[--] \textbf{Main challenge}: 7 dimensions ( for time, space, and velocity)
+\item[--] \textbf{Current focus}: Spatially homogeneous case with $\vec{E}=0$ using Petrov-Galerkin approach. 
+\item[--] \textbf{Collisional Term}: 5, 8 dimensional integral in the variational form.
+\item[--] \textbf{Experimental data}: The use of experimental cross-section data can introduce additional numerical challenges.   
+%\item[--] \textbf{Overall approach}: FEM in $\vect{x}$, spectral in $\vect{v}$
+
 
 %\item[--] \textbf{Spatially homogeneous case with acceleration term}
 %\begin{align*}
@@ -180,24 +188,62 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
 %----------------------------------------------------------------------------------------
 
 \headerbox{Results}{name=results,column=2,span=2,row=0}{
+  \begin{itemize}
+    \item [--] Elastic collisions EEDF error with increasing radial polynomials
+  \end{itemize}
+  \begin{tabular}{ccc}
+    B-spline (linear) & B-spline (quadratic)  & Maxwell polynomials \\
+    \includegraphics[width=0.3\textwidth]{img/g0_bspline_linear.png} &
+    \includegraphics[width=0.3\textwidth]{img/g0_bspline_quad.png} &
+    \includegraphics[width=0.3\textwidth]{img/g0_maxwell.png} \\
+  \end{tabular}
 
-\begin{multicols}{2}
-\begin{itemize}[leftmargin=*]
-\item[--] Cross section graph\\
-\includegraphics[width=.45\textwidth]{img/g0_tcs}
-\item[--] Convergence of Maxwell polynomials\\
-\includegraphics[width=.45\textwidth]{img/g0_mw_m0_eedf_final_error}
-\end{itemize}
-\columnbreak
-\begin{itemize}[leftmargin=*]
-\item[--] Mass conservation (?)\\
-\includegraphics[width=.45\textwidth]{img/g02_mw_mass}
-\item[--] Convergence of B-splines\\
-\includegraphics[width=.45\textwidth]{img/g0_bs_eedf_final_error}
-\end{itemize}
-\end{multicols}
+  \begin{itemize}
+    \item [--] Elastic collisions EEDF final ($T=3\times 10^{-6}$ s) with increasing radial polynomials
+  \end{itemize}
+  \begin{tabular}{ccc}
+    B-spline (linear) & B-spline (quadratic)  & Maxwell polynomials \\
+    \includegraphics[width=0.3\textwidth]{img/g0_bspline_linear_eedf.png} &
+    \includegraphics[width=0.3\textwidth]{img/g0_bspline_quad_eedf.png} &
+    \includegraphics[width=0.3\textwidth]{img/g0_maxwell_eedf.png} \\
+  \end{tabular}
 
+  \begin{tabular}{cc}
+    cross-section data &  elastic + ionization reactions  \\
+    & (electron growth with increasing radial polynomials) \\
+    \includegraphics[width=0.3\textwidth]{img/lxcat_vs_curve_fitted.png} &
+    \includegraphics[width=0.4\textwidth]{img/g02_mw_mass.png} \\
+  \end{tabular}
 
+% \begin{multicols}{2}
+%   \begin{itemize}[leftmargin=*]
+%     \item[--] B-spline (linear) \\
+%     \includegraphics[width=.4\textwidth]{img/g0_bspline_quad.png}
+%     \item[--] B-spline (quadratic) \\
+%     \includegraphics[width=.4\textwidth]{img/g0_bspline_quad.png}
+%   \end{itemize}
+%   % \columnbreak
+%   % \begin{itemize}[leftmargin=*]
+%   %   \item[--] Maxwell polynomials \\
+%   %   \includegraphics[width=.4\textwidth]{img/g0_maxwell.png}
+%   % \end{itemize}
+% \end{multicols}
+%
+% \begin{multicols}{2}
+% \begin{itemize}[leftmargin=*]
+% \item[--] Cross section graph\\
+% \includegraphics[width=.45\textwidth]{img/g0_tcs}
+% \item[--] Convergence of Maxwell polynomials\\
+% \includegraphics[width=.45\textwidth]{img/g0_mw_m0_eedf_final_error}
+% \end{itemize}
+% \columnbreak
+% \begin{itemize}[leftmargin=*]
+% \item[--] Mass conservation (?)\\
+% \includegraphics[width=.4\textwidth]{img/g0_maxwell.png}
+% \item[--] Convergence of B-splines\\
+% \includegraphics[width=.4\textwidth]{img/g0_bspline_linear.png}
+% \end{itemize}
+% \end{multicols}
 }
 
 %----------------------------------------------------------------------------------------
@@ -230,10 +276,10 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
 
 \headerbox{Conclusion}{name=conclusion,column=2,span=2,row=0,below=results}{
 \begin{itemize}[leftmargin=*]
-\item[--] Analytical cross sections are needed to preserve convergence
-\item[--] Maxwell polynomials are expected to converge faster (?)
-\item[--] B-splines represent tails better (?)
-\item[--] Tensorized assembly accelerates execution by several order of magnitudes
+\item[--] To reduce numerical noise in sampling from experimental cross-section data, we need analytical cross sections.
+\item[--] Maxwell polynomials tends to have faster convergence rate than B-splines. 
+\item[--] B-splines seem capture the tails better.
+%\item[--] Tensorized computation of the collision operator
 \end{itemize}
 }
 
@@ -241,14 +287,15 @@ C_a(f) &= n_0\int_{S^2} v \underbrace{\sigma_a(v,\omega)}_{\tiny\text{\tiny scat
 %	FUTURE RESEARCH
 %----------------------------------------------------------------------------------------
 
-\headerbox{Future Research}{name=futureresearch,column=2,span=2,row=0,below=conclusion}{ % This block is as tall as the references block
-\begin{itemize}[leftmargin=*]
-\item[--] Add recombination reactions
-\item[--] Couple with electric field forcing term
-\item[--] Extend to spatially inhomogeneous case
-\end{itemize}
+% \headerbox{Future Research}{name=futureresearch,column=2,span=2,row=0,below=conclusion}{ % This block is as tall as the references block
+% \begin{itemize}[leftmargin=*]
+% \item[--] Reducing oscillations in tails for longer evolutions. 
+% \item[--] Add recombination reactions
+% \item[--] Couple with electric field forcing term
+% \item[--] Extend to spatially inhomogeneous case
+% \end{itemize}
 
-}
+% }
 
 
 %----------------------------------------------------------------------------------------
@@ -287,21 +334,20 @@ f_e\of{\vect{v}_e}
 \right) d{\vect{\omega}}
 d{\vect{v}_e}
 \end{multline*}}}
-
-\item[--] Resulting system of ODEs:
-\begin{align*}
-\sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  L_{p,q,s}^{k,l,m} h_{k,l,m}\of{t}
-\end{align*}
-\scalebox{0.75}{\vbox{
-where
-\begin{multline*}
-{L}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} \int_{S^2} \int_{S^2}  
-v^2 M(v_r) P_k \of{\frac{v_r}{\vth}} Y^{lm}\of{v_\theta, v_\phi} v_r\sigma(|v_r|,\chi) \\ \times   \left(
-P_p\of{\frac{v^{\prime}_r}{\vth}} Y_{qs}\of{v^{\prime}_\theta, v^{\prime}_\phi} - 
-P_p\of{\frac{v_r}{\vth}} Y_{qs}\of{v_\theta, v_\phi}
-\right) d\omega d\omega_v dv 
-\end{multline*}
-}}
+\item[--] Resulting system of ODEs
+% \begin{align*}
+% \sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  L_{p,q,s}^{k,l,m} h_{k,l,m}\of{t}
+% \end{align*}
+% \scalebox{0.75}{\vbox{
+% where
+% \begin{multline*}
+% {L}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} \int_{S^2} \int_{S^2}  
+% v^2 M(v_r) P_k \of{\frac{v_r}{\vth}} Y^{lm}\of{v_\theta, v_\phi} v_r\sigma(|v_r|,\chi) \\ \times   \left(
+% P_p\of{\frac{v^{\prime}_r}{\vth}} Y_{qs}\of{v^{\prime}_\theta, v^{\prime}_\phi} - 
+% P_p\of{\frac{v_r}{\vth}} Y_{qs}\of{v_\theta, v_\phi}
+% \right) d\omega d\omega_v dv 
+% \end{multline*}
+% }}
 \end{itemize}
 
 }
@@ -310,9 +356,10 @@ P_p\of{\frac{v_r}{\vth}} Y_{qs}\of{v_\theta, v_\phi}
 %	RESULTS 2
 %----------------------------------------------------------------------------------------
 
-\headerbox{Tensorized Implementation}{name=results2,column=1,below=objectives,bottomaligned=method}{ % This block's bottom aligns with the bottom of the conclusion block
+\headerbox{\normalsize Computing collision operator}{name=results2,column=1,below=objectives,bottomaligned=method}{ % This block's bottom aligns with the bottom of the conclusion block
 \begin{itemize}[leftmargin=*]
-\item[--] Tensorized formulation
+\item[--] Recomputation of collision operator is needed, hence need to be efficient. 
+\item[--] Write the collision operator with dense tensor contractions.  
 %\begin{align*}
 %{L}_{k,l,m}^{p,q,s} &=P^{r\theta\phi}_{k} Y_{lm}^{r\theta\phi} \left( M^{r\theta\phi\chi\gamma} \left(P^{r\theta\phi\chi\gamma}_{p} (v^\prime_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v^\prime_\theta,v^{\prime}_\phi) - P^{r\theta\phi\chi\gamma}_{p} (v_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v_\theta,v_\phi) \right) W_\chi W_\gamma \right) W_\phi W_\theta W_r
 %\end{align*}
@@ -325,21 +372,23 @@ M^{r\theta\phi\chi\gamma} \times&\ldots\times W_\chi W_\gamma
 \\
 &\uparrow
 \\
-P^{r\theta\phi\chi\gamma}_{p} (v^\prime_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v^\prime_\theta,v^{\prime}_\phi) &- P^{r\theta\phi\chi\gamma}_{p} (v_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v_\theta,v_\phi)
+%P^{r\theta\phi\chi\gamma}_{p} (v^\prime_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v^\prime_\theta,v^{\prime}_\phi) &- P^{r\theta\phi\chi\gamma}_{p} (v_r)	Y^{r\theta\phi\chi\gamma}_{qs} (v_\theta,v_\phi)
+P_{p} (v^\prime_r)	Y_{qs} (v^\prime_\theta,v^{\prime}_\phi) &- P_{p} (v_r)	Y_{qs} (v_\theta,v_\phi)
 \end{align*}
 
-\item[--] Tensors:
+\item[--] Identify quantities that can be pre-compute and stored. E.g.,
 \begin{itemize}[leftmargin=*]
 \small
-\item[$\circ$] $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$: Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity
+\item[$\circ$] $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$: Scattering velocity matrix
+%, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity
 \item[$\circ$] $P^{r\theta\phi\chi\gamma}_{p}$: radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
 \item[$\circ$] $Y^{r\theta\phi\chi\gamma}_{qs}$: $qs$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-\item[$\circ$] $M^{r\theta\phi\chi\gamma}$: Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-\item[$\circ$] $\sigma^{r\theta\phi\chi\gamma}$: differential cross section broadcasted on scattering cross section angles. 
-\item[$\circ$] $P^{r\theta\phi}_{k}$: radial polynomials evaluated at radial quadrature points. 
-\item[$\circ$] $Y_{lm}^{r\theta\phi}$: spherical harmonics evaluated angular quadrature points. 
+%\item[$\circ$] $M^{r\theta\phi\chi\gamma}$: Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
+%\item[$\circ$] $\sigma^{r\theta\phi\chi\gamma}$: differential cross section broadcasted on scattering cross section angles. 
+%\item[$\circ$] $P^{r\theta\phi}_{k}$: radial polynomials evaluated at radial quadrature points. 
+%\item[$\circ$] $Y_{lm}^{r\theta\phi}$: spherical harmonics evaluated angular quadrature points. 
 \end{itemize}
-
+\item[--] Use existing dense linear algebra packages.
 \end{itemize}
 }
 

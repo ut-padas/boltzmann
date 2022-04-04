@@ -11,7 +11,7 @@ import scipy.interpolate
 
 # some parameters related to splines. 
 XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 31
-BSPLINE_NUM_Q_PTS_PER_KNOT     = 7
+BSPLINE_NUM_Q_PTS_PER_KNOT     = 3
 BSPLINE_BASIS_ORDER            = 1
 
 class BasisType(enum.Enum):
@@ -168,7 +168,7 @@ class BSpline(Basis):
 
     @staticmethod
     def get_num_q_pts(p_order, s_order, pts_per_knot):
-        return pts_per_knot*(p_order+1 + s_order + 2  - 2*(s_order+1))
+        return pts_per_knot*(p_order)
 
     def __init__(self,k_domain,spline_order, num_p):
         self._basis_type = BasisType.SPLINES

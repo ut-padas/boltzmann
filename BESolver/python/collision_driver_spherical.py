@@ -4,6 +4,7 @@
 
 import enum
 import scipy
+from sympy import arg
 import basis
 import spec_spherical as sp
 import numpy as np
@@ -265,7 +266,6 @@ def ode_numerical_solve_no_reassembly_and_projection(collOp:colOpSp.CollisionOpS
     else:
         print("Not implemented ")
 
-
 def restore_solver(fname):
     TIME_INDEX=0
     MASS_INDEX=1
@@ -279,6 +279,104 @@ def restore_solver(fname):
     mass  = data[-1,MASS_INDEX]
     temp  = data[-1,TEMP_INDEX]
     return[time, mass, temp, h_vec]
+
+
+def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, dt,t_tol, mode:CollissionMode):
+    spec_sp = collOp._spec
+    MVTH  = vth
+    MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
+    MTEMP = collisions.electron_temperature(MVTH)
+    print("==========================================================================")
+
+    t_ts.start()
+    h_t = np.array(h_init)
+    t_curr = 0.0
+    t_step = 0
+
+    ne_t      = MNE
+    mw_vth    = BEUtils.get_maxwellian_3d(vth,ne_t)
+    m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
+    temp_t0   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t0,1)
+    vth_curr  = collisions.electron_thermal_velocity(temp_t0) 
+    print("Initial Ev : " , temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+    
+    t_M.start()
+    M  = spec_sp.compute_mass_matrix()
+    t_M.stop()
+    print("Mass assembly time (s): ", t_M.seconds)
+    print("Condition number of M= %.8E"%np.linalg.cond(M))
+
+    Minv = np.linalg.inv(M)
+
+    if(mode == CollissionMode.ELASTIC_ONLY):
+        g0  = collisions.eAr_G0()
+        g0.reset_scattering_direction_sp_mat()
+        t_L.start()
+        FOp = collOp.assemble_mat(g0,mw_vth,vth_curr)
+        t_L.stop()
+        print("Assembled the collision op. for Vth : ", vth_curr)
+        print("Collision Operator assembly time (s): ",t_L.snap)
+        #print("FOp: ",FOp)
+        #print("Condition number of C= %.8E"%np.linalg.cond(FOp))
+        FOp= np.matmul(Minv,FOp)
+        #print("Condition number of n0 x (M^-1 x C)= ",np.linalg.cond(FOp))
+        # u,s,v = np.linalg.svd(FOp)
+        # print("Singular values of FOp:", s)
+        def f_rhs(t,y,n0):
+            return n0*np.matmul(FOp,y)
+        
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, atol=t_tol)
+        #ode_solver = ode(f_rhs,jac=None).set_integrator("dop853",verbosity=1,rtol=t_tol)
+        ode_solver.set_initial_value(h_init,t=0.0)
+        ode_solver.set_f_params(collisions.AR_NEUTRAL_N)
+
+        total_steps     = int(t_end/dt)
+        solution_vector = np.zeros((total_steps,h_init.shape[0]))
+        while ode_solver.successful() and t_step < total_steps: 
+            t_curr = ode_solver.t
+            ht     = ode_solver.y
+            solution_vector[t_step,:] = ht
+            ode_solver.integrate(ode_solver.t + dt)
+            t_step+=1
+
+    elif(mode == CollissionMode.ELASTIC_W_IONIZATION):
+        g0  = collisions.eAr_G0()
+        g0.reset_scattering_direction_sp_mat()
+
+        g2  = collisions.eAr_G2()
+        g2.reset_scattering_direction_sp_mat()
+        t_L.start()
+        FOp_g0 = collOp.assemble_mat(g0,mw_vth,vth_curr) 
+        FOp_g2 = collOp.assemble_mat(g2,mw_vth,vth_curr)
+        t_L.stop()
+        print("Assembled the collision op. for Vth : ", vth_curr)
+        print("Collision Operator assembly time (s): ",t_L.snap)
+        
+        FOp_g0 = np.matmul(Minv,FOp_g0)
+        FOp_g2 = np.matmul(Minv,FOp_g2)
+
+        def f_rhs(t,y,n0,ni):
+            return n0*np.matmul(FOp_g0,y) + ni*np.matmul(FOp_g2,y)
+
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, atol=t_tol)
+        ode_solver.set_initial_value(h_init,t=0.0)
+
+        t_step = 0
+        total_steps = int(t_end/dt)
+        solution_vector = np.zeros((total_steps,h_init.shape[0]))
+        while ode_solver.successful() and t_step < total_steps: 
+            t_curr   = ode_solver.t
+            m0_t     = BEUtils.moment_n_f(spec_sp,ode_solver.y,mw_vth,vth,0,None,None,None,1)
+            ode_solver.set_f_params(collisions.AR_NEUTRAL_N,m0_t)
+            ht       = ode_solver.y
+            ode_solver.integrate(ode_solver.t + dt)
+            t_step+=1
+    else:
+        print("Not implemented ")
+
+    return solution_vector
+
+    
 
 
 
@@ -300,48 +398,87 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 npes = comm.Get_size()
 
-params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL[rank]
-params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
 
-# q_mode = sp.QuadMode.SIMPSON
-# r_mode = basis.BasisType.SPLINES
-# params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.BSPLINE_NUM_Q_PTS_PER_KNOT)
+run_data=list()
+ev     = np.linspace(0.3,40,1000)
+eedf   = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
+for i, nr in enumerate(args.NUM_P_RADIAL):
+    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(i+1)]
 
-q_mode = sp.QuadMode.GMX
-r_mode = basis.BasisType.MAXWELLIAN_POLY
-params.BEVelocitySpace.NUM_Q_VR  = 300
+    q_mode = sp.QuadMode.SIMPSON
+    r_mode = basis.BasisType.SPLINES
+    params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.BSPLINE_NUM_Q_PTS_PER_KNOT)
 
-params.BEVelocitySpace.NUM_Q_VT  = 2
-params.BEVelocitySpace.NUM_Q_VP  = 2
-params.BEVelocitySpace.NUM_Q_CHI = 2
-params.BEVelocitySpace.NUM_Q_PHI = 2
-params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
-OUTPUT_FILE_NAME = args.out_fname
-RESTORE_SOLVER = args.restore
-INIT_EV    = args.electron_volt
-IO_COUT_FEQ  = 10 #(1<<rank) * 100
-#args.T_DT         = CONV_DT[rank%len(CONV_DT)]
-#args.NUM_P_RADIAL = CONV_NR[rank//len(CONV_DT)]
-## ============================================
+    # q_mode = sp.QuadMode.GMX
+    # r_mode = basis.BasisType.MAXWELLIAN_POLY
+    # params.BEVelocitySpace.NUM_Q_VR  = 300
+    
+    params.BEVelocitySpace.NUM_Q_VT  = 2
+    params.BEVelocitySpace.NUM_Q_VP  = 2
+    params.BEVelocitySpace.NUM_Q_CHI = 2
+    params.BEVelocitySpace.NUM_Q_PHI = 2
+    params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 
-if(not rank):
-    print("Total MPI tasks : ", npes)
-    print(args)
+    INIT_EV    = args.electron_volt
+    collisions.MAXWELLIAN_TEMP_K   = INIT_EV * collisions.TEMP_K_1EV
+    collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode,r_mode)
+    spec  = cf._spec
+    VTH   = collisions.ELECTRON_THEMAL_VEL
 
-collisions.MAXWELLIAN_TEMP_K   = INIT_EV * collisions.TEMP_K_1EV
-collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+    print("""===========================Parameters ======================""")
+    print("\tMAXWELLIAN_N : ", collisions.MAXWELLIAN_N)
+    print("\tELECTRON_THEMAL_VEL : ", VTH," ms^-1")
+    print("\tDT : ", params.BEVelocitySpace().VELOCITY_SPACE_DT, " s")
+    print("""============================================================""")
+    params.print_parameters()
+
+    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+    hv         = lambda v,vt,vp : np.ones_like(v)
+    h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
+    data       = solve_collop(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_ONLY)
+    eedf[i]    = BEUtils.get_eedf(ev, spec, data[-1,:], maxwellian, VTH, 1)
+
+
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import figure
+figure(figsize=(4, 4), dpi=300)
+
+# for i in range(eedf.shape[0]-1):
+#     plt.plot(ev,np.abs(eedf[i]-eedf[i+1]),label="Nr=%d"%(args.NUM_P_RADIAL[i]))
+
+for i in range(eedf.shape[0]):
+    plt.plot(ev,eedf[i],linewidth=1,label="Nr=%d"%(args.NUM_P_RADIAL[i]))
+
+
+# plt.xscale("log")
+# plt.yscale("log")
+# plt.xlabel("energy(ev)")
+# plt.ylabel("error")
+# plt.legend()
+#plt.savefig('g0_maxwell.png')
+#plt.savefig('g0_bspline_linear.png', dpi=300)
+#plt.savefig('g0_bspline_quad.png', dpi=300)
+
+plt.xscale("log")
+plt.yscale("log")
+plt.xlabel("energy(ev)")
+plt.ylabel("EEDF")
+plt.legend()
+#plt.show()
+#plt.savefig('g0_maxwell_eedf.png')
+plt.savefig('g0_bspline_linear_eedf.png', dpi=300)
+#plt.savefig('g0_bspline_quad_eedf.png', dpi=300)
+
+
+
+
+
+
     
 # instance of the collision operator
-cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode,r_mode)
-spec  = cf._spec
-VTH   = collisions.ELECTRON_THEMAL_VEL
 
-print("""===========================Parameters ======================""")
-print("\tMAXWELLIAN_N : ", collisions.MAXWELLIAN_N)
-print("\tELECTRON_THEMAL_VEL : ", VTH," ms^-1")
-print("\tDT : ", params.BEVelocitySpace().VELOCITY_SPACE_DT, " s")
-print("""============================================================""")
-params.print_parameters()
 
 # col_g0_no_E_loss = collisions.eAr_G0_NoEnergyLoss()
 # col_g0 = collisions.eAr_G0()
@@ -374,94 +511,5 @@ def perturbed_mw_test():
     #ode_first_order_linear_adaptive_v1(cf,[col_g0_no_E_loss],h_vec,mw_high,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol)
 
 
-def g0_test():
-    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    hv         = lambda v,vt,vp : np.ones_like(v)
-    h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
 
-    global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g0_dt_tol_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,args.ts_tol,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-    print(OUTPUT_FILE_NAME)
-
-    #ode_numerical_solve(cf,[col_g0],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
-    ode_numerical_solve_no_reassembly_and_projection(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_ONLY)
-
-def g1_test():
-    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    hv         = lambda v,vt,vp : np.ones_like(v)
-    h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
-
-    t_M.start()
-    M  = spec.compute_maxwellian_mm(maxwellian,VTH)
-    t_M.stop()
-    print("Mass assembly time (s): ", t_M.seconds)
-
-    global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g1_dt_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,params.BEVelocitySpace.VELOCITY_SPACE_DT,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-    print(OUTPUT_FILE_NAME)
-
-
-    #ode_numerical_solve(cf,[col_g1],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
-    
-
-
-def g2_test():
-    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    hv         = lambda v,vt,vp : np.ones_like(v)
-    h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
-
-    t_M.start()
-    M  = spec.compute_maxwellian_mm(maxwellian,VTH)
-    t_M.stop()
-    print("Mass assembly time (s): ", t_M.seconds)
-    
-    global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g2_dt_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,params.BEVelocitySpace.VELOCITY_SPACE_DT,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-    print(OUTPUT_FILE_NAME)
-
-
-    #ode_numerical_solve(cf,[col_g2],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER,quasi_neutral=False)
-
-
-def g01_test():
-    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    hv         = lambda v,vt,vp : np.ones_like(v)
-    h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
-
-    t_M.start()
-    M  = spec.compute_maxwellian_mm(maxwellian,VTH)
-    t_M.stop()
-    print("Mass assembly time (s): ", t_M.seconds)
-    
-    global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g01_dt_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,params.BEVelocitySpace.VELOCITY_SPACE_DT,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-    print(OUTPUT_FILE_NAME)
-
-    #ode_numerical_solve(cf,[col_g0,col_g1],h_vec,maxwellian,VTH,args.T_END,args.T_DT, ts_tol=args.ts_tol,restore=RESTORE_SOLVER)
-
-
-def g02_test():
-    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    hv         = lambda v,vt,vp : np.ones_like(v)
-    h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
-
-    global OUTPUT_FILE_NAME
-    OUTPUT_FILE_NAME = f"%s/g02_dt_tol_%.8E_Nr_%d.dat" %(OUTPUT_FILE_NAME,args.ts_tol,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)
-    print(OUTPUT_FILE_NAME)
-
-    ode_numerical_solve_no_reassembly_and_projection(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_W_IONIZATION)
-    
-
-if args.collision_mode  == "g0":
-    g0_test()
-elif args.collision_mode  == "g1":
-    g1_test()
-elif args.collision_mode  == "g2":
-    g2_test()
-elif args.collision_mode  == "g01":
-    g01_test()
-elif args.collision_mode  == "g02":
-    g02_test()
-else:
-    print("unknown collision mode")
-
+#ode_numerical_solve_no_reassembly_and_projection(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_ONLY)

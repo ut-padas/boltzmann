@@ -61,9 +61,9 @@ class Collisions(abc.ABC):
         """
         self._cs_fname  = fname
         self._cs_fields = ["energy", "cross section"]
-        np_data      = cross_section.lxcat_cross_section_to_numpy(self._cs_fname, self._cs_fields)
-        self._energy   = np_data[0]
-        self._total_cs = np_data[1]
+        np_data         = cross_section.lxcat_cross_section_to_numpy(self._cs_fname, self._cs_fields)
+        self._energy    = np_data[0]
+        self._total_cs  = np_data[1]
         self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear',bounds_error=False,fill_value=0.0)
         return
 

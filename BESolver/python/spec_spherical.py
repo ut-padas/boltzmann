@@ -87,7 +87,7 @@ class SpectralExpansionSpherical:
         """
         return (self._p +1)*len(self._sph_harm_lm)
 
-    def compute_mass_matrix(self,is_diagonal=False):
+    def compute_mass_matrix(self, v_th=1.0):
         """
         Compute the mass matrix w.r.t the basis polynomials
         if the chosen basis is orthogonal set is_diagonal to True. 
@@ -99,40 +99,30 @@ class SpectralExpansionSpherical:
         if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
             [gx, gw] = self._basis_p.Gauss_Pn(num_p)
             Vr = self.Vq_r(gx)
-            mr = np.ones_like(gx) 
+            mm=np.zeros((num_p*num_sh, num_p*num_sh))
+            for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
+                mr   = np.ones_like(gx) *  gx**(2*l)
+                mm_l = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
+                mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+                print("l,m=(%d,%d) condition number of the radial component = %.8e"%(l,m,np.linalg.cond(mm_l)))
+
+                for i in range(num_p):
+                 for j in range(num_p):
+                    idx_pqs = i * num_sh + lm_idx
+                    idx_klm = j * num_sh + lm_idx
+                    mm[idx_pqs, idx_klm] = mm_l[i,j]
+
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
             [gx, gw] = self._basis_p.Gauss_Pn(basis.BSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
             # note that, VTH**3 should be here but discarded, since they cancel out at C operator. 
             Vr = self.Vq_r(gx)
             mr = gx**2 
         
-        mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
-        mm = np.dot(mm,gw).reshape(num_p,num_p)
-        Lm = np.eye(num_sh)
-        mm = np.kron(mm,Lm).reshape(num_p*num_sh,num_p*num_sh)
-        return mm
+            mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
+            mm = np.dot(mm,gw).reshape(num_p,num_p)
+            Lm = np.eye(num_sh)
+            mm = np.kron(mm,Lm).reshape(num_p*num_sh,num_p*num_sh)
 
-    def compute_maxwellian_mm(self,maxwellian,v_th):
-        """
-        computs the the mass matrix w.r.t specified maxwellian
-        for generic maxwellian mm might not be diagonal. 
-        """
-        num_p = self._p+1
-        num_sh = len(self._sph_harm_lm)
-        
-        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
-            [gx, gw] = self._basis_p.Gauss_Pn(num_p)
-            Vr = self.Vq_r(gx)
-            mr = np.ones_like(gx) 
-        elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            [gx, gw] = self._basis_p.Gauss_Pn(basis.BSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
-            Vr = self.Vq_r(gx)
-            mr = np.exp(-gx**2) * (gx**2)
-
-        mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
-        mm = np.dot(mm,gw).reshape(num_p,num_p)
-        Lm = np.eye(num_sh)
-        mm = np.kron(mm,Lm).reshape(num_p*num_sh,num_p*num_sh)
         return mm
 
     def Vq_r(self, v_r, scale=1):

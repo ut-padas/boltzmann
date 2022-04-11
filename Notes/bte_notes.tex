@@ -162,7 +162,7 @@ A particularly important velocity distribution function is the Maxwell-Boltzmann
 \end{equation}
 using the number density equation, we can derive the coefficient $A$ as follows, 
 \begin{equation}
-M(v) = \frac{n}{(\sqrt{\pi}v_{th})^d} \exp{(-(\frac{v}{v_{th}})^2)}    
+M(v) = \frac{n}{(\sqrt{\pi}v_{th})^d} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)}    
 \end{equation} where, $v_{th}$ defined as, 
 \begin{equation}
     v_{th} = \sqrt{\frac{2kT}{m}}
@@ -298,63 +298,115 @@ Let $H_k (x)$ be the sequence of Hermite polynomials, defined on $(\infty,infty)
     \int_{-\infty}^{\infty} w(x) f(x) \approx \sum_{q=1}^{n} w_i f(x_i)
 \end{equation} where, $x_i$ are the roots of $H_n(x)$, and $w_i$ are the corresponding weights for the Gaussian quadrature. 
 
-\section{Maxwellian polynomials with spherical coordinates}
-
-For the electron-Boltzmann equation, the generalized weak form of the collision operator can be written as follows (note: velocity should be normalized by the thermal velocity).
-\begin{equation}
-    L_{ij} = n_0 \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv \label{eq:cOp}
-\end{equation}
-
-\begin{equation}
-    M_{ij} = \int_{\R^3} M(v) P_i(v)P_j(v) dv
-\end{equation}
-
-In spherical coordinates, the above becomes, 
-
+\section{Collision operator with Maxwell polynomials}
+As described in~\S\ref{subsec:binary_reactions} we can write the binary collision operator as below.  
 \begin{align*}
-    {L}_{k,l,m}^{p,q,s} &=n_0
-    \myint_{0}^{+\infty} 
-    v^2
-    P^p \of{\frac{v}{\vth}} 
-    \myint_{S^2}^{}
-    \myint_{S^2}^{}
-    B\of{v,\omega} Y^{qs}\of{v_\theta, v_\phi} 
-     \times
-    \\
-    & \times
-    \left(
-    M\of{v^\prime} P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime}
-    -
-    M\of{v} P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi}
-    \right)
-    \diff{\omega}
-    \diff{v_\omega}
-    \diff{v} 
+\myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+&=
+\myint_{R^3} \myint_{R^3} \myint_{S^2} 
+B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
+f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
+\left(
+\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}} 
+- \phi\of{\vect{v}_e} 
+\right)
+\diff{\vect{v}_0} \diff{\vect{v}_e} \diff{\vect{\omega}}
+\end{align*}
+Assuming the $f(\vect{v}_0)= n_0\delta(\vect{v}_0)$, we can simplify the above as, 
+\begin{align*}
+\myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+&=
+n_0 \myint_{R^3} \myint_{S^2} 
+B\of{\vect{v}_e, 0, \vect{\omega}} 
+f_e\of{\vect{v}_e}
+\left(
+\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, 0, \vect{\omega}}} 
+- \phi\of{\vect{v}_e} 
+\right)
+\diff{\vect{v}_e} \diff{\vect{\omega}}
 \end{align*}
 
 \begin{align*}
-    {M}_{k,l,m}^{p,q,s} &=
-    \myint_{0}^{+\infty} 
-    v^2
-    M\of{v} P^p \of{\frac{v}{\vth}}  P_k \of{\frac{v}{\vth}} \delta^{qs}_{lm}
-    \diff{v} 
+M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
+\Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
+\Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
 \end{align*}
+
+We can write the basis expansion for $f(\vect{v})$ as,  
+\begin{align*}
+	f(\vect{v})  = \sum_{klm} \hat{f}_{klm} \Phi_{klm} (\vect{v})
+\end{align*}
+Then the discretized collision operator becomes, 
+\begin{align*}
+{L}_{k,l,m}^{p,q,s} &=n_0 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} v_r^2 \norm{\vect{v}} \sigma(\vect{v},\omega) \Phi_{klm}(\vect{v})   (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \diff{v_r} \\
+{L}_{k,l,m}^{p,q,s} &=n_0 (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} \left(\frac{v_r}{v_{th}}\right)^{(2+l)} \norm{\vect{v}} \sigma(\vect{v},\omega) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)   (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
+{M}_{k,l,m}^{p,q,s} &= \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2}  v_r^2 \Psi_{pqs}(\vect{v}) \Phi_{klm}(\vect{v}) \diff{\omega} \diff{\omega_v} \diff{v_r}\\
+{M}_{k,l,m}^{p,q,s} &= (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} 
+					   \left(\frac{v_r}{v_{th}}\right)^{(2+l+q)} P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  \\& P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}}
+\end{align*}
+
+
+
+
+
+
+
+
+%For the electron-Boltzmann equation, the generalized weak form of the collision operator can be written as follows (note: velocity should be normalized by the thermal velocity).
+%\begin{equation}
+%    L_{ij} = n_0 \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv \label{eq:cOp}
+%\end{equation}
+%
+%\begin{equation}
+%    M_{ij} = \int_{\R^3} M(v) P_i(v)P_j(v) dv
+%\end{equation}
+%
+%In spherical coordinates, the above becomes, 
+%
+%\begin{align*}
+%    {L}_{k,l,m}^{p,q,s} &=n_0
+%    \myint_{0}^{+\infty} 
+%    v^2
+%    P^p \of{\frac{v}{\vth}} 
+%    \myint_{S^2}^{}
+%    \myint_{S^2}^{}
+%    B\of{v,\omega} Y^{qs}\of{v_\theta, v_\phi} 
+%     \times
+%    \\
+%    & \times
+%    \left(
+%    M\of{v^\prime} P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime}
+%    -
+%    M\of{v} P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi}
+%    \right)
+%    \diff{\omega}
+%    \diff{v_\omega}
+%    \diff{v} 
+%\end{align*}
+%
+%\begin{align*}
+%    {M}_{k,l,m}^{p,q,s} &=
+%    \myint_{0}^{+\infty} 
+%    v^2
+%    M\of{v} P^p \of{\frac{v}{\vth}}  P_k \of{\frac{v}{\vth}} \delta^{qs}_{lm}
+%    \diff{v} 
+%\end{align*}
 
 \subsection{Tensorized computation of ${L}_{k,l,m}^{p,q,s}$}
 
-\begin{align*}
-    {L}_{k,l,m}^{p,q,s} &= {L^{+}}_{k,l,m}^{p,q,s} - {L^{-}}_{k,l,m}^{p,q,s}
-\end{align*} where, 
-\begin{align*}
-    {L^{+}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
-                               \int_{S^2(v_\theta,v_\phi)}
-                               \int_{S^2(\chi,\gamma)} & 
-                               v^2 M(v^\prime) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime} |v|\sigma(|v|,\chi) d\omega d\omega_v dv \\
-    {L^{-}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
-                              \int_{S^2(v_\theta,v_\phi)}
-                              \int_{S^2(\chi,\gamma)} & 
-                              v^2 M(v) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi} |v|\sigma(|v|,\chi) d\omega d\omega_v dv
-\end{align*}
+%\begin{align*}
+%    {L}_{k,l,m}^{p,q,s} &= {L^{+}}_{k,l,m}^{p,q,s} - {L^{-}}_{k,l,m}^{p,q,s}
+%\end{align*} where, 
+%\begin{align*}
+%    {L^{+}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
+%                               \int_{S^2(v_\theta,v_\phi)}
+%                               \int_{S^2(\chi,\gamma)} & 
+%                               v^2 M(v^\prime) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime} |v|\sigma(|v|,\chi) d\omega d\omega_v dv \\
+%    {L^{-}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
+%                              \int_{S^2(v_\theta,v_\phi)}
+%                              \int_{S^2(\chi,\gamma)} & 
+%                              v^2 M(v) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi} |v|\sigma(|v|,\chi) d\omega d\omega_v dv
+%\end{align*}
 
 The list of tensors that can be precomputed
 \begin{itemize}
@@ -1039,6 +1091,7 @@ Experimental setup summary.
 \appendix
 \section{Derivation of Collision operators}
 \subsection{Binary reactions}
+\label{subsec:binary_reactions}
 We start with reactions of the type
 \begin{align*}
 \text{Ar} + e \longrightarrow X + e

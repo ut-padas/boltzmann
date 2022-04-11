@@ -146,37 +146,50 @@
 
 \begin{frame}
 \frametitle{V-space solver (with operator splitting)}
-
-\begin{center}
-	\small
-	\begin{align*}
-	\partial_t f + \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
-	\end{align*}
-	\begin{align*}
-	&\left\{
-	\begin{aligned}
-	\partial_t f^{(0)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(0)} &= 0, \quad t_n < t \leq t_n + \frac12 \Delta t \\
-	f^{(0)}\of{t_n} &= f\of{t_n}
-	\end{aligned}
-	\right.
-	\\
-	&\left\{
-	\begin{aligned}
-	\partial_t f^{(1)} &= C[f^{(1)}], \quad t_n < t \leq t_n + \Delta t \\
-	f^{(1)}\of{t_n} &= f^{(0)}\of{t_n + \frac12 \Delta t}
-	\end{aligned}
-	\right.
-	\\
-	&\left\{
-	\begin{aligned}
-	\partial_t f^{(2)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(2)} &= 0, \quad t_n + \frac12 \Delta t < t \leq t_n + \Delta t  \\
-	f^{(2)}\of{t_n} &= f^{(1)}\of{t_n + \Delta t}
-	\end{aligned}
-	\right.
-	\\
-	& f\of{t_n + \Delta t} = f^{(2)}\of{t_n + \Delta t}
-	\end{align*}
-\end{center}
+\begin{columns}
+	\begin{column}{0.5\textwidth}
+		\begin{center}
+			\small
+			\begin{align*}
+			\partial_t f + \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
+			\end{align*}
+			\begin{align*}
+			&\left\{
+			\begin{aligned}
+			\partial_t f^{(0)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(0)} &= 0, \quad t_n < t \leq t_n + \frac12 \Delta t \\
+			f^{(0)}\of{t_n} &= f\of{t_n}
+			\end{aligned}
+			\right.
+			\\
+			&\left\{
+			\begin{aligned}
+			\partial_t f^{(1)} &= C[f^{(1)}], \quad t_n < t \leq t_n + \Delta t \\
+			f^{(1)}\of{t_n} &= f^{(0)}\of{t_n + \frac12 \Delta t}
+			\end{aligned}
+			\right.
+			\\
+			&\left\{
+			\begin{aligned}
+			\partial_t f^{(2)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(2)} &= 0, \quad t_n + \frac12 \Delta t < t \leq t_n + \Delta t  \\
+			f^{(2)}\of{t_n} &= f^{(1)}\of{t_n + \Delta t}
+			\end{aligned}
+			\right.
+			\\
+			& f\of{t_n + \Delta t} = f^{(2)}\of{t_n + \Delta t}
+			\end{align*}
+		\end{center}
+	\end{column}
+	\begin{column}{0.5\textwidth}  %%<--- here
+		\begin{center}
+			Overall algorithm: given $\vect{v}_0$, $a_{klm}$ at $t_n$:
+			\begin{enumerate}
+				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n}^{t_n+\frac12 \Delta t} \vect{E}\of{\tau} d\tau$
+				\item Solve collision op.  from $t_0$ to $t_0 + \Delta t$
+				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n+\frac12 \Delta t}^{t_n + \Delta t} \vect{E}\of{\tau} d\tau$
+			\end{enumerate}
+		\end{center}
+	\end{column}
+\end{columns}
 \end{frame}
 
 \begin{frame}

@@ -26,6 +26,7 @@ class SpectralExpansionSpherical:
         """
         self._sph_harm_lm = sph_harm_lm
         self._p = p_order
+        self._num_q_radial=300
         self._domain = domain
         self._window = window
 
@@ -55,13 +56,13 @@ class SpectralExpansionSpherical:
         """
         Evaluates 
         """
-        return self.basis_eval_radial(r,k) * self._sph_harm_real(l, m, theta, phi)
+        return self.basis_eval_radial(r,k,l) * self._sph_harm_real(l, m, theta, phi)
     
-    def basis_eval_radial(self,r,k):
+    def basis_eval_radial(self,r,k,l):
         """
         Evaluates 
         """
-        return np.nan_to_num(self._basis_1d[k](r))
+        return np.nan_to_num(self._basis_1d[k](r,l))
     
     def basis_eval_spherical(self, theta, phi,l,m):
         """
@@ -93,39 +94,67 @@ class SpectralExpansionSpherical:
         if the chosen basis is orthogonal set is_diagonal to True. 
         Given we always use spherical harmonics we will integrate them exactly
         """
-        num_p  = self._p+1
-        num_sh = len(self._sph_harm_lm)
-        
+        num_p   = self._p+1
+        num_sh  = len(self._sph_harm_lm)
+
         if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
-            [gx, gw] = self._basis_p.Gauss_Pn(num_p)
-            Vr = self.Vq_r(gx)
+            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+            l_modes = list(set([l for l,_ in self._sph_harm_lm]))
+            Vr_l    = list()
+            MM_l    = list()
+
+            for l in l_modes:
+                Vr_l.append(self.Vq_r(gx, l))
+            
+            for i,l in enumerate(l_modes):
+                mr = np.ones_like(gx) *  gx**(2*l)
+                Vr = Vr_l[i]
+                mm_l = np.array([ mr * Vr[p,:] * Vr[k,:] for p in range(num_p) for k in range(num_p)])
+                mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+                MM_l.append(mm_l)
+
             mm=np.zeros((num_p*num_sh, num_p*num_sh))
             for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
-                mr   = np.ones_like(gx) *  gx**(2*l)
-                mm_l = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
-                mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
-                print("l,m=(%d,%d) condition number of the radial component = %.8e"%(l,m,np.linalg.cond(mm_l)))
+                idx=l_modes.index(l)
+                for p in range(num_p):
+                 for k in range(num_p):
+                    idx_pqs = p * num_sh + lm_idx
+                    idx_klm = k * num_sh + lm_idx
+                    mm[idx_pqs, idx_klm] = MM_l[idx][p,k]
+            
+            #assert(np.allclose(mm,np.eye(num_p*num_sh)))
+            return mm
 
-                for i in range(num_p):
-                 for j in range(num_p):
-                    idx_pqs = i * num_sh + lm_idx
-                    idx_klm = j * num_sh + lm_idx
-                    mm[idx_pqs, idx_klm] = mm_l[i,j]
+            # Vr = self.Vq_r(gx)
+            # mm=np.zeros((num_p*num_sh, num_p*num_sh))
+            # for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
+            #     mr   = np.ones_like(gx) *  gx**(2*l)
+            #     mm_l = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
+            #     mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+            #     #print("l,m=(%d,%d) condition number of the radial component = %.8e"%(l,m,np.linalg.cond(mm_l)))
+
+            #     for i in range(num_p):
+            #      for j in range(num_p):
+            #         idx_pqs = i * num_sh + lm_idx
+            #         idx_klm = j * num_sh + lm_idx
+            #         mm[idx_pqs, idx_klm] = mm_l[i,j]
+
+
 
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            [gx, gw] = self._basis_p.Gauss_Pn(basis.BSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
-            # note that, VTH**3 should be here but discarded, since they cancel out at C operator. 
-            Vr = self.Vq_r(gx)
-            mr = gx**2 
+            raise NotImplementedError("not implemented for BSplines")
+            # [gx, gw] = self._basis_p.Gauss_Pn(basis.BSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+            # # note that, VTH**3 should be here but discarded, since they cancel out at C operator. 
+            # Vr = self.Vq_r(gx)
+            # mr = gx**2 
         
-            mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
-            mm = np.dot(mm,gw).reshape(num_p,num_p)
-            Lm = np.eye(num_sh)
-            mm = np.kron(mm,Lm).reshape(num_p*num_sh,num_p*num_sh)
+            # mm = np.array([ mr * Vr[i,:] * Vr[j,:] for i in range(num_p) for j in range(num_p)])
+            # mm = np.dot(mm,gw).reshape(num_p,num_p)
+            # Lm = np.eye(num_sh)
+            # mm = np.kron(mm,Lm).reshape(num_p*num_sh,num_p*num_sh)
+            #return mm
 
-        return mm
-
-    def Vq_r(self, v_r, scale=1):
+    def Vq_r(self, v_r, l, scale=1):
         """
         compute the basis Vandermonde for the all the basis function
         for the specified quadrature points.  
@@ -137,7 +166,7 @@ class SpectralExpansionSpherical:
         Vq = np.zeros(_shape)
 
         for i in range(num_p):
-            Vq[i] = scale * self.basis_eval_radial(v_r,i)
+            Vq[i] = scale * self.basis_eval_radial(v_r,i,l)
         
         return Vq
 

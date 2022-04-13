@@ -73,7 +73,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         def f_rhs(t,y,n0):
             return n0*np.matmul(FOp,y)
         
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, atol=t_tol)
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=10000)
         #ode_solver = ode(f_rhs,jac=None).set_integrator("dop853",verbosity=1,rtol=t_tol)
         ode_solver.set_initial_value(h_init,t=0.0)
         ode_solver.set_f_params(collisions.AR_NEUTRAL_N)
@@ -129,6 +129,7 @@ parser.add_argument("-Te", "--T_END", help="Simulation time", type=float, defaul
 parser.add_argument("-dt", "--T_DT", help="Simulation time step size ", type=float, default=1e-10)
 parser.add_argument("-o",  "--out_fname", help="output file name", type=str, default='.')
 parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-15)
+parser.add_argument("-l_max", "--l_max", help="max polar modes in SH expansion", type=float, default=2)
 parser.add_argument("-c", "--collision_mode", help="collision mode", type=str, default="g0")
 parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type=float, default=1.0)
 parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
@@ -139,7 +140,7 @@ ev     = np.linspace(0.3,40,1000)
 eedf   = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
 for i, nr in enumerate(args.NUM_P_RADIAL):
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
-    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(3) for j in range(i+1)]
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max) for j in range(i+1)]
 
     # q_mode = sp.QuadMode.SIMPSON
     # r_mode = basis.BasisType.SPLINES
@@ -147,10 +148,10 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
 
     q_mode = sp.QuadMode.GMX
     r_mode = basis.BasisType.MAXWELLIAN_POLY
-    params.BEVelocitySpace.NUM_Q_VR  = 300
+    params.BEVelocitySpace.NUM_Q_VR  = 128
     
-    params.BEVelocitySpace.NUM_Q_VT  = 2
-    params.BEVelocitySpace.NUM_Q_VP  = 2
+    params.BEVelocitySpace.NUM_Q_VT  = 8
+    params.BEVelocitySpace.NUM_Q_VP  = 8
     params.BEVelocitySpace.NUM_Q_CHI = 2
     params.BEVelocitySpace.NUM_Q_PHI = 2
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
@@ -171,7 +172,8 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
 
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
     hv         = lambda v,vt,vp : np.ones_like(v)
-    h_vec      = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
+    h_vec      = BEUtils.function_to_basis(spec,hv,maxwellian,300,16,16)
+    print(h_vec)
     data       = solve_collop(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_ONLY)
     eedf[i]    = BEUtils.get_eedf(ev, spec, data[-1,:], maxwellian, VTH, 1)
 
@@ -202,8 +204,8 @@ plt.xlabel("energy(ev)")
 plt.ylabel("EEDF")
 plt.legend()
 #plt.show()
-#plt.savefig('g0_maxwell_eedf.png')
-plt.savefig('g0_bspline_linear_eedf.png', dpi=300)
+plt.savefig('g0_maxwell_eedf.png')
+#plt.savefig('g0_bspline_linear_eedf.png', dpi=300)
 #plt.savefig('g0_bspline_quad_eedf.png', dpi=300)
 
 

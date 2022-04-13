@@ -326,6 +326,8 @@ f_e\of{\vect{v}_e}
 \diff{\vect{v}_e} \diff{\vect{\omega}}
 \end{align*}
 
+We can try to use a fixed radial basis for each lm mode, by extracting out the $(\cdot)^{l}$ factor as follows. 
+\textbf{Note} : The below basis produce ill-conditioned mass matrix. 
 \begin{align*}
 M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
 \Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
@@ -339,14 +341,53 @@ We can write the basis expansion for $f(\vect{v})$ as,
 Then the discretized collision operator becomes, 
 \begin{align*}
 {L}_{k,l,m}^{p,q,s} &=n_0 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} v_r^2 \norm{\vect{v}} \sigma(\vect{v},\omega) \Phi_{klm}(\vect{v})   (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \diff{v_r} \\
-{L}_{k,l,m}^{p,q,s} &=n_0 (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} \left(\frac{v_r}{v_{th}}\right)^{(2+l)} \norm{\vect{v}} \sigma(\vect{v},\omega) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)   (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
+{L}_{k,l,m}^{p,q,s} &=n_0 (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} \left(\frac{v_r}{v_{th}}\right)^{(2+l)} \norm{\vect{v}} \sigma(\vect{v},\omega) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right) \\
+&P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi)  (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
 {M}_{k,l,m}^{p,q,s} &= \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2}  v_r^2 \Psi_{pqs}(\vect{v}) \Phi_{klm}(\vect{v}) \diff{\omega} \diff{\omega_v} \diff{v_r}\\
 {M}_{k,l,m}^{p,q,s} &= (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} 
 					   \left(\frac{v_r}{v_{th}}\right)^{(2+l+q)} P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  \\& P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}}
 \end{align*}
 
+Using orthogonalized radial basis for each lm mode we can discretize the collision operator as follows. 
+\begin{align*}
+M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
+\Phi_{klm} (\vect{v}) &= \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  P_{kl}\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
+\Psi_{pqs} (\vect{v}) &= P_{pq}\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
+\end{align*} where, 
+\begin{align*}
+	P_{pq}\of{x}  &= x^q \mathcal{P}^{2q+2}_p(x)  \\
+   \myint_{0}^{+\infty} P_{pq}\of{x} P_{pl} \exp(-x^2) x^2 dx &= \delta_{ql}
+\end{align*} with $\mathcal{P}^{2q+2}_p$ denotes the derived Maxwell polynomials. 
 
 
+\begin{align*}
+{L}_{k,l,m}^{p,q,s} &=n_0 (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} \left(\frac{v_r}{v_{th}}\right)^{2} \norm{\vect{v}} \sigma(\vect{v},\omega) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right) \\
+&P_{kl}\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi)  (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
+{M}_{k,l,m}^{p,q,s} &= (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} 
+ \left(\frac{v_r}{v_{th}}\right)^{2} P_{pq}\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  \\& P_{kl}\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
+ {M}_{k,l,m}^{p,q,s} &= \delta^p_q \delta^q_l \delta^m_s
+\end{align*}
+
+For given distribution function of the form, $f(\vect{v}) = \exp\of{-\left(\frac{v_r}{v_{th}}\right)^2}h(\vect{v})$ we can compute the expansion coefficients $\hat{f}_{klm}$ as, 
+\begin{align*}
+	\hat{f}_{klm} = \myint_{R^3} \Psi_{klm}(\vect{v}) f(\vect{v}) \diff{\vect{v}}
+\end{align*}
+
+The $n^{th}$ moment of the distribution function can be computed,
+\begin{align*}
+	m_n&=\myint_{R^3} \norm{v}^n f(\vect{v}) \diff{\vect{v}}\\
+	m_n&=(v_{th})^{3+n}\myint_{0}^{+\infty} \myint_{S^2} \of{\frac{v_r}{v_{th}}}^{2+n} \sum_{klm} \hat{f}_{klm} \Phi_{klm}(\vect{v}) \diff{\omega}\frac{\diff{v_r}}{v_{th}}
+\end{align*}
+
+The electron temperature is defined as, 
+\begin{align*}
+T_e & = \frac{1}{3k_B} m_e \frac{m_2}{m_0}
+\end{align*}
+The electron energy distribution function (EEDF) can be computed with, 
+\begin{align*}
+E_f(\epsilon) &= \myint_{S^2} f\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\right)} \diff{\omega} \\
+E_f(\epsilon) &= \myint_{S^2} \sum_{klm} \exp(-\frac{2\epsilon}{m_e}) \hat{f}_{klm} \Phi_{klm}\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\right)} \diff{\omega}
+\end{align*}
 
 
 

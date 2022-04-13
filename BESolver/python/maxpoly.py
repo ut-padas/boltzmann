@@ -164,5 +164,5 @@ class basis:
         """
         self._deg = deg
 
-    def __call__(self, x):
-        return maxpolyeval(2, x, self._deg)
+    def __call__(self, x, l):
+        return maxpolyeval(2*l+2, x, self._deg)

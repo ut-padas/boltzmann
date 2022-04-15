@@ -36,6 +36,18 @@ def spec_tail_timeseries(cf, num_p, num_sh):
     return np.array([np.linalg.norm(cf[i, num_p//2 * num_sh :]) for i in range(data.shape[0])])
 
 
+def svd_truncate(FOp,r_tol=1e-6):
+    u, s, v = np.linalg.svd(FOp)
+    FOp_svd = np.matmul(u, np.matmul(np.diag(s), v))  
+    print("SVD rel. error : %.12E"%(np.linalg.norm(FOp_svd-FOp)/np.linalg.norm(FOp)))
+    st = np.where(s/s[0]>r_tol) 
+    s_k = st[0][-1]
+    print("truncated at =%d out of %d "%(s_k,len(s)))
+    FOp_svd = np.matmul(u[:, 0:s_k], np.matmul(np.diag(s[0:s_k]), v[0:s_k,:]))  
+    print("SVD after truncation rel. error : %.12E"%(np.linalg.norm(FOp_svd-FOp)/np.linalg.norm(FOp)))
+    return FOp_svd
+    
+
 def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, dt,t_tol, mode:CollissionMode):
     spec_sp = collOp._spec
     MVTH  = vth
@@ -73,7 +85,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         print("Collision Operator assembly time (s): ",(t2-t1))
         #print("FOp: ",FOp)
         #print("Condition number of C= %.8E"%np.linalg.cond(FOp))
-        FOp= np.matmul(Minv,FOp)
+        FOp = np.matmul(Minv,FOp)
         #print("Condition number of n0 x (M^-1 x C)= ",np.linalg.cond(FOp))
         # u,s,v = np.linalg.svd(FOp)
         # print("Singular values of FOp:", s)
@@ -158,8 +170,8 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     r_mode = basis.BasisType.MAXWELLIAN_POLY
     params.BEVelocitySpace.NUM_Q_VR  = 300
     
-    params.BEVelocitySpace.NUM_Q_VT  = 8
-    params.BEVelocitySpace.NUM_Q_VP  = 8
+    params.BEVelocitySpace.NUM_Q_VT  = 4
+    params.BEVelocitySpace.NUM_Q_VP  = 4
     params.BEVelocitySpace.NUM_Q_CHI = 2
     params.BEVelocitySpace.NUM_Q_PHI = 2
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT

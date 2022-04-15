@@ -557,7 +557,7 @@ class eAr_G0(Collisions):
             self._v_scale = np.sqrt(1- 2*MASS_R_EARGON)
 
         vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        vel_fac  = vr * self._v_scale
+        vel_fac  = vr * self._v_scale #-for the time disable the energy loss. 
         vs[0]    = vel_fac
         return vs
 

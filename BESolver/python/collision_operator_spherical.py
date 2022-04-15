@@ -210,62 +210,67 @@ class CollisionOpSP():
             return cc_collision
             
         elif(g._type == collisions.CollisionType.EAR_G2):
-            raise NotImplemented("not implemented for ionizations (collisions.CollisionType.EAR_G2)")
-            # Sd_particles = g.post_scattering_velocity_sp(scattering_mg_v0[0]*V_TH,scattering_mg_v0[1],scattering_mg_v0[2],scattering_mg[3],scattering_mg[4])         
-            # Sd1          = Sd_particles[0]
-            # Sd2          = Sd_particles[1]
+            Sd_particles = g.post_scattering_velocity_sp(scattering_mg_v0[0]*V_TH,scattering_mg_v0[1],scattering_mg_v0[2],scattering_mg[3],scattering_mg[4])         
+            Sd1          = Sd_particles[0]
+            Sd2          = Sd_particles[1]
 
-            # Sd1     = BEUtils.spherical_to_cartesian(Sd1[0]/V_TH,Sd1[1],Sd1[2])
-            # Sd2     = BEUtils.spherical_to_cartesian(Sd2[0]/V_TH,Sd2[1],Sd2[2])
+            Sd1          = BEUtils.spherical_to_cartesian(Sd1[0]/V_TH,Sd1[1],Sd1[2])
+            Sd2          = BEUtils.spherical_to_cartesian(Sd2[0]/V_TH,Sd2[1],Sd2[2])
 
-            # Sd1[0]   = Sd1[0] - np.ones_like(Sd1[0]) * v0[0]
-            # Sd1[1]   = Sd1[1] - np.ones_like(Sd1[0]) * v0[1]
-            # Sd1[2]   = Sd1[2] - np.ones_like(Sd1[0]) * v0[2]
+            Sd1[0]       = Sd1[0] - np.ones_like(Sd1[0]) * v0[0]
+            Sd1[1]       = Sd1[1] - np.ones_like(Sd1[0]) * v0[1]
+            Sd1[2]       = Sd1[2] - np.ones_like(Sd1[0]) * v0[2]
 
-            # Sd2[0]   = Sd2[0] - np.ones_like(Sd2[0]) * v0[0]
-            # Sd2[1]   = Sd2[1] - np.ones_like(Sd2[0]) * v0[1]
-            # Sd2[2]   = Sd2[2] - np.ones_like(Sd2[0]) * v0[2]
+            Sd2[0]       = Sd2[0] - np.ones_like(Sd2[0]) * v0[0]
+            Sd2[1]       = Sd2[1] - np.ones_like(Sd2[0]) * v0[1]
+            Sd2[2]       = Sd2[2] - np.ones_like(Sd2[0]) * v0[2]
 
-            # Sd2      = BEUtils.cartesian_to_spherical(Sd2[0],Sd2[1],Sd2[2])
+            Sd1          = BEUtils.cartesian_to_spherical(Sd1[0],Sd1[1],Sd1[2])
+            Sd2          = BEUtils.cartesian_to_spherical(Sd2[0],Sd2[1],Sd2[2])
             
-            # Pp1_kr   = spec_sp.Vq_r(Sd1[0])
-            # Yp1_lm   = spec_sp.Vq_sph(Sd1[1],Sd1[2])
+            radial_poly_l_post1 = list()
+            radial_poly_l_post2 = list()
 
-            # Pp2_kr   = spec_sp.Vq_r(Sd2[0])
-            # Yp2_lm   = spec_sp.Vq_sph(Sd2[1],Sd2[2])
-            
-            # P_kr     = spec_sp.Vq_r(scattering_mg[0])
-            # Y_lm     = spec_sp.Vq_sph(scattering_mg[1],scattering_mg[2])
+            for l in self._l_modes:
+                radial_poly_l_post1.append(self._spec.Vq_r(Sd1[0],l))
+                radial_poly_l_post2.append(self._spec.Vq_r(Sd2[0],l))
 
-            # if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
-            #     if spec_sp._q_mode == sp.QuadMode.GMX:
-            #         Mp_r    = (scattering_mg[0])*V_TH
-            #     elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
-            #         Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
-            #     else:
-            #         Mr=None
-            #         print("Unknown quadrature mode- inner product weight function is set to none.")
-            # elif self._r_basis_type == basis.BasisType.SPLINES:
-            #     Mp_r    = (scattering_mg[0]**3) * V_TH
-            
-            # Ap_klm = np.array([diff_cs * Mp_r* (Pp2_kr[i] * Yp2_lm[j] + Pp1_kr[i] * Yp1_lm[j]  - P_kr[i]*Y_lm[j]) for i in range(num_p) for j in range(num_sh)])
-            # Ap_klm = Ap_klm.reshape(tuple([num_p,num_sh]) + scattering_mg[0].shape)
+            Yp1_lm   = spec_sp.Vq_sph(Sd1[1],Sd1[2])
+            Yp2_lm   = spec_sp.Vq_sph(Sd2[1],Sd2[2])
 
-            # Bp_klm = np.dot(Ap_klm,WPhi_q)
-            # Bp_klm = np.dot(Bp_klm,glw_s)
+            if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+                if spec_sp._q_mode == sp.QuadMode.GMX:
+                    Mp_r    = (scattering_mg[0])*V_TH
+                elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+                    Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
+                else:
+                    Mr=None
+                    print("Unknown quadrature mode- inner product weight function is set to none.")
+            elif self._r_basis_type == basis.BasisType.SPLINES:
+                Mp_r    = (scattering_mg[0]**3) * V_TH
             
-            # D_pqs_klm = np.array([Bp_klm[pi,li] * C_pqs[pj,lj] for pi in range(num_p) for li in range(num_sh) for pj in range(num_p) for lj in range(num_sh)])
-            # D_pqs_klm = D_pqs_klm.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
+            #print("Mr shape : ", Mp_r.shape)
+            cc_collision = np.array([diff_cs * Mp_r * ( (Sd2[0]**(l)) * radial_poly_l_post2[self._l_modes.index(l)] * Yp2_lm[lm_idx] + (Sd1[0]**(l)) * radial_poly_l_post1[self._l_modes.index(l)] * Yp1_lm[lm_idx] - (scattering_mg[0]**(l)) * self._radial_poly_l_pre_on_sg[self._l_modes.index(l)] *self._sph_pre_on_sg[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+            cc_collision = cc_collision.reshape(tuple([num_sh,num_p]) + scattering_mg[0].shape)
+            #print(cc_collision.shape)
 
-            # D_pqs_klm = np.dot(D_pqs_klm,WVPhi_q)
-            # D_pqs_klm = np.dot(D_pqs_klm,glw)
-            # D_pqs_klm = np.dot(D_pqs_klm,gmw)
+            cc_collision = np.dot(cc_collision,WPhi_q)
+            cc_collision = np.dot(cc_collision,glw_s)
+
+            cc_collision =np.array([cc_collision[qs_idx,p] * self._full_basis_pre[lm_idx,k]  for p in range(num_p) for qs_idx, (q,s) in enumerate(self._sph_harm_lm) for k in range(num_p) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+            cc_collision = cc_collision.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
             
-            # D_pqs_klm = D_pqs_klm.reshape((num_p*num_sh,num_p*num_sh))
-            # return D_pqs_klm
+            cc_collision = np.dot(cc_collision,WVPhi_q)
+            cc_collision = np.dot(cc_collision,glw)
+            cc_collision = np.dot(cc_collision,gmw)
+            cc_collision = cc_collision.reshape((num_p*num_sh,num_p*num_sh))
+            
+            print("collision = %.8E"%np.linalg.cond(cc_collision))
+            print(cc_collision)
+            #print(cc_collision.shape)
+            return cc_collision
 
     def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3)):
-        #Lij = self._Lp(collision,maxwellian,vth)-self._Lm(collision,maxwellian,vth)
         Lij  = self._LOp(collision,maxwellian,vth,v0) 
         return Lij
         

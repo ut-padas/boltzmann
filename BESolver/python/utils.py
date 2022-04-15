@@ -118,7 +118,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
         MP_klm = np.dot(MP_klm,gmw)
         MP_klm = np.transpose(MP_klm)
         MP_klm = MP_klm.reshape(num_p*num_sph_harm)
-        m_k     = (np.sqrt(np.pi)/4) * (maxwellian_fac * (V_TH**(3+moment))) * scale * np.dot(MP_klm,cf)
+        m_k    = (maxwellian_fac * (V_TH**(3+moment))) * scale * np.dot(MP_klm,cf)
         return m_k
 
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
@@ -183,7 +183,9 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
     if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
-
+        """
+        assumes orthonormal mass matrix. 
+        """
         [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
         weight_func  = spec_sp._basis_p.Wx()
         quad_grid    = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
@@ -197,7 +199,7 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
         Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
         hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) 
 
-        M_klm = np.array([quad_grid[0]**(l) * Vq_radial_l[l_modes.index(l)] * Y_lm[lm_idx] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm)])
+        M_klm = np.array([ hq * quad_grid[0]**(l) * Vq_radial_l[l_modes.index(l)] * Y_lm[lm_idx] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm)])
         M_klm = np.dot(M_klm,WVPhi_q)
         M_klm = np.dot(M_klm,glw)
         M_klm = np.dot(M_klm,gmw)

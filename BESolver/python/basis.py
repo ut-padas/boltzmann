@@ -10,7 +10,7 @@ import lagpoly
 import scipy.interpolate
 
 # some parameters related to splines. 
-XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 31
+XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 3
 BSPLINE_NUM_Q_PTS_PER_KNOT     = 3
 BSPLINE_BASIS_ORDER            = 1
 
@@ -163,7 +163,6 @@ class Laguerre(Basis):
         """
         return lagpoly.lagpolyweight
 
-
 class BSpline(Basis):
 
     @staticmethod
@@ -259,7 +258,7 @@ class XlBSpline(Basis):
         # first and last splines have repeated knots, 
         num_k            = 2*spline_order + (num_p -2) + 2
         self._t          = (k_domain[0])*np.ones(spline_order+1)
-        knot_base        = 1.5
+        knot_base        = 10
         self._t          = np.append(self._t,np.logspace(-2, np.log(k_domain[1]-2)/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base))
         self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
         #print("len_t ",len(self._t) , " num_k ",num_k)
@@ -286,7 +285,7 @@ class XlBSpline(Basis):
 
 
     def Pn(self,deg,domain=None,window=None):
-        return lambda l,x : np.nan_to_num(self._splines[deg](x)) * (x**(max(l-deg,0)))
+        return lambda x,l : np.nan_to_num(self._splines[deg](x)) * x**l #(x**(max(l-deg,0)))
         
         
         

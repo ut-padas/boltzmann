@@ -42,7 +42,7 @@ class CollisionOpSP():
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order = basis.BSPLINE_BASIS_ORDER
             k_domain     = (0,40)
-            splines      = basis.BSpline(k_domain,spline_order,self._p+1)
+            splines      = basis.XlBSpline(k_domain,spline_order,self._p+1)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
 
@@ -70,18 +70,11 @@ class CollisionOpSP():
         self._num_sh           = len(spec_sp._sph_harm_lm)
 
         if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
-            if spec_sp._q_mode == sp.QuadMode.GMX:
-                [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-            elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
-                num_q                  = self._NUM_Q_VR
-                [self._gmx,self._gmw]  = basis.uniform_simpson((1e-8,10),num_q)
-
+            [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
         elif self._r_basis_type == basis.BasisType.SPLINES:
             [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR,True)
 
         
-        weight_func            = spec_sp._basis_p.Wx()
-
         legendre                  = basis.Legendre()
         [self._glx,self._glw]     = legendre.Gauss_Pn(self._NUM_Q_VT)
         self._VTheta_q            = np.arccos(self._glx)
@@ -121,8 +114,10 @@ class CollisionOpSP():
         self._sph_pre       = self._spec.Vq_sph(self._incident_mg[1],self._incident_mg[2])
         self._sph_pre_on_sg = self._spec.Vq_sph(self._scattering_mg[1],self._scattering_mg[2])
 
-
-        self._full_basis_pre = np.array([(self._incident_mg[0]**(l)) * self._radial_poly_l_pre[self._l_modes.index(l)] *self._sph_pre[lm_idx] for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+            self._full_basis_pre = np.array([(self._incident_mg[0]**(l)) * self._radial_poly_l_pre[self._l_modes.index(l)] *self._sph_pre[lm_idx] for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+        elif self._r_basis_type == basis.BasisType.SPLINES:
+            self._full_basis_pre = np.array([self._radial_poly_l_pre[self._l_modes.index(l)] *self._sph_pre[lm_idx] for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
         
         # for each lm mode we have num_sh, num_p, mesh grid dimensions
         self._full_basis_pre=self._full_basis_pre.reshape(tuple([len(self._sph_harm_lm),self._num_p]) + self._incident_mg[0].shape)
@@ -181,21 +176,18 @@ class CollisionOpSP():
             sph_post=self._spec.Vq_sph(Sd[1],Sd[2])
             
             if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
-                if spec_sp._q_mode == sp.QuadMode.GMX:
-                    Mp_r    = (scattering_mg[0])*V_TH
-                elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
-                    Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
-                else:
-                    Mr=None
-                    print("Unknown quadrature mode- inner product weight function is set to none.")
+                Mp_r    = (scattering_mg[0])*V_TH
+                
+                cc_collision = np.array([diff_cs * Mp_r * ((Sd[0]**(l)) * radial_poly_l_post[self._l_modes.index(l)] * sph_post[lm_idx] - (scattering_mg[0]**(l)) * self._radial_poly_l_pre_on_sg[self._l_modes.index(l)] *self._sph_pre_on_sg[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+                cc_collision = cc_collision.reshape(tuple([num_sh,num_p]) + scattering_mg[0].shape)
+
             elif self._r_basis_type == basis.BasisType.SPLINES:
                 Mp_r    = (scattering_mg[0]**3) * V_TH
+                cc_collision = np.array([diff_cs * Mp_r * (radial_poly_l_post[self._l_modes.index(l)] * sph_post[lm_idx] - self._radial_poly_l_pre_on_sg[self._l_modes.index(l)] *self._sph_pre_on_sg[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+                cc_collision = cc_collision.reshape(tuple([num_sh,num_p]) + scattering_mg[0].shape)
             
-            #print("Mr shape : ", Mp_r.shape)
-            cc_collision = np.array([diff_cs * Mp_r * ((Sd[0]**(l)) * radial_poly_l_post[self._l_modes.index(l)] * sph_post[lm_idx] - (scattering_mg[0]**(l)) * self._radial_poly_l_pre_on_sg[self._l_modes.index(l)] *self._sph_pre_on_sg[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
-            cc_collision = cc_collision.reshape(tuple([num_sh,num_p]) + scattering_mg[0].shape)
+            
             #print(cc_collision.shape)
-
             cc_collision = np.dot(cc_collision,WPhi_q)
             cc_collision = np.dot(cc_collision,glw_s)
 

@@ -50,6 +50,14 @@ def svd_truncate(FOp,r_tol=1e-6):
 
 def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, dt,t_tol, mode:CollissionMode):
     spec_sp = collOp._spec
+
+    t1=time()
+    M  = spec_sp.compute_mass_matrix()
+    t2=time()
+    print("Mass assembly time (s): ", (t2-t1))
+    print("Condition number of M= %.8E"%np.linalg.cond(M))
+    Minv = np.linalg.pinv(M)
+
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
@@ -64,17 +72,9 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
     temp_t0   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t0,1)
     vth_curr  = collisions.electron_thermal_velocity(temp_t0) 
-    print("Initial Ev : " , temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+    print("Initial Ev : "   , temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+    print("Initial mass : " , m0_t0 )
     
-    t1=time()
-    M  = spec_sp.compute_mass_matrix()
-    t2=time()
-    print("Mass assembly time (s): ", (t2-t1))
-    print("Condition number of M= %.8E"%np.linalg.cond(M))
-    #print(M)
-
-    Minv = np.linalg.inv(M)
-
     if(mode == CollissionMode.ELASTIC_ONLY):
         g0  = collisions.eAr_G0()
         g0.reset_scattering_direction_sp_mat()
@@ -156,17 +156,20 @@ parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a
 args = parser.parse_args()
 
 run_data=list()
-ev     = np.linspace(0.3,40,1000)
-eedf   = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
+ev           = np.linspace(0.3,40,1000)
+eedf         = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
+SPLINE_ORDER = 2
+basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
+basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=11
 for i, nr in enumerate(args.NUM_P_RADIAL):
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
-    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max) for j in range(i+1)]
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(i+1)]
 
-    # q_mode = sp.QuadMode.SIMPSON
+    #q_mode = sp.QuadMode.SIMPSON # q_mode = sp.QuadMode.GMX
+    
     # r_mode = basis.BasisType.SPLINES
-    # params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.BSPLINE_NUM_Q_PTS_PER_KNOT)
-
-    q_mode = sp.QuadMode.GMX
+    # params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+    
     r_mode = basis.BasisType.MAXWELLIAN_POLY
     params.BEVelocitySpace.NUM_Q_VR  = 300
     
@@ -179,7 +182,7 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     INIT_EV    = args.electron_volt
     collisions.MAXWELLIAN_TEMP_K   = INIT_EV * collisions.TEMP_K_1EV
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
-    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode,r_mode)
+    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode)
     spec  = cf._spec
     VTH   = collisions.ELECTRON_THEMAL_VEL
 

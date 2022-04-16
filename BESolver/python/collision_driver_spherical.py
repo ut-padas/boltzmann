@@ -144,39 +144,52 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
 
     return solution_vector
 
-parser.add_argument("-Nr", "--NUM_P_RADIAL", help="Number of polynomials in radial direction", nargs='+', type=int, default=[4,8,16,32,64])
-parser.add_argument("-Te", "--T_END", help="Simulation time", type=float, default=1e-6)
-parser.add_argument("-dt", "--T_DT", help="Simulation time step size ", type=float, default=1e-10)
-parser.add_argument("-o",  "--out_fname", help="output file name", type=str, default='.')
-parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-15)
-parser.add_argument("-l_max", "--l_max", help="max polar modes in SH expansion", type=int, default=1)
-parser.add_argument("-c", "--collision_mode", help="collision mode", type=str, default="g0")
-parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type=float, default=1.0)
-parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
+parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=[4,8,16,32,64])
+parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-6)
+parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-10)
+parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='.')
+parser.add_argument("-ts_tol", "--ts_tol"                     , help="adaptive timestep tolerance", type=float, default=1e-15)
+parser.add_argument("-l_max", "--l_max"                       , help="max polar modes in SH expansion", type=int, default=0)
+parser.add_argument("-c", "--collision_mode"                  , help="collision mode", type=str, default="g0")
+parser.add_argument("-ev", "--electron_volt"                  , help="initial electron volt", type=float, default=1.0)
+parser.add_argument("-q_vr", "--quad_radial"                  , help="quadrature in r"        , type=int, default=270)
+parser.add_argument("-q_vt", "--quad_theta"                   , help="quadrature in polar"    , type=int, default=2)
+parser.add_argument("-q_vp", "--quad_phi"                     , help="quadrature in azimuthal", type=int, default=2)
+parser.add_argument("-q_st", "--quad_s_theta"                 , help="quadrature in scattering polar"    , type=int, default=2)
+parser.add_argument("-q_sp", "--quad_s_phi"                   , help="quadrature in scattering azimuthal", type=int, default=2)
+parser.add_argument("-radial_poly", "--radial_poly"           , help="radial basis", type=str, default="maxwell")
+parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=2)
+parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=11)
+#parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
 
 run_data=list()
 ev           = np.linspace(0.3,40,1000)
 eedf         = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
-SPLINE_ORDER = 2
+SPLINE_ORDER = args.spline_order
 basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
-basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=11
+basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=args.spline_q_pts_per_knot
 for i, nr in enumerate(args.NUM_P_RADIAL):
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
     params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(i+1)]
 
     #q_mode = sp.QuadMode.SIMPSON # q_mode = sp.QuadMode.GMX
     
-    # r_mode = basis.BasisType.SPLINES
-    # params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+    if (args.radial_poly == "maxwell"):
+        r_mode = basis.BasisType.MAXWELLIAN_POLY
+        params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+
+    elif (args.radial_poly == "bspline"):
+        r_mode = basis.BasisType.SPLINES
+        params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+
+
+
     
-    r_mode = basis.BasisType.MAXWELLIAN_POLY
-    params.BEVelocitySpace.NUM_Q_VR  = 300
-    
-    params.BEVelocitySpace.NUM_Q_VT  = 4
-    params.BEVelocitySpace.NUM_Q_VP  = 4
-    params.BEVelocitySpace.NUM_Q_CHI = 2
-    params.BEVelocitySpace.NUM_Q_PHI = 2
+    params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta
+    params.BEVelocitySpace.NUM_Q_VP  = args.quad_phi
+    params.BEVelocitySpace.NUM_Q_CHI = args.quad_s_theta
+    params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 
     INIT_EV    = args.electron_volt
@@ -214,14 +227,14 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
 plt.legend()
 plt.yscale('log')
 plt.xlabel("time (s)")
-plt.ylabel("spectral tail l2(h[nr/2: ])")
+plt.ylabel("tail l2(h[nr/2: ])")
 
 
 plt.subplot(1, 2, 2)
 plt.plot(ev, eedf_initial, label="initial")
 for i, nr in enumerate(args.NUM_P_RADIAL):
     data=run_data[i]
-    plt.plot(ev, eedf[i],label="final")
+    plt.plot(ev, eedf[i],label="Nr=%d"%(nr))
 
 plt.xscale('log')
 plt.yscale('log')

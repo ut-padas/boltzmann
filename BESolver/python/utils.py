@@ -358,7 +358,7 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
         
         Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
         
-        MP_klm = np.array([ np.exp(-quad_grid[0]**2) *  Vq_radial_l[l_modes.index(l)] * Y_lm[lm_idx] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm)])
+        MP_klm = np.array([ np.exp(-quad_grid[0]**2) * quad_grid[0]**(l) * Vq_radial_l[l_modes.index(l)] * Y_lm[lm_idx] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm)])
         MP_klm = np.dot(MP_klm,WVPhi_q)
         MP_klm = np.dot(MP_klm,glw)
         MP_klm = np.swapaxes(MP_klm,0,1)

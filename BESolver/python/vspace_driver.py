@@ -28,6 +28,7 @@ parser.add_argument("-T ", "--T", help="Simulation time", type=float, default=1e
 parser.add_argument("-dt", "--dt", help="split timestep",  type=float, default=1e-5)
 parser.add_argument("-ts_tol", "--ts_tol", help="adaptive timestep tolerance", type=float, default=1e-15)
 parser.add_argument("-c", "--collision_mode", help="collision mode", type=str, default="g0")
+parser.add_argument("-l_max", "--l_max", help="max polar modes in SH expansion", type=int, default=0)
 parser.add_argument("-ev", "--electron_volt", help="initial electron volt", type=float, default=1.0)
 parser.add_argument("-o", "--f_prefix", help="file prefix for plots", type=str, default="vspace_")
 args = parser.parse_args()
@@ -104,7 +105,7 @@ def second_order_split(E : np.array, y0: np.array, cf : colOpSp.CollisionOpSP, t
     spec      = cf._spec
     
     M=spec.compute_mass_matrix()
-    Minv = np.linalg.inv(M)
+    Minv = np.linalg.pinv(M)
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
 
     def collission_rhs(t,y, C, n0):
@@ -154,7 +155,11 @@ def second_order_split(E : np.array, y0: np.array, cf : colOpSp.CollisionOpSP, t
         
         return [f_t,v0]
 
-
+params.BEVelocitySpace.NUM_Q_VT  = 16
+params.BEVelocitySpace.NUM_Q_VP  = 4
+params.BEVelocitySpace.NUM_Q_CHI = 2
+params.BEVelocitySpace.NUM_Q_PHI = 2
+   
 E  = np.array([-1,-1,-1]) * 100 #* collisions.ELECTRON_CHARGE /collisions.MASS_ELECTRON
 ev = np.linspace(0,50, 100)
 b_eedf_0 = np.zeros((len(args.NUM_P_RADIAL), len(ev)))
@@ -170,22 +175,13 @@ for run_k, nr in enumerate(args.NUM_P_RADIAL):
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
 
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr #args.NUM_P_RADIAL[0]
-    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(-i,i+1)]
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
 
-    q_mode = sp.QuadMode.SIMPSON
     r_mode = basis.BasisType.SPLINES
-    basis.BSPLINE_NUM_Q_PTS_PER_KNOT = 3
-    basis.BSPLINE_BASIS_ORDER        = 1
-    params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.BSPLINE_NUM_Q_PTS_PER_KNOT)
+    basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT = 11
+    basis.BSPLINE_BASIS_ORDER          = 2
+    params.BEVelocitySpace.NUM_Q_VR  = basis.XlBSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
 
-    # q_mode = sp.QuadMode.GMX
-    # r_mode = basis.BasisType.MAXWELLIAN_POLY
-    # params.BEVelocitySpace.NUM_Q_VR  = 300
-
-    params.BEVelocitySpace.NUM_Q_VT  = 2
-    params.BEVelocitySpace.NUM_Q_VP  = 2
-    params.BEVelocitySpace.NUM_Q_CHI = 2
-    params.BEVelocitySpace.NUM_Q_PHI = 2
     print("parameters : ", args)
 
 
@@ -198,13 +194,13 @@ for run_k, nr in enumerate(args.NUM_P_RADIAL):
     print("""============================================================""")
     params.print_parameters()
 
-    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode,r_mode)
+    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, poly_type = r_mode)
     spec  = cf._spec
     print("E field : ", E)
     v0 = np.array([0,0,0])
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
     hv         = lambda v,vt,vp : np.ones_like(v)
-    f0         = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
+    f0         = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
 
     [ft,vt]         = second_order_split(E, f0, cf  ,args.T, args.dt, v0)
 
@@ -232,22 +228,11 @@ for run_k, nr in enumerate(args.NUM_P_RADIAL):
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
 
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr #args.NUM_P_RADIAL[0]
-    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(1) for j in range(-i,i+1)]
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
 
-    # q_mode = sp.QuadMode.SIMPSON
-    # r_mode = basis.BasisType.SPLINES
-    # basis.BSPLINE_NUM_Q_PTS_PER_KNOT = 3
-    # basis.BSPLINE_BASIS_ORDER        = 1
-    # params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,basis.BSPLINE_BASIS_ORDER,basis.BSPLINE_NUM_Q_PTS_PER_KNOT)
-
-    q_mode = sp.QuadMode.GMX
     r_mode = basis.BasisType.MAXWELLIAN_POLY
-    params.BEVelocitySpace.NUM_Q_VR  = 300
+    params.BEVelocitySpace.NUM_Q_VR  = 270
 
-    params.BEVelocitySpace.NUM_Q_VT  = 2
-    params.BEVelocitySpace.NUM_Q_VP  = 2
-    params.BEVelocitySpace.NUM_Q_CHI = 2
-    params.BEVelocitySpace.NUM_Q_PHI = 2
     print("parameters : ", args)
 
 
@@ -260,13 +245,13 @@ for run_k, nr in enumerate(args.NUM_P_RADIAL):
     print("""============================================================""")
     params.print_parameters()
 
-    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,q_mode,r_mode)
+    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, poly_type= r_mode)
     spec  = cf._spec
     print("E field : ", E)
     v0 = np.array([0,0,0])
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
     hv         = lambda v,vt,vp : np.ones_like(v)
-    f0         = BEUtils.compute_func_projection_coefficients(spec,hv,maxwellian,None,None,None)
+    f0         = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
 
     [ft,vt]         = second_order_split(E, f0, cf  ,args.T, args.dt, v0)
 

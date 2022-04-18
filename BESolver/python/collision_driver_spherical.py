@@ -46,6 +46,22 @@ def svd_truncate(FOp,r_tol=1e-6):
     FOp_svd = np.matmul(u[:, 0:s_k], np.matmul(np.diag(s[0:s_k]), v[0:s_k,:]))  
     print("SVD after truncation rel. error : %.12E"%(np.linalg.norm(FOp_svd-FOp)/np.linalg.norm(FOp)))
     return FOp_svd
+
+
+def constant_r_eval(spec : sp.SpectralExpansionSpherical, cf, r):
+    theta = np.linspace(0,np.pi,50)
+    phi   = np.linspace(0,2*np.pi,100)
+    grid  = np.meshgrid(theta, phi, indexing='ij')
+    
+    num_p  = spec._p + 1
+    num_sh = len(spec._sph_harm_lm)
+    
+    b_eval = np.array([ spec.basis_eval_radial(k,l,r) * spec.basis_eval_spherical(grid[0],grid[1],l,m) for lm_idx, (l,m) in enumerate(spec._sph_harm_lm) for k in range(num_p)])
+    b_eval = b_eval.reshape(num_sh,num_p, -1)
+    b_eval = np.swapaxes(b_eval,0,1)
+    b_eval = b_eval.reshape(num_p * num_sh,-1)
+    
+    return np.dot(cf, b_eval).reshape(50,100), theta, phi
     
 
 def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, dt,t_tol, mode:CollissionMode):
@@ -76,7 +92,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     print("Initial mass : " , m0_t0 )
     
     if(mode == CollissionMode.ELASTIC_ONLY):
-        g0  = collisions.eAr_G0()
+        g0  = collisions.eAr_G0_NoEnergyLoss()
         g0.reset_scattering_direction_sp_mat()
         t1=time()
         FOp = collOp.assemble_mat(g0,mw_vth,vth_curr)
@@ -147,10 +163,10 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
 parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=[4,8,16,32,64])
 parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-6)
 parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-10)
-parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='.')
+parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='coll_op')
 parser.add_argument("-ts_tol", "--ts_tol"                     , help="adaptive timestep tolerance", type=float, default=1e-15)
 parser.add_argument("-l_max", "--l_max"                       , help="max polar modes in SH expansion", type=int, default=0)
-parser.add_argument("-c", "--collision_mode"                  , help="collision mode", type=str, default="g0")
+parser.add_argument("-c", "--collision_mode"                  , help="collision mode g- elastic with no E loss, g0-elastic", type=str, default="g0")
 parser.add_argument("-ev", "--electron_volt"                  , help="initial electron volt", type=float, default=1.0)
 parser.add_argument("-q_vr", "--quad_radial"                  , help="quadrature in r"        , type=int, default=270)
 parser.add_argument("-q_vt", "--quad_theta"                   , help="quadrature in polar"    , type=int, default=2)
@@ -171,10 +187,7 @@ basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
 basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=args.spline_q_pts_per_knot
 for i, nr in enumerate(args.NUM_P_RADIAL):
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
-    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(i+1)]
-
-    #q_mode = sp.QuadMode.SIMPSON # q_mode = sp.QuadMode.GMX
-    
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
     if (args.radial_poly == "maxwell"):
         r_mode = basis.BasisType.MAXWELLIAN_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
@@ -183,9 +196,6 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
         r_mode = basis.BasisType.SPLINES
         params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
 
-
-
-    
     params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta
     params.BEVelocitySpace.NUM_Q_VP  = args.quad_phi
     params.BEVelocitySpace.NUM_Q_CHI = args.quad_s_theta
@@ -207,28 +217,42 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     params.print_parameters()
 
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    hv         = lambda v,vt,vp : np.ones_like(v)
+    hv         = lambda v,vt,vp : np.ones_like(v) +  np.tan(vt)  
     h_vec      = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
     data       = solve_collop(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_ONLY)
     #data       = solve_collop(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_W_IONIZATION)
     eedf[i]      = BEUtils.get_eedf(ev, spec, data[-1,:], maxwellian, VTH, 1)
     eedf_initial = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH, 1)
+    # print("i:", data[0])
+    # print("f:", data[-1])
     run_data.append(data)
 
 
 import matplotlib.pyplot as plt
-fig = plt.figure()#(figsize=(6, 6), dpi=300)
+fig = plt.figure(figsize=(10, 4), dpi=300)
 
-ts= np.linspace(0,args.T_END, int(args.T_END/args.T_DT))
-plt.subplot(1, 2, 1)
-for i, nr in enumerate(args.NUM_P_RADIAL):
-    plt.plot(ts, spec_tail_timeseries(run_data[i],nr, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
+if (args.radial_poly == "maxwell"):
+    ts= np.linspace(0,args.T_END, int(args.T_END/args.T_DT))
+    plt.subplot(1, 2, 1)
+    for i, nr in enumerate(args.NUM_P_RADIAL):
+        plt.plot(ts, spec_tail_timeseries(run_data[i],nr, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
 
-plt.legend()
-plt.yscale('log')
-plt.xlabel("time (s)")
-plt.ylabel("tail l2(h[nr/2: ])")
+    plt.legend()
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.xlabel("time (s)")
+    plt.ylabel("tail l2(h[nr/2: ])")
 
+elif (args.radial_poly == "bspline"):
+    plt.subplot(1, 2, 1)
+    for i, nr in enumerate(args.NUM_P_RADIAL):
+        plt.plot(ev, np.abs(eedf[i]-eedf[-1]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.legend()
+    plt.xlabel("energy (ev)")
+    plt.ylabel("error in eedf")
 
 plt.subplot(1, 2, 2)
 plt.plot(ev, eedf_initial, label="initial")
@@ -243,7 +267,27 @@ plt.xlabel("energy (ev)")
 plt.ylabel("eedf")
 plt.tight_layout()
 
-plt.show()
+#plt.show()
+plt.savefig("%s.png"%(args.out_fname))
+plt.close()
+
+fig = plt.figure(figsize=(10, 4), dpi=300)
+plt.subplot(1,2,1)
+polar_plot, _ , __ = constant_r_eval(spec,run_data[-1][0,:],1)
+plt.imshow(polar_plot,extent=[0,2*np.pi,0,np.pi])
+plt.colorbar()
+plt.xlabel("azimuthal angle")
+plt.ylabel("polar angle")
+plt.title("initial, v_r = 1")
+
+plt.subplot(1,2,2)
+polar_plot, _ , __ = constant_r_eval(spec,run_data[-1][-1,:],1)
+plt.imshow(polar_plot,extent=[0,2*np.pi,0,np.pi])
+plt.colorbar()
+plt.xlabel("azimuthal angle")
+plt.ylabel("polar angle")
+plt.title("final, v_r = 1")
+plt.savefig("%s_const_r.png"%(args.out_fname))
 
 
 # for i in range(eedf.shape[0]-1):

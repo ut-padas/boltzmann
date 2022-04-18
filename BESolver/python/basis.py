@@ -258,8 +258,8 @@ class XlBSpline(Basis):
         # first and last splines have repeated knots, 
         num_k            = 2*spline_order + (num_p -2) + 2
         self._t          = (k_domain[0])*np.ones(spline_order+1)
-        knot_base        = 10
-        self._t          = np.append(self._t,np.logspace(-2, np.log(k_domain[1]-2)/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base))
+        knot_base        = 1.5
+        self._t          = np.append(self._t,np.logspace(-4, np.log(k_domain[1]-2)/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base))
         self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
         #print("len_t ",len(self._t) , " num_k ",num_k)
         self._num_c_pts  = num_p

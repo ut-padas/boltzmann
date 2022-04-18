@@ -298,7 +298,7 @@ Let $H_k (x)$ be the sequence of Hermite polynomials, defined on $(\infty,infty)
     \int_{-\infty}^{\infty} w(x) f(x) \approx \sum_{q=1}^{n} w_i f(x_i)
 \end{equation} where, $x_i$ are the roots of $H_n(x)$, and $w_i$ are the corresponding weights for the Gaussian quadrature. 
 
-\section{Collision operator with Maxwell polynomials}
+\section{Computation of the collision operator}
 As described in~\S\ref{subsec:binary_reactions} we can write the binary collision operator as below.  
 \begin{align*}
 \myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
@@ -389,6 +389,12 @@ E_f(\epsilon) &= \myint_{S^2} f\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\rig
 E_f(\epsilon) &= \myint_{S^2} \sum_{klm} \exp(-\frac{2\epsilon}{m_e}) \hat{f}_{klm} \Phi_{klm}\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\right)} \diff{\omega}
 \end{align*}
 
+\subsection{Collision operator using B-splines}
+\begin{align*}
+M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
+\Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
+\Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
+\end{align*}where $P_k,P_p$ denotes the B-splines polynomials.  
 
 
 

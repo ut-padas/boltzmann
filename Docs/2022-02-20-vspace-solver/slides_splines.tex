@@ -143,6 +143,168 @@
 %\hoffset=0in
 % -- end title slide ---------------------------------------------
 
+\begin{frame}{Collision operator with corrected basis}
+	\begin{columns}
+		\begin{column}{0.5\textwidth}
+			Maxwell polynomials
+			\small
+			\begin{align*}
+				\Phi_{klm} (\vect{v}) &= \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  P_{kl}\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
+				\Psi_{pqs} (\vect{v}) &= P_{pq}\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
+			\end{align*}
+			\begin{itemize}
+				\item Mass matrix is orthonomal.  
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.5\textwidth}
+			B-Splines 
+			\small
+			\begin{align*}
+			\Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
+			\Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
+			\end{align*}
+			\begin{itemize}
+				\item ill-conditioning of the mass matrix treated with pseudo inverse. 
+				\item knots are placed in log scale
+				\item pseudo inverse allows placing knots closer to $v=0$
+			\end{itemize}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}
+\frametitle{Discretized collision kernel with Maxwell (T=3eV) singular values}
+\begin{table}
+	\centering
+	\begin{tabular}{cc}
+		$l_{max}=0$ &  $l_{max}=1$ \\
+		\includegraphics[width=0.3\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
+		\includegraphics[width=0.3\textwidth]{figures/m_spectrum_3ev_l_max_1.png} 
+	\end{tabular}
+\end{table}
+Currently the differential cross section is uniform across all scattering angles. 
+\end{frame}
+
+
+\begin{frame}
+	\frametitle{Discretized collision kernel (T=3eV) singular values}
+	\only<+>{
+	\begin{table}
+		\centering
+		\begin{tabular}{cc}
+			Maxwell &  linear splines \\
+			\includegraphics[width=0.35\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
+			\includegraphics[width=0.35\textwidth]{figures/b_sp1_spectrum_3ev_l_max_0.png} 
+		\end{tabular}
+	\end{table}}
+	\only<+>{
+	\begin{table}
+		\centering
+		\begin{tabular}{cc}
+			Maxwell &  quadratic splines \\
+			\includegraphics[width=0.35\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
+			\includegraphics[width=0.35\textwidth]{figures/b_sp2_spectrum_3ev_l_max_0.png} 
+		\end{tabular}
+\end{table}}
+	\only<+>{
+	\begin{table}
+		\centering
+		\begin{tabular}{cc}
+			Maxwell &  cubic splines \\
+			\includegraphics[width=0.35\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
+			\includegraphics[width=0.35\textwidth]{figures/b_sp3_spectrum_3ev_l_max_0.png} 
+		\end{tabular}
+\end{table}}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Elastic collisions (with energy transfer)}
+	\only<+>{
+		Using T(t=0)=1eV, T=1e-6 s
+		\begin{table}
+			\centering
+			\begin{tabular}{cc}
+				Maxwell &   quadratic splines\\
+				\includegraphics[width=0.48\textwidth]{figures/m_1ev_1e-6.png} & 
+				\includegraphics[width=0.48\textwidth]{figures/b_sp2_1ev_1e-6.png} 
+			\end{tabular}
+	\end{table}
+	}
+	\only<+>{
+	Using T(t=0)=3eV, T=1e-6 s
+	\begin{table}
+		\centering
+		\begin{tabular}{cc}
+			Maxwell &   quadratic splines\\
+			\includegraphics[width=0.48\textwidth]{figures/m_3ev_1e-6.png} & 
+			\includegraphics[width=0.48\textwidth]{figures/b_sp2_3ev_1e-6.png} 
+		\end{tabular}
+	\end{table}
+	}
+
+	\only<+>{
+	Using T(t=0)=5eV, T=1e-6 s
+	\begin{table}
+		\centering
+		\begin{tabular}{cc}
+			Maxwell &   quadratic splines\\
+			\includegraphics[width=0.48\textwidth]{figures/m_5ev_1e-6.png} & 
+			\includegraphics[width=0.48\textwidth]{figures/b_sp2_5ev_1e-6.png} 
+		\end{tabular}
+	\end{table}
+	}
+	
+	\only<+>{
+		Using T(t=0)=5eV, T=5e-6 s,
+		\begin{table}
+			\centering
+			\begin{tabular}{cc}
+				Maxwell &   quadratic splines\\
+				\includegraphics[width=0.48\textwidth]{figures/m_5ev_5e-6.png} & 
+				\includegraphics[width=0.48\textwidth]{figures/b_sp2_5ev_5e-6.png} 
+			\end{tabular}
+		\end{table}
+	}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Accuracy tests}
+	With elastic collisions without energy transfer and with angle independent differential cross section, isotropic distribution should stay isotropic during evolution. We start with $f(\vect{v},t=0) = M(\vect{v})$
+	
+	\begin{table}
+		\centering
+		\begin{tabular}{cc}
+			Maxwell &   quadratic splines\\
+			\includegraphics[width=0.48\textwidth]{figures/m_no_e_loss_1ev_1e-6.png} & 
+			\includegraphics[width=0.48\textwidth]{figures/b_sp2_no_e_loss_1ev_1e-6.png} 
+		\end{tabular}
+	\end{table}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Accuracy tests}
+	With elastic collisions without energy transfer and with angle independent differential cross section, if we start with aisotropic distribution we should reach isotropic distribution eventually. We start with $f(\vect{v},t=0) = M(\vect{v}) (1 + \tan v_\theta)$, evolved for time horizon T=4e-6 s.
+	
+	\only<+>
+	{
+		\begin{figure}
+			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6.png}
+		\end{figure}
+	}
+	\only<+>
+	{
+		\begin{figure}
+			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_const_r.png}
+		\end{figure}
+	}
+\end{frame}
+
+
+\begin{frame}
+\end{frame}
+
+
+
 
 \begin{frame}
 \frametitle{V-space solver (with operator splitting)}

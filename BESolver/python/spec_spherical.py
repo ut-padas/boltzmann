@@ -26,7 +26,7 @@ class SpectralExpansionSpherical:
         """
         self._sph_harm_lm = sph_harm_lm
         self._p = p_order
-        self._num_q_radial=300
+        self._num_q_radial=270
         self._domain = domain
         self._window = window
 

@@ -92,7 +92,8 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     print("Initial mass : " , m0_t0 )
     
     if(mode == CollissionMode.ELASTIC_ONLY):
-        g0  = collisions.eAr_G0_NoEnergyLoss()
+        # g0  = collisions.eAr_G0_NoEnergyLoss()
+        g0  = collisions.eAr_G0()
         g0.reset_scattering_direction_sp_mat()
         t1=time()
         FOp = collOp.assemble_mat(g0,mw_vth,vth_curr)
@@ -160,7 +161,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
 
     return solution_vector
 
-parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=[4,8,16,32,64])
+parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=[4,8,16,32,64,128,256])
 parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-6)
 parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-10)
 parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='coll_op')
@@ -180,7 +181,7 @@ parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points p
 args = parser.parse_args()
 
 run_data=list()
-ev           = np.linspace(0.3,40,1000)
+ev     = np.linspace(args.electron_volt/50.,100.*args.electron_volt,1000)
 eedf         = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
 SPLINE_ORDER = args.spline_order
 basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
@@ -190,6 +191,10 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
     if (args.radial_poly == "maxwell"):
         r_mode = basis.BasisType.MAXWELLIAN_POLY
+        params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+        
+    elif (args.radial_poly == "laguerre"):
+        r_mode = basis.BasisType.LAGUERRE
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
 
     elif (args.radial_poly == "bspline"):
@@ -229,6 +234,70 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
 
 
 import matplotlib.pyplot as plt
+
+if (1):
+    plt.subplot(1, 5, 1)
+    for i, nr in enumerate(args.NUM_P_RADIAL):
+        data=run_data[i]
+        plt.plot(abs(data[1,:]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+    plt.yscale('log')
+    plt.xlabel("Coeff. #")
+    plt.ylabel("Coeff. magnitude")
+    plt.grid()
+    plt.legend()
+
+    plt.subplot(1, 5, 2)
+    for i, nr in enumerate(args.NUM_P_RADIAL):
+        data=run_data[i]
+        plt.plot(abs(data[-1,:]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+    plt.yscale('log')
+    plt.xlabel("Coeff. #")
+    plt.ylabel("Coeff. magnitude")
+    plt.grid()
+    plt.legend()
+
+    plt.subplot(1, 5, 3)
+    for i, nr in enumerate(args.NUM_P_RADIAL):
+        data_last=run_data[-1]
+        data=run_data[i]
+        plt.plot(abs(data[-1,:] - data_last[-1,0:len(data[-1,:])]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+    plt.yscale('log')
+    plt.xlabel("Coeff. #")
+    plt.ylabel("Error in coeff. magnitude")
+    plt.grid()
+    plt.legend()
+
+    ts= np.linspace(0,args.T_END, int(args.T_END/args.T_DT))
+    plt.subplot(1, 5, 4)
+    for i, nr in enumerate(args.NUM_P_RADIAL):
+        plt.plot(ts, spec_tail_timeseries(run_data[i],nr, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+    plt.legend()
+    plt.yscale('log')
+    plt.xlabel("time (s)")
+    plt.ylabel("spectral tail l2(h[nr/2: ])")
+    plt.grid()
+
+
+    plt.subplot(1, 5, 5)
+    plt.plot(ev, eedf_initial, label="initial")
+    for i, nr in enumerate(args.NUM_P_RADIAL):
+        data=run_data[i]
+        plt.plot(ev, abs(eedf[i]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+    # plt.xscale('log')
+    plt.yscale('log')
+    plt.legend()
+    plt.xlabel("energy (ev)")
+    plt.ylabel("eedf")
+    # plt.tight_layout()
+    plt.grid()
+
+    plt.show()
+
 fig = plt.figure(figsize=(10, 4), dpi=300)
 
 if (args.radial_poly == "maxwell"):
@@ -260,7 +329,7 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     data=run_data[i]
     plt.plot(ev, eedf[i],label="Nr=%d"%(nr))
 
-plt.xscale('log')
+#plt.xscale('log')
 plt.yscale('log')
 plt.legend()
 plt.xlabel("energy (ev)")

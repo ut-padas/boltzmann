@@ -38,6 +38,11 @@ class CollisionOpSP():
 
             self._spec = sp.SpectralExpansionSpherical(self._p,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
+
+        elif self._r_basis_type == basis.BasisType.LAGUERRE:
+
+            self._spec = sp.SpectralExpansionSpherical(self._p,basis.Laguerre(),params.BEVelocitySpace.SPH_HARM_LM)
+            self._spec._q_mode = q_mode
         
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order = basis.BSPLINE_BASIS_ORDER
@@ -69,7 +74,7 @@ class CollisionOpSP():
         self._num_p            = spec_sp._p +1
         self._num_sh           = len(spec_sp._sph_harm_lm)
 
-        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
             [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
         elif self._r_basis_type == basis.BasisType.SPLINES:
             [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR,True)
@@ -114,7 +119,7 @@ class CollisionOpSP():
         self._sph_pre       = self._spec.Vq_sph(self._incident_mg[1],self._incident_mg[2])
         self._sph_pre_on_sg = self._spec.Vq_sph(self._scattering_mg[1],self._scattering_mg[2])
 
-        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
             self._full_basis_pre = np.array([(self._incident_mg[0]**(l)) * self._radial_poly_l_pre[self._l_modes.index(l)] *self._sph_pre[lm_idx] for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
         elif self._r_basis_type == basis.BasisType.SPLINES:
             self._full_basis_pre = np.array([self._radial_poly_l_pre[self._l_modes.index(l)] *self._sph_pre[lm_idx] for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
@@ -175,7 +180,7 @@ class CollisionOpSP():
             # sph eval at post collission points. 
             sph_post=self._spec.Vq_sph(Sd[1],Sd[2])
             
-            if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+            if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
                 Mp_r    = (scattering_mg[0])*V_TH
                 
                 cc_collision = np.array([diff_cs * Mp_r * ((Sd[0]**(l)) * radial_poly_l_post[self._l_modes.index(l)] * sph_post[lm_idx] - (scattering_mg[0]**(l)) * self._radial_poly_l_pre_on_sg[self._l_modes.index(l)] *self._sph_pre_on_sg[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
@@ -230,7 +235,7 @@ class CollisionOpSP():
             Yp1_lm   = spec_sp.Vq_sph(Sd1[1],Sd1[2])
             Yp2_lm   = spec_sp.Vq_sph(Sd2[1],Sd2[2])
 
-            if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
+            if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
                 if spec_sp._q_mode == sp.QuadMode.GMX:
                     Mp_r    = (scattering_mg[0])*V_TH
                 elif spec_sp._q_mode == sp.QuadMode.SIMPSON:

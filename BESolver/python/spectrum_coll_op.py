@@ -69,6 +69,10 @@ for i, nr in enumerate(Nr):
         r_mode = basis.BasisType.MAXWELLIAN_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
 
+    elif (args.radial_poly == "laguerre"):
+        r_mode = basis.BasisType.LAGUERRE
+        params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+
     elif (args.radial_poly == "bspline"):
         r_mode = basis.BasisType.SPLINES
         params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)

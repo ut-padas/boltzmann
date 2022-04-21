@@ -38,28 +38,14 @@ def gaussian(v,mu=None,sigma=1.0):
     return ( 1.0/(sigma * np.sqrt(2 * np.pi)) ) * np.exp(-0.5 * np.linalg.norm((v-mu),2)**2/(sigma**2))
 
 def cartesian_to_spherical(vx,vy,vz):
-    v_abs = np.sqrt(vx**2 + vy**2 + vz**2)
-    check_1  = np.isclose(v_abs,0.0)
-    check_2  = np.isclose(vx,0.0)
-
-    not_check_1 = np.logical_not(check_1)
-    not_check_2 = np.logical_not(check_2)
     
-    not_check_1_and_check_2 = np.logical_and(not_check_1,not_check_2)
+    r1              = np.sqrt(vx**2 + vy**2 + vz**2)
     
-    vr = np.zeros_like(v_abs)
-    vt = np.zeros_like(v_abs)
-    vp = np.zeros_like(v_abs)
+    theta_p         = np.arccos(np.divide(vz, r1, where=r1!= 0))
+    phi_p           = np.arctan2(vy, vx)
+    phi_p           = phi_p % (2 * np.pi)
 
-    vr = v_abs
-    vt[not_check_1_and_check_2] =  np.arccos(vz[not_check_1_and_check_2]/v_abs[not_check_1_and_check_2])
-    vp[not_check_1_and_check_2] =  np.arctan(vy[not_check_1_and_check_2]/vx[not_check_1_and_check_2])
-
-    # to fix the range to 0-2pi
-    vp[vp < 0]+= (np.pi * 2)
-    vp[check_2]                 =  np.pi/2
-    
-    return [vr,vt,vp]
+    return [r1,theta_p,phi_p]
 
 def spherical_to_cartesian(v_abs, v_theta, v_phi):
     return [v_abs * np.sin(v_theta) * np.cos(v_phi), v_abs * np.sin(v_theta) * np.sin(v_phi), v_abs * np.cos(v_theta)]

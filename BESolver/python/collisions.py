@@ -114,6 +114,9 @@ class Collisions(abc.ABC):
         ei      = np.array([1.0,0.0,0.0])
         theta   = np.arccos(np.dot(E0,ei))
         s_theta = np.sin(theta[index_set])
+        
+        ## 04/21/22 : note this is only needed for b-spline case since it has 0 in the velocity bounds
+        s_theta[s_theta==0]+=np.finfo(float).eps
 
         E1    = np.cross(E0,ei)
         E1[index_set,0] = E1[index_set,0]/s_theta

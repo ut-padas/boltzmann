@@ -177,6 +177,7 @@ class CollisionOpSP():
             for l in self._l_modes:
                 radial_poly_l_post.append(self._spec.Vq_r(Sd[0],l))
 
+            #print("sc mag : ", np.allclose(scattering_mg[0], Sd[0], rtol=np.finfo(float).eps/2 ,  atol=1e-14))
             # sph eval at post collission points. 
             sph_post=self._spec.Vq_sph(Sd[1],Sd[2])
             
@@ -191,8 +192,6 @@ class CollisionOpSP():
                 cc_collision = np.array([diff_cs * Mp_r * (radial_poly_l_post[self._l_modes.index(l)] * sph_post[lm_idx] - self._radial_poly_l_pre_on_sg[self._l_modes.index(l)] *self._sph_pre_on_sg[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
                 cc_collision = cc_collision.reshape(tuple([num_sh,num_p]) + scattering_mg[0].shape)
             
-            
-            #print(cc_collision.shape)
             cc_collision = np.dot(cc_collision,WPhi_q)
             cc_collision = np.dot(cc_collision,glw_s)
 
@@ -203,7 +202,7 @@ class CollisionOpSP():
             cc_collision = np.dot(cc_collision,glw)
             cc_collision = np.dot(cc_collision,gmw)
             cc_collision = cc_collision.reshape((num_p*num_sh,num_p*num_sh))
-            #print(cc_collision.shape)
+            
             return cc_collision
             
         elif(g._type == collisions.CollisionType.EAR_G2):

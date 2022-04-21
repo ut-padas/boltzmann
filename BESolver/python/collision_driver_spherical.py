@@ -30,10 +30,10 @@ collisions.AR_IONIZED_N=collisions.MAXWELLIAN_N
 parser = argparse.ArgumentParser()
 
 def spec_tail(cf, num_p, num_sh):
-    return np.linalg.norm(cf[num_p//2 * num_sh :])
+    return np.linalg.norm(cf[(num_p//2) * num_sh :])
 
 def spec_tail_timeseries(cf, num_p, num_sh):
-    return np.array([np.linalg.norm(cf[i, num_p//2 * num_sh :]) for i in range(data.shape[0])])
+    return np.array([np.linalg.norm(cf[i, (num_p//2) * num_sh :])/len(cf[i, (num_p//2) * num_sh :]) for i in range(data.shape[0])])
 
 
 def svd_truncate(FOp,r_tol=1e-6):
@@ -56,7 +56,7 @@ def constant_r_eval(spec : sp.SpectralExpansionSpherical, cf, r):
     num_p  = spec._p + 1
     num_sh = len(spec._sph_harm_lm)
     
-    b_eval = np.array([ spec.basis_eval_radial(k,l,r) * spec.basis_eval_spherical(grid[0],grid[1],l,m) for lm_idx, (l,m) in enumerate(spec._sph_harm_lm) for k in range(num_p)])
+    b_eval = np.array([ np.exp(-r**2) * spec.basis_eval_radial(r,k,l) * spec.basis_eval_spherical(grid[0],grid[1],l,m) for lm_idx, (l,m) in enumerate(spec._sph_harm_lm) for k in range(num_p)])
     b_eval = b_eval.reshape(num_sh,num_p, -1)
     b_eval = np.swapaxes(b_eval,0,1)
     b_eval = b_eval.reshape(num_p * num_sh,-1)
@@ -92,7 +92,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     print("Initial mass : " , m0_t0 )
     
     if(mode == CollissionMode.ELASTIC_ONLY):
-        # g0  = collisions.eAr_G0_NoEnergyLoss()
+        #g0  = collisions.eAr_G0_NoEnergyLoss()
         g0  = collisions.eAr_G0()
         g0.reset_scattering_direction_sp_mat()
         t1=time()
@@ -100,9 +100,9 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         t2=time()
         print("Assembled the collision op. for Vth : ", vth_curr)
         print("Collision Operator assembly time (s): ",(t2-t1))
-        #print("FOp: ",FOp)
-        #print("Condition number of C= %.8E"%np.linalg.cond(FOp))
         FOp = np.matmul(Minv,FOp)
+        #print(3e22*FOp)
+        print("Condition number of C= %.8E"%np.linalg.cond(FOp))
         #print("Condition number of n0 x (M^-1 x C)= ",np.linalg.cond(FOp))
         # u,s,v = np.linalg.svd(FOp)
         # print("Singular values of FOp:", s)
@@ -228,14 +228,13 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     #data       = solve_collop(cf, h_vec, maxwellian, VTH, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_W_IONIZATION)
     eedf[i]      = BEUtils.get_eedf(ev, spec, data[-1,:], maxwellian, VTH, 1)
     eedf_initial = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH, 1)
-    # print("i:", data[0])
-    # print("f:", data[-1])
     run_data.append(data)
 
 
 import matplotlib.pyplot as plt
 
 if (1):
+    fig = plt.figure(figsize=(12, 4), dpi=300)
     plt.subplot(1, 5, 1)
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data=run_data[i]
@@ -296,7 +295,8 @@ if (1):
     # plt.tight_layout()
     plt.grid()
 
-    plt.show()
+    #plt.show()
+    plt.savefig("%s_coeff.png"%(args.out_fname))
 
 fig = plt.figure(figsize=(10, 4), dpi=300)
 
@@ -304,7 +304,7 @@ if (args.radial_poly == "maxwell"):
     ts= np.linspace(0,args.T_END, int(args.T_END/args.T_DT))
     plt.subplot(1, 2, 1)
     for i, nr in enumerate(args.NUM_P_RADIAL):
-        plt.plot(ts, spec_tail_timeseries(run_data[i],nr, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
+        plt.plot(ts, spec_tail_timeseries(run_data[i],nr+1, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
 
     plt.legend()
     plt.yscale('log')
@@ -353,6 +353,7 @@ plt.subplot(1,2,2)
 polar_plot, _ , __ = constant_r_eval(spec,run_data[-1][-1,:],1)
 plt.imshow(polar_plot,extent=[0,2*np.pi,0,np.pi])
 plt.colorbar()
+plt.clim(np.min(polar_plot),np.max(polar_plot)*1.01)
 plt.xlabel("azimuthal angle")
 plt.ylabel("polar angle")
 plt.title("final, v_r = 1")

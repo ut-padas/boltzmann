@@ -89,10 +89,14 @@ for i, nr in enumerate(Nr):
     mm    = spec.compute_mass_matrix()
     mm    = np.linalg.inv(mm)
 
-    g0  = collisions.eAr_G0()
-    g0.reset_scattering_direction_sp_mat()
+    if args.collision_mode == "g0":
+        g  = collisions.eAr_G0()
+    if args.collision_mode == "g2":
+        g  = collisions.eAr_G2()
+        
+    g.reset_scattering_direction_sp_mat()
     t1=time()
-    FOp = cf.assemble_mat(g0,maxwellian,VTH)
+    FOp = cf.assemble_mat(g,maxwellian,VTH)
     t2=time()
     #FOp = np.matmul(mm, FOp)
     FOp  = FOp / ((spec._p +1) * len(spec._sph_harm_lm))

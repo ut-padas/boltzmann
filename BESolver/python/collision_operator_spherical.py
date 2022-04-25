@@ -46,7 +46,7 @@ class CollisionOpSP():
         
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order = basis.BSPLINE_BASIS_ORDER
-            k_domain     = (0,40)
+            k_domain     = (0,120)
             splines      = basis.XlBSpline(k_domain,spline_order,self._p+1)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
@@ -235,13 +235,14 @@ class CollisionOpSP():
             Yp2_lm   = spec_sp.Vq_sph(Sd2[1],Sd2[2])
 
             if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
-                if spec_sp._q_mode == sp.QuadMode.GMX:
-                    Mp_r    = (scattering_mg[0])*V_TH
-                elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
-                    Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
-                else:
-                    Mr=None
-                    print("Unknown quadrature mode- inner product weight function is set to none.")
+                Mp_r    = (scattering_mg[0])*V_TH
+                # if spec_sp._q_mode == sp.QuadMode.GMX:
+                #     Mp_r    = (scattering_mg[0])*V_TH
+                # elif spec_sp._q_mode == sp.QuadMode.SIMPSON:
+                #     Mp_r    = np.sqrt(16/np.pi) * np.exp(-scattering_mg[0]**2) * (scattering_mg[0]**3) * V_TH
+                # else:
+                #     Mr=None
+                #     print("Unknown quadrature mode- inner product weight function is set to none.")
             elif self._r_basis_type == basis.BasisType.SPLINES:
                 Mp_r    = (scattering_mg[0]**3) * V_TH
             
@@ -261,8 +262,8 @@ class CollisionOpSP():
             cc_collision = np.dot(cc_collision,gmw)
             cc_collision = cc_collision.reshape((num_p*num_sh,num_p*num_sh))
             
-            print("collision = %.8E"%np.linalg.cond(cc_collision))
-            print(cc_collision)
+            # print("collision = %.8E"%np.linalg.cond(cc_collision))
+            # print(cc_collision)
             #print(cc_collision.shape)
             return cc_collision
 

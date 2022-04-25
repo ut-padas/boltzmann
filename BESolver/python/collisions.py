@@ -14,6 +14,7 @@ import cross_section
 from scipy import interpolate
 import scipy.constants
 import utils as BEUtils
+import scipy.ndimage
 
 def electron_thermal_velocity(T):
     """

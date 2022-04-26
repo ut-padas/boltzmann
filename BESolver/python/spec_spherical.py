@@ -26,7 +26,7 @@ class SpectralExpansionSpherical:
         """
         self._sph_harm_lm = sph_harm_lm
         self._p = p_order
-        self._num_q_radial=300
+        self._num_q_radial=270
         self._domain = domain
         self._window = window
 
@@ -97,7 +97,7 @@ class SpectralExpansionSpherical:
         num_p   = self._p+1
         num_sh  = len(self._sph_harm_lm)
 
-        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or self.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             l_modes = list(set([l for l,_ in self._sph_harm_lm]))
             Vr_l    = list()

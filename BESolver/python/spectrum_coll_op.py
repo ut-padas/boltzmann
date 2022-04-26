@@ -69,6 +69,10 @@ for i, nr in enumerate(Nr):
         r_mode = basis.BasisType.MAXWELLIAN_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
 
+    elif (args.radial_poly == "laguerre"):
+        r_mode = basis.BasisType.LAGUERRE
+        params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+
     elif (args.radial_poly == "bspline"):
         r_mode = basis.BasisType.SPLINES
         params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
@@ -85,12 +89,17 @@ for i, nr in enumerate(Nr):
     mm    = spec.compute_mass_matrix()
     mm    = np.linalg.inv(mm)
 
-    g0  = collisions.eAr_G0()
-    g0.reset_scattering_direction_sp_mat()
+    if args.collision_mode == "g0":
+        g  = collisions.eAr_G0()
+    if args.collision_mode == "g2":
+        g  = collisions.eAr_G2()
+        
+    g.reset_scattering_direction_sp_mat()
     t1=time()
-    FOp = cf.assemble_mat(g0,maxwellian,VTH)
+    FOp = cf.assemble_mat(g,maxwellian,VTH)
     t2=time()
-    FOp = np.matmul(mm, FOp)
+    #FOp = np.matmul(mm, FOp)
+    FOp  = FOp / ((spec._p +1) * len(spec._sph_harm_lm))
     print("Assembled the collision op. for Vth : ", VTH)
     print("Collision Operator assembly time (s): ",(t2-t1))
     #coll_mats.append(FOp)
@@ -104,7 +113,10 @@ for i, nr in enumerate(Nr):
     #     plt.plot(v[k,:],label="R Nr=%d"%(nr))
     #     #plt.legend()
     #     pt_c+=2
-    plt.plot(s,label="Nr=%d"%(nr))
+    plt.plot(s,label="Nr=%d"%(nr),linewidth=0.5)
+    plt.yscale("log")
+    plt.xscale("log")
+
 
 plt.legend()
 plt.tight_layout()

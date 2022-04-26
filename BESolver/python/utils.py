@@ -38,28 +38,14 @@ def gaussian(v,mu=None,sigma=1.0):
     return ( 1.0/(sigma * np.sqrt(2 * np.pi)) ) * np.exp(-0.5 * np.linalg.norm((v-mu),2)**2/(sigma**2))
 
 def cartesian_to_spherical(vx,vy,vz):
-    v_abs = np.sqrt(vx**2 + vy**2 + vz**2)
-    check_1  = np.isclose(v_abs,0.0)
-    check_2  = np.isclose(vx,0.0)
-
-    not_check_1 = np.logical_not(check_1)
-    not_check_2 = np.logical_not(check_2)
     
-    not_check_1_and_check_2 = np.logical_and(not_check_1,not_check_2)
+    r1              = np.sqrt(vx**2 + vy**2 + vz**2)
     
-    vr = np.zeros_like(v_abs)
-    vt = np.zeros_like(v_abs)
-    vp = np.zeros_like(v_abs)
+    theta_p         = np.arccos(np.divide(vz, r1, where=r1!= 0))
+    phi_p           = np.arctan2(vy, vx)
+    phi_p           = phi_p % (2 * np.pi)
 
-    vr = v_abs
-    vt[not_check_1_and_check_2] =  np.arccos(vz[not_check_1_and_check_2]/v_abs[not_check_1_and_check_2])
-    vp[not_check_1_and_check_2] =  np.arctan(vy[not_check_1_and_check_2]/vx[not_check_1_and_check_2])
-
-    # to fix the range to 0-2pi
-    vp[vp < 0]+= (np.pi * 2)
-    vp[check_2]                 =  np.pi/2
-    
-    return [vr,vt,vp]
+    return [r1,theta_p,phi_p]
 
 def spherical_to_cartesian(v_abs, v_theta, v_phi):
     return [v_abs * np.sin(v_theta) * np.cos(v_phi), v_abs * np.sin(v_theta) * np.sin(v_phi), v_abs * np.cos(v_theta)]
@@ -70,7 +56,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     \int_v f(v) dv
     """
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -98,7 +84,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     WVPhi_q[0]  = 0.5 * WVPhi_q[0]
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
         [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
         #weight_func  = spec_sp._basis_p.Wx()
 
@@ -118,7 +104,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
         MP_klm = np.dot(MP_klm,gmw)
         MP_klm = np.transpose(MP_klm)
         MP_klm = MP_klm.reshape(num_p*num_sph_harm)
-        m_k    = (maxwellian_fac * (V_TH**(3+moment))) * scale * np.dot(MP_klm,cf)
+        m_k    = (maxwellian_fac * (V_TH**(3+moment))) * scale * np.dot(cf, MP_klm)
         return m_k
 
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
@@ -142,7 +128,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
         MP_klm = np.dot(MP_klm,gmw)
         MP_klm = np.transpose(MP_klm)
         MP_klm = MP_klm.reshape(num_p*num_sph_harm)
-        m_k    = (maxwellian_fac * (V_TH**(3+moment))) * scale * np.dot(MP_klm,cf)
+        m_k    = (maxwellian_fac * (V_TH**(3+moment))) * scale * np.dot(cf, MP_klm)
         return m_k
 
 def compute_avg_temp(particle_mass,spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian, V_TH, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, m0=None, scale=1.0):
@@ -161,7 +147,7 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     should be compatible with the weight function of the polynomials. 
     """
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -189,7 +175,7 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     WVPhi_q[0]  = 0.5 * WVPhi_q[0]
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
         """
         assumes orthonormal mass matrix. 
         """
@@ -229,7 +215,7 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
             Vq_radial_l.append(spec_sp.Vq_r(quad_grid[0],l)) 
         
         Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
-        hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) * np.exp(-quad_grid[0]**2) * (quad_grid[0]**2)
+        hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) * (quad_grid[0]**2)
         MM   = spec_sp.compute_mass_matrix()
         
         M_klm  = np.array([ hq * Vq_radial_l[l_modes.index(l)] * Y_lm[lm_idx] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm)])
@@ -260,53 +246,72 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
         # print(MP_klm)
         return M_klm
 
-def compute_Mvth1_Pi_vth2_Pj_vth1(spec_sp: spec_spherical.SpectralExpansionSpherical,mw_1,vth_1,mw_2,vth_2, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
+def thermal_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw_1,vth_1,mw_2,vth_2, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
     """
     v_a = v/v_th 
     computes the \int_{R^3} M(v_a) f(v_a) Pi(vth_1) Pj(vth_2) dv
     """
-    if NUM_Q_VR is None:
-        NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     
-    if NUM_Q_VT is None:
-        NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    
-    if NUM_Q_VP is None:
-        NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-            
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
-    num_sph_harm = len(sph_harm_lm)
-    [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-    weight_func  = spec_sp._basis_p.Wx()
+    num_sh       = len(sph_harm_lm)
     
-    legendre     = basis.Legendre()
-    [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
-    VTheta_q     = np.arccos(glx)
-    VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
+    # legendre     = basis.Legendre()
+    # [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
+    # VTheta_q     = np.arccos(glx)
+    # VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
 
-    assert NUM_Q_VP>1
-    sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
-    WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
+    # assert NUM_Q_VP>1
+    # sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
+    # WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
 
-    #trap. weights
-    WVPhi_q[0]  = 0.5 * WVPhi_q[0]
-    WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
-
-    quad_grid = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
-    P_kr = spec_sp.Vq_r(quad_grid[0]) 
-    Q_kr = spec_sp.Vq_r(quad_grid[0]*(vth_1/vth_2)) 
-    Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
+    # #trap. weights
+    # WVPhi_q[0]  = 0.5 * WVPhi_q[0]
+    # WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
     
-    M_klm_pqs = np.array([1 * Q_kr[i]*Y_lm[j] * P_kr[p]*Y_lm[q] for i in range(num_p) for j in range(num_sph_harm) for p in range(num_p) for q in range(num_sph_harm)])
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+        
+        if NUM_Q_VR is None:
+            NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
+        
+        if NUM_Q_VT is None:
+            NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
+        
+        if NUM_Q_VP is None:
+            NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+        
+        [gx,gw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+        weight_func  = spec_sp._basis_p.Wx()
+        
+        l_modes    = list(set([l for l,_ in spec_sp._sph_harm_lm]))
+        Vr_l_vth1  = list()
+        Vr_l_vth2  = list()
+        vth1_by_vth2 = vth_1 / vth_2
+        
+        MM_l    = list()
 
-    M_klm_pqs  = np.dot(M_klm_pqs,WVPhi_q)
-    M_klm_pqs  = np.dot(M_klm_pqs,glw)
-    M_klm_pqs  = np.dot(M_klm_pqs,gmw)
-    M_klm_pqs  = M_klm_pqs.reshape(num_p*num_sph_harm, num_p*num_sph_harm)
+        for l in l_modes:
+            Vr_l_vth1.append(spec_sp.Vq_r(gx, l))
+            Vr_l_vth2.append(spec_sp.Vq_r(vth1_by_vth2 * gx, l))
+        
+        for j,l in enumerate(l_modes):
+            mr   = np.ones_like(gx) *  gx**(2*l) * vth1_by_vth2**(l) 
+            mm_l = np.array([ mr * Vr_l_vth1[l][p,:] * Vr_l_vth2[l][k,:] for p in range(num_p) for k in range(num_p)])
+            mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+            MM_l.append(mm_l)
+            
+        mm=np.zeros((num_p*num_sh, num_p*num_sh))
+        for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm):
+            idx=l_modes.index(l)
+            for p in range(num_p):
+                for k in range(num_p):
+                    idx_pqs = p * num_sh + lm_idx
+                    idx_klm = k * num_sh + lm_idx
+                    mm[idx_pqs, idx_klm] = MM_l[idx][p,k]
+        return mm
+    else:
+        raise NotImplementedError("not implemented for other basis yet")
     
-    return M_klm_pqs
-
 def get_maxwellian_3d(vth,n_scale=1):
     M = lambda x: (n_scale / ((vth * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
     return M
@@ -321,7 +326,7 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
     vr       = np.sqrt(2* EV * ev_pts /E_MASS)/vth
     
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
         NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -348,7 +353,7 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
 
     quad_grid = np.meshgrid(vr,VTheta_q,VPhi_q,indexing='ij')
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
 
         l_modes      = list(set([l for l,_ in spec_sp._sph_harm_lm])) 
         Vq_radial_l  = list()
@@ -388,7 +393,7 @@ def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, ma
     Compute the reaction rates for specified collision data, 
     """    
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
         NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)

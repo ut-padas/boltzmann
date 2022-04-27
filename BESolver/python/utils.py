@@ -9,6 +9,24 @@ import scipy.constants
 
 MAX_GMX_Q_VR_PTS=278
 
+def block_jacobi_inv(M,num_partitions=8):
+    #return np.linalg.pinv(M,rcond=1e-30)
+    rtol=1e-14
+    atol=1e-14
+    Pinv = np.zeros_like(M)
+    for r in range(num_partitions):
+        lb = (r * M.shape[0])//num_partitions
+        le = ((r+1) * M.shape[0])//num_partitions
+        D  = M[lb:le,lb:le]
+        Pinv[lb:le,lb:le] = np.linalg.inv(D)
+
+    Mp   = np.matmul(Pinv,M)
+    print("preconditioned mass matrix conditioning: %.8E"%np.linalg.cond(Mp))
+    Minv = np.matmul(np.linalg.inv(Mp),Pinv)
+    assert np.allclose(np.matmul(Minv,M),np.eye(M.shape[0]), rtol=rtol, atol=atol), "preconditioned inverse failed with %.2E rtol"%(rtol)
+    return Minv
+
+
 def maxwellian_normalized(v_abs):
     """
     Normalized Maxwellian without 
@@ -217,6 +235,7 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
         Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
         hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) * (quad_grid[0]**2)
         MM   = spec_sp.compute_mass_matrix()
+        MMinv= block_jacobi_inv(MM,8)
         
         M_klm  = np.array([ hq * Vq_radial_l[l_modes.index(l)] * Y_lm[lm_idx] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm)])
         M_klm  = np.dot(M_klm,WVPhi_q)
@@ -224,7 +243,8 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
         M_klm  = np.dot(M_klm,gmw)
         M_klm  = np.transpose(M_klm)
         M_klm  = M_klm.reshape(num_p*num_sph_harm)
-        M_klm = np.matmul(np.linalg.pinv(MM),M_klm)
+        #M_klm = np.matmul(np.linalg.pinv(MM),M_klm)
+        M_klm = np.matmul(MMinv,M_klm)
         
         # import matplotlib.pyplot as plt
         # cmat        = MP_klm.reshape(num_p,num_sph_harm)

@@ -259,11 +259,11 @@ class XlBSpline(Basis):
         num_k            = 2*spline_order + (num_p -2) + 2
         self._t          = (k_domain[0])*np.ones(spline_order+1)
         knot_base        = 1.5
-        self._t          = np.append(self._t,np.logspace(-4, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
-        # pts_1 =  (num_k-2*spline_order -2)//2
-        # pts_2 =  (num_k-2*spline_order -2) -pts_1
-        # self._t          = np.append(self._t,np.logspace(-4, np.log(0.7 * k_domain[1])/np.log(knot_base) , pts_1  ,base=knot_base, endpoint=False))
-        # self._t          = np.append(self._t,np.linspace(0.7 * k_domain[1], k_domain[1] , pts_2 , endpoint=False))
+        # self._t          = np.append(self._t,np.logspace(-4, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
+        pts_1 =  2*((num_k-2*spline_order -2)//10)
+        pts_2 =  (num_k-2*spline_order -2) -pts_1
+        self._t          = np.append(self._t,np.logspace(-4, np.log(0.2 * k_domain[1])/np.log(knot_base) , pts_1  ,base=knot_base, endpoint=False))
+        self._t          = np.append(self._t,np.linspace(0.2 * k_domain[1], k_domain[1] , pts_2 , endpoint=False))
         self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
         #print("len_t ",len(self._t) , " num_k ",num_k)
         #print(self._t)

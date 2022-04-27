@@ -2,7 +2,9 @@
 @package Boltzmann collision operator solver. 
 """
 
+from cProfile import label
 import enum
+from turtle import rt
 import scipy
 from sympy import arg
 import basis
@@ -17,6 +19,7 @@ import utils as BEUtils
 import argparse
 import scipy.integrate
 from scipy.integrate import ode
+import scipy.linalg
 
 class CollissionMode(enum.Enum):
     ELASTIC_ONLY=0
@@ -63,7 +66,7 @@ def constant_r_eval(spec : sp.SpectralExpansionSpherical, cf, r):
     return np.dot(cf, b_eval).reshape(50,100), theta, phi
     
 
-def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, dt,t_tol, mode:CollissionMode):
+def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, dt,t_tol, mode:CollissionMode, filter_tol=1e-12):
     spec_sp = collOp._spec
 
     t1=time()
@@ -71,17 +74,28 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     t2=time()
     _, s, _ = np.linalg.svd(M)
     m_cond=np.linalg.cond(M)
-    #print("s=",s)
     print("Mass assembly time (s): ", (t2-t1))
     print("Condition number of M= %.8E"%m_cond)
-    Minv = np.linalg.pinv(M)
+    
+    if(args.radial_poly == "bspline"):
+        # import matplotlib.pyplot as plt
+        # plt.spy(M)
+        # plt.show()
+        num_partitions = 8
+        Minv = BEUtils.block_jacobi_inv(M,num_partitions)
+        
+    else:
+        Minv = np.linalg.inv(M)
 
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     print("==========================================================================")
 
-    h_t = np.array(h_init)
+    h_t = h_init
+    # if(args.radial_poly == "bspline"):
+    #     h_t[np.abs(h_t)<filter_tol]=0.0
+        
     t_curr = 0.0
     t_step = 0
 
@@ -116,8 +130,10 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         solution_vector = np.zeros((total_steps,h_init.shape[0]))
         while ode_solver.successful() and t_step < total_steps: 
             t_curr = ode_solver.t
-            ht     = ode_solver.y
-            solution_vector[t_step,:] = ht
+            h_t     = ode_solver.y
+            # if(args.radial_poly == "bspline"):
+            #     h_t[np.abs(h_t)<filter_tol]=0.0
+            solution_vector[t_step,:] = h_t
             ode_solver.integrate(ode_solver.t + dt)
             t_step+=1
 
@@ -183,9 +199,18 @@ parser.add_argument("-vth_fac", "--vth_fac" , help="expand the function vth_fac 
 #parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
 
+coll_mode=CollissionMode.ELASTIC_ONLY
+if args.collision_mode == "g0":
+    coll_mode=CollissionMode.ELASTIC_ONLY
+elif args.collision_mode == "g02":
+    coll_mode=CollissionMode.ELASTIC_W_IONIZATION
+else:
+    raise NotImplementedError
+
 run_data=list()
 ev           = np.linspace(args.electron_volt/50.,100.*args.electron_volt,1000)
 eedf         = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
+eedf_initial = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
 temperature  = list()
 SPLINE_ORDER = args.spline_order
 basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
@@ -236,22 +261,20 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     if (args.radial_poly == "bspline"):
         hv           = lambda v,vt,vp : (vth_factor**3) * np.exp(-(v*vth_factor)**2)
         
-    h_vec        = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
-    data         = solve_collop(cf, h_vec, maxwellian, VTH_C, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_ONLY)
-    #data        = solve_collop(cf, h_vec, maxwellian, VTH_C, args.T_END, args.T_DT,args.ts_tol,mode=CollissionMode.ELASTIC_W_IONIZATION)
-    eedf[i]      = BEUtils.get_eedf(ev, spec, data[-1,:], maxwellian, VTH_C, 1)
-    eedf_initial = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH_C, 1)
+    h_vec           = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
+    data            = solve_collop(cf, h_vec, maxwellian, VTH_C, args.T_END, args.T_DT,args.ts_tol,mode=coll_mode)
+    eedf[i]         = BEUtils.get_eedf(ev, spec, data[-1,:], maxwellian, VTH_C, 1)
+    eedf_initial[i] = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH_C, 1)
+    temp            = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec, data, maxwellian, VTH_C, None, None, None, None) * (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
     
-    # temp       = np.array([(BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec, data[w], maxwellian, VTH_C, None, None, None, None)) * (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT) for w in range(data.shape[0])])
-    temp         = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec, data, maxwellian, VTH_C, None, None, None, None) * (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
     temperature.append(temp)
     run_data.append(data)
 
-import matplotlib.pyplot as plt
-
 if (1):
+    import matplotlib.pyplot as plt
     fig = plt.figure(figsize=(16, 10), dpi=300)
     plt.subplot(2, 3, 1)
+    plt.plot(abs(run_data[-1][0,:]), label = "t=0")
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data=run_data[i]
         plt.plot(abs(data[1,:]),label="Nr=%d"%args.NUM_P_RADIAL[i])
@@ -259,7 +282,7 @@ if (1):
     plt.yscale('log')
     plt.xlabel("Coeff. #")
     plt.ylabel("Coeff. magnitude")
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
     plt.legend()
 
     plt.subplot(2, 3, 2)
@@ -270,7 +293,7 @@ if (1):
     plt.yscale('log')
     plt.xlabel("Coeff. #")
     plt.ylabel("Coeff. magnitude")
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
     plt.legend()
 
     plt.subplot(2, 3, 3)
@@ -282,7 +305,7 @@ if (1):
     plt.yscale('log')
     plt.xlabel("Coeff. #")
     plt.ylabel("Error in coeff. magnitude")
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
     plt.legend()
 
     ts= np.linspace(0,args.T_END, int(args.T_END/args.T_DT))
@@ -296,46 +319,45 @@ if (1):
         plt.yscale('log')
         plt.xlabel("time (s)")
         plt.ylabel("spectral tail l2(h[nr/2: ])")
-        plt.grid()
+        plt.grid(True, which="both", ls="-")
         
     elif (args.radial_poly == "bspline"):
         for i, nr in enumerate(args.NUM_P_RADIAL):
             plt.plot(ev, np.abs(eedf[i]-eedf[-1]),label="Nr=%d"%args.NUM_P_RADIAL[i])
 
         plt.yscale('log')
-        plt.xscale('log')
+        #plt.xscale('log')
         plt.legend()
         plt.xlabel("energy (ev)")
         plt.ylabel("error in eedf")
-        plt.grid()
+        plt.grid(True, which="both", ls="-")
 
 
     plt.subplot(2, 3, 5)
-    plt.plot(ev, eedf_initial, label="initial")
+    plt.plot(ev, eedf_initial[-1], label="initial")
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data=run_data[i]
         plt.plot(ev, abs(eedf[i]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+        #plt.plot(ev, abs(eedf_initial[i]),label="initial Nr=%d"%args.NUM_P_RADIAL[i])
 
     # plt.xscale('log')
     plt.yscale('log')
     plt.legend()
     plt.xlabel("energy (ev)")
     plt.ylabel("eedf")
-    # plt.tight_layout()
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
 
     plt.subplot(2, 3, 6)
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data=temperature[i]
-        plt.plot(ts, temperature[i], label="Nr=%d vth_fac=%.2f"%(args.NUM_P_RADIAL[i],vth_factor_temp[i]))
+        plt.plot(ts, temperature[i], label="Nr=%d"%(args.NUM_P_RADIAL[i]))
 
     # plt.xscale('log')
     # plt.yscale('log')
     plt.legend()
     plt.xlabel("time (s)")
     plt.ylabel("temperature (eV)")
-    # plt.tight_layout()
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
 
     plt.tight_layout()
     #plt.show()

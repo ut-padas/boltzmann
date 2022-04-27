@@ -403,20 +403,6 @@ class Collisions(abc.ABC):
             tcs = 3.22e-21 * (ev-x0)**2 + e0
             return tcs
 
-        elif mode == 10:
-            """
-            G0 cross section data fit with analytical function
-            """
-            ev=ev+1e-8
-            a0 =    0.008787
-            b0 =     0.07243
-            c  =    0.007048
-            d  =      0.9737
-            a1 =        3.27
-            b1 =       3.679
-            x0 =      0.2347
-            x1 =       11.71
-            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
         elif mode == 11:
             """
             Cross section data from Kevin. 
@@ -472,25 +458,66 @@ class Collisions(abc.ABC):
 
             return elastic_shifted_MERT(theta,ev)
 
-    def assemble_diff_cs_mat(self,v,chi):
-        """
-        computes the differential cross section matrix. 
-        v   : np array of velocity of electron particles
-        chi : np array of scattering angles
-        Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
-        """
-        energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        total_cs  = self._total_cs_interp1d(energy_ev)
-        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev,10)
-        diff_cs    = total_cs / (4*np.pi)
-        return diff_cs
-    
+        elif mode == "g0":
+            """
+            G0 cross section data fit with analytical function
+            """
+            ev =     ev+1e-8
+            a0 =    0.008787
+            b0 =     0.07243
+            c  =    0.007048
+            d  =      0.9737
+            a1 =        3.27
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+        
+        elif mode == "g1":
+            """
+            G1 cross section data fit with analytical function (excitation)
+            """
+            #ev =     ev+1e-8
+            a  = -4.06265154e-21
+            b  =  6.46808245e-22
+            c  = -3.20434420e-23
+            d  = 6.39873618e-25 
+            e  = -4.37947887e-27
+            f  = -1.30972221e-23
+            g  =  2.15683845e-19
+            y = a +  b * ev**1 + c * ev**2 + d * ev**3 + e * ev **4 
+            y[ev<=11.55] = 0 
+            y[ev>35.00] = f + g * (1/pow(ev[ev>35.00],2))
+            y[ev>200]   = 0
+            return y     
+        
+        elif mode == "g2":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            #ev =     ev+1e-8
+            a = 2.84284159e-22
+            b = 1.02812034e-17
+            c =-1.40391999e-15
+            d = 9.97783291e-14
+            e =-3.82647294e-12
+            f =-5.70400826e+01
+            
+            x=ev-f
+            y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
+            
+            y[ev<=15.76]=0
+            y[ev>1e3]=0
+            
+            return  y
+        
     @abc.abstractmethod
     def get_cross_section_scaling():
         pass
 
-
+    def assemble_diff_cs_mat(self,v,chi):
+        raise NotImplementedError
+    
 
 class CollisionType():
     EAR_G0=0
@@ -534,7 +561,21 @@ class eAr_G0_NoEnergyLoss(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return 1.0#AR_NEUTRAL_N
+        return 1.0
+    
+    def assemble_diff_cs_mat(self,v,chi):
+        """
+        computes the differential cross section matrix. 
+        v   : np array of velocity of electron particles
+        chi : np array of scattering angles
+        Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
+        """
+        energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
+        #total_cs  = self._total_cs_interp1d(energy_ev)
+        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
+        total_cs   = Collisions.synthetic_tcs(energy_ev,"g0")
+        diff_cs    = total_cs / (4*np.pi)
+        return diff_cs
 
 """
 e + Ar -> e + Ar
@@ -580,7 +621,21 @@ class eAr_G0(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return 1.0#AR_NEUTRAL_N
+        return 1.0
+    
+    def assemble_diff_cs_mat(self,v,chi):
+        """
+        computes the differential cross section matrix. 
+        v   : np array of velocity of electron particles
+        chi : np array of scattering angles
+        Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
+        """
+        energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
+        #total_cs  = self._total_cs_interp1d(energy_ev)
+        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
+        total_cs   = Collisions.synthetic_tcs(energy_ev,"g0")
+        diff_cs    = total_cs / (4*np.pi)
+        return diff_cs
 
 """
 e + Ar -> e + Ar^*
@@ -623,7 +678,21 @@ class eAr_G1(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return 1.0#AR_NEUTRAL_N
+        return 1.0
+
+    def assemble_diff_cs_mat(self,v,chi):
+        """
+        computes the differential cross section matrix. 
+        v   : np array of velocity of electron particles
+        chi : np array of scattering angles
+        Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
+        """
+        energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
+        #total_cs  = self._total_cs_interp1d(energy_ev)
+        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
+        total_cs   = Collisions.synthetic_tcs(energy_ev,"g1")
+        diff_cs    = total_cs / (4*np.pi)
+        return diff_cs
 
 """
 e + Ar -> e + Ar^+
@@ -652,42 +721,9 @@ class eAr_G2(Collisions):
         return v1,v2
 
     def pre_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        raise NotImplementedError
         return None
-        # vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         
-        # # pre collision velocity. 
-        # vs[0]    = np.sqrt(2 * (vr**2 + (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)) )
-        # if(self._momentum_setup == False):
-        #     self._v0       = np.zeros(vr.shape + tuple([3]))
-        #     self._v1       = np.zeros(vr.shape + tuple([3]))
-        #     self._v2       = np.zeros(vr.shape + tuple([3]))
-        
-        #     self._check_1  = vr>=0
-        #     self._v0[self._check_1,0]   = np.sin(vt[self._check_1]) * np.cos(vp[self._check_1])
-        #     self._v0[self._check_1,1]   = np.sin(vt[self._check_1]) * np.sin(vp[self._check_1])
-        #     self._v0[self._check_1,2]   = np.cos(vt[self._check_1])
-
-        #     self._v1[self._check_1,0]   = np.sin(vs[1][self._check_1]) * np.cos(vs[2][self._check_1])
-        #     self._v1[self._check_1,1]   = np.sin(vs[1][self._check_1]) * np.sin(vs[2][self._check_1])
-        #     self._v1[self._check_1,2]   = np.cos(vs[1][self._check_1])
-
-
-        # self._v2[self._check_1,:]   = vs[0][self._check_1,:] * self._v1[self._check_1,:] + vr[self._check_1,:] * self._v0[self._check_1,:]
-        # v2_norm_fac     = (vs[0][self._check_1] / ( np.sqrt(self._v2[self._check_1,0]**2 + self._v2[self._check_1,1]**2 + self._v2[self._check_1,2]**2)))
-        
-        # self._v2[self._check_1,0]   = v2_norm_fac * self._v2[self._check_1,0]
-        # self._v2[self._check_1,1]   = v2_norm_fac * self._v2[self._check_1,1]
-        # self._v2[self._check_1,2]   = v2_norm_fac * self._v2[self._check_1,2]
-
-        # vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
-        # v2_sp           = BEUtils.cartesian_to_spherical(self._v2[self._check_1,0],self._v2[self._check_1,1],self._v2[self._check_1,2])
-        # vs2[0][self._check_1] = v2_sp[0]
-        # vs2[1][self._check_1] = v2_sp[1]
-        # vs2[2][self._check_1] = v2_sp[2]
-        
-        # return [vs,vs2]
-
-    
     def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
         vs                       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         check_1            = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
@@ -744,39 +780,47 @@ class eAr_G2(Collisions):
         self._sc_direction_mat=None
         self._momentum_setup=False
         return
-
-"""
-Simple test collision class to test
-the collision operator computation
-"""
-class eAr_TestCollision(Collisions):
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._type=-1
-
-    def total_cross_section(self, energy)->float:
-        #print("c")
-        return 1.0
     
-    @staticmethod
-    def differential_cross_section(total_cross_section : float, energy : float, scattering_angle: float ) -> float:
+    def assemble_diff_cs_mat(self,v,chi):
         """
-        computes the differential cross section from total cross section. 
+        computes the differential cross section matrix. 
+        v   : np array of velocity of electron particles
+        chi : np array of scattering angles
+        Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
-        #print(total_cross_section,energy," diff/total : ", (energy)/(4 * np.pi *  (1 + energy * (np.sin(0.5*scattering_angle)**2))  *  np.log(1+energy) ))
-        v0 = np.sqrt(2*energy/MASS_ELECTRON)
-        return (v0 * np.cos(scattering_angle))/AR_NEUTRAL_N
+        energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
+        #total_cs  = self._total_cs_interp1d(energy_ev)
+        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
+        total_cs   = Collisions.synthetic_tcs(energy_ev,"g2")
+        diff_cs    = total_cs / (4*np.pi)
+        return diff_cs
 
 
-    @staticmethod
-    def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
-        v1_dir   = Collisions.compute_scattering_direction(v0,polar_angle, azimuthal_angle)
-        vel_fac  = np.linalg.norm(v0,2) 
-        v1       =  vel_fac  * v1_dir
 
-        return v1
-
-    @staticmethod
-    def min_energy_threshold():
-        return 0.0
+def collission_cs_test():
+    """
+    plot the experimental and synthetic cross section differences. 
+    g0 - elastic
+    g1 - excitation
+    g2 - inonization
+    """
+    
+    G    = [eAr_G0(), eAr_G1(), eAr_G2()]
+    mode = ["g0", "g1", "g2"]
+    #tcs  = list()
+    
+    import matplotlib.pyplot as plt
+    for i, g in enumerate(G):
+        tcs = Collisions.synthetic_tcs(g._energy,mode[i])
+        plt.figure(figsize=(8,8),dpi=300)
+        plt.plot(g._energy, g._total_cs,linewidth=1, label="lxcat")
+        plt.plot(g._energy,tcs, linewidth=1, label="analytical")
+        plt.legend()
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.xlabel(r'energy (eV)')
+        plt.ylabel(r'cross section ($m^2$)')
+        plt.grid(True, which="both", ls="-")
+        plt.savefig("%s.png"%(mode[i]))
+        plt.close()
+    

@@ -396,6 +396,15 @@ M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\rig
 \Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
 \end{align*}where $P_k,P_p$ denotes the B-splines polynomials.  
 
+\subsection{Collision operator spectrum}
+Let $C : V \rightarrow V$ denotes the infinity dimension collision operator, $P_n V \rightarrow V_n$ be the projection operator for finite dimensional subspace $V_n \subset V$. For orthogonal radial basis choice, $P_n$ is an orthogonal projection, while for B-splines it is not orthogonal.
+
+\begin{align*}
+C_{n\times n} &= P_n C P_n^T \\
+\norm{C_{n\times n}} = \norm{P_n C P_n^T} &\leq \norm{P_n^2}\norm{C} \\
+\norm{P_n} &=\sqrt{n} \\
+\frac{\norm{C_{n\times n}}}{n} &\leq \norm{C}
+\end{align*}
 
 
 

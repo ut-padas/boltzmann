@@ -172,18 +172,18 @@
 	\end{columns}
 \end{frame}
 
-\begin{frame}
-\frametitle{Discretized collision kernel with Maxwell (T=3eV) singular values}
-\begin{table}
-	\centering
-	\begin{tabular}{cc}
-		$l_{max}=0$ &  $l_{max}=1$ \\
-		\includegraphics[width=0.3\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
-		\includegraphics[width=0.3\textwidth]{figures/m_spectrum_3ev_l_max_1.png} 
-	\end{tabular}
-\end{table}
-Currently the differential cross section is uniform across all scattering angles. 
-\end{frame}
+%\begin{frame}
+%\frametitle{Discretized collision kernel with Maxwell (T=3eV) singular values}
+%\begin{table}
+%	\centering
+%	\begin{tabular}{cc}
+%		$l_{max}=0$ &  $l_{max}=1$ \\
+%		\includegraphics[width=0.3\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
+%		\includegraphics[width=0.3\textwidth]{figures/m_spectrum_3ev_l_max_1.png} 
+%	\end{tabular}
+%\end{table}
+%Currently the differential cross section is uniform across all scattering angles. 
+%\end{frame}
 
 
 \begin{frame}
@@ -220,7 +220,7 @@ Currently the differential cross section is uniform across all scattering angles
 \begin{frame}
 	\frametitle{Elastic collisions (with energy transfer)}
 	\only<+>{
-		Using T(t=0)=1eV, T=1e-6 s
+		Using Temp(t=0)=1eV, T=1e-6 s
 		\begin{table}
 			\centering
 			\begin{tabular}{cc}
@@ -231,7 +231,7 @@ Currently the differential cross section is uniform across all scattering angles
 	\end{table}
 	}
 	\only<+>{
-	Using T(t=0)=3eV, T=1e-6 s
+	Using Temp(t=0)=3eV, T=1e-6 s
 	\begin{table}
 		\centering
 		\begin{tabular}{cc}
@@ -243,7 +243,7 @@ Currently the differential cross section is uniform across all scattering angles
 	}
 
 	\only<+>{
-	Using T(t=0)=5eV, T=1e-6 s
+	Using Temp(t=0)=5eV, T=1e-6 s
 	\begin{table}
 		\centering
 		\begin{tabular}{cc}
@@ -255,7 +255,7 @@ Currently the differential cross section is uniform across all scattering angles
 	}
 	
 	\only<+>{
-		Using T(t=0)=5eV, T=5e-6 s,
+		Using Temp(t=0)=5eV, T=5e-6 s,
 		\begin{table}
 			\centering
 			\begin{tabular}{cc}
@@ -283,25 +283,93 @@ Currently the differential cross section is uniform across all scattering angles
 
 \begin{frame}
 	\frametitle{Accuracy tests}
-	With elastic collisions without energy transfer and with angle independent differential cross section, if we start with aisotropic distribution we should reach isotropic distribution eventually. We start with $f(\vect{v},t=0) = M(\vect{v}) (1 + \tan v_\theta)$, evolved for time horizon T=4e-6 s.
+	With elastic collisions without energy transfer and with angle independent differential cross section, if we start with anisotropic distribution we should reach isotropic distribution eventually. We start with $f(\vect{v},t=0) = M(\vect{v}) (1 + \tan v_\theta)$, evolved for time horizon T=4e-6 s.
 	
 	\only<+>
 	{
 		\begin{figure}
-			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6.png}
+			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_l2.png}
 		\end{figure}
 	}
 	\only<+>
 	{
 		\begin{figure}
-			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_const_r.png}
+			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_l2_const_r.png}
 		\end{figure}
 	}
 \end{frame}
 
 
-\begin{frame}
+\begin{frame}{Changing expansion thermal velocity}
+	Let $\beta$ be the chosen thermal velocity for the $f(\vect{v})$ expansion, $\alpha$ be the actual thermal velocity (i.e., for corresponding temperature).
+	\begin{align*}
+		f(\vect{v},0) &= \frac{n_e}{(\sqrt{\pi}\alpha)^3}\exp\of{-\frac{v_r^2}{\alpha^2}} = \underbrace{\frac{n_e}{(\sqrt{\pi}\beta)^3} \exp\of{-\frac{v_r^2}{\beta^2}}}_{M(\vect{v})} \underbrace{\left(\frac{\beta}{\alpha}\right)^3 \exp\of{-\frac{v_r^2}{\alpha^2} + \frac{v_r^2}{\beta^2}}}_{h(\vect{v})} 
+	\end{align*}
 \end{frame}
+
+\begin{frame}{Maxwell polynomials with $\beta=\lambda \alpha$}
+	\begin{center}
+		\only<+>{
+		chosen $\beta = 1.0 \alpha$
+		\begin{figure}
+			\includegraphics[width=0.6\textwidth]{figures/m_1ev_1e0vth_coeff.png}
+		\end{figure}
+		}
+		\only<+>{
+		chosen $\beta = 0.9 \alpha$
+		\begin{figure}
+		\includegraphics[width=0.6\textwidth]{figures/m_1ev_9e-1vth_coeff.png}
+		\end{figure}
+		}
+		\only<+>{
+		chosen $\beta = 0.8 \alpha$
+		\begin{figure}
+		\includegraphics[width=0.6\textwidth]{figures/m_1ev_8e-1vth_coeff.png}
+		\end{figure}
+
+		}
+		\only<+>{
+		chosen $\beta = 0.7 \alpha$
+		\begin{figure}
+		\includegraphics[width=0.6\textwidth]{figures/m_1ev_7e-1vth_coeff.png}
+		\end{figure}
+		}
+	\end{center}
+\end{frame}
+
+\begin{frame}{Quadratic splines with $\beta=\lambda \alpha$}
+	\begin{center}
+		\only<+>{
+			chosen $\beta = 1.0 \alpha$
+			\begin{figure}
+				\includegraphics[width=0.6\textwidth]{figures/b_sp2_1ev_1e0vth_coeff.png}
+			\end{figure}
+		}
+		\only<+>{
+			chosen $\beta = 0.98 \alpha$
+			\begin{figure}
+				\includegraphics[width=0.6\textwidth]{figures/b_sp2_1ev_9.8e-1vth_coeff.png}
+			\end{figure}
+		}
+		\only<+>{
+			chosen $\beta = 0.96 \alpha$
+			\begin{figure}
+				\includegraphics[width=0.6\textwidth]{figures/b_sp2_1ev_9.6e-1vth_coeff.png}
+			\end{figure}
+		}
+
+		\only<+>{
+			\begin{itemize}
+				\item Log-spaced knot placement is not ideal for capturing tails. Struggles to capture the a perfect Maxwellian for energies > 40eV.
+				\item Explore adaptive knot placement with appropriate error controls (i.e., binary tree with hierarchical splitting) ?
+			\end{itemize}
+		}
+	
+	\end{center}
+\end{frame}
+
+
+
 
 
 \begin{frame}

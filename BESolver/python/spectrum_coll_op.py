@@ -34,7 +34,7 @@ parser.add_argument("-q_vp", "--quad_phi"                     , help="quadrature
 parser.add_argument("-q_st", "--quad_s_theta"                 , help="quadrature in scattering polar"    , type=int, default=2)
 parser.add_argument("-q_sp", "--quad_s_phi"                   , help="quadrature in scattering azimuthal", type=int, default=2)
 parser.add_argument("-radial_poly", "--radial_poly"           , help="radial basis", type=str, default="maxwell")
-parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=2)
+parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=1)
 parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=11)
 #parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
@@ -61,69 +61,133 @@ fig = plt.figure(figsize=(4, 4),dpi=300) #(figsize=(6, 6), dpi=300)
 
 SPLINE_ORDER = args.spline_order
 basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
-basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=args.spline_q_pts_per_knot
-for i, nr in enumerate(Nr):
-    params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
-    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
-    if (args.radial_poly == "maxwell"):
-        r_mode = basis.BasisType.MAXWELLIAN_POLY
-        params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
 
-    elif (args.radial_poly == "laguerre"):
-        r_mode = basis.BasisType.LAGUERRE
-        params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
-
-    elif (args.radial_poly == "bspline"):
-        r_mode = basis.BasisType.SPLINES
-        params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
-
-    params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta
-    params.BEVelocitySpace.NUM_Q_VP  = args.quad_phi
-    params.BEVelocitySpace.NUM_Q_CHI = args.quad_s_theta
-    params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
-    params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
-    params.print_parameters()
+def spec_with_increasing_qr(nr):
     
-    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM, nr,poly_type=r_mode)
-    spec  = cf._spec
-    mm    = spec.compute_mass_matrix()
-    mm    = np.linalg.inv(mm)
+    if (args.radial_poly == "maxwell" or args.radial_poly == "laguerre"):
+        Qr=[16,32,64, 128, 300]
+    elif (args.radial_poly == "bspline"):
+        Qr=[4,10,22,43,82]
+    
+    import matplotlib.pyplot as plt
+    s_list=list()
+    for qr_idx, qr in enumerate(Qr):
+        params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
+        params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
+        if (args.radial_poly == "maxwell"):
+            r_mode = basis.BasisType.MAXWELLIAN_POLY
+            params.BEVelocitySpace.NUM_Q_VR  = qr #args.quad_radial
 
-    if args.collision_mode == "g0":
-        g  = collisions.eAr_G0()
-    if args.collision_mode == "g2":
-        g  = collisions.eAr_G2()
+        elif (args.radial_poly == "laguerre"):
+            r_mode = basis.BasisType.LAGUERRE
+            params.BEVelocitySpace.NUM_Q_VR  = qr #args.quad_radial
+
+        elif (args.radial_poly == "bspline"):
+            r_mode = basis.BasisType.SPLINES
+            basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=qr #args.spline_q_pts_per_knot
+            params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, qr)
+
+        params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta
+        params.BEVelocitySpace.NUM_Q_VP  = args.quad_phi
+        params.BEVelocitySpace.NUM_Q_CHI = args.quad_s_theta
+        params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
+        params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
+        params.print_parameters()
         
-    g.reset_scattering_direction_sp_mat()
-    t1=time()
-    FOp = cf.assemble_mat(g,maxwellian,VTH)
-    t2=time()
-    #FOp = np.matmul(mm, FOp)
-    FOp  = FOp / ((spec._p +1) * len(spec._sph_harm_lm))
-    print("Assembled the collision op. for Vth : ", VTH)
-    print("Collision Operator assembly time (s): ",(t2-t1))
-    #coll_mats.append(FOp)
-    u, s, v = np.linalg.svd(FOp)
-    # pt_c=1
-    # for k in range(Nr[0]):
-    #     plt.subplot(Nr[0], 2, pt_c)
-    #     plt.plot(u[:,k],label="L Nr=%d"%(nr))
-    #     #plt.legend()
-    #     plt.subplot(Nr[0], 2, pt_c+1)
-    #     plt.plot(v[k,:],label="R Nr=%d"%(nr))
-    #     #plt.legend()
-    #     pt_c+=2
-    plt.plot(s,label="Nr=%d"%(nr),linewidth=0.5)
+        cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM, nr,poly_type=r_mode)
+        spec  = cf._spec
+        mm    = spec.compute_mass_matrix()
+        
+        if args.radial_poly == "bspline":
+            Minv = BEUtils.block_jacobi_inv(mm, 8)
+        elif args.radial_poly == "maxwell" or args.radial_poly == "laguerre":
+            Minv = np.linalg.inv(mm)
+            assert np.allclose(mm,np.eye(mm.shape[0]), rtol=1e-12, atol=1e-12), "mass matrix orthogonality test failed"
+        
+        if args.collision_mode == "g0":
+            g  = collisions.eAr_G0()
+        if args.collision_mode == "g2":
+            g  = collisions.eAr_G2()
+            
+        g.reset_scattering_direction_sp_mat()
+        t1=time()
+        FOp = cf.assemble_mat(g,maxwellian,VTH)
+        t2=time()
+        #FOp = np.matmul(Minv, FOp)
+        FOp  = FOp / ((spec._p +1) * len(spec._sph_harm_lm))
+        print("Assembled the collision op. for Vth : ", VTH)
+        print("Collision Operator assembly time (s): ",(t2-t1))
+        
+        _, s, _ = np.linalg.svd(FOp)
+        s_list.append(s)
+    
+    for qr_idx, qr in enumerate(Qr):   
+        plt.plot(np.abs(s_list[qr_idx]-s_list[-1])/np.linalg.norm(s_list[-1]),label="qr=%d"%(qr))  
+    plt.xlabel("coeff #")
+    plt.ylabel("singluar value")
     plt.yscale("log")
-    plt.xscale("log")
+    plt.legend()
+    plt.show()
+    
 
+def spec_with_increasing_nr():
+    for i, nr in enumerate(Nr):
+        params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
+        params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
+        if (args.radial_poly == "maxwell"):
+            r_mode = basis.BasisType.MAXWELLIAN_POLY
+            params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
 
-plt.legend()
-plt.tight_layout()
-plt.savefig("%s.png"%(args.out_fname))
-#plt.close()
+        elif (args.radial_poly == "laguerre"):
+            r_mode = basis.BasisType.LAGUERRE
+            params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
 
+        elif (args.radial_poly == "bspline"):
+            r_mode = basis.BasisType.SPLINES
+            params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
 
+        params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta
+        params.BEVelocitySpace.NUM_Q_VP  = args.quad_phi
+        params.BEVelocitySpace.NUM_Q_CHI = args.quad_s_theta
+        params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
+        params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
+        params.print_parameters()
+        
+        cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM, nr,poly_type=r_mode)
+        spec  = cf._spec
+        mm    = spec.compute_mass_matrix()
+        mm    = np.linalg.inv(mm)
 
+        if args.collision_mode == "g0":
+            g  = collisions.eAr_G0()
+        if args.collision_mode == "g2":
+            g  = collisions.eAr_G2()
+            
+        g.reset_scattering_direction_sp_mat()
+        t1=time()
+        FOp = cf.assemble_mat(g,maxwellian,VTH)
+        t2=time()
+        #FOp = np.matmul(mm, FOp)
+        FOp  = FOp / ((spec._p +1) * len(spec._sph_harm_lm))
+        print("Assembled the collision op. for Vth : ", VTH)
+        print("Collision Operator assembly time (s): ",(t2-t1))
+        #coll_mats.append(FOp)
+        u, s, v = np.linalg.svd(FOp)
+        # pt_c=1
+        # for k in range(Nr[0]):
+        #     plt.subplot(Nr[0], 2, pt_c)
+        #     plt.plot(u[:,k],label="L Nr=%d"%(nr))
+        #     #plt.legend()
+        #     plt.subplot(Nr[0], 2, pt_c+1)
+        #     plt.plot(v[k,:],label="R Nr=%d"%(nr))
+        #     #plt.legend()
+        #     pt_c+=2
+        plt.plot(s,label="Nr=%d"%(nr),linewidth=0.5)
+        plt.yscale("log")
+        plt.xscale("log")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("%s.png"%(args.out_fname))
+    
 
-
+spec_with_increasing_qr(32)

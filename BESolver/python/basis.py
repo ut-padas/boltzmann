@@ -305,14 +305,14 @@ class XlBSpline(Basis):
         qx = np.zeros(deg)
         qw = np.zeros(deg)
         for i in range(self._sp_order, self._sp_order + num_intervals):
-            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = uniform_simpson((self._t[i], self._t[i+1]),self._q_per_knot)
+            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = uniform_simpson_3b8((self._t[i], self._t[i+1]),self._q_per_knot)
         
         # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
         # print(qx.shape)
         # print(qx)
         # print(np.sum(qw))
         # print(qx)
-        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0])), "simpson weights computed for splines does not match the knots domain"
+        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "simpson weights computed for splines does not match the knots domain"
         return qx,qw
     
     def Wx(self):
@@ -360,5 +360,17 @@ def uniform_simpson(domain, pts):
     gw[range(1,pts,2)]    *= 4.0
     return gx,gw
 
+
+def uniform_simpson_3b8(domain, pts):
+    assert (pts-1)%3==0, "simpson requires intervals divisable by 3"
+    assert pts>1   , "composite simpson require more than 1"
+    gx = np.linspace(domain[0],domain[1],pts)
+    dx = (domain[1]-domain[0])/(pts-1)
+    gw = np.ones_like(gx) * (3.0 * dx / 8.0)
+    gw[range(1,pts-1,3)]  *= 3.0
+    gw[range(2,pts-1,3)]  *= 3.0
+    gw[range(3,pts-1,3)]  *= 2.0
+    
+    return gx,gw
 
 

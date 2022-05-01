@@ -81,8 +81,10 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         # import matplotlib.pyplot as plt
         # plt.spy(M)
         # plt.show()
-        num_partitions = 8
-        Minv = BEUtils.block_jacobi_inv(M,num_partitions)
+        #num_partitions = 8
+        #BEUtils.block_jacobi_inv(M,num_partitions)
+        Minv = BEUtils.choloskey_inv(M)
+        
         
     else:
         Minv = np.linalg.inv(M)
@@ -133,6 +135,9 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
             h_t     = ode_solver.y
             # if(args.radial_poly == "bspline"):
             #     h_t[np.abs(h_t)<filter_tol]=0.0
+            current_mass     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
+            current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,current_mass,1)
+            print("time: %.2E  mass: %.14E  temp: %.14E"%(t_curr, current_mass, current_temp))
             solution_vector[t_step,:] = h_t
             ode_solver.integrate(ode_solver.t + dt)
             t_step+=1
@@ -167,10 +172,12 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         solution_vector = np.zeros((total_steps,h_init.shape[0]))
         while ode_solver.successful() and t_step < total_steps: 
             t_curr   = ode_solver.t
-            # m0_t     = BEUtils.moment_n_f(spec_sp,ode_solver.y,mw_vth,vth,0,300,16,16,1)
-            # ode_solver.set_f_params(collisions.AR_NEUTRAL_N,m0_t)
-            ht     = ode_solver.y
-            solution_vector[t_step,:] = ht
+            h_t     = ode_solver.y
+            current_mass     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
+            current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,current_mass,1)
+            print("time: %.2E  mass: %.14E  temp: %.14E"%(t_curr, current_mass, current_temp))
+            ode_solver.set_f_params(collisions.AR_NEUTRAL_N,current_mass)
+            solution_vector[t_step,:] = h_t
             ode_solver.integrate(ode_solver.t + dt)
             t_step+=1
     else:

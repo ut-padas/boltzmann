@@ -121,7 +121,7 @@ def first_order_split(E : np.array, y0: np.array, cf : colOpSp.CollisionOpSP, t_
         
         return [f_t,v0]
 
-def second_order_split(e_field, y0: np.array, cf : colOpSp.CollisionOpSP, t_final : float,  dt :float, v0: np.array,mw, vth):
+def second_order_split(e_field, y0: np.array, cf : colOpSp.CollisionOpSP, t_final : float,  dt :float, v0: np.array, mw, vth, mode):
     """
     E  : electric field for v-space advection 
     cf : collision operator
@@ -131,54 +131,131 @@ def second_order_split(e_field, y0: np.array, cf : colOpSp.CollisionOpSP, t_fina
     t_initial = 0.0
     t_curr    = 0.0
     spec      = cf._spec
+    q_by_m    = collisions.ELECTRON_CHARGE/ collisions.MASS_ELECTRON 
+    ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
     
-    M=spec.compute_mass_matrix()
-    Minv = np.linalg.pinv(M)
-    
-    def collission_rhs(t,y, C, n0):
-        return n0 * np.matmul(C,y)
+    M    = spec.compute_mass_matrix()
+    if args.radial_poly == "bspline":
+        Minv = BEUtils.choloskey_inv(M) #BEUtils.block_jacobi_inv(M, 8)
+    elif args.radial_poly == "maxwell" or args.radial_poly == "laguerre":
+        Minv = np.linalg.inv(M)
+        assert np.allclose(M,np.eye(M.shape[0]), rtol=1e-10, atol=1e-10), "mass matrix orthogonality test failed"
+        
+    if (mode == CollissionMode.ELASTIC_ONLY):
+        def collission_rhs(t,y, C, n0):
+            return n0 * np.matmul(C,y)
+    elif (mode == CollissionMode.ELASTIC_W_IONIZATION):
+        def collission_rhs(t,y, Ce, n0, Ci,ni):
+            return n0 * np.matmul(Ce,y) + ni * np.matmul(Ci,y)
+    else:
+        raise NotImplementedError
 
-    f_t = y0
+    f_t    = y0
+    spec_sp   = cf._spec
+    ne_t            = mw(0) * (np.sqrt(np.pi)**3) * (vth**3)
+    current_mass    = BEUtils.moment_n_f(spec_sp,y0,mw,vth,0,None,None,None,1)
+    current_temp    = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,y0,mw,vth,None,None,None,current_mass,1) 
+    current_vth     = collisions.electron_thermal_velocity(current_temp) 
+    current_mw      = mw
+    
+    print("Initial Ev : %.14E"%(current_temp * ev_fac))
+    print("Initial mass : %.14E"%current_mass)
 
     g0  = collisions.eAr_G0()
     g2  = collisions.eAr_G2()
 
     ode_solver = ode(collission_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol = 1e-14, atol=1e-14, nsteps=1e8)
-    ode_solver.set_initial_value(f_t,t_curr)
     
     q_pts_efield = 11
     [xt_1, wt_1] = basis.uniform_simpson( (0,  dt/2), q_pts_efield)
     [xt_2, wt_2] = basis.uniform_simpson( (dt/2, dt), q_pts_efield)
     
     sol_vec=list()
+    temp_t =list()
+    mass_t =list()
+    mw_t   =list()
     while (t_curr < t_final):
-        sol_vec.append(np.array(ode_solver.y))
-        print(v0)
+        current_mass     = BEUtils.moment_n_f(spec_sp, f_t, current_mw, current_vth, 0, None, None, None, 1)
+        current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON, spec_sp, f_t, current_mw, current_vth, None, None, None, current_mass, 1)
+        # current_vth      = collisions.electron_thermal_velocity(current_temp)
+        # current_mass     = BEUtils.moment_n_f(spec_sp, f_t, mw, vth, 0, None, None, None, 1)
+        # current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON, spec_sp, f_t, mw, vth, None, None, None, current_mass, 1)
+        # current_vth      = collisions.electron_thermal_velocity(current_temp)
+        collisions.AR_IONIZED_N = current_mass
+        print("time=%2E\t mass\t=%.12E temp\t=%.12E"%(t_curr, current_mass, current_temp * ev_fac))
+        
+        sol_vec.append(f_t)
+        temp_t.append(current_temp)
+        mass_t.append(current_mass)
+        mw_t.append(current_mw)
+        
+        print("reassemble collision Op: (%.2E, %.2E,%.2E)"%(v0[0], v0[1], v0[2]))
         E = np.dot(e_field(t_curr + xt_1), wt_1)
         "A - advection step"
-        v1 = v0 - E 
+        v1 = v0 - E * q_by_m 
 
         "C - collision step"
-        g0.reset_scattering_direction_sp_mat()
-        collission_mat=cf.assemble_mat(g0, maxwellian, VTH, v1)
-        collission_mat= np.matmul(Minv,collission_mat)
-        ode_solver.set_f_params(collission_mat,collisions.AR_NEUTRAL_N)
-        ode_solver.set_initial_value(f_t,t_curr)
-        ode_solver.integrate(ode_solver.t + dt)
-
+        if(mode == CollissionMode.ELASTIC_ONLY):
+            g0.reset_scattering_direction_sp_mat()
+            Ce=cf.assemble_mat(g0, current_mw, current_vth, v1)
+            Ce= np.matmul(Minv,Ce)
+            ode_solver.set_f_params(Ce,collisions.AR_NEUTRAL_N)
+            
+        elif(mode == CollissionMode.ELASTIC_W_IONIZATION):
+            g0.reset_scattering_direction_sp_mat()
+            Ce=cf.assemble_mat(g0, current_mw, current_vth, v1)
+            Ce= np.matmul(Minv,Ce)
+            
+            g2.reset_scattering_direction_sp_mat()
+            Ci=cf.assemble_mat(g2, current_mw, current_vth, v1)
+            Ci= np.matmul(Minv,Ci)
+            
+            ode_solver.set_f_params(Ce,collisions.AR_NEUTRAL_N, Ci, collisions.AR_IONIZED_N)
+            
+        ode_solver.set_initial_value(f_t,0)
+        ode_solver.integrate(dt)
+        
         if(not ode_solver.successful()):
             print("collission operator solve failed\n")
             assert(False)
         
-        f_t = ode_solver.y
+        f_t       = ode_solver.y
+        # w1     = BEUtils.moment_n_f(spec_sp, f_t, current_mw, current_vth, 0, None, None, None, 1)
+        # w2     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON, spec_sp, f_t, current_mw, current_vth, None, None, None, w1, 1)
+        # print("After collision step mass =%.12E temp=%.12E"%(w1,w2*ev_fac))
+        new_mass  = BEUtils.moment_n_f(spec, f_t, current_mw, current_vth, 0, None, None, None, 1)
+        new_temp  = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec,f_t, current_mw, current_vth, None, None, None, new_mass, 1)
+        
+        if new_temp > current_temp:
+            print("current temp: %.8E new temp %.8E"%(current_temp*ev_fac, new_temp*ev_fac))
+            new_vth     = collisions.electron_thermal_velocity(new_temp)
+            mw_new      = BEUtils.get_maxwellian_3d(new_vth,new_mass)
+            P_mat       = BEUtils.thermal_projection(spec_sp, current_mw, current_vth, mw_new, new_vth, None, None, None, 1)
+            f_t         = np.matmul(P_mat,f_t)
+            
+            # num_p   = spec_sp._p + 1
+            # sph_lm_modes = spec_sp._sph_harm_lm
+            # num_sh  = len(sph_lm_modes)
+            
+            # current_hv = lambda vr,vt,vp : np.sum( np.array([f_t[k * num_sh + lm_idx] * spec.basis_eval_full(vr * (current_vth/new_vth) ,vt,vp,k,l,m) for k in range(num_p) for lm_idx, (l,m) in enumerate(sph_lm_modes)]),axis=0)
+            # f_t        = BEUtils.function_to_basis(spec_sp,current_hv, mw_new, None, None, None )
+            
+            current_mw   = mw_new
+            current_vth  = new_vth
+            current_mass     = BEUtils.moment_n_f(spec_sp, f_t, current_mw, current_vth, 0, None, None, None, 1)
+            print("mass before %.14E mass after %.14E"%(new_mass,current_mass))
+            
+        
+        # scale_fac = collisions.MAXWELLIAN_N/m0_t
+        # f_t       = f_t * scale_fac
         
         "A- advection step"
         E = np.dot(e_field(t_curr + xt_2), wt_2)
-        v0 = v1 - E 
+        v0 = v1 - E * q_by_m
         
         t_curr+=dt
     ts_steps = len(sol_vec)
-    return np.array(sol_vec).reshape((ts_steps,-1))
+    return np.array(sol_vec).reshape((ts_steps,-1)), np.array(temp_t).reshape(ts_steps,-1), np.array(mass_t).reshape(ts_steps,-1), mw_t
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=[4,8,16,32,64,128,256])
@@ -198,13 +275,29 @@ parser.add_argument("-radial_poly", "--radial_poly"           , help="radial bas
 parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=2)
 parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=11)
 parser.add_argument("-vth_fac", "--vth_fac" , help="expand the function vth_fac *V_TH", type=float, default=1.0)
+parser.add_argument("-E", "--E"                               , help="E field", nargs='+', type=float, default=[-1e-6, 0, 0])
+parser.add_argument("-e_freq", "--e_freq"                     , help="E field frequency", type=float, default=13.56e6)
+parser.add_argument("-v_cfl", "--v_cfl"                       , help="v-space cfl", type=float, default=0.2)
 args = parser.parse_args()
-print(args)
+
+coll_mode=CollissionMode.ELASTIC_ONLY
+if args.collision_mode == "g0":
+    coll_mode=CollissionMode.ELASTIC_ONLY
+elif args.collision_mode == "g02":
+    coll_mode=CollissionMode.ELASTIC_W_IONIZATION
+else:
+    raise NotImplementedError
 run_data=list()
+temperature=list()
 ev           = np.linspace(args.electron_volt/50.,100.*args.electron_volt,1000)
 eedf         = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
+eedf_initial = np.zeros((len(args.NUM_P_RADIAL),len(ev)))
+temperature  = list()
+mass_of_f    = list()
 SPLINE_ORDER = args.spline_order
 basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
+basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=args.spline_q_pts_per_knot
+
 for i, nr in enumerate(args.NUM_P_RADIAL):
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
     params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
@@ -233,36 +326,44 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
     spec  = cf._spec
     VTH   = collisions.ELECTRON_THEMAL_VEL
     
-    op_split_dt     = args.v_cfl * args.v_dv/ np.linalg.norm(np.array(args.e_amp))
+    dt_e  = args.v_cfl * collisions.MASS_ELECTRON / collisions.ELECTRON_CHARGE / np.linalg.norm(args.E)
+    args.T_DT = dt_e #np.min(args.T_DT, dt_e)
 
     print("""===========================Parameters ======================""")
     print("\tMAXWELLIAN_N : ", collisions.MAXWELLIAN_N)
     print("\tELECTRON_THEMAL_VEL : ", VTH," ms^-1")
     #print("\tDT : ", params.BEVelocitySpace().VELOCITY_SPACE_DT, " s")
-    print("\ttimestep size : ", op_split_dt, " s")
+    print("\ttimestep size : ", args.T_DT, " s")
     print("""============================================================""")
     
     params.print_parameters()
     
-    vth_factor = 1.0 #+ 1e-2
+    vth_factor = args.vth_fac
     VTH_C      = vth_factor * VTH
     maxwellian = BEUtils.get_maxwellian_3d(VTH_C, collisions.MAXWELLIAN_N)
     #hv         = lambda v,vt,vp : np.ones_like(v) +  np.tan(vt)  
-    hv         = lambda v,vt,vp : (vth_factor**3) * np.exp(v**2  -(v*vth_factor)**2)
+    if (args.radial_poly == "maxwell" or args.radial_poly == "laguerre"):
+        hv           = lambda v,vt,vp : (vth_factor**3) * np.exp(v**2  -(v*vth_factor)**2)
+    if (args.radial_poly == "bspline"):
+        hv           = lambda v,vt,vp : (vth_factor**3) * np.exp(-(v*vth_factor)**2)
     h_vec      = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
-    #e_field    = lambda t : np.array([args.e_amp[i] * np.sin(2* np.pi * args.e_freq * t) for i in range(3)])
-    e_field    = lambda t : np.array([args.e_amp[i] * np.ones_like(t) for i in range(3)])
+    #e_field    = lambda t : np.array([args.E[i] * np.sin(2* np.pi * args.e_freq * t) for i in range(3)])
+    e_field    = lambda t : np.array([args.E[i] * np.ones_like(t) for i in range(3)])
     
-    v0              = np.array([0,0,0])
-    data            = second_order_split(e_field, h_vec, cf, args.T_END, op_split_dt, v0,maxwellian, VTH_C)
-    eedf[i]         = BEUtils.get_eedf(ev, spec, data[-1,:], maxwellian, VTH_C, 1)
-    eedf_initial    = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH_C, 1)
+    v0                       = np.array([0,0,0])
+    data, temp_t, mass_t, mw = second_order_split(e_field, h_vec, cf, args.T_END, args.T_DT, v0,maxwellian, VTH_C, coll_mode)
+    eedf[i]                  = BEUtils.get_eedf(ev, spec, data[-1,:], mw[-1], collisions.electron_thermal_velocity(temp_t[-1]), 1)
+    eedf_initial[i]          = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH_C, 1)
+    
+    mass_of_f.append(mass_t)
+    temperature.append(temp_t * (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT))
     run_data.append(data)
     
-import matplotlib.pyplot as plt
 if (1):
-    fig = plt.figure(figsize=(12, 4), dpi=300)
-    plt.subplot(1, 5, 1)
+    import matplotlib.pyplot as plt
+    fig = plt.figure(figsize=(16, 10), dpi=300)
+    plt.subplot(2, 3, 1)
+    plt.plot(abs(run_data[-1][0,:]), label = "t=0")
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data=run_data[i]
         plt.plot(abs(data[1,:]),label="Nr=%d"%args.NUM_P_RADIAL[i])
@@ -270,10 +371,10 @@ if (1):
     plt.yscale('log')
     plt.xlabel("Coeff. #")
     plt.ylabel("Coeff. magnitude")
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
     plt.legend()
 
-    plt.subplot(1, 5, 2)
+    plt.subplot(2, 3, 2)
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data=run_data[i]
         plt.plot(abs(data[-1,:]),label="Nr=%d"%args.NUM_P_RADIAL[i])
@@ -281,10 +382,10 @@ if (1):
     plt.yscale('log')
     plt.xlabel("Coeff. #")
     plt.ylabel("Coeff. magnitude")
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
     plt.legend()
 
-    plt.subplot(1, 5, 3)
+    plt.subplot(2, 3, 3)
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data_last=run_data[-1]
         data=run_data[i]
@@ -293,95 +394,123 @@ if (1):
     plt.yscale('log')
     plt.xlabel("Coeff. #")
     plt.ylabel("Error in coeff. magnitude")
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
     plt.legend()
 
-    ts= np.linspace(0,args.T_END, run_data[i].shape[0])
-    plt.subplot(1, 5, 4)
-    for i, nr in enumerate(args.NUM_P_RADIAL):
-        plt.plot(ts, spec_tail_timeseries(run_data[i],nr, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
+    #ts= np.linspace(0,args.T_END, int(args.T_END/args.T_DT))
+    ts= np.linspace(0,args.T_END, run_data[-1].shape[0])
+    plt.subplot(2, 3, 4)
+    
+    if (args.radial_poly == "maxwell"):
+        for i, nr in enumerate(args.NUM_P_RADIAL):
+            plt.plot(ts, spec_tail_timeseries(run_data[i],nr, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
 
-    plt.legend()
-    plt.yscale('log')
-    plt.xlabel("time (s)")
-    plt.ylabel("spectral tail l2(h[nr/2: ])")
-    plt.grid()
+        plt.legend()
+        plt.yscale('log')
+        plt.xlabel("time (s)")
+        plt.ylabel("spectral tail l2(h[nr/2: ])")
+        plt.grid(True, which="both", ls="-")
+        
+    elif (args.radial_poly == "bspline"):
+        for i, nr in enumerate(args.NUM_P_RADIAL):
+            plt.plot(ev, np.abs(eedf[i]-eedf[-1]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+        plt.yscale('log')
+        #plt.xscale('log')
+        plt.legend()
+        plt.xlabel("energy (ev)")
+        plt.ylabel("error in eedf")
+        plt.grid(True, which="both", ls="-")
 
 
-    plt.subplot(1, 5, 5)
-    plt.plot(ev, eedf_initial, label="initial")
+    plt.subplot(2, 3, 5)
+    plt.plot(ev, eedf_initial[-1], label="initial")
     for i, nr in enumerate(args.NUM_P_RADIAL):
         data=run_data[i]
         plt.plot(ev, abs(eedf[i]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+        #plt.plot(ev, abs(eedf_initial[i]),label="initial Nr=%d"%args.NUM_P_RADIAL[i])
 
     # plt.xscale('log')
     plt.yscale('log')
     plt.legend()
     plt.xlabel("energy (ev)")
     plt.ylabel("eedf")
-    # plt.tight_layout()
-    plt.grid()
+    plt.grid(True, which="both", ls="-")
 
-    #plt.show()
-    plt.savefig("%s_coeff.png"%(args.out_fname))
-    
-fig = plt.figure(figsize=(10, 4), dpi=300)
-
-if (args.radial_poly == "maxwell"):
-    ts= np.linspace(0,args.T_END, run_data[i].shape[0])
-    plt.subplot(1, 2, 1)
+    plt.subplot(2, 3, 6)
     for i, nr in enumerate(args.NUM_P_RADIAL):
-        plt.plot(ts, spec_tail_timeseries(run_data[i],nr+1, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
+        data=temperature[i]
+        plt.plot(ts, temperature[i], label="Nr=%d"%(args.NUM_P_RADIAL[i]))
 
+    # plt.xscale('log')
+    # plt.yscale('log')
     plt.legend()
-    plt.yscale('log')
-    plt.xscale('log')
     plt.xlabel("time (s)")
-    plt.ylabel("tail l2(h[nr/2: ])")
+    plt.ylabel("temperature (eV)")
+    plt.grid(True, which="both", ls="-")
 
-elif (args.radial_poly == "bspline"):
-    plt.subplot(1, 2, 1)
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig("%s_vspace_coeff.png"%(args.out_fname))
+    
+
+if(0):
+    fig = plt.figure(figsize=(10, 4), dpi=300)
+    if (args.radial_poly == "maxwell"):
+        ts= np.linspace(0,args.T_END, run_data[i].shape[0])
+        plt.subplot(1, 2, 1)
+        for i, nr in enumerate(args.NUM_P_RADIAL):
+            plt.plot(ts, spec_tail_timeseries(run_data[i],nr+1, len(params.BEVelocitySpace.SPH_HARM_LM)),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+        plt.legend()
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.xlabel("time (s)")
+        plt.ylabel("tail l2(h[nr/2: ])")
+
+    elif (args.radial_poly == "bspline"):
+        plt.subplot(1, 2, 1)
+        for i, nr in enumerate(args.NUM_P_RADIAL):
+            plt.plot(ev, np.abs(eedf[i]-eedf[-1]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.legend()
+        plt.xlabel("energy (ev)")
+        plt.ylabel("error in eedf")
+
+    plt.subplot(1, 2, 2)
+    plt.plot(ev, eedf_initial, label="initial")
     for i, nr in enumerate(args.NUM_P_RADIAL):
-        plt.plot(ev, np.abs(eedf[i]-eedf[-1]),label="Nr=%d"%args.NUM_P_RADIAL[i])
+        data=run_data[i]
+        plt.plot(ev, eedf[i],label="Nr=%d"%(nr))
 
+    #plt.xscale('log')
     plt.yscale('log')
-    plt.xscale('log')
     plt.legend()
     plt.xlabel("energy (ev)")
-    plt.ylabel("error in eedf")
+    plt.ylabel("eedf")
+    plt.tight_layout()
 
-plt.subplot(1, 2, 2)
-plt.plot(ev, eedf_initial, label="initial")
-for i, nr in enumerate(args.NUM_P_RADIAL):
-    data=run_data[i]
-    plt.plot(ev, eedf[i],label="Nr=%d"%(nr))
+    #plt.show()
+    plt.savefig("%s.png"%(args.out_fname))
+    plt.close()
 
-#plt.xscale('log')
-plt.yscale('log')
-plt.legend()
-plt.xlabel("energy (ev)")
-plt.ylabel("eedf")
-plt.tight_layout()
+    fig = plt.figure(figsize=(10, 4), dpi=300)
+    plt.subplot(1,2,1)
+    polar_plot, _ , __ = constant_r_eval(spec,run_data[-1][0,:],1)
+    plt.imshow(polar_plot,extent=[0,2*np.pi,0,np.pi])
+    plt.colorbar()
+    plt.xlabel("azimuthal angle")
+    plt.ylabel("polar angle")
+    plt.title("initial, v_r = 1")
 
-#plt.show()
-plt.savefig("%s.png"%(args.out_fname))
-plt.close()
-
-fig = plt.figure(figsize=(10, 4), dpi=300)
-plt.subplot(1,2,1)
-polar_plot, _ , __ = constant_r_eval(spec,run_data[-1][0,:],1)
-plt.imshow(polar_plot,extent=[0,2*np.pi,0,np.pi])
-plt.colorbar()
-plt.xlabel("azimuthal angle")
-plt.ylabel("polar angle")
-plt.title("initial, v_r = 1")
-
-plt.subplot(1,2,2)
-polar_plot, _ , __ = constant_r_eval(spec,run_data[-1][-1,:],1)
-plt.imshow(polar_plot,extent=[0,2*np.pi,0,np.pi])
-plt.colorbar()
-plt.clim(np.min(polar_plot),np.max(polar_plot)*1.01)
-plt.xlabel("azimuthal angle")
-plt.ylabel("polar angle")
-plt.title("final, v_r = 1")
-plt.savefig("%s_const_r.png"%(args.out_fname))
+    plt.subplot(1,2,2)
+    polar_plot, _ , __ = constant_r_eval(spec,run_data[-1][-1,:],1)
+    plt.imshow(polar_plot,extent=[0,2*np.pi,0,np.pi])
+    plt.colorbar()
+    plt.clim(np.min(polar_plot),np.max(polar_plot)*1.01)
+    plt.xlabel("azimuthal angle")
+    plt.ylabel("polar angle")
+    plt.title("final, v_r = 1")
+    plt.savefig("%s_const_r.png"%(args.out_fname))

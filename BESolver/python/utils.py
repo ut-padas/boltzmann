@@ -9,7 +9,19 @@ import scipy.constants
 
 MAX_GMX_Q_VR_PTS=278
 
+def choloskey_inv(M):
+    #return np.linalg.pinv(M,rcond=1e-30)
+    rtol=1e-14
+    atol=1e-14
+    L    = np.linalg.cholesky(M)
+    #print("conditioning of L", np.linalg.cond(L))
+    Linv = np.linalg.inv(L)
+    return np.matmul(np.transpose(Linv),Linv)
+    
+    
+
 def block_jacobi_inv(M,num_partitions=8):
+    #return choloskey_inv(M)
     #return np.linalg.pinv(M,rcond=1e-30)
     rtol=1e-14
     atol=1e-14
@@ -311,12 +323,12 @@ def thermal_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw_1,v
         MM_l    = list()
 
         for l in l_modes:
-            Vr_l_vth1.append(spec_sp.Vq_r(gx, l))
-            Vr_l_vth2.append(spec_sp.Vq_r(vth1_by_vth2 * gx, l))
+            Vr_l_vth1.append(spec_sp.Vq_r(vth1_by_vth2 * gx, l))
+            Vr_l_vth2.append(spec_sp.Vq_r(gx, l))
         
         for j,l in enumerate(l_modes):
-            mr   = np.ones_like(gx) *  gx**(2*l) * vth1_by_vth2**(l) 
-            mm_l = np.array([ mr * Vr_l_vth1[l][p,:] * Vr_l_vth2[l][k,:] for p in range(num_p) for k in range(num_p)])
+            mr   = (gx**(2*l))
+            mm_l = np.array([ mr * Vr_l_vth1[j][p,:] * Vr_l_vth2[j][k,:] for p in range(num_p) for k in range(num_p)])
             mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
             MM_l.append(mm_l)
             
@@ -329,8 +341,59 @@ def thermal_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw_1,v
                     idx_klm = k * num_sh + lm_idx
                     mm[idx_pqs, idx_klm] = MM_l[idx][p,k]
         return mm
+    
+    elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        
+        if NUM_Q_VR is None:
+            NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+        
+        if NUM_Q_VT is None:
+            NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
+        
+        if NUM_Q_VP is None:
+            NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+        
+        [gx,gw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+        weight_func  = spec_sp._basis_p.Wx()
+        
+        l_modes    = list(set([l for l,_ in spec_sp._sph_harm_lm]))
+        Vr_l_vth1  = list()
+        Vr_l_vth2  = list()
+        vth1_by_vth2 = vth_1 / vth_2
+        
+        MM_l       = list()
+        mmat_vth2  = list()
+        
+        for l in l_modes:
+            Vr_l_vth1.append(spec_sp.Vq_r(vth1_by_vth2 * gx, l))
+            Vr_l_vth2.append(spec_sp.Vq_r(gx, l))
+        
+        # note: integration perfomed in the vth2 normalize coord, so the factors cancel out with the mass mat. 
+        for j,l in enumerate(l_modes):
+            mr   = gx**2 
+            mm_l = np.array([ mr * Vr_l_vth1[j][p,:] * Vr_l_vth2[j][k,:] for p in range(num_p) for k in range(num_p)])
+            mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+            MM_l.append(mm_l)
+            
+            mm_l = np.array([ mr * Vr_l_vth2[j][p,:] * Vr_l_vth2[j][k,:] for p in range(num_p) for k in range(num_p)])
+            mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+            mmat_vth2.append(mm_l)
+            
+        mm_proj = np.zeros((num_p*num_sh, num_p*num_sh))
+        mm_vth2 = np.zeros((num_p*num_sh, num_p*num_sh))
+        for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm):
+            idx=l_modes.index(l)
+            for p in range(num_p):
+                for k in range(num_p):
+                    idx_pqs = p * num_sh + lm_idx
+                    idx_klm = k * num_sh + lm_idx
+                    mm_proj[idx_pqs, idx_klm] = MM_l[idx][p,k]
+                    mm_vth2[idx_pqs, idx_klm] = mmat_vth2[idx][p,k]
+        
+        mm_vth2 = choloskey_inv(mm_vth2)
+        return np.matmul(mm_vth2,mm_proj)
     else:
-        raise NotImplementedError("not implemented for other basis yet")
+        raise NotImplementedError("not implemented for specified basis")
     
 def get_maxwellian_3d(vth,n_scale=1):
     M = lambda x: (n_scale / ((vth * np.sqrt(np.pi))**3) ) * np.exp(-x**2)

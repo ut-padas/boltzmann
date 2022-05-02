@@ -488,7 +488,7 @@ class Collisions(abc.ABC):
             y = a +  b * ev**1 + c * ev**2 + d * ev**3 + e * ev **4 
             y[ev<=11.55] = 0 
             y[ev>35.00] = f + g * (1/pow(ev[ev>35.00],2))
-            y[ev>200]   = 0
+            y[ev>=200]   = 0
             return y     
         
         elif mode == "g2":

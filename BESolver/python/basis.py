@@ -259,11 +259,11 @@ class XlBSpline(Basis):
         num_k            = 2*spline_order + (num_p -2) + 2
         self._t          = (k_domain[0])*np.ones(spline_order+1)
         knot_base        = 1.5
-        # self._t          = np.append(self._t,np.logspace(-4, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
-        pts_1 =  2*((num_k-2*spline_order -2)//10)
-        pts_2 =  (num_k-2*spline_order -2) -pts_1
-        self._t          = np.append(self._t,np.logspace(-4, np.log(0.2 * k_domain[1])/np.log(knot_base) , pts_1  ,base=knot_base, endpoint=False))
-        self._t          = np.append(self._t,np.linspace(0.2 * k_domain[1], k_domain[1] , pts_2 , endpoint=False))
+        self._t          = np.append(self._t,np.logspace(-4, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
+        # pts_1 =  2*((num_k-2*spline_order -2)//10)
+        # pts_2 =  (num_k-2*spline_order -2) -pts_1
+        # self._t          = np.append(self._t,np.logspace(-4, np.log(0.2 * k_domain[1])/np.log(knot_base) , pts_1  ,base=knot_base, endpoint=False))
+        # self._t          = np.append(self._t,np.linspace(0.2 * k_domain[1], k_domain[1] , pts_2 , endpoint=False))
         self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
         #print("len_t ",len(self._t) , " num_k ",num_k)
         #print(self._t)
@@ -290,7 +290,7 @@ class XlBSpline(Basis):
 
 
     def Pn(self,deg,domain=None,window=None):
-        return lambda x,l : np.nan_to_num(self._splines[deg](x)) * x**l #(x**(max(l-deg,0)))
+        return lambda x,l : np.nan_to_num(self._splines[deg](x)) * x**l 
         
         
         
@@ -305,7 +305,7 @@ class XlBSpline(Basis):
         qx = np.zeros(deg)
         qw = np.zeros(deg)
         for i in range(self._sp_order, self._sp_order + num_intervals):
-            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = uniform_simpson_3b8((self._t[i], self._t[i+1]),self._q_per_knot)
+            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = uniform_simpson((self._t[i], self._t[i+1]),self._q_per_knot)
         
         # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
         # print(qx.shape)
@@ -323,7 +323,9 @@ class XlBSpline(Basis):
         return I
 
     def derivative(self, deg, dorder):
-        assert dorder==1, "not implemented for HO derivatives"
+        if(dorder > 1):
+            raise NotImplementedError
+        
         i=deg
         p=self._sp_order
         c1 = self._t[i+p] - self._t[i]
@@ -342,10 +344,11 @@ class XlBSpline(Basis):
         return lambda x : np.nan_to_num(f_c1(x)) + np.nan_to_num(f_c2(x))
 
     def diff(self,deg, dorder):
-        assert dorder==1, "not implemented for HO derivatives"
+        if(dorder > 1):
+            raise NotImplementedError
         
         b_deriv = self.derivative(deg,1)
-        return lambda l,x : b_deriv(x) if deg>=(l) else x**(l-deg) *b_deriv(x) + self.Pn(deg)(0,x) * (l-deg) * x**(l-deg-1)
+        return lambda l,x : b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
         #return lambda l,x : b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(0,x) * (l) * x**(l-1)
 
 

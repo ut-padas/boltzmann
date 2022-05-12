@@ -78,14 +78,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     print("Condition number of M= %.8E"%m_cond)
     
     if(args.radial_poly == "bspline"):
-        # import matplotlib.pyplot as plt
-        # plt.spy(M)
-        # plt.show()
-        #num_partitions = 8
-        #BEUtils.block_jacobi_inv(M,num_partitions)
         Minv = BEUtils.choloskey_inv(M)
-        
-        
     else:
         Minv = np.linalg.inv(M)
 
@@ -95,9 +88,6 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     print("==========================================================================")
 
     h_t = h_init
-    # if(args.radial_poly == "bspline"):
-    #     h_t[np.abs(h_t)<filter_tol]=0.0
-        
     t_curr = 0.0
     t_step = 0
 

@@ -36,5 +36,5 @@ class basis:
         self._deg = deg
 
     def __call__(self, x, l):
-        return lagp(self._deg, l+0.5, x**2)
+        return (x**l) * lagp(self._deg, l+0.5, x**2)
     

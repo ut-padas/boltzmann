@@ -2791,5 +2791,183 @@ e^{-x^2} x^{q} \left( \lp{q}{k} - \lp{q}{k-1} \right)
 + (q-1) \sum_{j=0}^{p} \nfun{q-1}{j} \delta_{j,k}
 \end{multline*}
 
+\newpage
+Constant cross-section $t_{end} = 10^{-6}$ s\\
+\includegraphics[width=0.99\textwidth]{fig/different_vth_const_1e-6.png}
+
+Data-fitted cross section $t_{end} = 10^{-6}$ s\\
+\includegraphics[width=0.99\textwidth]{fig/different_vth_real_1e-6.png}
+
+Constant cross-section $t_{end} = 10^{-5}$ s\\
+\includegraphics[width=0.99\textwidth]{fig/different_vth_const_1e-5.png}
+
+Data-fitted cross section $t_{end} = 10^{-5}$ s\\
+\includegraphics[width=0.99\textwidth]{fig/different_vth_real_1e-5.png}
+
+\newpage
+\section{Analytical solutions}
+
+Expansion
+\begin{align*}
+f\of{\vect{v},t} = \sum h_{klm}\of{t} \exp\of{-\frac{v^2}{\vth^2}} \left( \frac{v}{\vth} \right)^{l} P_{kl}\of{\frac{v}{\vth}} Y_{lm}\of{\vtheta, \vphi}
+\end{align*}
+System of ODEs for coefficients
+\begin{align*}
+\frac{d \vect{h}}{dt} + E \vect{h} = C \vect{h}
+\end{align*}
+Factor out the very first coefficient $h_0\of{t}$:
+\begin{align*}
+\vect{h} = 
+\begin{pmatrix}
+h_0 \\ \vect{h}_\ast
+\end{pmatrix}
+,\quad
+E = 
+\begin{pmatrix}
+0 & \vect{0}^T \\
+\vect{e}_{0\ast} & E_{\ast\ast}
+\end{pmatrix}
+,\quad
+C = 
+\begin{pmatrix}
+C_{00} & \vect{c}_{\ast 0}^T \\
+\vect{c}_{0\ast} & C_{\ast\ast}
+\end{pmatrix}
+\end{align*}
+A slightly more explicit systems of ODEs
+\begin{align*}
+\frac{dh_0}{dt} &= h_0 \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right)
+\\
+\frac{d \vect{h}_\ast}{dt} &= - \vect{e}_{0\ast} h_0 
+- E_{\ast\ast} \vect{h}_\ast
+- \vect{c}_{0\ast} h_0 
+- C_{\ast\ast} \vect{h}_\ast
+\end{align*}
+Deriving an equation for scaled coefficients $\frac{\vect{h}_\ast}{h_0}$
+\begin{align*}
+\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) + \frac{\vect{h}_\ast}{h_0^2} \frac{dh_0}{dt} &= 
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
++ \left( C_{\ast\ast} - E_{\ast\ast} \right) \frac{\vect{h}_\ast}{h_0}
+\end{align*}
+Substituting equation for $\frac{dh_0}{dt}$
+\begin{align*}
+\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) 
++ \frac{\vect{h}_\ast}{h_0} \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) &= 
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
++ \left( C_{\ast\ast} - E_{\ast\ast} \right) \frac{\vect{h}_\ast}{h_0}
+\end{align*}
+Steady-state solution
+\begin{align*}
+\frac{\vect{h}_\ast}{h_0} = 
+\left( \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) I
+- \left( C_{\ast\ast} - E_{\ast\ast} \right) \right)^{-1}
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
+\end{align*}
+
+\newpage
+
+\begin{align*}
+\vect{h} =
+\begin{pmatrix}
+h_0 \\
+\tilde{\vect{h}}
+\end{pmatrix}
+,\quad
+C = 
+\begin{pmatrix}
+0 & \vect{0}^T \\
+\vect{c}_0 & \tilde{C}
+\end{pmatrix}
+\end{align*}
+\begin{align*}
+\frac{d \tilde{\vect{h}}}{dt} = \tilde{C} \tilde{\vect{h}} + h_0 \vect{c}_0
+\end{align*}
+
+\begin{align*}
+\tilde{C} &= V \Lambda V^{-1}
+\end{align*}
+
+\begin{align*}
+\tilde{\vect{h}}\of{t} = V \exp\of{\Lambda t} V^{-1} \tilde{\vect{h}}\of{0} + h_0 V \left( I - \exp\of{\Lambda t} \right) \Lambda^{-1} V^{-1} \vect{c}_0
+\end{align*}
+
+\includegraphics[width=0.99\textwidth]{fig/steady_state_elastic_only.png}
+
+\newpage
+System of ODEs for coefficients
+\begin{align*}
+\frac{d \vect{h}}{dt} - E \sin\of{\omega t} \vect{h} = C \vect{h}
+\end{align*}
+Eigenvalue decomposition of $C$:
+\begin{align*}
+C &= V \Lambda V^{-1}
+\end{align*}
+Change of variables:
+\begin{align*}
+\vect{y} &= V^{-1} \vect{h} \\
+F &= V^{-1} E V
+\end{align*}
+New form:
+\begin{align*}
+\frac{d \vect{y}}{dt} - F \sin\of{\omega t} \vect{y} = \Lambda \vect{y}
+\end{align*}
+A Floquet-Lyapunov transformation:
+\begin{align*}
+\vect{y} = \exp\of{-\frac{F}{\omega} \cos{\omega t} + \Lambda t} \vect{z}
+\end{align*}
+leads to:
+\begin{align*}
+\frac{d \vect{z}}{dt} = 0
+\end{align*}
+thus:
+\begin{align*}
+\vect{h}\of{t} = V \exp\of{\frac{V^{-1} E V}{\omega}  \left(1 - \cos\of{\omega t} \right) + \Lambda t} V^{-1} \vect{h}\of{0}
+\end{align*}
+
+\newpage
+\begin{align*}
+\vect{h} =
+\begin{pmatrix}
+h_0 \\
+\tilde{\vect{h}}
+\end{pmatrix}
+,\quad
+C = 
+\begin{pmatrix}
+0 & \vect{0}^T \\
+\vect{c}_0 & \tilde{C}
+\end{pmatrix}
+\end{align*}
+\begin{align*}
+\frac{d \tilde{\vect{h}}}{dt} - E \sin\of{\omega t} \tilde{\vect{h}} = \tilde{C} \tilde{\vect{h}} + h_0 \vect{c}_0
+\end{align*}
+Change of variables:
+\begin{align*}
+\vect{y} &= \tilde{V}^{-1} \tilde{\vect{h}} \\
+F &= \tilde{V}^{-1} \tilde{E} \tilde{V}\\
+\vect{g} &= \tilde{V}^{-1} h_0 \vect{c}_0
+\end{align*}
+New form:
+\begin{align*}
+\frac{d \vect{y}}{dt} - F \sin\of{\omega t} \vect{y} = \Lambda \vect{y} + \vect{g}
+\end{align*}
+After a Floquet-Lyapunov transformation:
+\begin{align*}
+\exp\of{-\frac{F}{\omega} \cos{\omega t} + \Lambda t} \frac{d \vect{z}}{dt} = \vect{g}
+\end{align*}
+Solving:
+\begin{align*}
+\vect{z}\of{t} = \vect{z}\of{0} + \int_{0}^{t} \exp\of{\frac{F}{\omega} \cos{\omega \tau} - \Lambda \tau} d\tau \vect{g} 
+\end{align*}
+
+\begin{multline*}
+\tilde{\vect{h}}\of{t} = \tilde{V} \exp\of{\frac{\tilde{V}^{-1} \tilde{E} \tilde{V}}{\omega} \left(1 - \cos\of{\omega t}\right) + \Lambda t} V^{-1} \tilde{\vect{h}}\of{0}
+\\
++
+h_0
+\tilde{V} 
+\int_{0}^{t} \exp\of{\frac{\tilde{V}^{-1} \tilde{E} \tilde{V}}{\omega} \left( \cos\of{\omega \tau} - \cos\of{\omega t} \right)  - \Lambda \left( \tau - t \right)} d\tau V^{-1} \vect{c}_0
+\end{multline*}
+
 
 \end{document}

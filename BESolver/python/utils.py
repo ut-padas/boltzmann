@@ -628,11 +628,11 @@ def thermal_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw_1,v
     else:
         raise NotImplementedError("not implemented for specified basis")
 
-def vcenter_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw,vth, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, v0, Minv, scale=1.0):
+def vcenter_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw,vth, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, v0, scale=1.0):
     """
     compute the v center projection operator
     v0- shift in the choosen v center. 
-    P= Minv \int_{R^3} \psi_{pqs}(u) \phi_{klm}(u+v0) dv 
+    P= Minv \int_{R^3} \psi_{pqs}(v) \phi_{klm}(v-v0) dv 
     """
 
     num_p        = spec_sp._p +1
@@ -675,43 +675,36 @@ def vcenter_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw,vth
         [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR,True)
         weight_func  = spec_sp._basis_p.Wx()
 
-        quad_grid      = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
+        quad_grid    = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
         l_modes      = list(set([l for l,_ in spec_sp._sph_harm_lm])) 
         
-        Vq_sph_lm    = np.zeros(tuple([num_sh]) + quad_grid[0].shape)
-        Vq_sph_qs    = np.zeros(tuple([num_sh]) + quad_grid[0].shape)
+        quad_grid_v0 = spherical_to_cartesian(quad_grid[0], quad_grid[1], quad_grid[2])
 
-        quad_grid_v0   = spherical_to_cartesian(quad_grid[0], quad_grid[1], quad_grid[2])
-
-        quad_grid_v0[0] +=v0[0] 
-        quad_grid_v0[1] +=v0[1] 
-        quad_grid_v0[2] +=v0[2] 
+        quad_grid_v0[0] -=v0[0] 
+        quad_grid_v0[1] -=v0[1] 
+        quad_grid_v0[2] -=v0[2] 
 
         quad_grid_v0 = cartesian_to_spherical(quad_grid_v0[0], quad_grid_v0[1], quad_grid_v0[2])
         
-        Vq_sph_lm = spec_sp.Vq_sph(quad_grid[1], quad_grid[2], 1)
-        Vq_sph_qs = spec_sp.Vq_sph(quad_grid_v0[1], quad_grid_v0[2], 1)
+        Vq_sph_lm    = spec_sp.Vq_sph(quad_grid_v0[1], quad_grid_v0[2], 1)
+        Vq_sph_qs    = spec_sp.Vq_sph(quad_grid[1], quad_grid[2], 1)
 
-        
-        psi_pqs = np.array([ spec_sp.basis_eval_radial(quad_grid_v0[0],p,q) * Vq_sph_qs[qs_idx] for qs_idx, (q,s) in enumerate(sph_harm_lm) for p in range(num_p)])
+        psi_pqs = np.array([ spec_sp.basis_eval_radial(quad_grid[0],p,q) * Vq_sph_qs[qs_idx] for qs_idx, (q,s) in enumerate(sph_harm_lm) for p in range(num_p)])
         psi_pqs = psi_pqs.reshape(tuple([num_sh,num_p]) + quad_grid[0].shape)
         psi_pqs = np.swapaxes(psi_pqs,0,1)
         
-        phi_klm = np.array([ spec_sp.basis_eval_radial(quad_grid[0],k,l) * Vq_sph_lm[lm_idx] for lm_idx, (l,m) in enumerate(sph_harm_lm) for k in range(num_p)])
+        phi_klm = np.array([ spec_sp.basis_eval_radial(quad_grid_v0[0],k,l) * Vq_sph_lm[lm_idx] for lm_idx, (l,m) in enumerate(sph_harm_lm) for k in range(num_p)])
         phi_klm = phi_klm.reshape(tuple([num_sh,num_p]) + quad_grid[0].shape)
         phi_klm = np.swapaxes(phi_klm,0,1)
         
-
         mm = np.array([ (quad_grid[0] **2) * psi_pqs[p,qs_idx] * phi_klm[k,lm_idx] for p in range(num_p) for qs_idx in range(num_sh) for k in range(num_p) for lm_idx in range(num_sh)])
         mm = np.dot(mm, WVPhi_q)
         mm = np.dot(mm, glw)
         mm = np.dot(mm, gmw)
         mm = mm.reshape(num_p * num_sh , num_p * num_sh)
-        mm = np.matmul(Minv, mm)
         return mm
     else:
         raise NotImplementedError("not implemented for specified basis")
-    
 
 def get_maxwellian_3d(vth,n_scale=1):
     M = lambda x: (n_scale / ((vth * np.sqrt(np.pi))**3) ) * np.exp(-x**2)

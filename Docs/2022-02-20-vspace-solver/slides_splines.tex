@@ -187,7 +187,7 @@
 
 
 \begin{frame}
-	\frametitle{Discretized collision kernel (T=3eV) singular values}
+	\frametitle{Discretized collision kernel singular values}
 	\only<+>{
 	\begin{table}
 		\centering
@@ -197,75 +197,62 @@
 			\includegraphics[width=0.35\textwidth]{figures/b_sp1_spectrum_3ev_l_max_0.png} 
 		\end{tabular}
 	\end{table}}
-	\only<+>{
-	\begin{table}
-		\centering
-		\begin{tabular}{cc}
-			Maxwell &  quadratic splines \\
-			\includegraphics[width=0.35\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
-			\includegraphics[width=0.35\textwidth]{figures/b_sp2_spectrum_3ev_l_max_0.png} 
-		\end{tabular}
-\end{table}}
-	\only<+>{
-	\begin{table}
-		\centering
-		\begin{tabular}{cc}
-			Maxwell &  cubic splines \\
-			\includegraphics[width=0.35\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
-			\includegraphics[width=0.35\textwidth]{figures/b_sp3_spectrum_3ev_l_max_0.png} 
-		\end{tabular}
-\end{table}}
+%	\only<+>{
+%	\begin{table}
+%		\centering
+%		\begin{tabular}{cc}
+%			Maxwell &  quadratic splines \\
+%			\includegraphics[width=0.35\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
+%			\includegraphics[width=0.35\textwidth]{figures/b_sp2_spectrum_3ev_l_max_0.png} 
+%		\end{tabular}
+%\end{table}}
+%	\only<+>{
+%	\begin{table}
+%		\centering
+%		\begin{tabular}{cc}
+%			Maxwell &  cubic splines \\
+%			\includegraphics[width=0.35\textwidth]{figures/m_spectrum_3ev_l_max_0.png} & 
+%			\includegraphics[width=0.35\textwidth]{figures/b_sp3_spectrum_3ev_l_max_0.png} 
+%\end{tabular}
+%\end{table}}
+\begin{itemize}
+	\item Difference between $max(\sigma)$ can be due to the norm differences between the projection operators.
+\end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Elastic collisions (with energy transfer)}
-	\only<+>{
-		Using Temp(t=0)=1eV, T=1e-6 s
-		\begin{table}
-			\centering
-			\begin{tabular}{cc}
-				Maxwell &   quadratic splines\\
-				\includegraphics[width=0.48\textwidth]{figures/m_1ev_1e-6.png} & 
-				\includegraphics[width=0.48\textwidth]{figures/b_sp2_1ev_1e-6.png} 
-			\end{tabular}
-	\end{table}
-	}
-	\only<+>{
-	Using Temp(t=0)=3eV, T=1e-6 s
-	\begin{table}
-		\centering
-		\begin{tabular}{cc}
-			Maxwell &   quadratic splines\\
-			\includegraphics[width=0.48\textwidth]{figures/m_3ev_1e-6.png} & 
-			\includegraphics[width=0.48\textwidth]{figures/b_sp2_3ev_1e-6.png} 
-		\end{tabular}
-	\end{table}
-	}
-
-	\only<+>{
-	Using Temp(t=0)=5eV, T=1e-6 s
-	\begin{table}
-		\centering
-		\begin{tabular}{cc}
-			Maxwell &   quadratic splines\\
-			\includegraphics[width=0.48\textwidth]{figures/m_5ev_1e-6.png} & 
-			\includegraphics[width=0.48\textwidth]{figures/b_sp2_5ev_1e-6.png} 
-		\end{tabular}
-	\end{table}
-	}
-	
-	\only<+>{
-		Using Temp(t=0)=5eV, T=5e-6 s,
-		\begin{table}
-			\centering
-			\begin{tabular}{cc}
-				Maxwell &   quadratic splines\\
-				\includegraphics[width=0.48\textwidth]{figures/m_5ev_5e-6.png} & 
-				\includegraphics[width=0.48\textwidth]{figures/b_sp2_5ev_5e-6.png} 
-			\end{tabular}
-		\end{table}
-	}
+	\frametitle{B-Splines projection}
+	\begin{itemize}
+		\item Mass matrix for splines is ill-conditioned. 
+		\item Using Cholesky factorization based inversion has improved the projection coefficient accuracy for b-splines. 
+	\end{itemize}
+\begin{table}
+	\centering
+	\begin{tabular}{cc}
+		svd pseudo-inverse $\sigma_{c} = 10^{-15}\max\sigma$ &  Cholesky factored inverse \\
+		\includegraphics[width=0.35\textwidth]{figures/svd_pseudo_inv.png} &
+		\includegraphics[width=0.35\textwidth]{figures/cholesky_inv.png} 
+	\end{tabular}
+\end{table}
 \end{frame}
+
+
+\begin{frame}
+\frametitle{Elastic + Ionization at 1eV : Maxwell}
+\begin{figure}
+	\centering
+	\includegraphics[width=0.7\textwidth]{figures/m_1ev_coeff.png}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Elastic + Ionization at 1eV : Linear splines}
+	\begin{figure}
+		\centering
+		\includegraphics[width=0.7\textwidth]{figures/b_1ev_coeff.png}
+	\end{figure}
+\end{frame}
+
 
 \begin{frame}
 	\frametitle{Accuracy tests}
@@ -274,9 +261,9 @@
 	\begin{table}
 		\centering
 		\begin{tabular}{cc}
-			Maxwell &   quadratic splines\\
-			\includegraphics[width=0.48\textwidth]{figures/m_no_e_loss_1ev_1e-6.png} & 
-			\includegraphics[width=0.48\textwidth]{figures/b_sp2_no_e_loss_1ev_1e-6.png} 
+			Maxwell &   linear splines\\
+			\includegraphics[width=0.45\textwidth]{figures/m_1ev_no_cooling_coeff.png} & 
+			\includegraphics[width=0.45\textwidth]{figures/b_1ev_no_cooling_coeff.png} 
 		\end{tabular}
 	\end{table}
 \end{frame}
@@ -284,112 +271,10 @@
 \begin{frame}
 	\frametitle{Accuracy tests}
 	With elastic collisions without energy transfer and with angle independent differential cross section, if we start with anisotropic distribution we should reach isotropic distribution eventually. We start with $f(\vect{v},t=0) = M(\vect{v}) (1 + \tan v_\theta)$, evolved for time horizon T=4e-6 s.
-	
-	\only<+>
-	{
-		\begin{figure}
-			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_l2.png}
-		\end{figure}
-	}
-	\only<+>
-	{
-		\begin{figure}
-			\includegraphics[width=0.8\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_l2_const_r.png}
-		\end{figure}
-	}
-\end{frame}
-
-
-\begin{frame}{Changing expansion thermal velocity}
-	Let $\beta$ be the chosen thermal velocity for the $f(\vect{v})$ expansion, $\alpha$ be the actual thermal velocity (i.e., for corresponding temperature).
-	\begin{align*}
-		f(\vect{v},0) &= \frac{n_e}{(\sqrt{\pi}\alpha)^3}\exp\of{-\frac{v_r^2}{\alpha^2}} = \underbrace{\frac{n_e}{(\sqrt{\pi}\beta)^3} \exp\of{-\frac{v_r^2}{\beta^2}}}_{M(\vect{v})} \underbrace{\left(\frac{\beta}{\alpha}\right)^3 \exp\of{-\frac{v_r^2}{\alpha^2} + \frac{v_r^2}{\beta^2}}}_{h(\vect{v})} 
-	\end{align*}
-\end{frame}
-
-\begin{frame}{Maxwell polynomials with $\beta=\lambda \alpha$}
-	\begin{center}
-		\only<+>{
-		chosen $\beta = 1.0 \alpha$
-		\begin{figure}
-			\includegraphics[width=0.6\textwidth]{figures/m_1ev_1e0vth_coeff.png}
-		\end{figure}
-		}
-		\only<+>{
-		chosen $\beta = 0.9 \alpha$
-		\begin{figure}
-		\includegraphics[width=0.6\textwidth]{figures/m_1ev_9e-1vth_coeff.png}
-		\end{figure}
-		}
-		\only<+>{
-		chosen $\beta = 0.8 \alpha$
-		\begin{figure}
-		\includegraphics[width=0.6\textwidth]{figures/m_1ev_8e-1vth_coeff.png}
-		\end{figure}
-
-		}
-		\only<+>{
-		chosen $\beta = 0.7 \alpha$
-		\begin{figure}
-		\includegraphics[width=0.6\textwidth]{figures/m_1ev_7e-1vth_coeff.png}
-		\end{figure}
-		}
-	\end{center}
-\end{frame}
-
-\begin{frame}{Quadratic splines with $\beta=\lambda \alpha$}
-	\begin{center}
-		\only<+>{
-			chosen $\beta = 1.0 \alpha$
-			\begin{figure}
-				\includegraphics[width=0.6\textwidth]{figures/b_sp2_1ev_1e0vth_coeff.png}
-			\end{figure}
-		}
-		\only<+>{
-			chosen $\beta = 0.98 \alpha$
-			\begin{figure}
-				\includegraphics[width=0.6\textwidth]{figures/b_sp2_1ev_9.8e-1vth_coeff.png}
-			\end{figure}
-		}
-		\only<+>{
-			chosen $\beta = 0.96 \alpha$
-			\begin{figure}
-				\includegraphics[width=0.6\textwidth]{figures/b_sp2_1ev_9.6e-1vth_coeff.png}
-			\end{figure}
-		}
-
-		\only<+>{
-			\begin{itemize}
-				\item Log-spaced knot placement is not ideal for capturing tails. Struggles to capture the a perfect Maxwellian for energies > 40eV.
-				\item Explore adaptive knot placement with appropriate error controls (i.e., binary tree with hierarchical splitting) ?
-			\end{itemize}
-		}
-	
-	\end{center}
-\end{frame}
-
-
-
-
-
-\begin{frame}
-\frametitle{Convergence of expansion coefficients}
-1eV, $\Delta t = 10^{-10}$ s, $t_{end} = 10^{-6}$ s\\
-\includegraphics[width=0.99\textwidth]{figures/expansion_1ev.png}
-\end{frame}
-
-\begin{frame}
-\frametitle{Convergence of expansion coefficients}
-1eV, $\Delta t = 10^{-10}$ s, $t_{end} = 10^{-6}$ s\\
-\includegraphics[width=0.99\textwidth]{figures/expansion_1ev_256.png}
-\end{frame}
-
-\begin{frame}
-0.1ev\\
-\includegraphics[width=0.99\textwidth]{figures/expansion_01ev.png}
-
-5ev \\
-\includegraphics[width=0.99\textwidth]{figures/expansion_5ev.png}
+	\begin{figure}
+		\includegraphics[width=0.48\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_l2_const_r.png}
+		\includegraphics[width=0.48\textwidth]{figures/m_no_e_loss_aiso_test_1ev_4e-6_l2.png}
+	\end{figure}
 \end{frame}
 
 
@@ -398,7 +283,7 @@
 \begin{columns}
 	\begin{column}{0.5\textwidth}
 		\begin{center}
-			\small
+			\tiny
 			\begin{align*}
 			\partial_t f + \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
 			\end{align*}
@@ -434,6 +319,7 @@
 			\begin{enumerate}
 				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n}^{t_n+\frac12 \Delta t} \vect{E}\of{\tau} d\tau$
 				\item Solve collision op.  from $t_0$ to $t_0 + \Delta t$
+				\item If temperature increased project to higher $v_{th}$.
 				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n+\frac12 \Delta t}^{t_n + \Delta t} \vect{E}\of{\tau} d\tau$
 			\end{enumerate}
 		\end{center}
@@ -442,76 +328,17 @@
 \end{frame}
 
 \begin{frame}
-	\frametitle{EEDF : Maxwell Polynomials (T=1e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_1_maxwell_eedf.png}
-	\end{center}
+	\frametitle{Maxwell : Elastic + Ionization + advection}
+	\begin{figure}
+		\includegraphics[width=0.7\textwidth]{figures/m_test_vspace_coeff.png}
+	\end{figure}
 \end{frame}
 
 \begin{frame}
-	\frametitle{EEDF : Maxwell Polynomials (T=1e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_1_maxwell_eedf_conv.png}
-	\end{center}
-\end{frame}
-
-\begin{frame}
-	\frametitle{EEDF : linear b-splines (T=1e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_1_bspline_eedf.png}
-	\end{center}
-\end{frame}
-
-\begin{frame}
-	\frametitle{EEDF : linear b-splines (T=1e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_1_bspline_eedf_conv.png}
-	\end{center}
-\end{frame}
-
-
-
-\begin{frame}
-	\frametitle{EEDF : Maxwell Polynomials (T=3e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_3_maxwell_eedf.png}
-	\end{center}
-\end{frame}
-
-\begin{frame}
-	\frametitle{EEDF : Maxwell Polynomials (T=3e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_3_maxwell_eedf_conv.png}
-	\end{center}
-\end{frame}
-
-\begin{frame}
-	\frametitle{EEDF : linear b-splines (T=3e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_3_bspline_eedf.png}
-	\end{center}
-\end{frame}
-
-\begin{frame}
-	\frametitle{EEDF : linear b-splines (T=3e-6 s)}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_3_bspline_eedf_conv.png}
-	\end{center}
-\end{frame}
-
-
-\begin{frame}
-	\frametitle{EEDF : Maxwell vs. b-splines}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_1_bspline_vs_maxwell.png}
-	\end{center}
-\end{frame}
-
-\begin{frame}
-	\frametitle{EEDF : Maxwell vs. b-splines}
-	\begin{center}
-		\includegraphics[width=0.9\textwidth]{figures/g0_3_bspline_vs_maxwell.png}
-	\end{center}
+	\frametitle{B-spline : Elastic + Ionization + advection}
+	\begin{figure}
+		\includegraphics[width=0.7\textwidth]{figures/b_test_vspace_coeff.png}
+	\end{figure}
 \end{frame}
 
 

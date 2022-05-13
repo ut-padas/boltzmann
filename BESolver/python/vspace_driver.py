@@ -70,6 +70,60 @@ def advection_mat(spec: sp.SpectralExpansionSpherical, mw, vth):
         print("norm adv mat = %.8E"%np.linalg.norm(advec_mat))
         return advec_mat
     elif args.radial_poly=="maxwell":
+        phimat = np.genfromtxt('sph_harm_del/phimat16.dat',delimiter=',')
+        psimat = np.genfromtxt('sph_harm_del/psimat16.dat',delimiter=',')
+
+        def sph_harm_norm(l,m):
+            if m == 0:
+                return np.sqrt((2.*l+1)/(4.*np.pi))
+            else:
+                return (-1)**m * np.sqrt((2.*l+1)/(2.*np.pi)*math.factorial(l-abs(m))/math.factorial(l+abs(m)))
+
+        AM = lambda l,m: (l+abs(m))/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l-1,m)
+        BM = lambda l,m: (l-abs(m)+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l+1,m)
+
+        AD = lambda l,m: (l+abs(m))*(l+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l-1,m)
+        BD = lambda l,m: -l*(l-abs(m)+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l+1,m)
+
+        CpsiDphiP = np.load('polynomials/maxpoly_CpsiDphiP.npy')
+        CpsiDphiM = np.load('polynomials/maxpoly_CpsiDphiM.npy')
+        CphiDpsiP = np.load('polynomials/maxpoly_CphiDpsiP.npy')
+        CphiDpsiM = np.load('polynomials/maxpoly_CphiDpsiM.npy')
+
+        print(CpsiDphiP.shape)
+
+        sph_harm_lm = spec._sph_harm_lm
+        Nr          = spec._p
+        num_sh      = len(sph_harm_lm)
+        num_total   = (Nr+1)*num_sh
+        adv_mat     = np.zeros([num_total, num_total])
+
+        for qs_idx,qs in enumerate(sph_harm_lm):
+
+            lm = [qs[0]+1,qs[1]]
+            if lm in sph_harm_lm:
+                lm_idx = sph_harm_lm.index(lm)
+
+                for p in range(Nr+1):
+                    for k in range(Nr+1):
+                        klm = k*num_sh + lm_idx
+                        pqs = p*num_sh + qs_idx
+
+                        adv_mat[pqs,klm] += (AM(lm[0],lm[1]) - .5*AD(lm[0],lm[1]))*CpsiDphiP[qs[0],p,k] - .5*AD(lm[0],lm[1])*CphiDpsiP[qs[0],p,k]
+            
+            lm = [qs[0]-1,qs[1]]
+            if lm in sph_harm_lm:
+                lm_idx = sph_harm_lm.index(lm)
+
+                for p in range(Nr+1):
+                    for k in range(Nr+1):
+                        klm = k*num_sh + lm_idx
+                        pqs = p*num_sh + qs_idx
+
+                        adv_mat[pqs,klm] += (BM(lm[0],lm[1]) - .5*BD(lm[0],lm[1]))*CpsiDphiM[qs[0],p,k] - .5*BD(lm[0],lm[1])*CphiDpsiM[qs[0],p,k]
+        
+        return adv_mat
+    else:
         raise NotImplementedError
     
 
@@ -105,7 +159,7 @@ def constant_r_eval(spec : sp.SpectralExpansionSpherical, cf, r):
     
     return np.dot(cf, b_eval).reshape(50,100), theta, phi
     
-def first_order_split(E: np.array(3) , y0: np.array, cf : colOpSp.CollisionOpSP, t_final : float,  dt :float, v0: np.array, mw, vth, mode):
+def semi_lagrange_1st_order(E: np.array(3) , y0: np.array, cf : colOpSp.CollisionOpSP, t_final : float,  dt :float, v0: np.array, mw, vth, mode):
     
     """
     E  : electric field for v-space advection 
@@ -220,6 +274,7 @@ def first_order_split(E: np.array(3) , y0: np.array, cf : colOpSp.CollisionOpSP,
 
         if(mode == CollissionMode.ELASTIC_W_IONIZATION):
             h_t = ode_solver.y
+            current_mass     = np.dot(h_t,mass_op) * current_vth**3 * current_mw(0)
             mr = current_mass/mass_initial
             h_t=h_t/mr
             current_mass     = np.dot(h_t,mass_op) * current_vth**3 * current_mw(0)
@@ -230,6 +285,140 @@ def first_order_split(E: np.array(3) , y0: np.array, cf : colOpSp.CollisionOpSP,
             print("collission operator solve failed\n")
             assert(False)
         
+        t_step+=1
+        
+    return sol_t, temp_t, mass_t, mw_t, v0_t
+
+def semi_lagrange_2nd_order(E: np.array(3) , y0: np.array, cf : colOpSp.CollisionOpSP, t_final : float,  dt :float, v0: np.array, mw, vth, mode):
+    
+    """
+    E  : electric field for v-space advection 
+    cf : collision operator
+    dt : operator splitting time scale. 
+    v0 : initial mean velocity
+    """
+    t_initial = 0.0
+    t_curr    = 0.0
+    
+    spec      = cf._spec
+    q_by_m    = -collisions.ELECTRON_CHARGE/ collisions.MASS_ELECTRON 
+    ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+
+    mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
+    temp_op   = BEUtils.temp_op(spec, None, 64, 2, 1)
+    avg_vop   = BEUtils.mean_velocity_op(spec, None, 64, 4, 1)
+    eavg_to_K = (2/(3*scipy.constants.Boltzmann))
+    
+    M=spec.compute_mass_matrix()
+    if args.radial_poly == "bspline":
+        Minv = BEUtils.choloskey_inv(M) #BEUtils.block_jacobi_inv(M, 8)
+    elif args.radial_poly == "maxwell" or args.radial_poly == "laguerre":
+        Minv = np.linalg.inv(M)
+        assert np.allclose(M,np.eye(M.shape[0]), rtol=1e-10, atol=1e-10), "mass matrix orthogonality test failed"
+    
+    if (mode == CollissionMode.ELASTIC_ONLY):
+        def collission_rhs(t,y, C, n0):
+            return n0 * np.matmul(C,y)
+    elif (mode == CollissionMode.ELASTIC_W_IONIZATION):
+        def collission_rhs(t,y, Ce, n0, Ci,ni):
+            return n0 * np.matmul(Ce,y) + ni * np.matmul(Ci,y)
+    else:
+        raise NotImplementedError
+
+    f_t    = y0
+    current_vth      = vth 
+    current_mw       = mw
+    current_mass     = np.dot(f_t,mass_op)  * current_vth**3 * current_mw(0)
+    current_temp     = np.dot(f_t,temp_op)  * current_vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass 
+    
+    print("Initial Ev : %.14E"%(current_temp * ev_fac))
+    print("Initial mass : %.14E"%current_mass)
+
+    mass_initial = current_mass
+    ode_solver = ode(collission_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol = 1e-14, atol=1e-14, nsteps=1e8)
+
+    g0  = collisions.eAr_G0()
+    g2  = collisions.eAr_G2()
+
+    "C - collision step"
+    if(mode == CollissionMode.ELASTIC_ONLY):
+        g0.reset_scattering_direction_sp_mat()
+        t1 = time()
+        Ce=cf.assemble_mat(g0, current_mw, current_vth)
+        Ce= np.matmul(Minv,Ce)
+        t2 = time()
+        print("Collission op. assembly time(s)= ",(t2-t1))
+        ode_solver.set_f_params(Ce,collisions.AR_NEUTRAL_N)
+        
+    elif(mode == CollissionMode.ELASTIC_W_IONIZATION):
+        g0.reset_scattering_direction_sp_mat()
+        t1=time()
+        Ce=cf.assemble_mat(g0, current_mw, current_vth)
+        Ce= np.matmul(Minv,Ce)
+        
+        g2.reset_scattering_direction_sp_mat()
+        Ci=cf.assemble_mat(g2, current_mw, current_vth)
+        Ci= np.matmul(Minv,Ci)
+        t2 = time()
+        print("Collission op. assembly time(s)= ",(t2-t1))
+        
+        ode_solver.set_f_params(Ce,collisions.AR_NEUTRAL_N, Ci, collisions.AR_IONIZED_N)
+
+    v_shift  = (q_by_m/current_vth) * E * dt/2
+    P_vc     = BEUtils.vcenter_projection(spec, current_mw, current_vth, None, 8, 8, v_shift, 1)
+    P_vc     = np.matmul(Minv, P_vc)
+    
+    ode_solver.set_initial_value(f_t,0)
+
+    total_steps = int(t_final/dt)
+    sol_t = np.zeros((total_steps,y0.shape[0]))
+    temp_t = np.zeros(total_steps)
+    mass_t = np.zeros(total_steps)
+    mw_t   = list()
+    v0_t   = list()
+    
+    t_step = 0
+    while t_step < total_steps:
+        t_curr           = ode_solver.t
+        h_t              = ode_solver.y
+
+        "A - advection step"
+        vc_x = np.dot(avg_vop[0],h_t) * current_vth**4 * (current_mw(0)/current_mass) /current_vth
+        vc_y = np.dot(avg_vop[1],h_t) * current_vth**4 * (current_mw(0)/current_mass) /current_vth
+        vc_z = np.dot(avg_vop[2],h_t) * current_vth**4 * (current_mw(0)/current_mass) /current_vth
+
+        print("time:%.2E mass: %.10E temp: %.10E vc=(%.2E,%.2E,%.6E) adv vc_z=%.6E " %(t_curr, current_mass, current_temp * ev_fac, vc_x, vc_y,vc_z,0 + (E[2] * t_curr * q_by_m/current_vth)))
+
+        sol_t [t_step,:] = h_t
+        temp_t[t_step]   = current_temp
+        mass_t[t_step]   = current_mass
+        mw_t.append(current_mw)
+        v0_t.append(np.array([vc_x,vc_y,vc_z]))
+
+        # v center shift projection. 
+        h_t = np.matmul(P_vc, h_t)
+        
+        # "C - collision step"
+        ode_solver.set_initial_value(h_t,t_curr)
+        ode_solver.integrate(t_curr + dt)
+
+        if(mode == CollissionMode.ELASTIC_W_IONIZATION):
+            h_t = ode_solver.y
+            current_mass     = np.dot(h_t,mass_op) * current_vth**3 * current_mw(0)
+            mr = current_mass/mass_initial
+            h_t=h_t/mr
+            current_mass     = np.dot(h_t,mass_op) * current_vth**3 * current_mw(0)
+            current_temp     = np.dot(h_t,temp_op) * current_vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass
+            
+        
+        if(not ode_solver.successful()):
+            print("collission operator solve failed\n")
+            assert(False)
+        
+        # v center shift projection. 
+        h_t = np.matmul(P_vc, h_t)
+        ode_solver.set_initial_value(h_t,t_curr + dt)
+
         t_step+=1
         
     return sol_t, temp_t, mass_t, mw_t, v0_t
@@ -427,7 +616,6 @@ def eularian_approach(Ez, y0: np.array, cf : colOpSp.CollisionOpSP, t_final : fl
     if args.radial_poly == "bspline":
         Minv = BEUtils.choloskey_inv(M) #BEUtils.block_jacobi_inv(M, 8)
     elif args.radial_poly == "maxwell" or args.radial_poly == "laguerre":
-        raise NotImplementedError
         Minv = np.linalg.inv(M)
         assert np.allclose(M,np.eye(M.shape[0]), rtol=1e-10, atol=1e-10), "mass matrix orthogonality test failed"
 
@@ -666,7 +854,7 @@ for i, nr in enumerate(args.NUM_P_RADIAL):
         eedf[i]                          = BEUtils.get_eedf(ev, spec, data[-1,:], mw_t[-1], collisions.electron_thermal_velocity(temp_t[-1]), 1)
         eedf_initial[i]                  = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH_C, 1)
     elif args.vmode == "SL":
-        data, temp_t, mass_t, mw_t, v0_t = first_order_split(np.array(args.E), h_vec, cf, args.T_END, args.T_DT, v0,maxwellian, VTH_C, coll_mode)
+        data, temp_t, mass_t, mw_t, v0_t = semi_lagrange_2nd_order(np.array(args.E), h_vec, cf, args.T_END, args.T_DT, v0,maxwellian, VTH_C, coll_mode)
         eedf[i]                          = BEUtils.get_eedf(ev, spec, data[-1,:], mw_t[-1], collisions.electron_thermal_velocity(temp_t[-1]), 1,v0_t[-1])
         eedf_initial[i]                  = BEUtils.get_eedf(ev, spec, data[0,:], maxwellian, VTH_C, 1)
     else:

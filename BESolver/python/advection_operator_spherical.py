@@ -4,13 +4,13 @@ import scipy.integrate
 import numpy as np
 from maxpoly import *
 import matplotlib.pyplot as plt
-import profiler
+#import profiler
 from utils import *
 from mpl_toolkits import mplot3d
 
 import math
 
-t_adv_mat = profiler.profile_t("v_adv")
+#t_adv_mat = profiler.profile_t("v_adv")
 phimat = np.genfromtxt('sph_harm_del/phimat16.dat',delimiter=',')
 psimat = np.genfromtxt('sph_harm_del/psimat16.dat',delimiter=',')
 
@@ -153,11 +153,11 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     coeffs[6] = 1
     coeffs[7] = 1
 
-    t_adv_mat.start()
+    #t_adv_mat.start()
     advmat   = assemble_advection_matix_lp(Nr, lm_all)
     # advmat    = assemble_advection_matrix(Nr,lm_all)
-    t_adv_mat.stop()
-    print("time for advection op assembly: ",t_adv_mat.seconds)
+    #t_adv_mat.stop()
+    #print("time for advection op assembly: ",t_adv_mat.seconds)
     #print(np.linalg.norm(advmat-advmat1))
     
 

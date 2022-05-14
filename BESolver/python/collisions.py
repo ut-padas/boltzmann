@@ -37,6 +37,7 @@ MASS_R_EARGON       = MASS_ELECTRON/MASS_ARGON
 E_AR_IONIZATION_eV  = 15.76
 E_AR_EXCITATION_eV  = 11.55
 ELECTRON_VOLT       = scipy.constants.electron_volt
+ELECTRON_CHARGE_MASS_RATIO = ELECTRON_CHARGE/MASS_ELECTRON
 
 BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_1EV          = ELECTRON_VOLT/BOLTZMANN_CONST
@@ -510,6 +511,71 @@ class Collisions(abc.ABC):
             y[ev>1e3]=0
             
             return  y
+            
+        elif mode == "g0Const":
+            """
+            G0 cross section data fit with analytical function
+            (constant)
+            """
+            ev=ev+1e-8
+            a0 =    0.008787*0 + 1
+            b0 =     0.07243
+            c  =    0.007048*0
+            d  =      0.9737
+            a1 =        3.27*0 + 1
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
+        elif mode == "g0ConstDecay":
+            """
+            G0 cross section data fit with analytical function
+            (constant + decay)
+            """
+            ev=ev+1e-8
+            a0 =    0.008787*0 + 1
+            b0 =     0.07243
+            c  =    0.007048*1
+            d  =      0.9737
+            a1 =        3.27*0 + 1
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
+        elif mode == "g0ConstBumpDown":
+            """
+            G0 cross section data fit with analytical function
+            (constant + bump down)
+            """
+            ev=ev+1e-8
+            a0 =    0.008787*1 + 0
+            b0 =     0.07243
+            c  =    0.007048*0
+            d  =      0.9737
+            a1 =        3.27*0 + 1
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
+        elif mode == "g0ConstBumpUp":
+            """
+            G0 cross section data fit with analytical function
+            (constant + bump up)
+            """
+            ev=ev+1e-8
+            a0 =    0.008787*0 + 1
+            b0 =     0.07243
+            c  =    0.007048*0
+            d  =      0.9737
+            a1 =        3.27*0.5 + 0
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
         
     @abc.abstractmethod
     def get_cross_section_scaling():
@@ -532,10 +598,11 @@ when computing the scattering velocity
 """
 class eAr_G0_NoEnergyLoss(Collisions):
 
-    def __init__(self) -> None:
+    def __init__(self, cross_section="g0") -> None:
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Elastic.txt")
         self._type=CollisionType.EAR_G0
+        self._analytic_cross_section_type = cross_section
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -573,7 +640,7 @@ class eAr_G0_NoEnergyLoss(Collisions):
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
         #total_cs  = self._total_cs_interp1d(energy_ev)
         #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev,"g0")
+        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
         diff_cs    = total_cs / (4*np.pi)
         return diff_cs
 
@@ -582,11 +649,12 @@ e + Ar -> e + Ar
 """
 class eAr_G0(Collisions):
 
-    def __init__(self) -> None:
+    def __init__(self, cross_section="g0") -> None:
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Elastic.txt")
         self._type=CollisionType.EAR_G0
         self._v_scale=None
+        self._analytic_cross_section_type = cross_section
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -633,7 +701,8 @@ class eAr_G0(Collisions):
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
         #total_cs  = self._total_cs_interp1d(energy_ev)
         #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev,"g0")
+        # total_cs   = Collisions.synthetic_tcs(energy_ev,"g0")
+        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
         diff_cs    = total_cs / (4*np.pi)
         return diff_cs
 
@@ -642,10 +711,12 @@ e + Ar -> e + Ar^*
 """
 class eAr_G1(Collisions):
     
-    def __init__(self) -> None:
+    def __init__(self, cross_section="g1", threshold=E_AR_EXCITATION_eV) -> None:
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Excitation.txt")
         self._type=CollisionType.EAR_G1
+        self._analytic_cross_section_type = cross_section
+        self._reaction_threshold = threshold
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -672,9 +743,9 @@ class eAr_G1(Collisions):
         vs[0][check1] = vel_fac
         return vs
 
-    @staticmethod
-    def min_energy_threshold():
-        return E_AR_EXCITATION_eV
+    # @staticmethod
+    def min_energy_threshold(self):
+        return self._reaction_threshold
 
     @staticmethod
     def get_cross_section_scaling():
@@ -690,7 +761,7 @@ class eAr_G1(Collisions):
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
         #total_cs  = self._total_cs_interp1d(energy_ev)
         #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev,"g1")
+        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
         diff_cs    = total_cs / (4*np.pi)
         return diff_cs
 
@@ -699,11 +770,13 @@ e + Ar -> e + Ar^+
 """
 class eAr_G2(Collisions):
     
-    def __init__(self) -> None:
+    def __init__(self, cross_section="g2", threshold=E_AR_IONIZATION_eV) -> None:
         super().__init__()
         self.load_cross_section("lxcat_data/eAr_Ionization.txt")
         self._type=CollisionType.EAR_G2
         self._momentum_setup = False
+        self._analytic_cross_section_type = cross_section
+        self._reaction_threshold = threshold
         
 
     @staticmethod
@@ -767,9 +840,9 @@ class eAr_G2(Collisions):
         self._vs2[2][self._check_1] = v2_sp[2]
         return [vs,self._vs2]
 
-    @staticmethod
-    def min_energy_threshold():
-        return E_AR_IONIZATION_eV
+    # @staticmethod
+    def min_energy_threshold(self):
+        return self._reaction_threshold
 
     @staticmethod
     def get_cross_section_scaling():
@@ -791,7 +864,7 @@ class eAr_G2(Collisions):
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
         #total_cs  = self._total_cs_interp1d(energy_ev)
         #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev,"g2")
+        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
         diff_cs    = total_cs / (4*np.pi)
         return diff_cs
 

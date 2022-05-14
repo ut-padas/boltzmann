@@ -838,12 +838,68 @@ def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, ma
         reaction_rate = (np.dot(np.transpose(MP_klm),cf)/mass_m0) * gama_electron * scale
         return reaction_rate
 
+def sample_distriubtion(vx, vy, vz, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth,scale=1):
+
+    # vx, vy, vz must have the same shape
+
+    num_sph = len(spec_sp._sph_harm_lm)
+
+    sph_coord = cartesian_to_spherical(vx, vy, vz)
+
+    result = np.zeros_like(vx)
+
+    for k in range(spec_sp._p+1):
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            result += cf[k*num_sph+lm_idx]*spec_sp.basis_eval_full(sph_coord[0], sph_coord[1], sph_coord[2], k, lm[0], lm[1])*maxwellian(sph_coord[0])*(sph_coord[0]**lm[0])
+
+    return result
 
 
+def sample_distriubtion_spherical(sph_coord, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth,scale=1):
 
+    # vx, vy, vz must have the same shape
+
+    num_sph = len(spec_sp._sph_harm_lm)
+
+    result = np.zeros_like(sph_coord[0])
+
+    for k in range(spec_sp._p+1):
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            result += cf[k*num_sph+lm_idx]*spec_sp.basis_eval_full(sph_coord[0], sph_coord[1], sph_coord[2], k, lm[0], lm[1])*maxwellian(sph_coord[0])*(sph_coord[0]**lm[0])
+
+    return result
     
+def compute_radial_components(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth,scale=1, v0=np.zeros(3)):
+    """
+    Assumes spherical harmonic basis in vtheta vphi direction. 
+    the integration over the spherical harmonics is done analytically. 
+    """
+    EV       = scipy.constants.electron_volt
+    E_MASS   = scipy.constants.electron_mass
 
+    # v0_abs   = np.sqrt(v0[0]**2 + v0[1]**2 + v0[2]**2)
+    vr       = np.sqrt(2* EV * ev_pts /E_MASS)/vth
+    
+    # TODO: check this
+    # vr[vr<v0_abs]  = 0
+    # vr[vr>=v0_abs] = vr[vr>=v0_abs] -v0_abs
 
+    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    num_sph_harm = len(sph_harm_lm)
+
+    output = np.zeros((num_sph_harm, len(vr)))
+
+    for l_idx, lm in enumerate(params.BEVelocitySpace.SPH_HARM_LM):
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+            output[l_idx, :] = basis.maxpoly.maxpolyserieseval(2*lm[0]+2, vr, cf[l_idx::num_sph_harm])*np.exp(-vr**2)*(vr**lm[0])
+        else:
+            radial_component = 0
+            for i, coeff in enumerate(cf[l_idx::num_sph_harm]):
+                radial_component = radial_component + coeff*spec_sp.basis_eval_radial(vr, i, lm[0])
+
+            output[l_idx, :] = radial_component*np.exp(-vr**2)
+
+    return output
 
 
 

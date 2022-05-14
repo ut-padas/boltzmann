@@ -7,6 +7,7 @@ import basis
 import enum
 from scipy.special import sph_harm
 import enum
+from advection_operator_spherical_polys import *
 
 class QuadMode(enum.Enum):
     GMX     = 0 # default
@@ -222,6 +223,15 @@ class SpectralExpansionSpherical:
         Vq= np.kron(V_r_q,V_sph_q)
         
         return Vq
+
+    def compute_advection_matix(self):
+        """
+        loop based assembly of advection operator 
+        """
+        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+            return assemble_advection_matix_lp_max(self._p, self._sph_harm_lm)
+        elif self.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+            return assemble_advection_matix_lp_lag(self._p, self._sph_harm_lm)
 
 
 

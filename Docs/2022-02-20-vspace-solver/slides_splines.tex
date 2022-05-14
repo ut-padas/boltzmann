@@ -278,69 +278,71 @@
 \end{frame}
 
 
-\begin{frame}
-\frametitle{V-space solver (with operator splitting)}
-\begin{columns}
-	\begin{column}{0.5\textwidth}
-		\begin{center}
-			\tiny
-			\begin{align*}
-			\partial_t f + \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
-			\end{align*}
-			\begin{align*}
-			&\left\{
-			\begin{aligned}
-			\partial_t f^{(0)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(0)} &= 0, \quad t_n < t \leq t_n + \frac12 \Delta t \\
-			f^{(0)}\of{t_n} &= f\of{t_n}
-			\end{aligned}
-			\right.
-			\\
-			&\left\{
-			\begin{aligned}
-			\partial_t f^{(1)} &= C[f^{(1)}], \quad t_n < t \leq t_n + \Delta t \\
-			f^{(1)}\of{t_n} &= f^{(0)}\of{t_n + \frac12 \Delta t}
-			\end{aligned}
-			\right.
-			\\
-			&\left\{
-			\begin{aligned}
-			\partial_t f^{(2)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(2)} &= 0, \quad t_n + \frac12 \Delta t < t \leq t_n + \Delta t  \\
-			f^{(2)}\of{t_n} &= f^{(1)}\of{t_n + \Delta t}
-			\end{aligned}
-			\right.
-			\\
-			& f\of{t_n + \Delta t} = f^{(2)}\of{t_n + \Delta t}
-			\end{align*}
-		\end{center}
-	\end{column}
-	\begin{column}{0.5\textwidth}  %%<--- here
-		\begin{center}
-			Overall algorithm: given $\vect{v}_0$, $a_{klm}$ at $t_n$:
-			\begin{enumerate}
-				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n}^{t_n+\frac12 \Delta t} \vect{E}\of{\tau} d\tau$
-				\item Solve collision op.  from $t_0$ to $t_0 + \Delta t$
-				\item If temperature increased project to higher $v_{th}$.
-				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n+\frac12 \Delta t}^{t_n + \Delta t} \vect{E}\of{\tau} d\tau$
-			\end{enumerate}
-		\end{center}
-	\end{column}
-\end{columns}
-\end{frame}
+%\begin{frame}
+%\frametitle{V-space solver (with operator splitting)}
+%\begin{columns}
+%	\begin{column}{0.5\textwidth}
+%		\begin{center}
+%			\tiny
+%			\begin{align*}
+%			\partial_t f + \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
+%			\end{align*}
+%			\begin{align*}
+%			&\left\{
+%			\begin{aligned}
+%			\partial_t f^{(0)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(0)} &= 0, \quad t_n < t \leq t_n + \frac12 \Delta t \\
+%			f^{(0)}\of{t_n} &= f\of{t_n}
+%			\end{aligned}
+%			\right.
+%			\\
+%			&\left\{
+%			\begin{aligned}
+%			\partial_t f^{(1)} &= C[f^{(1)}], \quad t_n < t \leq t_n + \Delta t \\
+%			f^{(1)}\of{t_n} &= f^{(0)}\of{t_n + \frac12 \Delta t}
+%			\end{aligned}
+%			\right.
+%			\\
+%			&\left\{
+%			\begin{aligned}
+%			\partial_t f^{(2)} + \vect{E}\cdot \nabla_{\vect{v}} f^{(2)} &= 0, \quad t_n + \frac12 \Delta t < t \leq t_n + \Delta t  \\
+%			f^{(2)}\of{t_n} &= f^{(1)}\of{t_n + \Delta t}
+%			\end{aligned}
+%			\right.
+%			\\
+%			& f\of{t_n + \Delta t} = f^{(2)}\of{t_n + \Delta t}
+%			\end{align*}
+%		\end{center}
+%	\end{column}
+%	\begin{column}{0.5\textwidth}  %%<--- here
+%		\begin{center}
+%			Overall algorithm: given $\vect{v}_0$, $a_{klm}$ at $t_n$:
+%			\begin{enumerate}
+%				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \frac{q_e}{m_e}\myint_{t_n}^{t_n+\frac12 \Delta t} \vect{E}\of{\tau} d\tau$
+%				\item Solve collision op.  from $t_0$ to $t_0 + \Delta t$
+%				\item compute $\tilde{v}_0$ from updated $f$
+%				\item Project $f$ from $v_0$ to  $\tilde{v}_0$ update $v_0\leftarrow \tilde{v}_0$
+%				\item If temperature increased project to higher $v_{th}$.
+%				\item $\vect{v}_0 \leftarrow \vect{v}_0 - \frac{q_e}{m_e}\myint_{t_n+\frac12 \Delta t}^{t_n + \Delta t} \vect{E}\of{\tau} d\tau$
+%			\end{enumerate}
+%		\end{center}
+%	\end{column}
+%\end{columns}
+%\end{frame}
 
 \begin{frame}
-	\frametitle{Maxwell : Elastic + Ionization + advection}
+	\frametitle{Eulerian approach with linear splines}
+	E=10V/m along z-axis, with elastic + ionization reactions, T=$10^{-4}$ s
 	\begin{figure}
-		\includegraphics[width=0.7\textwidth]{figures/m_test_vspace_coeff.png}
+		\includegraphics[width=0.65\textwidth]{figures/b_1ev_10Vpm_vspace_coeff.png}
 	\end{figure}
 \end{frame}
 
-\begin{frame}
-	\frametitle{B-spline : Elastic + Ionization + advection}
-	\begin{figure}
-		\includegraphics[width=0.7\textwidth]{figures/b_test_vspace_coeff.png}
-	\end{figure}
-\end{frame}
-
+%\begin{frame}
+%	\frametitle{Maxwell : Elastic + Ionization + advection}
+%	\begin{figure}
+%		\includegraphics[width=0.7\textwidth]{figures/m_test_vspace_coeff.png}
+%	\end{figure}
+%\end{frame}
 
 
 

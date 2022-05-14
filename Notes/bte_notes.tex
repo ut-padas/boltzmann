@@ -994,20 +994,52 @@ B\of{\vect{u}+\vect{v}_0, \vect{\omega}}
 d\vect{u} d\vect{\omega}
 \end{multline}
 
-Overall algorithm: given $\vect{v}_0$, $a_{klm}$ at $t_n$:
+
+Let $\vect{v}_c$ denotes the physical mean velocity of $f(\vect{v})$. Let $\vect{v_0}$ be the shift of the coordinates, i.e., $\vect{u}=\vect{v}-\vect{v}_0$.
+
+For advection, 
+\begin{align*}
+%	\vect{v}_c^{(0)}(t_n+ \Delta t/2) - \vect{v}_c^{(0)}(t_n) &= \vect{v}_0^{(0)}(t_n+ \Delta t/2) - \vect{v}_0^{(0)}(t_n) \\
+	\vect{v}_0^{(0)}(t_n+ \Delta t/2) &=\vect{v}_0^{(0)}(t_n) -\frac{q}{mv_{th}} \int_{t_n}^{t_n + \Delta t/2} E(\tau) d\tau
+\end{align*}
+For collisions, we take the chosen $\vect{v}_0 = \vect{v}_0^{(0)}(t_n + \Delta t/2)$. The mean velocity change due to collisions can be written as, 
+\begin{align*}
+\vect{v}_c^{(1)} (t_n + \Delta t) &= \vect{u}^{(1)}(t_n + \Delta t) + v_0 \\
+\vect{v}_c^{(1)} (t_n) &= \vect{u}^{(1)}(t_n) + v_0 \\
+\vect{v}_c^{(1)} (t_n + \Delta t) - \vect{v}_c^{(1)} (t_n) &= \vect{u}_c^{(1)}(t_n + \Delta t) -\vect{u}_c^{(1)}(t_n) = \vect{b}\\
+\end{align*}
+By changing the $v_0$ to accommodate collision mean velocity change, we can write, 
+\begin{align*}
+\vect{v}_0^{(1)}(t_n + \Delta t) &= \vect{b} + \vect{v}_0^{(1)}(t_n) = \vect{b} + \vect{v}_0 
+\end{align*} 
+
+
+Overall algorithm 1: given $\vect{v}_0$, $a_{klm}$ at $t_n$ (without temperature projection)
 \begin{enumerate}
-\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n}^{t_n+\frac12 \Delta t} \vect{E}\of{\tau} d\tau$
-\item Solve \eqref{eq:shiftedColOp} from $t_0$ to $t_0 + \Delta t$
-\item $\vect{v}_0 \leftarrow \vect{v}_0 - \myint_{t_n+\frac12 \Delta t}^{t_n + \Delta t} \vect{E}\of{\tau} d\tau$
+\item $\vect{v}_1 \leftarrow \vect{v}_0(t_n) - \frac{q}{m v_{th}} \myint_{t_n}^{t_n+\frac12 \Delta t} \vect{E}\of{\tau} d\tau$
+\item Assemble collision op. with $\vect{v_1}$, solve \eqref{eq:shiftedColOp} from $t_n$ to $t_n + \Delta t$
+\item Compute physical mean shift $\vect{b}$ due to collisions, and update $\vect{v}_1=\vect{v}_1+\vect{b}$
+\item Project coefficients for updated $v_1$ (i.e., $\vect{v}_1$ change projection).
+\item $\vect{v}_0(t_n + \Delta t) \leftarrow \vect{v}_1 - \frac{q}{m v_{th}} \myint_{t_n+\frac12 \Delta t}^{t_n + \Delta t} \vect{E}\of{\tau} d\tau$
+\end{enumerate}
+
+\newpage
+Overall algorithm 2: given $\vect{v}_0$, $a_{klm}$ at $t_n$ (without temperature projection)
+\begin{enumerate}
+	\item $f(t_n + \Delta t /2, \vect{v} ) = \sum_{klm} f_{klm} \phi_{klm}\of{\vect{v}-\vect{c}} $ %where $\vect{c} = \frac{q}{m v_{th}} \myint_{t_n}^{t_n+\frac12 \Delta t} \vect{E}\of{\tau} d\tau$ 
+	\item Project basis $f(t_n + \Delta t /2, \vect{v} )= \sum_{klm} f\prime_{klm} \phi_{klm}(\vect{v})$
+	\item solve \eqref{eq:shiftedColOp} from $t_n$ to $t_n + \Delta t$ (One time assembly of the collision operator)
+	\item Advect and re-project (Note: for fixed $\Delta t $ projection operator pre-computed and reused) 
 \end{enumerate}
 
 
 
-\begin{align*}
-\psi_{pqs}\of{\vect{v}} &= \tilde{\psi}_{pqs}\of{\vect{v}-\vect{v}_0}
-\\
-\phi_{pqs}\of{\vect{v}} &= \tilde{\phi}_{pqs}\of{\vect{v}-\vect{v}_0}
-\end{align*}
+
+%\begin{align*}
+%\psi_{pqs}\of{\vect{v}} &= \tilde{\psi}_{pqs}\of{\vect{v}-\vect{v}_0}
+%\\
+%\phi_{pqs}\of{\vect{v}} &= \tilde{\phi}_{pqs}\of{\vect{v}-\vect{v}_0}
+%\end{align*}
 
 
 %\begin{align*}

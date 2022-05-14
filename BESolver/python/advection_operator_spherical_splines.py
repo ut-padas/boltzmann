@@ -191,8 +191,8 @@ f_num_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
 f_initial_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
 f_exact_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
 
-V_DOMAIN = (0,10.5)
-SP_ORDER = 2
+V_DOMAIN = (0,10)
+SP_ORDER = 1
 for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     nr = num_dofs[0]
     l_max = num_dofs[1]

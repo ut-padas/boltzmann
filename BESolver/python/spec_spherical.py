@@ -68,7 +68,7 @@ class SpectralExpansionSpherical:
         """
         Evaluates 
         """
-        return np.nan_to_num(self._basis_p.diff(k,dorder)(l,r))
+        return np.nan_to_num(self._basis_p.diff(k,dorder)(r,l))
     
     def basis_eval_spherical(self, theta, phi,l,m):
         """

@@ -8,6 +8,7 @@ import abc
 import maxpoly
 import lagpoly
 import scipy.interpolate
+import quadpy
 
 # some parameters related to splines. 
 XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 3
@@ -257,13 +258,15 @@ class XlBSpline(Basis):
         """
         # first and last splines have repeated knots, 
         num_k            = 2*spline_order + (num_p -2) + 2
-        self._t          = (k_domain[0])*np.ones(spline_order+1)
         knot_base        = 1.5
-        self._t          = np.append(self._t,np.logspace(-4, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
-        # pts_1 =  2*((num_k-2*spline_order -2)//10)
-        # pts_2 =  (num_k-2*spline_order -2) -pts_1
-        # self._t          = np.append(self._t,np.logspace(-4, np.log(0.2 * k_domain[1])/np.log(knot_base) , pts_1  ,base=knot_base, endpoint=False))
-        # self._t          = np.append(self._t,np.linspace(0.2 * k_domain[1], k_domain[1] , pts_2 , endpoint=False))
+        # self._t        = (k_domain[0])*np.ones(spline_order+1)
+        # self._t        = np.append(self._t,np.logspace(-2, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
+        # pts_1          = 2*((num_k-2*spline_order -2)//10)
+        # pts_2          = (num_k-2*spline_order -2) -pts_1
+        # self._t        = np.append(self._t,np.logspace(-2, np.log(0.2 * k_domain[1])/np.log(knot_base) , pts_1  ,base=knot_base, endpoint=False))
+        # self._t        = np.append(self._t,np.linspace(0.2 * k_domain[1], k_domain[1] , pts_2 , endpoint=False))
+        self._t          = (k_domain[0])*np.ones(spline_order)
+        self._t          = np.append(self._t,np.linspace(0 , k_domain[1] , num_k-2*spline_order -1 , endpoint=False))
         self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
         #print("len_t ",len(self._t) , " num_k ",num_k)
         #print(self._t)
@@ -271,6 +274,7 @@ class XlBSpline(Basis):
         self._sp_order   = spline_order
         self._q_per_knot = XLBSPLINE_NUM_Q_PTS_PER_KNOT
         self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(num_p)]
+        self._scheme     = quadpy.line_segment.gauss_lobatto(self._q_per_knot)
         
         #print(self._t)
         # import matplotlib.pyplot as plt
@@ -290,7 +294,8 @@ class XlBSpline(Basis):
 
 
     def Pn(self,deg,domain=None,window=None):
-        return lambda x,l : np.nan_to_num(self._splines[deg](x)) * x**l 
+        return lambda x,l : np.nan_to_num(self._splines[deg](x)) * x**(l)
+        #return lambda x,l : np.nan_to_num(self._splines[deg](x)) if deg>=l else np.nan_to_num(self._splines[deg](x)) * x**(l-deg)
         
         
         
@@ -304,15 +309,17 @@ class XlBSpline(Basis):
         assert deg % num_intervals == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,num_intervals)
         qx = np.zeros(deg)
         qw = np.zeros(deg)
+        eps= 1e-14 # !! this is needed to make things work with linear-splines (Dx is discontinous)
         for i in range(self._sp_order, self._sp_order + num_intervals):
-            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = uniform_simpson((self._t[i], self._t[i+1]),self._q_per_knot)
+            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = 0.5 * (self._t[i+1]-eps - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1]-eps + self._t[i]), 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights #uniform_simpson((self._t[i], self._t[i+1]),self._q_per_knot)
         
         # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
         # print(qx.shape)
         # print(qx)
+        # print(qw)
         # print(np.sum(qw))
         # print(qx)
-        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "simpson weights computed for splines does not match the knots domain"
+        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "weights computed for splines does not match the knots domain"
         return qx,qw
     
     def Wx(self):
@@ -348,8 +355,8 @@ class XlBSpline(Basis):
             raise NotImplementedError
         
         b_deriv = self.derivative(deg,1)
-        return lambda l,x : b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
-        #return lambda l,x : b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(0,x) * (l) * x**(l-1)
+        return lambda x, l: b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
+        #return lambda x,l : b_deriv(x) if deg>=l else x**(l-deg) *b_deriv(x) + self.Pn(deg)(x,0) * (l-deg) * x**(l-deg-1)
 
 
 

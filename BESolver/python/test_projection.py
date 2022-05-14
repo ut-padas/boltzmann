@@ -4,25 +4,25 @@ from numpy.ma.core import concatenate
 from maxpoly import *
 
 # max dofs used for represenation
-max_dofs = 50
+max_dofs = 129
 
 # change in thermal velocity
 # eps_all = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50]
 # eps_all = np.linspace(-0.45, 0.55, 21)
-eps_all = [.25]
-eps_all = np.linspace(0.05, 0.55, 11)
+eps_all = [0, -0.02, -0.04, -0.06]
+# eps_all = np.linspace(0.05, 0.55, 11)
 # eps_all = np.arange(-0.15,0.201,0.01)
 # eps_all = np.arange(-0.15,0.001,0.01)
 # eps_all = np.arange(-0.15,0.2,0.05)
-eps_all = [-0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15, 0.20]
+# eps_all = [-0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15, 0.20]
 # eps_all = [-0.015, -0.010, -0.005, 0, 0.005, 0.010, 0.015, 0.020]
 # eps_all = [0.0015]
 
 # use Gaussian quadratures or trapezoidal integration for projection
-use_gauss_for_proj = False
+use_gauss_for_proj = True
 
 # order of Gaussian quadrature used for projection
-gauss_q_order_proj = 50
+gauss_q_order_proj = 256
 
 # number of trapezoidal points used for projection
 trapz_num_q_points_proj = 100000
@@ -42,9 +42,53 @@ a_exp = np.ones(max_dofs)*np.exp(-np.linspace(0, 100, max_dofs))*0
 a_noise = np.random.rand(max_dofs)*1.e-14
 a_exp[0] = 1
 
+a_exp = [ 2.3597304924146956e+00, -6.6838750506123203e-08, -1.1126522946307354e-07,\
+ -7.7276925238944848e-08, -3.1123748682675316e-08, -1.0056393044375676e-08,\
+  6.4521892147112488e-09,  8.6711909412693096e-09,  1.1472264184607000e-09,\
+ -3.3595322440861861e-09, -2.2907787091943262e-09,  1.4429143792550318e-09, \
+  1.4430550032057249e-09, -4.7546758027356785e-10, -9.6360593417524337e-10,\
+  2.5261723603719437e-10,  5.8176705491748456e-10, -1.7559924192098384e-10,\
+ -3.4689810489367663e-10,  1.4662654535522383e-10,  2.0313226560667125e-10,\
+ -1.3554190716327607e-10, -1.0010827662628211e-10,  1.1256505484104861e-10,\
+  3.5205515486372264e-11, -8.5833001096712454e-11,  5.1638569950075070e-12,\
+  5.5890617870491442e-11, -2.4983281633397713e-11, -2.7672054848020177e-11,\
+  2.8677843075480124e-11,  6.2874840157305164e-12, -2.2782525288482723e-11,\
+  6.8048132981226189e-12,  1.2302433656037817e-11, -1.1083916951136016e-11,\
+ -2.6865349122388899e-12,  9.2962363355062527e-12, -3.4289400958592088e-12,\
+ -4.5345996399649997e-12,  5.1224383047177458e-12,  1.0006270325492275e-13,\
+ -3.7283588887295711e-12,  2.3303706844126646e-12,  1.1337098554568222e-12,\
+ -2.4141976565382252e-12,  8.1087191043020433e-13,  1.1859020806785862e-12,\
+ -1.4166733156750774e-12,  1.4982570900455221e-13,  9.1568355644082894e-13,\
+ -7.7104409711060567e-13, -1.0555850904681058e-13,  6.5351772739431712e-13,\
+ -4.3147296586141505e-13, -1.3784575199855533e-13,  4.1934005769861135e-13,\
+ -2.2995244018351793e-13, -1.2082754185620414e-13,  2.6131542539649000e-13,\
+ -1.2032789776365474e-13, -9.1247262550718102e-14,  1.5581699408763097e-13,\
+ -5.0409193576213120e-14, -8.4095541004268840e-14,  1.1424333467148804e-13,\
+ -3.4086941327232193e-14, -6.2312248624988356e-14,  8.8859711442967216e-14,\
+ -3.7801781975073455e-14, -3.1372948481493638e-14,  5.9390095317292000e-14,\
+ -3.7445916763516878e-14, -4.1613245378526665e-15,  2.7019554633221179e-14,\
+ -2.0063127731435236e-14,  3.0254766108076447e-16,  1.1508104739665659e-14,\
+ -8.2266791305876477e-15, -1.9496112575948632e-15,  5.4927021491350455e-15,\
+  2.1245461312530409e-16, -9.0942462344704539e-15,  1.1957566241120077e-14,\
+ -5.6256351564177753e-15, -4.4942505117103214e-15,  1.1698756039424209e-14,\
+ -1.2232926085628828e-14,  5.6411619211175453e-15,  2.7983160147155399e-15,\
+ -9.0174361936453183e-15,  9.6700411561034029e-15, -7.1659206089073994e-15,\
+  1.3763795155794840e-15,  3.6213212470027735e-15, -7.6302841810364361e-15,\
+  8.9850240075308049e-15, -7.4415778212995924e-15,  1.7576379589260231e-15,\
+  5.5497065223666954e-15, -1.1928414326173245e-14,  1.4800696102035887e-14,\
+ -1.1342909767790092e-14,  3.3013091500766786e-15,  7.6401015158366637e-15,\
+ -1.5300462710912575e-14,  1.7262238083028678e-14, -1.2093079706849550e-14,\
+  2.4492979953370197e-15,  7.9370460817364775e-15, -1.5959421645990318e-14,\
+  1.7453910545558523e-14, -1.4282873879554496e-14,  6.1178255054608702e-15,\
+  2.6878943464544919e-15, -9.4061453957501547e-15,  1.2443835163696696e-14,\
+ -1.2020803316678398e-14,  7.1587348573569044e-15, -2.3700827928987660e-15,\
+ -3.0330037430708051e-15,  6.4714848330109353e-15, -7.2792825432442092e-15,\
+  6.0580042761956570e-15, -2.4281839350281631e-15, -1.8503932264799231e-15,\
+  4.2215561895535527e-15, -6.5182848321163693e-15,  6.2668189179640925e-15]
+
 # for i in range(max_dofs):
-#     if abs(a[i]) < 1.e-15:
-#         a[i] = 0
+#     if abs(a_exp[i]) < 1.e-13:
+#         a_exp[i] = 0
 
 proj_mat_fwd = np.zeros([max_dofs, max_dofs])
 proj_mat_fwd_pen = np.zeros([max_dofs, max_dofs])
@@ -77,20 +121,20 @@ for eps_idx, eps in enumerate(eps_all):
         norm = np.sum(maxpolyeval(2, xg, i)**2*wg)
         for j in range(max_dofs):
             proj_mat_fwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd), i)*wg)/norm
-            proj_mat_fwd_over[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+overstep*eps_fwd), i)*wg)/norm
-            proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd)*(1.+overstep*eps_fwd), i)*wg)/norm
-            proj_mat_bwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_bwd), i)*wg)/norm
-            proj_mat_bwd2[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+2.*eps_bwd), i)*wg)/norm
+            # proj_mat_fwd_over[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+overstep*eps_fwd), i)*wg)/norm
+            # proj_mat_fwd_back[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_fwd)*(1.+overstep*eps_fwd), i)*wg)/norm
+            # proj_mat_bwd[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+eps_bwd), i)*wg)/norm
+            # proj_mat_bwd2[i, j] = np.sum(maxpolyeval(2, xg, j)*maxpolyeval(2, xg/(1.+2.*eps_bwd), i)*wg)/norm
 
-    proj_mat_fwd_pen = np.matmul(np.transpose(proj_mat_bwd),proj_mat_bwd) + pen*np.eye(max_dofs,max_dofs)
-    proj_mat_fwd_pen = np.matmul(np.linalg.inv(proj_mat_fwd_pen),np.transpose(proj_mat_bwd))
-    proj_mat_fwd = np.linalg.inv(proj_mat_bwd)
-    proj_mat_fwd_over = np.matmul(proj_mat_fwd_back, proj_mat_fwd_over)
-    proj_mat_bwd2 = np.matmul(proj_mat_fwd, proj_mat_bwd2)
+    # proj_mat_fwd_pen = np.matmul(np.transpose(proj_mat_bwd),proj_mat_bwd) + pen*np.eye(max_dofs,max_dofs)
+    # proj_mat_fwd_pen = np.matmul(np.linalg.inv(proj_mat_fwd_pen),np.transpose(proj_mat_bwd))
+    # proj_mat_fwd = np.linalg.inv(proj_mat_bwd)
+    # proj_mat_fwd_over = np.matmul(proj_mat_fwd_back, proj_mat_fwd_over)
+    # proj_mat_bwd2 = np.matmul(proj_mat_fwd, proj_mat_bwd2)
     eigs_fwd[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_fwd)), [1,max_dofs])
-    eigs_fwd2[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_fwd_over)), [1,max_dofs])
-    eigs_bwd[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_bwd)), [1,max_dofs])
-    eigs_bwd2[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_bwd2)), [1,max_dofs])
+    # eigs_fwd2[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_fwd_over)), [1,max_dofs])
+    # eigs_bwd[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_bwd)), [1,max_dofs])
+    # eigs_bwd2[eps_idx,:] = np.reshape(abs(np.linalg.eigvals(proj_mat_bwd2)), [1,max_dofs])
 
     # w, v = np.linalg.eig(proj_mat_bwd)
     # c_noise = np.linalg.solve(v, a_exp)
@@ -115,10 +159,10 @@ for eps_idx, eps in enumerate(eps_all):
     else:
         # b_exp[eps_idx,:] = np.matmul(proj_mat_fwd, a_exp)
         # b_noise[eps_idx,:] = np.matmul(proj_mat_fwd, a_noise)
-        # b_exp[eps_idx,:] = np.matmul(proj_mat_fwd, a_exp)
-        # b_noise[eps_idx,:] = np.matmul(proj_mat_fwd, a_noise)
-        b_exp[eps_idx,:] = np.matmul(proj_mat_fwd_pen, a_exp)
-        b_noise[eps_idx,:] = np.matmul(proj_mat_fwd_pen, a_noise)
+        b_exp[eps_idx,:] = np.matmul(proj_mat_fwd, a_exp)
+        b_noise[eps_idx,:] = np.matmul(proj_mat_fwd, a_noise)
+        # b_exp[eps_idx,:] = np.matmul(proj_mat_fwd_pen, a_exp)
+        # b_noise[eps_idx,:] = np.matmul(proj_mat_fwd_pen, a_noise)
         # b_noise[eps_idx,:] += a_noise
         # b_exp[eps_idx,:] = np.matmul(proj_mat_bwd, b_exp[eps_idx,:])
         # b_noise[eps_idx,:] = np.matmul(proj_mat_bwd, b_noise[eps_idx,:])
@@ -171,6 +215,8 @@ for eps_idx, eps in enumerate(eps_all):
     else:
         n = int(np.ceil(np.log(1.+eps)/np.log(1.-eps0)))
 
+    n = 0
+
     if n > 0:
         eps_fwd = (1.+eps)**(1/n) - 1.
 
@@ -196,12 +242,15 @@ plt.xlabel('Eigenvalue no.')
 plt.grid()
 plt.legend(['$\epsilon=$'+str(eps) for eps in eps_all])
 
-plt.subplot(1,4,2)
+# plt.subplot(1,4,2)
+plt.subplot(1,1,1)
 plt.semilogy(abs(np.transpose(b_exp)))
 plt.ylabel('Magnitude')
 plt.xlabel('Coefficient no.')
 plt.grid()
 plt.legend(['$\epsilon=$'+str(eps) for eps in eps_all])
+
+plt.show()
 
 plt.subplot(1,4,3)
 plt.semilogy(abs(np.transpose(b_exp+b_noise)))

@@ -5,7 +5,7 @@ from numpy.ma.core import concatenate
 from maxpoly import *
 
 # max dofs used for represenation
-max_dofs = 20
+max_dofs = 64
 
 # function and exact derivative
 f = lambda x: np.sin(x)
@@ -21,19 +21,20 @@ fd_coeffs_exact = np.zeros(max_dofs)
 fd_coeffs_app = np.zeros(max_dofs)
 xf_coeffs_exact = np.zeros(max_dofs)
 xf_coeffs_app = np.zeros(max_dofs)
-gauss_q_order_proj = 550
+gauss_q_order_proj = 200
 
-[xg, wg] = maxpolygauss(gauss_q_order_proj)
+G = 0
 
-G = 48
+[xg, wg] = maxpolygauss(gauss_q_order_proj, G)
 
 for i in range(max_dofs):
-    f_coeffs[i] = np.sum(maxpolyeval(G, xg, i)*f(xg)*wg*xg**(G-2))
-    fd_coeffs_exact[i] = np.sum(maxpolyeval(G, xg, i)*fd(xg)*wg*xg**(G-2))
-    xf_coeffs_exact[i] = np.sum(maxpolyeval(G, xg, i)*xf(xg)*wg*xg**(G-2))
+    f_coeffs[i] = np.sum(maxpolyeval(G, xg, i)*f(xg)*wg)
+    fd_coeffs_exact[i] = np.sum(maxpolyeval(G, xg, i)*fd(xg)*wg)
+    xf_coeffs_exact[i] = np.sum(maxpolyeval(G, xg, i)*xf(xg)*wg)
 
 # assemble matrix
 D = diff_matrix(G, max_dofs-1)
+print(D[:4,:4])
 fd_coeffs_app = np.matmul(D, f_coeffs)
 
 L = lift_matrix(G, max_dofs-1)
@@ -59,16 +60,16 @@ fd_app = maxpolyserieseval(G, xplot, fd_coeffs_app)
 xf_app = maxpolyserieseval(G, xplot, xf_coeffs_app)
 
 plt.subplot(1,2,1)
-plt.plot(xplot, xf(xplot)*xplot**G*np.exp(-xplot**2),'-')
-plt.plot(xplot, xf_app*xplot**G*np.exp(-xplot**2),'*')
-plt.plot(xplot, fd(xplot)*xplot**G*np.exp(-xplot**2),'-')
-plt.plot(xplot, fd_app*xplot**G*np.exp(-xplot**2),'o')
-plt.plot(xplot, f(xplot)*xplot**G*np.exp(-xplot**2),'-')
-plt.plot(xplot, f_app*xplot**G*np.exp(-xplot**2),'^')
+# plt.plot(xplot, xf(xplot)*xplot**G*np.exp(-xplot**2),'-')
+# plt.plot(xplot, xf_app*xplot**G*np.exp(-xplot**2),'*')
+plt.plot(xplot, fd(xplot)*np.exp(-xplot**2),'-')
+plt.plot(xplot, fd_app*np.exp(-xplot**2),'o')
+plt.plot(xplot, f(xplot)*np.exp(-xplot**2),'-')
+plt.plot(xplot, f_app*np.exp(-xplot**2),'^')
 
 plt.subplot(1,2,2)
-plt.semilogy(abs(xf_coeffs_exact),'-')
-plt.semilogy(abs(xf_coeffs_app),'*')
+# plt.semilogy(abs(xf_coeffs_exact),'-')
+# plt.semilogy(abs(xf_coeffs_app),'*')
 plt.semilogy(abs(fd_coeffs_exact),'-')
 plt.semilogy(abs(fd_coeffs_app),'*')
 # plt.semilogy(abs(xf_coeffs_exact-xf_coeffs_app),'o-')

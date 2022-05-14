@@ -78,14 +78,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     print("Condition number of M= %.8E"%m_cond)
     
     if(args.radial_poly == "bspline"):
-        # import matplotlib.pyplot as plt
-        # plt.spy(M)
-        # plt.show()
-        #num_partitions = 8
-        #BEUtils.block_jacobi_inv(M,num_partitions)
         Minv = BEUtils.choloskey_inv(M)
-        
-        
     else:
         Minv = np.linalg.inv(M)
 
@@ -95,9 +88,6 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
     print("==========================================================================")
 
     h_t = h_init
-    # if(args.radial_poly == "bspline"):
-    #     h_t[np.abs(h_t)<filter_tol]=0.0
-        
     t_curr = 0.0
     t_step = 0
 
@@ -124,7 +114,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         def f_rhs(t,y,n0):
             return n0*np.matmul(FOp,y)
         
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=10000)
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e6)
         ode_solver.set_initial_value(h_init,t=0.0)
         ode_solver.set_f_params(collisions.AR_NEUTRAL_N)
 
@@ -137,7 +127,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
             #     h_t[np.abs(h_t)<filter_tol]=0.0
             current_mass     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
             current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,current_mass,1)
-            print("time: %.2E  mass: %.14E  temp: %.14E"%(t_curr, current_mass, current_temp))
+            print("time: %.2E  mass: %.14E  temp: %.14E"%(t_curr, current_mass, current_temp * (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)))
             solution_vector[t_step,:] = h_t
             ode_solver.integrate(ode_solver.t + dt)
             t_step+=1
@@ -163,7 +153,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
         def f_rhs(t,y,n0,ni):
             return n0*np.matmul(FOp_g0,y) + ni*np.matmul(FOp_g2,y)
 
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=10000)
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e6)
         ode_solver.set_initial_value(h_init,t=0.0)
         ode_solver.set_f_params(collisions.AR_NEUTRAL_N,m0_t0)
         
@@ -175,7 +165,7 @@ def solve_collop(collOp:colOpSp.CollisionOpSP, h_init, maxwellian, vth, t_end, d
             h_t     = ode_solver.y
             current_mass     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
             current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,current_mass,1)
-            print("time: %.2E  mass: %.14E  temp: %.14E"%(t_curr, current_mass, current_temp))
+            print("time: %.2E  mass: %.14E  temp: %.14E"%(t_curr, current_mass, current_temp * (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)))
             ode_solver.set_f_params(collisions.AR_NEUTRAL_N,current_mass)
             solution_vector[t_step,:] = h_t
             ode_solver.integrate(ode_solver.t + dt)
@@ -225,7 +215,8 @@ basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=args.spline_q_pts_per_knot
 vth_factor_temp=[1,0.95, 0.9, 0.85, 0.8]
 for i, nr in enumerate(args.NUM_P_RADIAL):
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = nr
-    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
+    #params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
+    params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(1)]
     if (args.radial_poly == "maxwell"):
         r_mode = basis.BasisType.MAXWELLIAN_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial

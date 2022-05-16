@@ -2,6 +2,7 @@
 @package Boltzmann collision operator solver. 
 """
 
+from cProfile import run
 import enum
 import string
 import scipy
@@ -135,9 +136,9 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
             h_prev = h_red
             h_red = - np.linalg.solve(Cmat[1:,1:] - Emat[1:,1:] - (Cmat[0,0] + np.dot(h_red, Cmat[0,1:]))*np.eye(len(h_red)), Cmat[1:,0] - Emat[1:,0])
             iteration_error = np.linalg.norm(h_prev-h_red)
+            print("Iteration ", iteration_steps, ": Residual =", iteration_error)
             iteration_steps = iteration_steps + 1
 
-        print("Iteration error: ", iteration_error, "in ", iteration_steps, " steps")
 
         solution_vector = np.zeros((1,h_init.shape[0]))
         solution_vector[0,0] = 1
@@ -165,15 +166,16 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
     return solution_vector
 
 parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=32)
-parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-6)
-parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-10)
+parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-4)
+parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-7)
 parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='coll_op')
-parser.add_argument("-ts_tol", "--ts_tol"                     , help="adaptive timestep tolerance", type=float, default=1e-7)
-parser.add_argument("-l_max", "--l_max"                       , help="max polar modes in SH expansion", type=int, default=2)
-parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default=["g0", "g2"])
-parser.add_argument("-ev", "--electron_volt"                  , help="initial electron volt", type=float, default=.87)
-parser.add_argument("-ev_basis", "--electron_volt_basis"      , help="basis electron volt", type=float, default=.87)
-parser.add_argument("-q_vr", "--quad_radial"                  , help="quadrature in r"        , type=int, default=130)
+parser.add_argument("-ts_tol", "--ts_tol"                     , help="adaptive timestep tolerance", type=float, default=1e-10)
+parser.add_argument("-l_max", "--l_max"                       , help="max polar modes in SH expansion", type=int, default=1)
+# parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default=["g0", "g2"])
+parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default=["g0Const", "g2Const"])
+parser.add_argument("-ev", "--electron_volt"                  , help="initial electron volt", type=float, default=.36)
+parser.add_argument("-ev_basis", "--electron_volt_basis"      , help="basis electron volt", type=float, default=.36)
+parser.add_argument("-q_vr", "--quad_radial"                  , help="quadrature in r"        , type=int, default=64)
 parser.add_argument("-q_vt", "--quad_theta"                   , help="quadrature in polar"    , type=int, default=8)
 parser.add_argument("-q_vp", "--quad_phi"                     , help="quadrature in azimuthal", type=int, default=8)
 parser.add_argument("-q_st", "--quad_s_theta"                 , help="quadrature in scattering polar"    , type=int, default=8)
@@ -183,21 +185,25 @@ parser.add_argument("-radial_poly", "--radial_poly"           , help="radial bas
 parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=2)
 parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=11)
 parser.add_argument("-E", "--E_field"                         , help="Electric field in V/m", type=float, default=10)
-parser.add_argument("-dv", "--dv_target"                      , help="target displacement of distribution in v_th units", type=float, default=0.5)
-parser.add_argument("-nt", "--num_timesteps"                  , help="target number of time steps", type=float, default=500)
+parser.add_argument("-dv", "--dv_target"                      , help="target displacement of distribution in v_th units", type=float, default=0)
+parser.add_argument("-nt", "--num_timesteps"                  , help="target number of time steps", type=float, default=100)
 parser.add_argument("-steady", "--steady_state"               , help="Steady state or transient", type=bool, default=True)
 parser.add_argument("-bolsig", "--bolsig_data"                , help="Path to bolsig generated EEDF", type=str, default="./")
 
-# parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[16, 32])
-# parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="Nr")
+# parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[0.125, 0.25, 0.5, 0.87, 1.0, 1.5])
+# parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="ev_basis")
 
-parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=["maxwell", "laguerre"])
-parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="radial_poly")
+parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[32])
+parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="Nr")
+
+# parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=["maxwell", "laguerre"])
+# parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="radial_poly")
 
 #parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
 
 run_data=list()
+run_temp=list()
 
 v = np.linspace(-2,2,100)
 vx, vz = np.meshgrid(v,v,indexing='ij')
@@ -213,6 +219,7 @@ params.BEVelocitySpace.SPH_HARM_LM = [[i,0] for i in range(args.l_max+1)]
 num_sph_harm = len(params.BEVelocitySpace.SPH_HARM_LM)
 
 radial = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial_intial = np.zeros((num_sph_harm, len(ev)))
 
 density_slice         = np.zeros((len(args.sweep_values),len(vx[0]),len(vx[1])))
 density_slice_initial = np.zeros((len(args.sweep_values),len(vx[0]),len(vx[1])))
@@ -285,15 +292,27 @@ for i, value in enumerate(args.sweep_values):
 
     data       = solve_collop(args.steady_state, cf, h_vec, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
     
-    radial[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)
+    radial[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)#/VTH**3
+
+    if args.steady_state == False and i == 0:
+        radial_initial = BEUtils.compute_radial_components(ev, spec, data[0,:], maxwellian, VTH, 1)#/VTH**3
 
     density_slice[i]  = BEUtils.sample_distriubtion_spherical(v_sph_coord, spec, data[-1,:], maxwellian, VTH, 1)
     density_slice_initial[i]  = BEUtils.sample_distriubtion_spherical(v_sph_coord, spec, data[0,:], maxwellian, VTH, 1)
     run_data.append(data)
 
-    current_mass     = BEUtils.moment_n_f(spec,data[-1,:], maxwellian, VTH, 0,None,None,None,1)
-    current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec,data[-1,:], maxwellian, VTH, None,None,None,current_mass,1)
-    print(current_temp/collisions.TEMP_K_1EV)
+
+    nt = len(data[:,0])
+    temp_evolution = np.zeros(nt)
+
+    for k in range(nt):
+        current_mass     = BEUtils.moment_n_f(spec,data[k,:], maxwellian, VTH, 0,None,None,None,1)
+        current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec,data[k,:], maxwellian, VTH, None,None,None,current_mass,1)
+        temp_evolution[k] = current_temp/collisions.TEMP_K_1EV
+
+    print(temp_evolution[-1])
+    
+    run_temp.append(temp_evolution)
 
 
 # np.set_printoptions(precision=16)
@@ -326,6 +345,9 @@ if (1):
 
             plt.subplot(2, num_subplots, num_subplots + 1 + l_idx)
 
+            if args.steady_state == False:
+                plt.semilogy(ev,  abs(radial_initial[l_idx]), '-', label="Initial")
+
             color = next(plt.gca()._get_lines.prop_cycler)['color']
             plt.semilogy(ev,  abs(radial[i, l_idx]), '-', label=lbl, color=color)
             plt.semilogy(ev, -radial[i, l_idx], 'o', label=lbl, color=color, markersize=3, markerfacecolor='white')
@@ -337,11 +359,8 @@ if (1):
             # plt.legend()
 
         plt.subplot(2, num_subplots, num_sph_harm + 1)
-        # color = next(plt.gca()._get_lines.prop_cycler)['color']
-        # plt.semilogy(vr, abs(perpendicular_field/parallel_field), '-', label="Par Nr=%d"%args.NUM_P_RADIAL[i], color=color)
-        # plt.semilogy(vr, -perpendicular_field/parallel_field, 'o', label="Nr=%d"%args.NUM_P_RADIAL[i], color=color, markersize=3, markerfacecolor='white')
-        # plt.semilogy(vr, abs(perpendicular_field), '--', label="PerpNr=%d"%args.NUM_P_RADIAL[i], color=color)
-        # plt.semilogy(vr, -perpendicular_field, 'o', label="Nr=%d"%args.NUM_P_RADIAL[i], color=color, markersize=3, markerfacecolor='white')
+        temp = run_temp[i]
+        plt.plot(temp, label=lbl)
 
     plt.subplot(2, num_subplots, num_subplots + num_sph_harm + 1)
 

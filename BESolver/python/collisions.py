@@ -511,6 +511,11 @@ class Collisions(abc.ABC):
             y[ev>1e3]=0
             
             return  y
+        
+
+        elif mode == "g2Const":
+
+            return  9.9e-27
             
         elif mode == "g0Const":
             """

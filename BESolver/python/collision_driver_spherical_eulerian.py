@@ -3,6 +3,7 @@
 """
 
 from cProfile import run
+from dataclasses import replace
 import enum
 import string
 import scipy
@@ -23,6 +24,95 @@ from scipy.integrate import ode
 from advection_operator_spherical_polys import *
 
 import matplotlib.pyplot as plt
+
+def deriv_fd(x, y):
+    mid = (y[1:len(x)]-y[0:len(x)-1])/(x[1:len(x)]-x[0:len(x)-1])
+    d = np.zeros_like(x)
+    d[0] = mid[0]
+    d[-1] = mid[-1]
+    d[1:len(x)-1] = .5*(mid[1:len(x)-1]+mid[0:len(x)-2])
+    return d
+
+def parse_bolsig(file, num_collisions):
+    eveclist = []
+    dveclist = []
+    aveclist = []
+    Elist = []
+    mulist = []
+    mobillist = []
+    difflist = []
+    ratelist = []
+
+    rate = np.zeros(2)
+
+    with open(file, 'r') as F:
+        line = F.readline()
+        
+        while (line!='Energy (eV) EEDF (eV-3/2) Anisotropy\n'):
+
+            if (len(line)>=23):
+                if (line[0:23]=='Electric field / N (Td)'):
+                    EbN = float(line.split(")",2)[1]) # 1e-21 converts from Td to V*m^2
+                    print("Found EbN = ", EbN)
+                    Elist.append(EbN)
+
+            if (len(line)>=16):
+                if (line[0:16]=='Mean energy (eV)'):
+                    mu = float(line.split(")",2)[1]) # while it says eV, the unit here is actually V
+                    print("Found mu = ", mu)
+                    mulist.append(mu)
+
+            if (len(line)>=21):
+                if (line[0:21]=='Mobility *N (1/m/V/s)'):
+                    mobil = float(line.split(")",2)[1]) 
+                    print("Found mobility = ", mobil)
+                    mobillist.append(mobil)
+
+            if (len(line)>=32):
+                if (line[0:32]=='Diffusion coefficient *N (1/m/s)'):
+                    diff = float(line.split(")",2)[1]) 
+                    print("Found diffusion = ", diff)
+                    difflist.append(diff)
+
+            for i in range(num_collisions):
+                if (len(line)>=8):
+                    if (line[0:8]=='C'+str(i+1)+'    Ar'):
+                        rate[i] = float(line.split()[-1]) 
+                        print("Found collision rate no. "+str(i+1)+" = ", rate[i])
+                        ratelist.append(rate)
+
+            line = F.readline()
+
+        # while (line!=''):
+        line = F.readline()
+        elist = []
+        dlist = []
+        alist = []
+        while (line!=' \n'):
+            col = line.split()
+            energy = float(col[0])
+            distrib = float(col[1])
+            anisotropy = float(col[2])
+
+            elist.append(energy)
+            dlist.append(distrib)
+            alist.append(anisotropy)
+
+            line = F.readline()
+
+        print("Adding vectors to lists for Etil = {0:.3e}...".format(EbN))
+        eveclist.append(np.array(elist))
+        dveclist.append(np.array(dlist))
+        aveclist.append(np.array(alist))
+
+    return [eveclist[0], dveclist[0], aveclist[0], Elist[0], mulist[0], mobillist[0], difflist[0], ratelist[0]]
+
+def replace_line(file_name, line_num, text):
+    lines = open(file_name, 'r').readlines()
+    lines[line_num] = text
+    out = open(file_name, 'w')
+    out.writelines(lines)
+    out.close()
 
 class CollissionMode(enum.Enum):
     ELASTIC_ONLY=0
@@ -125,7 +215,8 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
     # plt.show()
     if steady_state == True:
 
-        h_red = np.zeros(len(h_init)-1)
+        # h_red = np.zeros(len(h_init)-1)
+        h_red = h_init[1:]
 
         Cmat = collisions.AR_NEUTRAL_N*FOp
         Emat = E_field/VTH*collisions.ELECTRON_CHARGE_MASS_RATIO*advmat
@@ -135,6 +226,8 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
         while (iteration_error > 1e-14 and iteration_steps < 30) or iteration_steps < 5:
             h_prev = h_red
             h_red = - np.linalg.solve(Cmat[1:,1:] - Emat[1:,1:] - (Cmat[0,0] + np.dot(h_red, Cmat[0,1:]))*np.eye(len(h_red)), Cmat[1:,0] - Emat[1:,0])
+            # inv_op = BEUtils.block_jacobi_inv(Cmat[1:,1:] - Emat[1:,1:] - (Cmat[0,0] + np.dot(h_red, Cmat[0,1:]))*np.eye(len(h_red)), 4)
+            # h_red = - np.matmul(inv_op, Cmat[1:,0] - Emat[1:,0])
             iteration_error = np.linalg.norm(h_prev-h_red)
             print("Iteration ", iteration_steps, ": Residual =", iteration_error)
             iteration_steps = iteration_steps + 1
@@ -165,17 +258,17 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
 
     return solution_vector
 
-parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=32)
+parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=64)
 parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-4)
 parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-7)
 parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='coll_op')
 parser.add_argument("-ts_tol", "--ts_tol"                     , help="adaptive timestep tolerance", type=float, default=1e-10)
 parser.add_argument("-l_max", "--l_max"                       , help="max polar modes in SH expansion", type=int, default=1)
 # parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default=["g0", "g2"])
-parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default=["g0Const", "g2Const"])
-parser.add_argument("-ev", "--electron_volt"                  , help="initial electron volt", type=float, default=.36)
-parser.add_argument("-ev_basis", "--electron_volt_basis"      , help="basis electron volt", type=float, default=.36)
-parser.add_argument("-q_vr", "--quad_radial"                  , help="quadrature in r"        , type=int, default=64)
+parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default=["g0", "g2"])
+parser.add_argument("-ev", "--electron_volt"                  , help="initial electron volt", type=float, default=0.25)
+parser.add_argument("-bscale", "--basis_scale"                , help="basis electron volt", type=float, default=1.0)
+parser.add_argument("-q_vr", "--quad_radial"                  , help="quadrature in r"        , type=int, default=200)
 parser.add_argument("-q_vt", "--quad_theta"                   , help="quadrature in polar"    , type=int, default=8)
 parser.add_argument("-q_vp", "--quad_phi"                     , help="quadrature in azimuthal", type=int, default=8)
 parser.add_argument("-q_st", "--quad_s_theta"                 , help="quadrature in scattering polar"    , type=int, default=8)
@@ -184,23 +277,43 @@ parser.add_argument("-radial_poly", "--radial_poly"           , help="radial bas
 # parser.add_argument("-radial_poly", "--radial_poly"           , help="radial basis", type=str, default="laguerre")
 parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=2)
 parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=11)
-parser.add_argument("-E", "--E_field"                         , help="Electric field in V/m", type=float, default=10)
+parser.add_argument("-E", "--E_field"                         , help="Electric field in V/m", type=float, default=7500)
 parser.add_argument("-dv", "--dv_target"                      , help="target displacement of distribution in v_th units", type=float, default=0)
 parser.add_argument("-nt", "--num_timesteps"                  , help="target number of time steps", type=float, default=100)
 parser.add_argument("-steady", "--steady_state"               , help="Steady state or transient", type=bool, default=True)
-parser.add_argument("-bolsig", "--bolsig_data"                , help="Path to bolsig generated EEDF", type=str, default="./")
+parser.add_argument("-bolsig", "--bolsig_dir"                 , help="Bolsig directory", type=str, default="/home/dbochkov/Dropbox/Code/boltzmann/Bolsig/")
 
-# parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[0.125, 0.25, 0.5, 0.87, 1.0, 1.5])
-# parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="ev_basis")
+# parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=float, default=[1.25, 1., 0.75, 0.5, 0.25, 0.125])
+# parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="bscale")
 
-parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[32])
-parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="Nr")
+# parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[16, 32, 48, 64, 80, 96, 112, 128])
+parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[16, 32])
+# parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[16])
+parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
 
 # parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=["maxwell", "laguerre"])
-# parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, ev_basis, E, radial_poly", type=str, default="radial_poly")
+# parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="radial_poly")
 
 #parser.add_argument("-r", "--restore", help="if 1 try to restore solution from a checkpoint", type=int, default=0)
 args = parser.parse_args()
+
+# run bolsig for chosen parameters and parse its output
+bolsig_cs_file = args.collisions[0]
+for col in args.collisions[1:]:
+    bolsig_cs_file = bolsig_cs_file + "_" + col
+bolsig_cs_file = bolsig_cs_file + ".txt"
+
+replace_line(args.bolsig_dir+"run.sh", 2, "cd " + args.bolsig_dir + "\n")
+replace_line(args.bolsig_dir+"minimal-argon.dat", 8, "\""+bolsig_cs_file+"\"   / File\n")
+replace_line(args.bolsig_dir+"minimal-argon.dat", 13, str(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+" / Electric field / N (Td)\n")
+os.system("sh "+args.bolsig_dir+"run.sh")
+[bolsig_ev, bolsig_f0, bolsig_a, bolsig_E, bolsig_mu, bolsig_M, bolsig_D, bolsig_rates] = parse_bolsig(args.bolsig_dir+"argon.out",len(args.collisions))
+
+# setting electron volts from bolsig results for now
+args.electron_volt = bolsig_mu
+# bolsig = np.genfromtxt(args.bolsig_data,delimiter=',')
+# plt.plot(bolsig[:,0], bolsig[:,1])
+# plt.show()
 
 run_data=list()
 run_temp=list()
@@ -211,7 +324,13 @@ vy = np.zeros_like(vx)
 v_sph_coord = BEUtils.cartesian_to_spherical(vx, vy, vz)
 
 # vr = np.linspace(1e-3,5,100)
-ev = np.linspace(args.electron_volt/20.,20.*args.electron_volt,100)
+# ev = np.linspace(args.electron_volt/20.,20.*args.electron_volt,1000)
+# ev = np.linspace(1e-5,10,100)
+ev = bolsig_ev
+
+dev = ev[-1]-ev[-2]
+numadd = int(.5*ev[-1]/dev)
+ev = np.concatenate((ev, np.linspace(ev[-1] + dev, ev[-1] + numadd*dev, numadd)))
 
 # assuming l_max is not changing
 # params.BEVelocitySpace.SPH_HARM_LM = [[i,j] for i in range(args.l_max+1) for j in range(-i,i+1)]
@@ -219,6 +338,7 @@ params.BEVelocitySpace.SPH_HARM_LM = [[i,0] for i in range(args.l_max+1)]
 num_sph_harm = len(params.BEVelocitySpace.SPH_HARM_LM)
 
 radial = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial_base = np.zeros((len(args.sweep_values), len(ev)))
 radial_intial = np.zeros((num_sph_harm, len(ev)))
 
 density_slice         = np.zeros((len(args.sweep_values),len(vx[0]),len(vx[1])))
@@ -227,6 +347,13 @@ density_slice_initial = np.zeros((len(args.sweep_values),len(vx[0]),len(vx[1])))
 SPLINE_ORDER = args.spline_order
 basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
 basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=args.spline_q_pts_per_knot
+
+mu = []
+M = []
+D = []
+rates = []
+for i in enumerate(args.collisions):
+    rates.append([])
 
 for i, value in enumerate(args.sweep_values):
 
@@ -237,8 +364,8 @@ for i, value in enumerate(args.sweep_values):
     elif args.sweep_param == "ev":
         args.electron_volt = value
         args.electron_volt_basis = value
-    elif args.sweep_param == "ev_basis":
-        args.electron_volt_basis = value
+    elif args.sweep_param == "bscale":
+        args.basis_scale = value
     elif args.sweep_param == "E":
         args.E_field = value
     elif args.sweep_param == "radial_poly":
@@ -269,12 +396,11 @@ for i, value in enumerate(args.sweep_values):
     params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 
-    INIT_EV    = args.electron_volt_basis
-    vratio = np.sqrt(args.electron_volt/args.electron_volt_basis)
+    BASIS_EV = args.electron_volt*args.basis_scale
+    vratio = np.sqrt(1.0/args.basis_scale)
 
-    # INIT_EV    = evcurr
-    collisions.MAXWELLIAN_TEMP_K   = INIT_EV * collisions.TEMP_K_1EV
-    collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+    collisions.ELECTRON_THEMAL_VEL = np.sqrt(4./3.*BASIS_EV*collisions.ELECTRON_CHARGE_MASS_RATIO)
+    collisions.MAXWELLIAN_TEMP_K   = collisions.electron_temperature(collisions.ELECTRON_THEMAL_VEL)
     cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode)
     spec  = cf._spec
     VTH   = collisions.ELECTRON_THEMAL_VEL
@@ -286,19 +412,37 @@ for i, value in enumerate(args.sweep_values):
     print("""============================================================""")
     params.print_parameters()
 
+    scale = (np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/VTH)**3*(2./np.sqrt(np.pi))/basis.maxpoly.maxpolyeval(2,0,0)
+    print("Scale:", scale)
+
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
     hv         = lambda v,vt,vp : np.exp((v**2)*(1.-1./(vratio**2)))/vratio**3
     h_vec      = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
 
+    if args.steady_state:
+        # continuation for quicker solution
+        if i == 0:
+            h_vec *= 0
+            h_vec[0] = 1
+        else:
+            data = run_data[i-1]
+            h_vec *= 0
+            h_vec[0:len(data[-1])] = data[-1]
+
+
     data       = solve_collop(args.steady_state, cf, h_vec, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
     
-    radial[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)#/VTH**3
-
+    radial[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)*scale
+    
     if args.steady_state == False and i == 0:
-        radial_initial = BEUtils.compute_radial_components(ev, spec, data[0,:], maxwellian, VTH, 1)#/VTH**3
+        radial_initial = BEUtils.compute_radial_components(ev, spec, data[0,:], maxwellian, VTH, 1)*scale
 
-    density_slice[i]  = BEUtils.sample_distriubtion_spherical(v_sph_coord, spec, data[-1,:], maxwellian, VTH, 1)
-    density_slice_initial[i]  = BEUtils.sample_distriubtion_spherical(v_sph_coord, spec, data[0,:], maxwellian, VTH, 1)
+    empty_cf = data[0,:]*0
+    empty_cf[0] = 1
+    radial_base[i,:] = BEUtils.compute_radial_components(ev, spec, empty_cf, maxwellian, VTH, 1)[0,:]*scale
+
+    # density_slice[i]  = BEUtils.sample_distriubtion_spherical(v_sph_coord, spec, data[-1,:], maxwellian, VTH, 1)
+    # density_slice_initial[i]  = BEUtils.sample_distriubtion_spherical(v_sph_coord, spec, data[0,:], maxwellian, VTH, 1)
     run_data.append(data)
 
 
@@ -310,8 +454,22 @@ for i, value in enumerate(args.sweep_values):
         current_temp     = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec,data[k,:], maxwellian, VTH, None,None,None,current_mass,1)
         temp_evolution[k] = current_temp/collisions.TEMP_K_1EV
 
-    print(temp_evolution[-1])
-    
+    mu.append(1.5*temp_evolution[-1])
+    print(1.5*temp_evolution[-1])
+
+    total_cs = 0
+
+    for col_idx, col in enumerate(args.collisions):
+        cs = collisions.Collisions.synthetic_tcs(ev, col)
+        total_cs += cs
+        rates[col_idx].append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)*np.trapz(radial[i,0,:]*ev*cs,x=ev) )
+
+        if col == "g2" or col == "g2Const":
+            total_cs += rates[col_idx][-1]/np.sqrt(ev)/np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)
+
+    D.append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(radial[i,0,:]*ev/total_cs,x=ev) )
+    M.append( -np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(deriv_fd(ev,radial[i,0,:])*ev/total_cs,x=ev) )
+
     run_temp.append(temp_evolution)
 
 
@@ -319,9 +477,17 @@ for i, value in enumerate(args.sweep_values):
 # print(data[1,:])
 
 if (1):
-    fig = plt.figure(figsize=(12, 4), dpi=150)
+    fig = plt.figure(figsize=(19, 9), dpi=200)
 
-    num_subplots = num_sph_harm + 1
+    num_subplots = num_sph_harm + 2
+
+    plt.subplot(2, num_subplots, num_subplots + 1 + 0)
+    plt.semilogy(bolsig_ev,  bolsig_f0, '-k', label="bolsig")
+    # print(np.trapz( bolsig[:,1]*np.sqrt(bolsig[:,0]), x=bolsig[:,0] ))
+    # print(np.trapz( scale*radial[i, 0]*np.sqrt(ev), x=ev ))
+
+    plt.subplot(2, num_subplots, num_subplots + 1 + 1)
+    plt.semilogy(bolsig_ev,  bolsig_f0*bolsig_a*spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0), '-k', label="bolsig")
 
     for i, value in enumerate(args.sweep_values):
         data=run_data[i]
@@ -329,6 +495,7 @@ if (1):
         lbl = args.sweep_param+"="+str(value)
 
         # spherical components plots
+
         for l_idx in range(num_sph_harm):
 
             plt.subplot(2, num_subplots, 1+l_idx)
@@ -350,27 +517,76 @@ if (1):
 
             color = next(plt.gca()._get_lines.prop_cycler)['color']
             plt.semilogy(ev,  abs(radial[i, l_idx]), '-', label=lbl, color=color)
-            plt.semilogy(ev, -radial[i, l_idx], 'o', label=lbl, color=color, markersize=3, markerfacecolor='white')
+            if l_idx == 0:
+                plt.semilogy(ev,  abs(radial_base[i]), ':', label=lbl+" (base)", color=color)
+            # plt.semilogy(ev, -radial[i, l_idx], 'o', label=lbl, color=color, markersize=3, markerfacecolor='white')
+
 
             plt.yscale('log')
-            plt.xlabel("Scaled speed")
+            plt.xlabel("Energy, eV")
             plt.ylabel("Radial component")
             plt.grid(visible=True)
+            # if l_idx == 0:
+                # plt.legend()
             # plt.legend()
 
-        plt.subplot(2, num_subplots, num_sph_harm + 1)
-        temp = run_temp[i]
-        plt.plot(temp, label=lbl)
+        # plt.subplot(2, num_subplots, num_sph_harm + 1)
+        # temp = run_temp[i]
+        # plt.plot(temp, label=lbl)
+
+    plt.subplot(2, num_subplots, num_sph_harm + 1)
+    plt.plot(args.sweep_values, mu, 'o-', label='us')
+    plt.axhline(y=bolsig_mu, label='bolsig', color='k')
+    plt.legend()
+    plt.xlabel(args.sweep_param)
+    plt.ylabel("Mean energy (eV)")
+
+    if args.sweep_param != "radial_poly":
+        plt.gca().ticklabel_format(useOffset=False)
+
+    plt.subplot(2, num_subplots, num_sph_harm + 2)
+    for col_idx, col in enumerate(args.collisions):
+        if bolsig_rates[col_idx] != 0:
+            plt.semilogy(args.sweep_values, abs(rates[col_idx]/bolsig_rates[col_idx]-1), 'o-', label='us '+col)
+            # plt.axhline(y=0, label='bolsig '+col, color='k')
+    plt.legend()
+    plt.xlabel(args.sweep_param)
+    plt.ylabel("Reaction rates")
+
+    # if args.sweep_param != "radial_poly":
+        # plt.gca().ticklabel_format(useOffset=False)
+
 
     plt.subplot(2, num_subplots, num_subplots + num_sph_harm + 1)
+    plt.plot(args.sweep_values, M, 'o-', label='us')
+    plt.axhline(y=bolsig_M, label='bolsig', color='k')
+    plt.legend()
+    plt.xlabel(args.sweep_param)
+    plt.ylabel("Mobility *N (1/m/V/s) ")
 
-    lvls = np.linspace(0, np.amax(density_slice_initial[0]), 10)
+    if args.sweep_param != "radial_poly":
+        plt.gca().ticklabel_format(useOffset=False)
 
-    plt.contour(vx, vz, density_slice_initial[-1], levels=lvls, linestyles='solid', colors='grey', linewidths=1) 
-    plt.contour(vx, vz, density_slice[-1], levels=lvls, linestyles='dotted', colors='red', linewidths=1)  
-    plt.gca().set_aspect('equal')
+    plt.subplot(2, num_subplots, num_subplots + num_sph_harm + 2)
+    plt.plot(args.sweep_values, D, 'o-', label='us')
+    plt.axhline(y=bolsig_D, label='bolsig', color='k')
+    plt.legend()
+    plt.xlabel(args.sweep_param)
+    plt.ylabel("Diffusion coefficient *N (1/m/s)")
+
+    if args.sweep_param != "radial_poly":
+        plt.gca().ticklabel_format(useOffset=False)
+
+    # plt.subplot(2, num_subplots, num_subplots + num_sph_harm + 1)
+
+    # lvls = np.linspace(0, np.amax(density_slice_initial[0]), 10)
+
+    # plt.contour(vx, vz, density_slice_initial[-1], levels=lvls, linestyles='solid', colors='grey', linewidths=1) 
+    # plt.contour(vx, vz, density_slice[-1], levels=lvls, linestyles='dotted', colors='red', linewidths=1)  
+    # plt.gca().set_aspect('equal')
     
-    fig.subplots_adjust(hspace=0.15)
-    fig.subplots_adjust(wspace=0.2)
-    plt.show()
-    # plt.savefig("%s_coeff.png"%(args.out_fname))
+    fig.subplots_adjust(hspace=0.3)
+    fig.subplots_adjust(wspace=0.4)
+    fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")")
+    # plt.show()
+    plt.savefig("maxwell_vs_bolsig_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly) + "_nr" + str(args.NUM_P_RADIAL) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")

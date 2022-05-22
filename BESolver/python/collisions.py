@@ -491,6 +491,24 @@ class Collisions(abc.ABC):
             y[ev>35.00] = f + g * (1/pow(ev[ev>35.00],2))
             y[ev>=200]   = 0
             return y     
+
+        elif mode == "g1smoother":
+            """
+            G1 cross section data fit with analytical function (excitation)
+            """
+            #ev =     ev+1e-8
+            a  = -4.06265154e-21
+            b  =  6.46808245e-22
+            c  = -3.20434420e-23
+            d  = 6.39873618e-25 
+            e  = -4.37947887e-27
+            f  = -1.30972221e-23
+            g  =  2.15683845e-19
+            mixing = 1./(1.+np.exp(-(ev-32.)))
+            y = (a +  b * ev + c * ev**2 + d * ev**3 + e * ev**4)*(1.-mixing) + mixing*(f + g/ev**2)
+            y[ev<=11.55] = 0 
+            # y[ev>=200]   = 0
+            return y    
         
         elif mode == "g2":
             """
@@ -508,14 +526,14 @@ class Collisions(abc.ABC):
             y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
             
             y[ev<=15.76]=0
-            y[ev>1e3]=0
+            # y[ev>1e3]=0
             
             return  y
         
 
         elif mode == "g2Const":
 
-            return  9.9e-27
+            return  9.9e-25
             
         elif mode == "g0Const":
             """
@@ -783,13 +801,11 @@ class eAr_G2(Collisions):
         self._analytic_cross_section_type = cross_section
         self._reaction_threshold = threshold
         
-
-    @staticmethod
-    def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
+    def compute_scattering_velocity(self, v0, polar_angle, azimuthal_angle):
         v1_dir   = Collisions.compute_scattering_direction(v0,polar_angle, azimuthal_angle)
         
-        assert (0.5 * np.linalg.norm(v0,2)**2    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)) > 0 , "collision G2 invalid velocity specified: %f "%v0
-        v1_fac   = np.sqrt(0.5 * np.linalg.norm(v0,2)**2    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        assert (0.5 * np.linalg.norm(v0,2)**2    - (self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON)) > 0 , "collision G2 invalid velocity specified: %f "%v0
+        v1_fac   = np.sqrt(0.5 * np.linalg.norm(v0,2)**2    - (self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON))
         v2_fac   = v1_fac
 
         v1       =  v1_fac  * v1_dir
@@ -804,8 +820,8 @@ class eAr_G2(Collisions):
         
     def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
         vs                       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        check_1            = vr**2 > 2*(E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON)
-        vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (E_AR_IONIZATION_eV * ELECTRON_VOLT/MASS_ELECTRON))
+        check_1            = vr**2 > 2*(self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON)
+        vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON))
         vs[0][np.logical_not(check_1)] = 0
         v2_fac             = vs[0]
         

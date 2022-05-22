@@ -1,0 +1,11 @@
+BOLSIG+ script file: ./minimal-argon.dat
+READCOLLISIONS
+Ar
+g0_g2.txt
+C1    Ar    Effective (momentum)                                
+C2    Ar    Ionization    15.70 eV                              
+RUN
+R1    233. Td    8.68 eV                                        
+SAVERESULTS
+argon.out
+FINISHED

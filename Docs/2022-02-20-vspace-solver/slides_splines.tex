@@ -346,6 +346,329 @@
 
 
 
+\begin{frame}
+%\frametitle{Steady-State solutions for orthogonal polynomials}
+\begin{itemize}
+\item Discretized system of equations 
+\begin{align*}
+\frac{d \vect{h}}{dt} + E \vect{h} = C \vect{h}
+\end{align*}
+admits a steady state solution:
+\begin{align*}
+\frac{\vect{h}_\ast}{h_0} = 
+\left( \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) I
+- \left( C_{\ast\ast} - E_{\ast\ast} \right) \right)^{-1}
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
+\end{align*}
+where
+\begin{align*}
+\vect{h} = 
+\begin{pmatrix}
+h_0 \\ \vect{h}_\ast
+\end{pmatrix}
+,\quad
+E = 
+\begin{pmatrix}
+0 & \vect{0}^T \\
+\vect{e}_{0\ast} & E_{\ast\ast}
+\end{pmatrix}
+,\quad
+C = 
+\begin{pmatrix}
+C_{00} & \vect{c}_{\ast 0}^T \\
+\vect{c}_{0\ast} & C_{\ast\ast}
+\end{pmatrix}
+\end{align*}
+
+\item Solving using fixed-point iteration (typically converges in $<5$ iterations)
+\begin{align*}
+\bar{\vect{h}}^{n+1} = 
+\left( \left(C_{00} + \vect{c}_{\ast 0}^T \bar{\vect{h}}^{n} \right) I
+- \left( C_{\ast\ast} - E_{\ast\ast} \right) \right)^{-1}
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
+\end{align*}
+\end{itemize}
+%	\begin{figure}
+%		\includegraphics[width=0.7\textwidth]{figures/m_test_vspace_coeff.png}
+%\end{figure}
+\end{frame}
+
+
+
+\begin{frame}
+Validation against Bolsig+ results:
+\begin{enumerate}
+\item Only elastic collisions with constant cross sections ($E=10$ V/m)
+\begin{enumerate}
+\item Convergence with increasing $N_r$ (number of radial polynomials)
+\item Sensitivity to basis thermal velocity (for $Nr = 64$)
+\item Sensitivity to choice of polynomials: Maxwell vs Laguerre (for $Nr = 64$)
+\end{enumerate}
+\item Only elastic collisions with experiment-fitted cross sections
+\begin{enumerate}
+\item Sweep through $E = 1, 10, 100, 500, 1000$ V/m
+\end{enumerate}
+\item Elastic and ionization collisions with experiment-fitted cross sections
+\begin{enumerate}
+\item Sweep through $E = 1, 10, 100, 500, 1000, 5000, 10000$ V/m
+\end{enumerate}
+\end{enumerate}
+
+
+Some notes:
+\begin{itemize}
+\item We use 8 quadrature points for integration over all angular dimensions, and 200 quadrature points for radial direction
+\item For basis thermal velocity values from Bolsig+ results are used unless otherwise stated
+\item Swarm parameters are computed quite roughly using sampled distributions and trapezoidal integration
+\end{itemize}
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+1. Only elastic collisions with constant cross sections ($E=10$ V/m):
+\\ 
+1.1 Convergence with increasing $N_r$ (number of radial polynomials)
+
+\includegraphics[width=\textwidth]{maxwell_vs_bolsig_g0Const_E10_poly_maxwell_nrsweep_bscale1.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+1. Only elastic collisions with constant cross sections ($E=10$ V/m):
+\\ 
+1.2 Sensitivity to basis thermal velocity (for $Nr = 64$)
+
+\includegraphics[width=\textwidth]{maxwell_vs_bolsig_g0Const_E10_poly_maxwell_nr64_bscalesweep.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+1. Only elastic collisions with constant cross sections ($E=10$ V/m):
+\\ 
+1.3 Sensitivity to choice of polynomials: Maxwell vs Laguerre (for $Nr = 64$)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0Const_E10_poly_laguerre_nr64_bscale1.0_sweeping_radial_poly}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+2. Only elastic collisions with experiment-fitted cross sections
+\\ 
+2.1 $E=1$ V/m
+
+\includegraphics[width=\textwidth]{maxwell_vs_bolsig_g0_E1_poly_maxwell_nrsweep_bscale1.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+2. Only elastic collisions with experiment-fitted cross sections
+\\ 
+2.2 $E=10$ V/m
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_E10.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+2. Only elastic collisions with experiment-fitted cross sections
+\\ 
+2.3 $E=100$ V/m
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_E100.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+2. Only elastic collisions with experiment-fitted cross sections
+\\ 
+2.4 $E=500$ V/m
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_E500.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+2. Only elastic collisions with experiment-fitted cross sections
+\\ 
+2.5 $E=1000$ V/m (struggles to find solution)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_E1000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+3. Elastic and ionization collisions with experiment-fitted cross sections
+\\ 
+3.1 $E=1$ V/m (for rates we display relative error now)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_g2_E1.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+3. Elastic and ionization collisions with experiment-fitted cross sections
+\\ 
+3.2 $E=10$ V/m (for rates we display relative error now)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_g2_E10.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+3. Elastic and ionization collisions with experiment-fitted cross sections
+\\ 
+3.3 $E=100$ V/m (for rates we display relative error now)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_g2_E100.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+3. Elastic and ionization collisions with experiment-fitted cross sections
+\\ 
+3.4 $E=500$ V/m (for rates we display relative error now)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_g2_E500.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+
+\begin{frame}
+
+\begin{figure}
+3. Elastic and ionization collisions with experiment-fitted cross sections
+\\ 
+3.5 $E=1000$ V/m (for rates we display relative error now)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_g2_E1000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+3. Elastic and ionization collisions with experiment-fitted cross sections
+\\ 
+3.6 $E=5000$ V/m (for rates we display relative error now)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_g2_E5000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+
+\begin{figure}
+3. Elastic and ionization collisions with experiment-fitted cross sections
+\\ 
+3.7 $E=10000$ V/m (for rates we display relative error now)
+
+\includegraphics[width=\textwidth]{{maxwell_vs_bolsig_g0_g2_E10000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr}.png}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+Some conlcusions and observations:
+\begin{enumerate}
+\item Only elastic collisions with constant cross sections ($E=10$ V/m)
+\begin{enumerate}
+\item Convergence with increasing $N_r$ (number of radial polynomials)
+\\ $\rightarrow$ converges nicely
+\item Sensitivity to basis thermal velocity (for $Nr = 64$)
+\\ $\rightarrow$ strongly affects tail resolution but unclear how to pick
+\item Sensitivity to choice of polynomials: Maxwell vs Laguerre (for $Nr = 64$)
+\\ $\rightarrow$ no big difference noted, Maxwell appear slightly better
+\end{enumerate}
+\item Only elastic collisions with experiment-fitted cross sections
+\begin{enumerate}
+\item Sweep through $E = 1, 10, 100, 500, 1000$ V/m
+\\ $\rightarrow$ seem to converge but slowly than in const case, unstable for high voltages (1000 V/m, not physically relevant without ionization?)
+\end{enumerate}
+\item Elastic and ionization collisions with experiment-fitted cross sections
+\begin{enumerate}
+\item Sweep through $E = 1, 10, 100, 500, 1000, 5000, 10000$ V/m
+\\ $\rightarrow$ for low voltages coincide with elastic only case because no ionization is triggered
+\\ $\rightarrow$ for intermediate voltages high errors in rates since tails are not well resolved
+\\ $\rightarrow$ for high voltages accuracy of rates improves since ionization now affects not only tails but entire distributions
+\\ $\rightarrow$ overall convergence seem to be slow (not respecting numerically discontinuous character of ionization cross section?)
+\end{enumerate}
+\end{enumerate}
+
+\end{frame}
+
+
+
+
+
 
 %===============================================================================
 \end{document}

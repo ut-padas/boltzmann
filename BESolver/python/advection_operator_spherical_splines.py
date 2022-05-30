@@ -10,70 +10,15 @@ import matplotlib.pyplot as plt
 from scipy.special import sph_harm
 import utils as BEUtils
 import parameters as params
-
-phimat = np.genfromtxt('sph_harm_del/phimat16.dat',delimiter=',')
-psimat = np.genfromtxt('sph_harm_del/psimat16.dat',delimiter=',')
-
+import collisions
 
 def create_xlbspline_spec(spline_order, k_domain, Nr, sph_harm_lm):
     splines      = basis.XlBSpline(k_domain,spline_order,Nr+1)
-    spec         = sp.SpectralExpansionSpherical(Nr,splines,params.BEVelocitySpace.SPH_HARM_LM)
+    spec         = sp.SpectralExpansionSpherical(Nr,splines,sph_harm_lm)
     return spec
 
 def assemble_advection_matrix_lp(spec: sp.SpectralExpansionSpherical):
-
-    num_p  = spec._p+1
-    num_sh = len(spec._sph_harm_lm)
-    
-    lmodes = list(set([l for l,_ in spec._sph_harm_lm]))
-    num_l  = len(lmodes)
-    l_max  = lmodes[-1]
-    
-    phimat = np.genfromtxt('sph_harm_del/phimat.dat',delimiter=',')
-    psimat = np.genfromtxt('sph_harm_del/psimat.dat',delimiter=',')
-
-    psimat= np.transpose(psimat[0:(l_max+1)**2, 0:(l_max+1)**2])
-    phimat= np.transpose(phimat[0:(l_max+1)**2, 0:(l_max+1)**2])
-
-    [gx, gw] = spec._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(spec._p,spec._basis_p._sp_order,spec._basis_p._q_per_knot),True)
-    
-    Vr  = np.zeros(tuple([num_l,num_p])+gx.shape)
-    Vdr = np.zeros(tuple([num_l,num_p])+gx.shape)
-    for i,l in enumerate(lmodes):
-        Vr[i]  = spec.Vq_r(gx,l)
-        Vdr[i] = spec.Vdq_r(gx,l,d_order=1)
-        
-    mr = gx**2 
-    mm1 = np.array([mr * Vr[pl,p,:] * Vdr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
-    mm1 = np.dot(mm1,gw)
-    
-    mr = gx
-    mm2 = np.array([mr * Vr[pl,p,:] * Vr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
-    mm2 = np.dot(mm2,gw)
-
-    # advec_mat = np.zeros((num_p*num_sh,num_p*num_sh))
-    # for p in range(num_p):
-    #     for k in range(num_p):
-    #         for qs_idx,qs in enumerate(spec._sph_harm_lm):
-    #             for lm_idx,lm in enumerate([(max(qs[0]-1,0), qs[1]), (min(qs[0]+1,l_max), qs[1])]):#enumerate(spec._sph_harm_lm):
-    #                 qs_mat = qs[0]**2+qs[0]+qs[1]
-    #                 lm_mat = lm[0]**2+lm[0]+lm[1]
-    #                 pqs = p*num_sh + qs_idx
-    #                 klm = k*num_sh + spec._sph_harm_lm.index(lm)
-    #                 advec_mat[pqs,klm] = mm1[p,k,qs[0],lm[0]] * psimat[qs_mat,lm_mat] - mm2[p,k,qs[0],lm[0]] * phimat[qs_mat,lm_mat]
-
-    advec_mat = np.zeros((num_p,num_sh,num_p,num_sh))
-    for qs_idx,qs in enumerate(spec._sph_harm_lm):
-        for lm in [(max(qs[0]-1,0), qs[1]), (min(qs[0]+1,l_max), qs[1])]:
-            qs_mat = qs[0]**2+qs[0]+qs[1]
-            lm_mat = lm[0]**2+lm[0]+lm[1]
-            advec_mat[:,qs_idx,:,spec._sph_harm_lm.index(lm)] = mm1[:,:,qs[0],lm[0]] * psimat[qs_mat,lm_mat] - mm2[:,:,qs[0],lm[0]] * phimat[qs_mat,lm_mat]
-            
-        
-    advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
-    print("norm adv mat = %.8E"%np.linalg.norm(advec_mat))
-    return advec_mat
-
+    return spec.compute_advection_matix()
     
 def backward_euler(FOp,y0,t_end,nsteps):
     dt = t_end/nsteps
@@ -133,13 +78,28 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
 
     L=assemble_advection_matrix_lp(spec_xlbspline)
     advmat=np.matmul(Minv,L)
-    print(advmat)
-
+    #print(advmat)
+    
     func = lambda t,a: -np.matmul(advmat,a)
     sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45',atol=1e-15, rtol=2.220446049250313e-14)
     # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='BDF')
     coeffs_new = sol.y[:,-1]
 
+    spec_sp=spec_xlbspline
+    vth=VTH_C
+    current_mw=maxwellian
+    mass_op   = BEUtils.mass_op(spec_sp, None, 64, 2, 1)
+    temp_op   = BEUtils.temp_op(spec_sp, None, 64, 2, 1)
+    avg_vop   = BEUtils.mean_velocity_op(spec_sp, None, 64, 4, 1)
+    eavg_to_K = (2/(3*scipy.constants.Boltzmann))
+    ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+
+    for i in range(0,sol.y.shape[1],500):
+        current_mass     = np.dot(sol.y[:,i],mass_op) * vth**3 * current_mw(0)
+        current_temp     = np.dot(sol.y[:,i],temp_op) * vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass
+        print("time %.4E mass = %.14E temp= %.8E"%(sol.t[i],current_mass,current_temp))
+
+    #print(np.dot(mass_op[0::num_sph], advmat[0::num_sph,1::num_sph]))
     avg_vop   = BEUtils.mean_velocity_op(spec_xlbspline, None, 64, 32, 1)
 
     vc_x             = np.dot(avg_vop[0],sol.y[:,0]) * VTH_C**4 * (maxwellian(0)/1)
@@ -168,7 +128,7 @@ error_l2 = np.zeros(len(num_dofs_all))
 error_linf_2d = np.zeros(len(num_dofs_all))
 error_l2_2d = np.zeros(len(num_dofs_all))
 
-t_end = 0.2
+t_end = 1e-1
 # nsteps = 400000
 nsteps = 10000
 dt = t_end/nsteps
@@ -198,7 +158,7 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     l_max = num_dofs[1]
     
     num_p   = nr+1
-    sph_lm  = [(l,0) for l in range(l_max+1)]
+    sph_lm  = [[l,0] for l in range(l_max+1)]
     num_sph = len(sph_lm)
     print("Nr=%d sph=%s"%(nr,sph_lm))
     c,ct,spec_xlbspline = solve_advection(nr,sph_lm,SP_ORDER,V_DOMAIN,t_end)

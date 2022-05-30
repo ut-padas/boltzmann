@@ -819,11 +819,18 @@ class eAr_G2(Collisions):
         return None
         
     def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
-        vs                       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
+        vs                 = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         check_1            = vr**2 > 2*(self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON)
         vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON))
+        
         vs[0][np.logical_not(check_1)] = 0
-        v2_fac             = vs[0]
+        vs[1][np.logical_not(check_1)] = 0
+        vs[2][np.logical_not(check_1)] = 0
+        # v2_fac             = vs[0]
+        # e_in  = 0.5 * vr**2 / ELECTRON_CHARGE_MASS_RATIO
+        # e_out = 0.5 * vs[0]**2 / ELECTRON_CHARGE_MASS_RATIO
+        # print(np.min(e_in), np.max(e_in))
+        # print(np.min(e_out), np.max(e_out))
         
 
         if(self._momentum_setup == False):
@@ -856,9 +863,18 @@ class eAr_G2(Collisions):
 
         
         v2_sp           = BEUtils.cartesian_to_spherical(self._v2[self._check_1,0],self._v2[self._check_1,1],self._v2[self._check_1,2])
-        self._vs2[0][self._check_1] = v2_sp[0]
-        self._vs2[1][self._check_1] = v2_sp[1]
-        self._vs2[2][self._check_1] = v2_sp[2]
+        
+        # v2_sp[0]        = v2_sp[0].reshape(vr.shape)
+        # v2_sp[1]        = v2_sp[1].reshape(vr.shape)
+        # v2_sp[2]        = v2_sp[2].reshape(vr.shape)
+
+        self._vs2[0][self._check_1] = v2_sp[0]#[self._check_1]
+        self._vs2[1][self._check_1] = v2_sp[1]#[self._check_1]
+        self._vs2[2][self._check_1] = v2_sp[2]#[self._check_1]
+        e_out = 0.5 * self._vs2[0]**2 / ELECTRON_CHARGE_MASS_RATIO
+        print(np.min(e_out), np.max(e_out))
+
+
         return [vs,self._vs2]
 
     # @staticmethod

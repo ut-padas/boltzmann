@@ -29,7 +29,7 @@ class CollisionOpSP():
     direc delta distribution function. 
     """
     
-    def __init__(self,dim,p_order,q_mode=sp.QuadMode.GMX,poly_type=basis.BasisType.MAXWELLIAN_POLY) -> None:
+    def __init__(self,dim,p_order,q_mode=sp.QuadMode.GMX,poly_type=basis.BasisType.MAXWELLIAN_POLY,k_domain=(0,10)) -> None:
         self._dim  = dim
         self._p    = p_order
         self._r_basis_type = poly_type
@@ -46,7 +46,6 @@ class CollisionOpSP():
         
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order = basis.BSPLINE_BASIS_ORDER
-            k_domain     = (0,10)
             splines      = basis.XlBSpline(k_domain,spline_order,self._p+1)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode

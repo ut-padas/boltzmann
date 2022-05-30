@@ -1,8 +1,8 @@
 #!/bin/bash
 
-cd /home/dbochkov/Dropbox/Code/boltzmann/Bolsig/
+cd ../../Bolsig/
 
-export LD_LIBRARY_PATH=/opt/intel/mkl/lib/intel64
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH;/opt/intel/mkl/lib/intel64
 
 # Run bolsig
 ./bolsigminus.exe ./minimal-argon.dat

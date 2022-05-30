@@ -232,6 +232,52 @@ class SpectralExpansionSpherical:
             return assemble_advection_matix_lp_max(self._p, self._sph_harm_lm)
         elif self.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             return assemble_advection_matix_lp_lag(self._p, self._sph_harm_lm)
+        elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
+            num_p  = self._p+1
+            num_sh = len(self._sph_harm_lm)
+    
+            lmodes = list(set([l for l,_ in self._sph_harm_lm]))
+            num_l  = len(lmodes)
+            l_max  = lmodes[-1]
+            
+            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+            
+            Vr  = np.zeros(tuple([num_l,num_p])+gx.shape)
+            Vdr = np.zeros(tuple([num_l,num_p])+gx.shape)
+            for i,l in enumerate(lmodes):
+                Vr[i]  = self.Vq_r(gx,l)
+                Vdr[i] = self.Vdq_r(gx,l,d_order=1)
+                
+            mr = gx**2 
+            mm1 = np.array([mr * Vr[pl,p,:] * Vdr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
+            mm1 = np.dot(mm1,gw)
+            
+            mr = gx
+            mm2 = np.array([mr * Vr[pl,p,:] * Vr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
+            mm2 = np.dot(mm2,gw)
+            
+            advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
+            for qs_idx,qs in enumerate(self._sph_harm_lm):
+                lm   =  [qs[0]+1, qs[1]]
+                if lm in self._sph_harm_lm:
+                    lm_idx = self._sph_harm_lm.index(lm)
+                    qs_mat = qs[0]**2+qs[0]+qs[1]
+                    lm_mat = lm[0]**2+lm[0]+lm[1]
+                    advec_mat[:,qs_idx,:,lm_idx] = mm1[:,:,qs[0],lm[0]] * AM(lm[0],lm[1]) + AD(lm[0],lm[1]) * mm2[:,:,qs[0],lm[0]]
+
+                lm     =  [qs[0]-1, qs[1]]
+                if lm in self._sph_harm_lm:
+                    lm_idx = self._sph_harm_lm.index(lm)
+                    qs_mat = qs[0]**2+qs[0]+qs[1]
+                    lm_mat = lm[0]**2+lm[0]+lm[1]
+                    advec_mat[:,qs_idx,:,lm_idx] = mm1[:,:,qs[0],lm[0]] * BM(lm[0],lm[1]) + BD(lm[0],lm[1]) * mm2[:,:,qs[0],lm[0]]
+                
+            
+            advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
+            #print("norm adv mat = %.8E"%np.linalg.norm(advec_mat))
+            return advec_mat
+        else:
+            raise NotImplementedError
 
 
 

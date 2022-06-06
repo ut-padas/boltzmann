@@ -3,11 +3,13 @@
 """
 
 from cProfile import run
+from cmath import sqrt
 from dataclasses import replace
 import enum
 import string
 import scipy
 import scipy.optimize
+import scipy.interpolate
 from sympy import arg, eye
 from maxpoly import maxpolyserieseval
 import basis
@@ -25,6 +27,17 @@ from scipy.integrate import ode
 from advection_operator_spherical_polys import *
 
 import matplotlib.pyplot as plt
+
+# from adaptive import Runner, Learner1D
+# class ALearner1D:
+#     def setup(self,x, y, bounds):
+#         self.func1d  = scipy.interpolate.interp1d(x,y)
+#         self.learner = Learner1D(self.func1d, bounds=bounds)
+#         self.learner.tell_many(x, map(self.func1d, x))
+
+#     def get_pts(self, num_points):
+#         points, _ = self.learner.ask(num_points)
+#         return np.sort(np.array(points))
 
 def deriv_fd(x, y):
     mid = (y[1:len(x)]-y[0:len(x)-1])/(x[1:len(x)]-x[0:len(x)-1])
@@ -212,8 +225,10 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
     t2=time()
     print("Assembled the collision op. for Vth : ", vth_curr)
     print("Collision Operator assembly time (s): ",(t2-t1))
-    
     FOp = np.matmul(Minv, FOp)
+    print("Cond(C)= %.8E"%np.linalg.cond(FOp))
+    print("Cond(E)= %.8E"%np.linalg.cond(E_field/VTH*collisions.ELECTRON_CHARGE_MASS_RATIO*advmat))
+    print("Cond(C-E)= %.8E"%np.linalg.cond(FOp-E_field/VTH*collisions.ELECTRON_CHARGE_MASS_RATIO*advmat))
 
     # plt.show()
     if steady_state == True:
@@ -224,6 +239,8 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
 
             Cmat = FOp
             Emat = E_field/VTH*collisions.ELECTRON_CHARGE_MASS_RATIO*advmat
+            print("Cmat cond: %.8E"%(np.linalg.cond(Cmat)))
+            print("Emat cond: %.8E"%(np.linalg.cond(Emat)))
 
             iteration_error = 1
             iteration_steps = 0
@@ -242,24 +259,29 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
             return solution_vector
 
         elif (args.radial_poly == "bspline"):
-            "not sure if we can do the steady state approach since the mass is scattered across the Y_00 mode"
+            Cmat = FOp
+            Emat = E_field/VTH*collisions.ELECTRON_CHARGE_MASS_RATIO*advmat
+            iteration_error = 1
+            iteration_steps = 0 
+
+
+            m_scale  = 1/np.sqrt(np.pi)**3
+            h_prev   = np.copy(h_init)
+            nn       = Cmat.shape[0]
+            Ai       = np.zeros((nn+1, nn))
+            rr       = np.zeros((nn+1,1))
+            rr[-1:0] = 1
+            
             raise NotImplementedError
 
     else:
-        rhs_op      =  FOp - ( (E_field / VTH) * collisions.ELECTRON_CHARGE_MASS_RATIO ) * advmat
-        rhs_op_cond = np.linalg.cond(rhs_op)
-        #dt  = min(dt, 0.1/rhs_op_cond)
-        print("cond(rhs) = ", rhs_op_cond, "dt =", dt)
-        def f_rhs(t,y):
-            return np.matmul(rhs_op,y)
-
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e6)
-        #ode_solver = ode(f_rhs,jac=None).set_integrator("lsode", rtol=t_tol, atol=t_tol, nsteps=1e6)
-        ode_solver.set_initial_value(h_init,t=0.0)
+        Cmat = FOp
+        Emat = E_field/VTH*collisions.ELECTRON_CHARGE_MASS_RATIO*advmat
         
-        
-        max_steps   = 100
-        total_steps = min(int(t_end/dt), max_steps)
+        # fname="Cmat_" + "_".join(args.collisions) + "_ev_"+str(args.electron_volt) + "_poly_" + str(args.radial_poly) + "_nr" + str(spec_sp._p+1)+".npy"
+        # np.save(fname, FOp)
+        # fname="Emat_" + "_".join(args.collisions) + "_ev_"+str(args.electron_volt) + "_poly_" + str(args.radial_poly) + "_nr" + str(spec_sp._p+1)+".npy"
+        # np.save(fname, ( (1.0 / VTH) * collisions.ELECTRON_CHARGE_MASS_RATIO ) * advmat)
         
         current_mw  = maxwellian
         current_vth = vth
@@ -270,10 +292,40 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
         current_mass     = np.dot(h_init,mass_op) * vth**3 * current_mw(0)
         current_temp     = np.dot(h_init,temp_op) * vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass
         mass_initial     = current_mass 
+        print("initial Ev = %.14E initial mass = %.14E"%(current_temp * ev_fac, mass_initial))
         
-        print("Initial Ev   : %.14E"%(current_temp * ev_fac))
-        print("Initial mass : %.14E"%current_mass)
-
+        u      = mass_op / (np.sqrt(np.pi)**3) 
+        h_init = h_init/ np.dot(u,h_init)
+        pp     = u / np.linalg.norm(u,ord=2)
+        w      = np.matmul(u.reshape(1,Cmat.shape[0]),Cmat)
+        Imppt  = np.eye(pp.shape[0]) - np.matmul(pp.reshape(-1,1),np.transpose(pp.reshape(-1,1)))
+        f1     = h_init-np.matmul(Imppt,h_init)
+        
+        def f_rhs(t,y):
+            f2     = y
+            c1     = np.dot(w,f1+f2)
+            return np.matmul(Imppt, c1 * (f1+f2) + np.matmul(Cmat-Emat, f1+f2))
+            
+            
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol,max_step=1e-8, nsteps=1e16)
+        ode_solver.set_initial_value(np.matmul(Imppt,h_init),t=0.0)
+        
+        # f1=0
+        # def f_rhs(t,y):
+        #     y     = y / (np.dot(mass_op,y) / (np.sqrt(np.pi)**3))
+        #     Ly    = np.matmul(FOp,y) 
+        #     mLy   = np.dot(mass_op,Ly) / (np.sqrt(np.pi)**3)
+        #     return -mLy * y +  np.matmul(Cmat-Emat, y)
+        
+        # ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e16)
+        # # #ode_solver = ode(f_rhs,jac=None).set_integrator("dop853",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e8)
+        # # #ode_solver = ode(f_rhs,jac=None).set_integrator("lsode", method='bdf', order=2, rtol=t_tol, atol=1e-30, nsteps=1e8)
+        # ode_solver.set_initial_value(h_init,t=0.0)
+        
+        
+        max_steps   = 100
+        total_steps = min(int(t_end/dt), max_steps)
+        
         ss_norm         = 1
         ss_tol          = 1e-10
         tt              = np.linspace(0,t_end,total_steps)
@@ -282,34 +334,19 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
 
         for t_idx in range(num_steps):
             t_curr                     = tt[t_idx]
-            h_t                        = ode_solver.y
+            h_t                        = ode_solver.y + f1
             
             solution_vector [t_idx,:]  = h_t
-            # current_mass               = np.dot(h_t,mass_op) * current_vth**3 * current_mw(0)
-            # current_temp               = np.dot(h_t,temp_op) * current_vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass
-
-            # vc_x                       = np.dot(avg_vop[0],h_t) * current_vth**4 * (current_mw(0)/current_mass) /current_vth
-            # vc_y                       = np.dot(avg_vop[1],h_t) * current_vth**4 * (current_mw(0)/current_mass) /current_vth
-            # vc_z                       = np.dot(avg_vop[2],h_t) * current_vth**4 * (current_mw(0)/current_mass) /current_vth
-            # vc_a                       = 0 + (E_field * t_curr * collisions.ELECTRON_CHARGE_MASS_RATIO /current_vth)
-            
-            # print("time:%.2E mass: %.10E temp: %.10E vc=(%.2E,%.2E,%.2E) adv vc_z=%.2E " %(t_curr, current_mass, current_temp * ev_fac, vc_x, vc_y,vc_z,vc_a))
-
-            ode_solver.set_initial_value(h_t,t_curr)
-
             dt_adap = dt
             ss_reached=False
             while t_curr < tt[t_idx+1]:
-                h_prev           = ode_solver.y 
+                h_prev           = ode_solver.y + f1
                 ode_solver.integrate(t_curr + dt)
-                h_t              = ode_solver.y
-                current_mass     = np.dot(h_t,mass_op) * current_vth**3 * current_mw(0)
-                #current_temp     = np.dot(h_t,temp_op) * current_vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass
-                h_t              = h_t * (mass_initial / current_mass)
+                h_t              = ode_solver.y + f1
                 t_curr          += dt_adap
-                ode_solver.set_initial_value(h_t,t_curr)
+            
                 ss_norm          = np.linalg.norm(h_prev-h_t)/np.linalg.norm(h_t)
-                
+            
                 current_mass               = np.dot(h_t,mass_op) * current_vth**3 * current_mw(0)
                 current_temp               = np.dot(h_t,temp_op) * current_vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass
 
@@ -320,8 +357,6 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
                 
                 print("time:%.2E mass: %.10E temp: %.10E vc=(%.2E,%.2E,%.2E) adv vc_z=%.2E ss_norm=%.5E dt=%.4E" %(t_curr, current_mass, current_temp * ev_fac, vc_x, vc_y,vc_z,vc_a,ss_norm,dt_adap))
 
-                #dt_adap          = max(1e-15, dt * ss_norm)
-                
                 if(ss_norm < ss_tol):
                     ss_reached=True
                     for w in range(t_idx+1, solution_vector.shape[0]):
@@ -341,7 +376,6 @@ parser.add_argument("-dt", "--T_DT"                           , help="Simulation
 parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='coll_op')
 parser.add_argument("-ts_tol", "--ts_tol"                     , help="adaptive timestep tolerance", type=float, default=1e-15)
 parser.add_argument("-l_max", "--l_max"                       , help="max polar modes in SH expansion", type=int, default=1)
-# parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default=["g0", "g2"])
 parser.add_argument("-c", "--collisions"                      , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)",nargs='+', type=str, default=["g0", "g2"])
 parser.add_argument("-ev", "--electron_volt"                  , help="initial electron volt", type=float, default=0.25)
 parser.add_argument("-bscale", "--basis_scale"                , help="basis electron volt", type=float, default=1.0)
@@ -351,7 +385,6 @@ parser.add_argument("-q_vp", "--quad_phi"                     , help="quadrature
 parser.add_argument("-q_st", "--quad_s_theta"                 , help="quadrature in scattering polar"    , type=int, default=8)
 parser.add_argument("-q_sp", "--quad_s_phi"                   , help="quadrature in scattering azimuthal", type=int, default=8)
 parser.add_argument("-radial_poly", "--radial_poly"           , help="radial basis", type=str, default="maxwell")
-# parser.add_argument("-radial_poly", "--radial_poly"           , help="radial basis", type=str, default="laguerre")
 parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=2)
 parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=11)
 parser.add_argument("-E", "--E_field"                         , help="Electric field in V/m", type=float, default=7500)
@@ -366,7 +399,6 @@ parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for
 #parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[16, 32])
 # parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=[16])
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
-
 # parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=str, default=["maxwell", "laguerre"])
 # parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="radial_poly")
 
@@ -388,7 +420,7 @@ os.system("sh "+args.bolsig_dir+"run.sh")
 
 # setting electron volts from bolsig results for now
 print("blolsig temp : %.8E"%((bolsig_mu /1.5)))
-args.electron_volt = bolsig_mu #(bolsig_mu /1.5) * 1.3
+args.electron_volt = bolsig_mu#0.98*(bolsig_mu/1.5) #0.8 * (bolsig_mu/1.5) 
 print(args.electron_volt)
 # bolsig = np.genfromtxt(args.bolsig_data,delimiter=',')
 # plt.plot(bolsig[:,0], bolsig[:,1])
@@ -481,9 +513,25 @@ for i, value in enumerate(args.sweep_values):
 
     collisions.MAXWELLIAN_TEMP_K   = BASIS_EV * collisions.TEMP_K_1EV
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
-    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=(0,8))
+    VTH                            = collisions.ELECTRON_THEMAL_VEL
+    c_gamma = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+    sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
+
+    # adaptive_learner = ALearner1D()
+    # adaptive_learner.setup(bolsig_ev,bolsig_f0,(bolsig_ev[0],bolsig_ev[-1]))
+    # adap_knots = adaptive_learner.get_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER) * c_gamma/VTH
+    # sig_pts = np.sort(np.append(sig_pts,adap_knots))
+    print("singularity pts : ", sig_pts)
+
+    # uncomment to plot the cross section data used. 
+    #collisions.collission_cs_test()
+
+    ev_range = (0, ev[-1])
+    #k_domain = np.sqrt(ev_range) * c_gamma / VTH
+    k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
+    print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
+    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=sig_pts)
     spec  = cf._spec
-    VTH   = collisions.ELECTRON_THEMAL_VEL
 
     print("""===========================Parameters ======================""")
     print("\tMAXWELLIAN_N        : ", collisions.MAXWELLIAN_N)
@@ -503,7 +551,6 @@ for i, value in enumerate(args.sweep_values):
         hv    = lambda v,vt,vp : np.exp((v**2)*(-1./(vratio**2)))/vratio**3
 
     h_vec      = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
-    print("Scale:", scale)
     spec_sp   = spec 
     mass_op   = BEUtils.mass_op(spec_sp, None, 64, 2, 1)
     temp_op   = BEUtils.temp_op(spec_sp, None, 64, 2, 1)
@@ -627,8 +674,9 @@ if (1):
         # plt.plot(temp, label=lbl)
 
     plt.subplot(2, num_subplots, num_sph_harm + 1)
-    plt.plot(args.sweep_values, mu, 'o-', label='us')
-    plt.axhline(y=bolsig_mu, label='bolsig', color='k')
+    #plt.plot(args.sweep_values, mu, 'o-', label='us')
+    #plt.axhline(y=bolsig_mu, label='bolsig', color='k')
+    plt.plot(args.sweep_values, abs(np.array(mu)/bolsig_mu-1), 'o-', label='us')
     plt.legend()
     plt.xlabel(args.sweep_param)
     plt.ylabel("Mean energy (eV)")
@@ -650,8 +698,9 @@ if (1):
 
 
     plt.subplot(2, num_subplots, num_subplots + num_sph_harm + 1)
-    plt.plot(args.sweep_values, M, 'o-', label='us')
-    plt.axhline(y=bolsig_M, label='bolsig', color='k')
+    # plt.plot(args.sweep_values, M, 'o-', label='us')
+    # plt.axhline(y=bolsig_M, label='bolsig', color='k')
+    plt.plot(args.sweep_values, abs(np.array(M)/bolsig_M-1), 'o-', label='us')
     plt.legend()
     plt.xlabel(args.sweep_param)
     plt.ylabel("Mobility *N (1/m/V/s) ")
@@ -660,8 +709,9 @@ if (1):
         plt.gca().ticklabel_format(useOffset=False)
 
     plt.subplot(2, num_subplots, num_subplots + num_sph_harm + 2)
-    plt.plot(args.sweep_values, D, 'o-', label='us')
-    plt.axhline(y=bolsig_D, label='bolsig', color='k')
+    # plt.plot(args.sweep_values, D, 'o-', label='us')
+    # plt.axhline(y=bolsig_D, label='bolsig', color='k')
+    plt.plot(args.sweep_values, abs(np.array(D)/bolsig_D-1), 'o-', label='us')
     plt.legend()
     plt.xlabel(args.sweep_param)
     plt.ylabel("Diffusion coefficient *N (1/m/s)")

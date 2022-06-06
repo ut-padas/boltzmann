@@ -250,7 +250,7 @@ class XlBSpline(Basis):
     def get_num_q_pts(p_order, s_order, pts_per_knot):
         return pts_per_knot*(p_order)
 
-    def __init__(self,k_domain,spline_order, num_p):
+    def __init__(self,k_domain,spline_order, num_p, sig_pts=None):
         self._basis_type = BasisType.SPLINES
         """
         x x x     | * * * * * * * * * * | x  x  x
@@ -258,18 +258,28 @@ class XlBSpline(Basis):
         """
         # first and last splines have repeated knots, 
         num_k            = 2*spline_order + (num_p -2) + 2
-        knot_base        = 1.5
+        knot_base        = 2
 
         # self._t          = (k_domain[0])*np.ones(spline_order+1)
-        # self._t          = np.append(self._t,np.logspace(-2, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
+        # self._t          = np.append(self._t,np.logspace(-3, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
         # self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
 
         self._t          = (k_domain[0])*np.ones(spline_order)
         self._t          = np.append(self._t,np.linspace(0 , k_domain[1] , num_k-2*spline_order -1 , endpoint=False))
         self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
         
-        ionization_idx   = np.argmin(abs(self._t - np.sqrt(15.76)))
-        self._t[ionization_idx] = np.sqrt(15.76) 
+
+        if(sig_pts is not None):
+            for sg in sig_pts:
+                if sg >=k_domain[0] and sg<k_domain[1]:
+                    idx   = np.argmin(abs(self._t - sg))
+                    self._t[idx] = sg
+        
+        for i in range(spline_order+1):
+            self._t[i]=k_domain[0]
+            self._t[-(i+1)]=k_domain[1]
+
+        print("bsplines knots:")
         print(self._t)
         
         self._num_c_pts  = num_p

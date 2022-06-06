@@ -463,7 +463,7 @@ class Collisions(abc.ABC):
             """
             G0 cross section data fit with analytical function
             """
-            ev =     ev+1e-8
+            #ev =     ev+1e-8
             a0 =    0.008787
             b0 =     0.07243
             c  =    0.007048
@@ -514,18 +514,12 @@ class Collisions(abc.ABC):
             """
             G2 cross section data fit with analytical function (ionization)
             """
-            #ev =     ev+1e-8
-            a = 2.84284159e-22
-            b = 1.02812034e-17
-            c =-1.40391999e-15
-            d = 9.97783291e-14
-            e =-3.82647294e-12
-            f =-5.70400826e+01
-            
-            x=ev-f
-            y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
-            
-            y[ev<=15.76]=0
+            y=np.zeros_like(ev)
+            #y[ev>15.76]=(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1))
+            y[ev>15.76] =(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1)) * np.exp(-1e-2*((ev[ev>15.76]-90)/90)**2)
+            y[ev>1000]=0
+            #print(y)
+
             # y[ev>1e3]=0
             
             return  y
@@ -540,7 +534,7 @@ class Collisions(abc.ABC):
             G0 cross section data fit with analytical function
             (constant)
             """
-            ev=ev+1e-8
+            #ev = ev+1e-8
             a0 =    0.008787*0 + 1
             b0 =     0.07243
             c  =    0.007048*0

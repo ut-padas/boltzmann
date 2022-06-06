@@ -3,17 +3,23 @@ clear;
 ev_el = logspace(-5,4,200);
 ev_ex = logspace(log10(11.55),4, 200);
 ev_io = logspace(log10(15.7),4, 200);
+ev_io = logspace(log10(15.76),4, 200);
+% ev_io = linspace(15.7, 19, 200);
+
+% semilogy(cs_io2(ev_io))
 
 loglog(ev_el, cs_el(ev_el), '.');
 hold on
-% loglog(ev, cs_ex(ev), '-');
-loglog(ev_ex, cs_ex2(ev_ex), '.');
-loglog(ev_io, cs_io(ev_io), '.');
-hold off
+loglog(ev_io, cs_io2(ev_io), 'o-');
+% % loglog(ev_ex, cs_ex2(ev_ex), '.');
+loglog(ev_io, cs_io(ev_io), '.-');
+% plot(ev_io, cs_io(ev_io), '.');
+% hold off
 
 % writematrix([ev_el', cs_el(ev_el)'], 'analytic_elastic.dat','Delimiter','tab');
 % writematrix([ev_ex', cs_ex(ev_ex)'], 'analytic_excitation.dat','Delimiter','tab');
 % writematrix([ev_io', cs_io(ev_io)'], 'analytic_ionization.dat','Delimiter','tab');
+writematrix([ev_io', cs_io2(ev_io)'], 'analytic_ionization_smoothed_tinybit.dat','Delimiter','tab');
 
 % excitation
 function y = cs_ex2(ev)
@@ -57,12 +63,40 @@ b = 1.02812034e-17;
 c =-1.40391999e-15;
 d = 9.97783291e-14;
 e =-3.82647294e-12;
-f =-5.70400826e+01;
+f =-5.70400826e+01-0.535743163918511;
 
 x=ev-f;
 y=a + b* (1./x.^1) + c * (1./x.^2) + d * (1./x.^3) + e * (1./x.^4);
 
-y(ev<=15.7) = 0;
+y(ev<=15.76) = 0;
+% y(ev>1e3) = 0;
+
+end
+
+
+% ionization
+function y = cs_io2(ev)
+
+a = 2.84284159e-22;
+b = 1.02812034e-17;
+c =-1.40391999e-15;
+d = 9.97783291e-14;
+e =-3.82647294e-12;
+f =-5.70400826e+01-0.535743163918511;
+
+trans_width = 3;
+% z = (log(ev+1.e-15)-log(15.76))/log(trans_width);
+z = ((ev)-(15.76))/(trans_width);
+
+transition = .5*(1.+tanh((2.*z-1)./sqrt((1.-z).*z)));
+transition(z<0) = 0;
+transition(z>1) = 1;
+
+x=ev-f;
+y=(a + b* (1./x.^1) + c * (1./x.^2) + d * (1./x.^3) + e * (1./x.^4)).*transition;
+% y=transition
+
+% y(ev<=15.76) = 0;
 % y(ev>1e3) = 0;
 
 end

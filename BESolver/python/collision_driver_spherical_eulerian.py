@@ -218,6 +218,16 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
         g2.reset_scattering_direction_sp_mat()
         FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2, mw_vth, vth_curr)
 
+    if "g2Smooth" in collisions_included:
+        g2Smooth  = collisions.eAr_G2(cross_section="g2Smooth", threshold=15.76)
+        g2Smooth.reset_scattering_direction_sp_mat()
+        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2Smooth, mw_vth, vth_curr)
+
+    if "g2Regul" in collisions_included:
+        g2Regul  = collisions.eAr_G2(cross_section="g2Regul", threshold=15.76)
+        g2Regul.reset_scattering_direction_sp_mat()
+        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2Regul, mw_vth, vth_curr)
+
     if "g2Const" in collisions_included:
         g2  = collisions.eAr_G2(cross_section="g2Const")
         g2.reset_scattering_direction_sp_mat()
@@ -255,13 +265,16 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
 
             iteration_error = 1
             iteration_steps = 0
-            while (iteration_error > 1e-14 and iteration_steps < 30) or iteration_steps < 5:
+            while (iteration_error > 1e-17 and iteration_steps < 30) or iteration_steps < 5:
                 h_prev = h_red
-                h_red = - np.linalg.solve(Cmat[1:,1:] - Emat[1:,1:] - (Cmat[0,0] + np.dot(h_red, Cmat[0,1:]))*np.eye(len(h_red)), Cmat[1:,0] - Emat[1:,0])
-                # inv_op = BEUtils.block_jacobi_inv(Cmat[1:,1:] - Emat[1:,1:] - (Cmat[0,0] + np.dot(h_red, Cmat[0,1:]))*np.eye(len(h_red)), 4)
+                tot_mat = Cmat[1:,1:] - Emat[1:,1:] - (Cmat[0,0] + np.dot(h_red, Cmat[0,1:]))*np.eye(len(h_red))
+                print("Tot mat cond: %.8E"%(np.linalg.cond(tot_mat)))
+                h_red = - np.linalg.solve(tot_mat, Cmat[1:,0] - Emat[1:,0])
+                # inv_op = BEUtils.choloskey_inv(Cmat[1:,1:] - Emat[1:,1:] - (Cmat[0,0] + np.dot(h_red, Cmat[0,1:]))*np.eye(len(h_red)), 4)
                 # h_red = - np.matmul(inv_op, Cmat[1:,0] - Emat[1:,0])
                 iteration_error = np.linalg.norm(h_prev-h_red)
-                print("Iteration ", iteration_steps, ": Residual =", iteration_error)
+                res = np.linalg.norm(np.matmul(tot_mat, h_red) + (Cmat[1:,0] - Emat[1:,0]))
+                print("Iteration ", iteration_steps, ": change = ", iteration_error, ", residual = ", res)
                 iteration_steps = iteration_steps + 1
 
             solution_vector = np.zeros((1,h_init.shape[0]))
@@ -594,6 +607,8 @@ for i, value in enumerate(args.sweep_values):
         args.E_field = value
     elif args.sweep_param == "radial_poly":
         args.radial_poly = value
+    elif args.sweep_param == "q_vr":
+        args.quad_radial = value
 
     # if args.dv_target != 0 and args.E_field != 0:
     #     args.T_END = args.dv_target/args.E_field*collisions.electron_thermal_velocity(args.electron_volt*collisions.TEMP_K_1EV)/collisions.ELECTRON_CHARGE_MASS_RATIO
@@ -764,7 +779,7 @@ for i, value in enumerate(args.sweep_values):
         total_cs += cs
         rates[col_idx].append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)*np.trapz(radial[i,0,:]*ev*cs,x=ev) )
 
-        if col == "g2" or col == "g2Const":
+        if col == "g2" or col == "g2Const" or col == "g2Smooth":
             total_cs += rates[col_idx][-1]/np.sqrt(ev)/np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)
 
     D.append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(radial[i,0,:]*ev/total_cs,x=ev) )
@@ -782,12 +797,12 @@ if (1):
     num_subplots = num_sph_harm + 2
 
     plt.subplot(2, num_subplots, num_subplots + 1 + 0)
-    plt.semilogy(bolsig_ev,  bolsig_f0, '-k', label="bolsig")
+    plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
     # print(np.trapz( bolsig[:,1]*np.sqrt(bolsig[:,0]), x=bolsig[:,0] ))
     # print(np.trapz( scale*radial[i, 0]*np.sqrt(ev), x=ev ))
 
     plt.subplot(2, num_subplots, num_subplots + 1 + 1)
-    plt.semilogy(bolsig_ev,  bolsig_f0*bolsig_a*spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0), '-k', label="bolsig")
+    plt.semilogy(bolsig_ev,  abs(bolsig_f0*bolsig_a*spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0)), '-k', label="bolsig")
 
     for i, value in enumerate(args.sweep_values):
         data=run_data[i]

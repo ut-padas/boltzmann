@@ -556,6 +556,79 @@ class Collisions(abc.ABC):
             y[ev>=b] = 5e-20
             return  y     
 
+        elif mode == "g2Smooth":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            #ev =     ev+1e-8
+            a = 2.84284159e-22
+            b = 1.02812034e-17
+            c =-1.40391999e-15
+            d = 9.97783291e-14
+            e =-3.82647294e-12
+            f =-5.70400826e+01
+
+
+            trans_width = 50
+            # z = ((ev+1e-15)-(15.76))/(trans_width)
+            z = (np.log(ev+1e-15)-np.log(15.76))/np.log(trans_width)
+
+            transition = np.zeros_like(z)
+            gt0 = z>0
+            lt1 = z<1
+            bw01 = np.logical_and(gt0, lt1)
+            transition[np.logical_not(gt0)] = 0
+            transition[np.logical_not(lt1)] = 1
+            transition[bw01] = .5*(1.+np.tanh((2*z[bw01]-1)/np.sqrt((1.-z[bw01])*z[bw01])))
+
+            # print(transition[transition<0])
+            
+            x=ev-f
+            y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
+            y = y * transition
+            y[y<=0] = 0
+            
+            # y[ev<=15.76]=0
+            # y[ev>1e3]=0
+            
+            return  y    
+        
+        elif mode == "g2Regul":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            #ev =     ev+1e-8
+            a = 2.84284159e-22
+            b = 1.02812034e-17
+            c =-1.40391999e-15
+            d = 9.97783291e-14
+            e =-3.82647294e-12
+            f =-5.70400826e+01
+
+
+            trans_width = 3
+            z = ((ev+1e-15)-(15.76))/(trans_width)
+            # z = (np.log(ev+1e-15)-np.log(15.76))/np.log(trans_width)
+
+            transition = np.zeros_like(z)
+            gt0 = z>0
+            lt1 = z<1
+            bw01 = np.logical_and(gt0, lt1)
+            transition[np.logical_not(gt0)] = 0
+            transition[np.logical_not(lt1)] = 1
+            transition[bw01] = .5*(1.+np.tanh((2*z[bw01]-1)/np.sqrt((1.-z[bw01])*z[bw01])))
+
+            # print(transition[transition<0])
+            
+            x=ev-f
+            y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
+            y = y * transition
+            y[y<0] = 0
+            
+            # y[ev<=15.76]=0
+            # y[ev>1e3]=0
+            
+            return  y      
 
         elif mode == "g2Const":
 
@@ -566,7 +639,7 @@ class Collisions(abc.ABC):
             G0 cross section data fit with analytical function
             (constant)
             """
-            return np.ones_like(ev) * 9.9e-25
+            return np.ones_like(ev) * 9.9e-20
             #ev = ev+1e-8
             # a0 =    0.008787*0 + 1
             # b0 =     0.07243

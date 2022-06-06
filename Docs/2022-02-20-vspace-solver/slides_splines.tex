@@ -666,6 +666,45 @@ Some conlcusions and observations:
 \end{frame}
 
 
+\begin{frame}[fragile]
+Validation against Bolsig+ with linear B-splines.
+\begin{align*}
+\partial_t \hat{f} &= -\left(u^T C \hat{f}\right) \hat{f} + (C-E) \hat{f} \\
+\end{align*} with enforced constraint $u^T \hat{f} -1 = 0 \ \ \forall t>0$. 
+\begin{itemize}
+	\item We evolve the normalized distribution function until the steady state is reached. 
+	\item Used 4 quadrature points for each angular direction, radial quadrature points $2N_r$ where $N_r$ denotes the number of polynomials in the radial direction. 
+	\item Linear splines with knot domain adjusted to match the energy range reported by the bolsig+ code. 
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\begin{itemize}
+		\item Only with elastic collisions with increasing $\vect{E}$ (curve-fitted cross sections to LXCAT).
+	\end{itemize}
+	\begin{center}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_E1.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_E10.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_E100.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_E500.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+	\end{center}
+\end{frame}
+
+\begin{frame}
+	\begin{itemize}
+		\item With elastic + ionization collisions with increasing $\vect{E}$ (curve-fitted cross sections to LXCAT).
+	\end{itemize}
+	\begin{center}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_g2_E1.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_g2_E10.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_g2_E100.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_g2_E500.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_g2_E1000.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+		\only<+>{\includegraphics[width=\textwidth]{figures/maxwell_vs_bolsig_g0_g2_E5000.0_poly_bspline_nr256_bscale1.0_sweeping_Nr.png}}
+	\end{center}
+\end{frame}
+
+
 
 
 

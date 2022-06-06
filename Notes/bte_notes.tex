@@ -2921,6 +2921,98 @@ where $\gamma = \sqrt{\frac{2 e}{m}}$ and $\varepsilon = \left( \frac{v}{\gamma}
 \frac{f\of{\vect{v},t}}{n\of{t}} = \frac{F_0\of{\varepsilon}}{\pi \gamma^3}  + F_1\of{\varepsilon} \cos\of{\theta}
 \end{align*}
 
+\newpage
+
+\begin{align*}
+n_e(t) &= \int_{\vect{v}} f(t, \vect{v}) \diff{\vect{v}} \text{ and } a(t) = \frac{1}{n_e(t)}
+\end{align*}
+The normalized distribution function $\hat{f}(t,\vect{v}) = a(t) f(t, \vect{v})$. Write the Boltzmann equation in the normalized $\hat{f}(t, \vect{v})$. For distribution function $f$, we can write, 
+\begin{align*}
+	\partial_t f\of{t,\vect{v}} &= (C-E)f \\
+	\partial_t\of{a\of{t} f\of{t,\vect{v}}} &= \dot{a}\of{t}f\of{t,\vect{v}} + a\of{t} \dot{f}\of{t,\vect{v}} \\
+											&= \dot{a}\of{t}f + a\of{t} (C-E)f \\
+											&= -\dot{n}_e\of{t} a^2\of{t} f + a\of{t} (C-E)f \\
+\end{align*}
+we can re-write the above with the normalized distribution $\hat{f}$, 
+\begin{align*}
+\partial_t\of{\hat{f}(t,\vect{v})} &=-\dot{n}_e\of{t} a\of{t} \hat{f} + (C-E)\hat{f}
+\end{align*}. In the continuous form, 
+\begin{align*}
+\dot{n}_e (t) = \int_\vect{v} \dot{f} \diff{\vect{v}} &= \int_\vect{v} C(f) \diff{v} - \int_\vect{v} \vect{E} \cdot \nabla_\vect{v} f \diff{\vect{v}} \\
+&= \int_\vect{v} C(f) \diff{v} -\int_\vect{v} \nabla_\vect{v} \cdot (\vect{E} f) \diff{\vect{v}} \\
+&= \int_\vect{v} C(f) \diff{v} -\int_{\partial\vect{v}} (\vect{E} f) \cdot \vect{n} \diff\vect{s}
+\end{align*}
+
+
+where, 
+\begin{align*}
+\dot{n}_e (t) = \int \dot{f} dv &= \int (C-E) f dv = \int C f dv \\
+\frac{\dot{n}_e (t)}{n_e(t)} &=\int C \hat{f} dv \\
+\partial_t\of{\hat{f}(t,\vect{v})} &=-\left(\int C \hat{f} dv \right) \hat{f} + (C-E)\hat{f}
+\end{align*}
+For the steady state, we can write, 
+\begin{align*}
+	\partial_t\of{\hat{f}} &=0 \implies -\left(\int C \hat{f} dv \right) \hat{f} + (C-E)\hat{f} =0 \\ 
+\end{align*}
+let $u^T f$ be the mass of the distribution function, by construction, $u^T \hat{f}=1$.
+\begin{align*}
+ -(u^T C \hat{f}) \hat{f} + (C-E)\hat{f} =0 \\ 
+\end{align*} 
+Let, 
+\begin{align*}
+R(f)&=
+\begin{pmatrix}
+-(u^T C f) f + (C-E)f \\
+u^Tf-1
+\end{pmatrix}
+\end{align*} For the steady  state we need $R(f) = \vect{0}$. The Jacobian for the $R$ is given by, 
+\begin{align*}
+J(f)&=
+\begin{pmatrix}
+-2(u^T C f) I + (C-E) \\
+u^T
+\end{pmatrix}
+\end{align*}
+
+
+
+
+%\begin{align*}
+%\partial_t\of{a\of{t} f\of{t,\vect{v}}} + \vect{E} \cdot \nabla_\vect{v}\of{a\of{t} f\of{t,\vect{v}}}  & = C\of{a(t) f(t, \vect{v})} \\
+%\dot{a}\of{t}f\of{t,\vect{v}} + a\of{t} \dot{f}\of{t,\vect{v}} +  a\of{t} \vect{E} \cdot \nabla_\vect{v}\of{f\of{t,\vect{v}}} &= C\of{a(t) f(t, \vect{v})}\\
+%\end{align*}
+
+
+
+%Attempt to compute the steady state solution analytically for B-splines. 
+%\begin{align*}
+%f\of{\vect{v},t} = \sum h_{klm}\of{t} \Phi_{kl}\of{\vr} Y_{lm}\of{\vtheta, \vphi}
+%\end{align*}
+%Total number of electrons
+%\begin{align*}
+%n = \myint_{R^3} f\of{\vect{v},t} d\vect{v} = \sum_{k} h_{k00}\of{t} \myint_{R^3} \Phi_{k0}\of{\vr} Y_{00}\of{\vtheta, \vphi} d\vect{v} = W_{p00}^T h_{p00}
+%\end{align*} where $W_{p00} = \myint_{R^3} \Phi_{k0}\of{\vr} Y_{00}\of{\vtheta, \vphi} d\vect{v} $.
+%
+%\begin{align*}
+%\vect{h} = 
+%\begin{pmatrix}
+%h_{k00} \\ \vect{h}_\ast
+%\end{pmatrix}
+%,\quad
+%E = 
+%\begin{pmatrix}
+%0 & \vect{0}^T \\
+%\vect{e}_{0\ast} & E_{\ast\ast}
+%\end{pmatrix}
+%,\quad
+%C = 
+%\begin{pmatrix}
+%C_{00} & \vect{c}_{\ast 0}^T \\
+%\vect{c}_{0\ast} & C_{\ast\ast}
+%\end{pmatrix}
+%\end{align*}
+
+
 
 \newpage
 

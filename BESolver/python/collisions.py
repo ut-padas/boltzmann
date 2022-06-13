@@ -244,7 +244,7 @@ class Collisions(abc.ABC):
         """
         synthetic cross-sections for testing. 
         """
-        print("synthetic mode : ", mode)
+        #print("synthetic mode : ", mode)
         if mode==0:
             return 2e-20 * np.ones_like(ev)
         elif mode==1:
@@ -463,7 +463,7 @@ class Collisions(abc.ABC):
             """
             G0 cross section data fit with analytical function
             """
-            #ev =     ev+1e-8
+            ev =     ev+1e-13
             a0 =    0.008787
             b0 =     0.07243
             c  =    0.007048
@@ -472,7 +472,9 @@ class Collisions(abc.ABC):
             b1 =       3.679
             x0 =      0.2347
             x1 =       11.71
-            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+            y=9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+            assert len(y[y<0]) == 0 , "g0 cross section is negative" 
+            return  y
         
         elif mode == "g1":
             """
@@ -515,35 +517,66 @@ class Collisions(abc.ABC):
             G2 cross section data fit with analytical function (ionization)
             """
             y=np.zeros_like(ev)
-            #y[ev>15.76]=(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1))
             y[ev>15.76] =(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1)) * np.exp(-1e-2*((ev[ev>15.76]-90)/90)**2)
-            y[ev>1000]=0
+            # y[ev>1000]=0
+            # print(y[y<0])
+            return  y
+
+        elif mode == "g2step":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            y=np.zeros_like(ev)
+            y[ev>15.76]=5e-20
+            #(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1))
+            # a= 15.76
+            # b= 1000.76
+
+            # si       = np.logical_and(ev>=a, ev<=b)
+            # x0 = (ev[si]-a)/(b-a)
+            # y[si]    = 2.860000e-17 * (3 * (x0)**2 - 2 * (x0)**3)
+            # y[ev>=b] = 2.860000e-17
+            #y[ev>1000]=0
             #print(y)
 
             # y[ev>1e3]=0
-            
-            return  y
+            return  y      
         
+        elif mode == "g2smoothstep":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            y=np.zeros_like(ev)
+            a= 15.76
+            b= 50.76
+
+            si       = np.logical_and(ev>=a, ev<=b)
+            x0 = (ev[si]-a)/(b-a)
+            y[si]    = 5e-20 * (6 * (x0)**5 - 15 * x0 **4  + 10 * (x0)**3)
+            y[ev>=b] = 5e-20
+            return  y     
+
 
         elif mode == "g2Const":
 
-            return  9.9e-25
+            return  9.9e-21 * np.ones_like(ev)
             
         elif mode == "g0Const":
             """
             G0 cross section data fit with analytical function
             (constant)
             """
+            return np.ones_like(ev) * 9.9e-25
             #ev = ev+1e-8
-            a0 =    0.008787*0 + 1
-            b0 =     0.07243
-            c  =    0.007048*0
-            d  =      0.9737
-            a1 =        3.27*0 + 1
-            b1 =       3.679
-            x0 =      0.2347
-            x1 =       11.71
-            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+            # a0 =    0.008787*0 + 1
+            # b0 =     0.07243
+            # c  =    0.007048*0
+            # d  =      0.9737
+            # a1 =        3.27*0 + 1
+            # b1 =       3.679
+            # x0 =      0.2347
+            # x1 =       11.71
+            # return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
 
         elif mode == "g0ConstDecay":
             """
@@ -813,63 +846,22 @@ class eAr_G2(Collisions):
         return None
         
     def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
+        c_gamma            = np.sqrt(2*ELECTRON_CHARGE_MASS_RATIO)
         vs                 = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
-        check_1            = vr**2 > 2*(self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON)
-        vs[0][check_1]     = np.sqrt(0.5 * (vr[check_1]**2)    - (self._reaction_threshold * ELECTRON_VOLT/MASS_ELECTRON))
+        check_1            = (vr/c_gamma)**2 > self._reaction_threshold
+        vs[0][check_1]     = c_gamma * np.sqrt(0.5*((vr[check_1]/c_gamma)**2  - self._reaction_threshold))
         
         vs[0][np.logical_not(check_1)] = 0
         vs[1][np.logical_not(check_1)] = 0
         vs[2][np.logical_not(check_1)] = 0
-        # v2_fac             = vs[0]
-        # e_in  = 0.5 * vr**2 / ELECTRON_CHARGE_MASS_RATIO
-        # e_out = 0.5 * vs[0]**2 / ELECTRON_CHARGE_MASS_RATIO
-        # print(np.min(e_in), np.max(e_in))
-        # print(np.min(e_out), np.max(e_out))
         
-
-        if(self._momentum_setup == False):
-            self._v0       = np.zeros(vr.shape + tuple([3]))
-            self._v1       = np.zeros(vr.shape + tuple([3]))
-            self._v2       = np.zeros(vr.shape + tuple([3]))
-            self._check_1  = vr>0 
+        e_out = (vr/c_gamma)**2
+        print("g2 energy in = (%.4E, %.4E)"%(np.min(e_out), np.max(e_out)))
         
-            self._v0[self._check_1,0]   = np.sin(vt[self._check_1]) * np.cos(vp[self._check_1])
-            self._v0[self._check_1,1]   = np.sin(vt[self._check_1]) * np.sin(vp[self._check_1])
-            self._v0[self._check_1,2]   = np.cos(vt[self._check_1])
-
-            self._v1[self._check_1,0]   = np.sin(vs[1][self._check_1]) * np.cos(vs[2][self._check_1])
-            self._v1[self._check_1,1]   = np.sin(vs[1][self._check_1]) * np.sin(vs[2][self._check_1])
-            self._v1[self._check_1,2]   = np.cos(vs[1][self._check_1])
-
-            self._vs2             = [np.zeros_like(vs[0]),np.zeros_like(vs[1]),np.zeros_like(vs[2])]
-
-            self._momentum_setup = True
-
-
-        self._v2[self._check_1,0]   = vr[self._check_1] * self._v0[self._check_1,0] - vs[0][self._check_1] * self._v1[self._check_1,0]
-        self._v2[self._check_1,1]   = vr[self._check_1] * self._v0[self._check_1,1] - vs[0][self._check_1] * self._v1[self._check_1,1]
-        self._v2[self._check_1,2]   = vr[self._check_1] * self._v0[self._check_1,2] - vs[0][self._check_1] * self._v1[self._check_1,2]
-        v2_norm_fac     = (vs[0][self._check_1] / ( np.sqrt(self._v2[self._check_1,0]**2 + self._v2[self._check_1,1]**2 + self._v2[self._check_1,2]**2)))
+        e_out = (vs[0]/c_gamma)**2
+        print("g2 energy out = (%.4E, %.4E)"%(np.min(e_out), np.max(e_out)))
         
-        self._v2[self._check_1,0]   = v2_norm_fac * self._v2[self._check_1,0]
-        self._v2[self._check_1,1]   = v2_norm_fac * self._v2[self._check_1,1]
-        self._v2[self._check_1,2]   = v2_norm_fac * self._v2[self._check_1,2]
-
-        
-        v2_sp           = BEUtils.cartesian_to_spherical(self._v2[self._check_1,0],self._v2[self._check_1,1],self._v2[self._check_1,2])
-        
-        # v2_sp[0]        = v2_sp[0].reshape(vr.shape)
-        # v2_sp[1]        = v2_sp[1].reshape(vr.shape)
-        # v2_sp[2]        = v2_sp[2].reshape(vr.shape)
-
-        self._vs2[0][self._check_1] = v2_sp[0]#[self._check_1]
-        self._vs2[1][self._check_1] = v2_sp[1]#[self._check_1]
-        self._vs2[2][self._check_1] = v2_sp[2]#[self._check_1]
-        e_out = 0.5 * self._vs2[0]**2 / ELECTRON_CHARGE_MASS_RATIO
-        print(np.min(e_out), np.max(e_out))
-
-
-        return [vs,self._vs2]
+        return vs
 
     # @staticmethod
     def min_energy_threshold(self):
@@ -915,10 +907,11 @@ def collission_cs_test():
     
     import matplotlib.pyplot as plt
     for i, g in enumerate(G):
-        tcs = Collisions.synthetic_tcs(g._energy,mode[i])
         plt.figure(figsize=(8,8),dpi=300)
-        plt.plot(g._energy, g._total_cs,linewidth=1, label="lxcat")
-        plt.plot(g._energy,tcs, linewidth=1, label="analytical")
+        #plt.plot(g._energy, g._total_cs,linewidth=1, label="lxcat")
+        ev=np.linspace(0,1000,1000000)
+        tcs = Collisions.synthetic_tcs(ev,mode[i])
+        plt.plot(ev,tcs, linewidth=1, label="analytical")
         plt.legend()
         plt.xscale("log")
         plt.yscale("log")

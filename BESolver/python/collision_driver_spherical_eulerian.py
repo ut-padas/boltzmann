@@ -6,6 +6,7 @@ from cProfile import run
 from cmath import sqrt
 from dataclasses import replace
 import enum
+from math import ceil
 import string
 import scipy
 import scipy.optimize
@@ -25,7 +26,7 @@ import argparse
 import scipy.integrate
 from scipy.integrate import ode
 from advection_operator_spherical_polys import *
-
+import scipy.ndimage
 import matplotlib.pyplot as plt
 
 # from adaptive import Runner, Learner1D
@@ -218,9 +219,19 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
         FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2, mw_vth, vth_curr)
 
     if "g2Const" in collisions_included:
-        g2const  = collisions.eAr_G2(cross_section="g2Const", threshold=0)
-        g2const.reset_scattering_direction_sp_mat()
-        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2const, mw_vth, vth_curr)
+        g2  = collisions.eAr_G2(cross_section="g2Const")
+        g2.reset_scattering_direction_sp_mat()
+        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2, mw_vth, vth_curr)
+
+    if "g2step" in collisions_included:
+        g2  = collisions.eAr_G2(cross_section="g2step")
+        g2.reset_scattering_direction_sp_mat()
+        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2, mw_vth, vth_curr)
+
+    if "g2smoothstep" in collisions_included:
+        g2  = collisions.eAr_G2(cross_section="g2smoothstep")
+        g2.reset_scattering_direction_sp_mat()
+        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g2, mw_vth, vth_curr)
 
     t2=time()
     print("Assembled the collision op. for Vth : ", vth_curr)
@@ -264,16 +275,56 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
             iteration_error = 1
             iteration_steps = 0 
 
-
-            m_scale  = 1/np.sqrt(np.pi)**3
-            h_prev   = np.copy(h_init)
-            nn       = Cmat.shape[0]
-            Ai       = np.zeros((nn+1, nn))
-            rr       = np.zeros((nn+1,1))
-            rr[-1:0] = 1
+            num_p   = spec_sp._p +1
+            num_sh  = len(spec_sp._sph_harm_lm)
             
-            raise NotImplementedError
+            u        = mass_op / (np.sqrt(np.pi)**3) 
+            h_prev   = np.copy(h_init)
+            h_prev   = h_prev / np.dot(u, h_prev)
+            
+            nn       = Cmat.shape[0]
+            Ji       = np.zeros((nn+1,nn))
+            Rf       = np.zeros(nn+1)
+            
+            iteration_error = 1
+            iteration_steps = 0
 
+            def residual_func(x):
+                y = -np.dot(u, np.matmul(Cmat, x)) * x  + np.matmul((Cmat - Emat), x)
+                return np.append(y, np.dot(u, x)-1 )
+
+            while (iteration_error > 1e-14 and iteration_steps < 1000) or iteration_steps < 5:
+                Rf = residual_func(h_prev) 
+                
+                Ji[0:nn, 0:nn] = -2 * np.eye(nn) * np.dot(u, np.matmul(Cmat,h_prev)) + (Cmat-Emat)
+                Ji[nn  , 0:nn] = u
+    
+                p = np.matmul(np.linalg.pinv(Ji,rcond=1e-30), -Rf)
+                alpha=1e-1
+                nRf=np.linalg.norm(Rf)
+                is_diverged = False
+                while (np.linalg.norm(residual_func(h_prev + alpha *p)) >= nRf):
+                    alpha*=0.5
+                    if alpha < 1e-14:
+                        is_diverged = True
+                        break
+                
+                if(is_diverged):
+                    print("Iteration ", iteration_steps, ": Residual =", iteration_error)
+                    print("line search step size becomes too small")
+                    break
+
+                iteration_error = np.linalg.norm(residual_func(h_prev + alpha *p))
+                if(iteration_steps%100==0):
+                    print("Iteration ", iteration_steps, ": Residual =", iteration_error)
+
+                h_prev += p*alpha
+                iteration_steps = iteration_steps + 1
+
+            solution_vector = np.zeros((1,h_init.shape[0]))
+            solution_vector[0,:] = h_prev
+            return solution_vector
+            
     else:
         Cmat = FOp
         Emat = E_field/VTH*collisions.ELECTRON_CHARGE_MASS_RATIO*advmat
@@ -307,7 +358,8 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
             return np.matmul(Imppt, c1 * (f1+f2) + np.matmul(Cmat-Emat, f1+f2))
             
             
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol,max_step=1e-8, nsteps=1e16)
+        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e16)
+        #ode_solver = ode(f_rhs,jac=None).set_integrator("lsode", method='bdf', order=1, rtol=t_tol, atol=1e-30, nsteps=1e8)
         ode_solver.set_initial_value(np.matmul(Imppt,h_init),t=0.0)
         
         # f1=0
@@ -355,7 +407,7 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, h_init, maxwellian,
                 vc_z                       = np.dot(avg_vop[2],h_t) * current_vth**4 * (current_mw(0)/current_mass) /current_vth
                 vc_a                       = 0 + (E_field * t_curr * collisions.ELECTRON_CHARGE_MASS_RATIO /current_vth)
                 
-                print("time:%.2E mass: %.10E temp: %.10E vc=(%.2E,%.2E,%.2E) adv vc_z=%.2E ss_norm=%.5E dt=%.4E" %(t_curr, current_mass, current_temp * ev_fac, vc_x, vc_y,vc_z,vc_a,ss_norm,dt_adap))
+                print("time:%.2E mass: %.10E temp: %.10E vc=(%.2E,%.2E,%.16E) adv vc_z=%.2E ss_norm=%.5E dt=%.4E" %(t_curr, current_mass, current_temp * ev_fac, vc_x, vc_y,vc_z,vc_a,ss_norm,dt_adap))
 
                 if(ss_norm < ss_tol):
                     ss_reached=True
@@ -390,7 +442,7 @@ parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points p
 parser.add_argument("-E", "--E_field"                         , help="Electric field in V/m", type=float, default=7500)
 parser.add_argument("-dv", "--dv_target"                      , help="target displacement of distribution in v_th units", type=float, default=0)
 parser.add_argument("-nt", "--num_timesteps"                  , help="target number of time steps", type=float, default=100)
-parser.add_argument("-steady", "--steady_state"               , help="Steady state or transient", type=bool, default=False)
+parser.add_argument("-steady", "--steady_state"               , help="Steady state or transient", type=bool, default=True)
 parser.add_argument("-bolsig", "--bolsig_dir"                 , help="Bolsig directory", type=str, default="../../Bolsig/")
 
 # parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", type=float, default=[1.25, 1., 0.75, 0.5, 0.25, 0.125])
@@ -412,6 +464,66 @@ for col in args.collisions[1:]:
     bolsig_cs_file = bolsig_cs_file + "_" + col
 bolsig_cs_file = bolsig_cs_file + ".txt"
 
+g0_str="""
+EFFECTIVE
+Ar
+ 1.373235e-5
+SPECIES: e / Ar
+PROCESS: E + Ar -> E + Ar, Effective
+PARAM.:  m/M = 1.373235e-5, complete set
+COMMENT: EFFECTIVE Momentum transfer CROSS SECTION.
+UPDATED: 2011-06-06 11:19:56
+COLUMNS: Energy (eV) | Cross section (m2)
+"""
+g2_str="""
+IONIZATION
+Ar -> Ar^+
+ 1.576000e+1
+SPECIES: e / Ar
+PROCESS: E + Ar -> E + E + Ar+, Ionization
+PARAM.:  E = 15.76 eV, complete set
+COMMENT: Ionization - RAPP-SCHRAM.
+UPDATED: 2010-10-01 07:49:50
+COLUMNS: Energy (eV) | Cross section (m2)
+"""
+
+for i, cc in enumerate(args.collisions):
+    if "g0" in str(cc):
+        prefix_line=g0_str
+
+        ev1=np.logspace(-4,4,500,base=10)
+        tcs = collisions.Collisions.synthetic_tcs(ev1,cc)
+
+        cs_data=np.concatenate((ev1,tcs),axis=0)
+        cs_data=cs_data.reshape((2,-1))
+        cs_data=np.transpose(cs_data)
+
+    elif "g2" in str(cc):
+        prefix_line=g2_str
+
+        ev1=np.logspace(np.log10(15.76),4,500,base=10)
+        tcs = collisions.Collisions.synthetic_tcs(ev1,cc)
+
+        cs_data=np.concatenate((ev1,tcs),axis=0)
+        cs_data=cs_data.reshape((2,-1))
+        cs_data=np.transpose(cs_data)
+        
+    f_mode="a"
+    if i==0:
+        f_mode="w"
+    with open("../../Bolsig/%s"%(bolsig_cs_file), f_mode) as file:
+        cs_str=np.array_str(cs_data)
+        cs_str=cs_str.replace("[","")
+        cs_str=cs_str.replace("]","")
+        cs_str=" "+cs_str
+        file.writelines(prefix_line)
+        file.write("\n-----------------------------\n")
+        cs_str=["%.14E %14E"%(cs_data[i][0],cs_data[i][1]) for i in range(cs_data.shape[0])]
+        cs_str = '\n'.join(cs_str)
+        file.writelines(cs_str)
+        file.write("\n-----------------------------\n")
+    
+
 replace_line(args.bolsig_dir+"run.sh", 2, "cd " + args.bolsig_dir + "\n")
 replace_line(args.bolsig_dir+"minimal-argon.dat", 8, "\""+bolsig_cs_file+"\"   / File\n")
 replace_line(args.bolsig_dir+"minimal-argon.dat", 13, str(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+" / Electric field / N (Td)\n")
@@ -420,7 +532,7 @@ os.system("sh "+args.bolsig_dir+"run.sh")
 
 # setting electron volts from bolsig results for now
 print("blolsig temp : %.8E"%((bolsig_mu /1.5)))
-args.electron_volt = bolsig_mu#0.98*(bolsig_mu/1.5) #0.8 * (bolsig_mu/1.5) 
+args.electron_volt = 0.98*(bolsig_mu/1.5) #0.8 * (bolsig_mu/1.5) 
 print(args.electron_volt)
 # bolsig = np.genfromtxt(args.bolsig_data,delimiter=',')
 # plt.plot(bolsig[:,0], bolsig[:,1])
@@ -516,21 +628,70 @@ for i, value in enumerate(args.sweep_values):
     VTH                            = collisions.ELECTRON_THEMAL_VEL
     c_gamma = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
     sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
-
-    # adaptive_learner = ALearner1D()
-    # adaptive_learner.setup(bolsig_ev,bolsig_f0,(bolsig_ev[0],bolsig_ev[-1]))
-    # adap_knots = adaptive_learner.get_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER) * c_gamma/VTH
-    # sig_pts = np.sort(np.append(sig_pts,adap_knots))
     print("singularity pts : ", sig_pts)
 
-    # uncomment to plot the cross section data used. 
-    #collisions.collission_cs_test()
-
     ev_range = (0, ev[-1])
-    #k_domain = np.sqrt(ev_range) * c_gamma / VTH
     k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
-    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=sig_pts)
+
+    import adaptive_trees
+    adaptive_trees.ev_range=ev_range
+    v_knots = np.sqrt(adaptive_trees.g0_knots(1.e-2,1e-30)) * c_gamma /VTH
+    v_knots = np.append(v_knots, np.sqrt(adaptive_trees.g2_knots(1.e-2,1e-30)) * c_gamma /VTH)
+    num_p   = args.NUM_P_RADIAL + 1
+    num_k   = 2*SPLINE_ORDER + (num_p -2) + 2
+    dx_max  = (k_domain[1]-k_domain[0])/( num_k-2*SPLINE_ORDER -2)
+    print("desired dx max : ", dx_max)
+    
+    # v_knots_r = np.array([])
+    # for ki in range(1, len(v_knots)):
+    #     if (v_knots[ki] - v_knots[ki-1]) > dx_max:
+    #         sub_split= int(np.ceil((v_knots[ki] - v_knots[ki-1])/dx_max)) + 1
+    #         v_knots_r = np.append(v_knots_r,np.linspace(v_knots[ki-1], v_knots[ki], sub_split)[1:-1])
+    
+    # v_knots=np.sort(np.union1d(v_knots,v_knots_r))
+    # v_dx    = np.array([v_knots[i]-v_knots[i-1] for i in range(1,len(v_knots))])
+    # print("min = ", np.min(v_dx), " max ", np.max(v_dx))
+    # print("adaptive knot length: ", len(v_knots))
+    # if len(v_knots)%2==1:
+    #     v_knots=np.append(np.array([v_knots[0], 0.5*(v_knots[0] + v_knots[1])]), v_knots[1:])
+
+    total_pts = num_k-2*SPLINE_ORDER
+    v_knots = np.linspace(k_domain[0],k_domain[1], total_pts)
+    v_knots_r = np.array([])
+    # for ki in range(1, len(v_knots)):
+    #     if(v_knots[ki] > sig_pts[0]):
+    #         v_knots_r= np.append(v_knots_r, np.linspace(v_knots[ki-1],v_knots[ki],3)[1:-1])
+
+    v_knots = np.sort(np.union1d(v_knots,v_knots_r))
+    v_knots = np.append(v_knots[0] * np.ones_like(SPLINE_ORDER), v_knots)
+    v_knots = np.append(v_knots, v_knots[-1]* np.ones_like(SPLINE_ORDER))
+    #v_knots = None
+
+    for cc in args.collisions:
+        plt.figure(figsize=(8,8),dpi=300)
+        #plt.plot(g._energy, g._total_cs,linewidth=1, label="lxcat")
+        ev1=np.logspace(-7,3,10000,base=10)
+        tcs = collisions.Collisions.synthetic_tcs(ev1,cc)
+        plt.plot(ev1,tcs, 'bx--',linewidth=1, label="analytical")
+        plt.plot((v_knots * VTH / c_gamma)**2, collisions.Collisions.synthetic_tcs((v_knots * VTH / c_gamma)**2, cc),'r*--', linewidth=1, label="sparse")
+        plt.legend()
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.xlabel(r'energy (eV)')
+        plt.ylabel(r'cross section ($m^2$)')
+        plt.grid(True, which="both", ls="-")
+        plt.savefig(".%s_nr%d.png"%(cc,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER))
+        plt.close()
+
+    
+    if (args.radial_poly == "bspline" and v_knots is not None):
+        r_mode = basis.BasisType.SPLINES
+        params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = len(v_knots) - 2 * (SPLINE_ORDER+1) + 1
+        params.BEVelocitySpace.NUM_Q_VR  = basis.BSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+
+
+    cf    = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=sig_pts, knot_vec=v_knots)
     spec  = cf._spec
 
     print("""===========================Parameters ======================""")
@@ -639,7 +800,7 @@ if (1):
 
             plt.subplot(2, num_subplots, 1+l_idx)
 
-            plt.plot(abs(data[-1,l_idx::num_sph_harm]),label=lbl)
+            plt.plot(np.abs(data[-1,l_idx::num_sph_harm]),label=lbl)
 
             plt.title(label="l=%d"%l_idx)
             plt.yscale('log')
@@ -658,10 +819,11 @@ if (1):
             plt.semilogy(ev,  abs(radial[i, l_idx]), '-', label=lbl, color=color)
             if l_idx == 0:
                 plt.semilogy(ev,  abs(radial_base[i]), ':', label=lbl+" (base)", color=color)
+                
             # plt.semilogy(ev, -radial[i, l_idx], 'o', label=lbl, color=color, markersize=3, markerfacecolor='white')
 
 
-            plt.yscale('log')
+            #plt.yscale('log')
             plt.xlabel("Energy, eV")
             plt.ylabel("Radial component")
             plt.grid(visible=True)

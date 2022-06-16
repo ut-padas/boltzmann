@@ -309,23 +309,54 @@ class CollisionOpSP():
         elif self._r_basis_type == basis.BasisType.SPLINES:
             Mp_r    = (scattering_mg_v0[0] * V_TH) * (scattering_mg[0]**2)
         
+        # if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
+        #     cc_collision = np.array([diff_cs * Mp_r * ( spec_sp.Vq_r(Sd[0],l) * sph_post[lm_idx] - spec_sp.Vq_r(scattering_mg[0],l) * sph_pre[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+        # elif(g._type == collisions.CollisionType.EAR_G2):
+        #     cc_collision = np.array([diff_cs * Mp_r * ( 2 * spec_sp.Vq_r(Sd[0],l) * sph_post[lm_idx] - spec_sp.Vq_r(scattering_mg[0],l) * sph_pre[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+        
+        # cc_collision = cc_collision.reshape(tuple([num_sh,num_p]) + scattering_mg[0].shape)
+        
+        # cc_collision = np.dot(cc_collision,WPhi_q)
+        # cc_collision = np.dot(cc_collision,glw_s)
+
+        # cc_collision =np.array([cc_collision[qs_idx,p] * spec_sp.basis_eval_radial(incident_mg[0], k, l) * sph_pre_in[lm_idx]  for p in range(num_p) for qs_idx, (q,s) in enumerate(self._sph_harm_lm) for k in range(num_p) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+
+        # cc_collision = cc_collision.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
+        # cc_collision = np.dot(cc_collision,WVPhi_q)
+        # cc_collision = np.dot(cc_collision,glw)
+        # cc_collision = np.dot(cc_collision,gmw)
+        # cc_collision = cc_collision.reshape((num_p*num_sh,num_p*num_sh))
+
+        # more memory efficient but can be slower than the above. 
+        cc_collision = np.zeros((num_p * num_sh, num_p * num_sh))
+        
+        tmp0 = np.zeros(tuple([num_p]) + scattering_mg[0].shape)
+        tmp1 = np.zeros(tuple([num_p]) + incident_mg[0].shape)
+        tmp2 = np.zeros(incident_mg[0].shape)
+
         if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
-            cc_collision = np.array([diff_cs * Mp_r * ( spec_sp.Vq_r(Sd[0],l) * sph_post[lm_idx] - spec_sp.Vq_r(scattering_mg[0],l) * sph_pre[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+            for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
+                tmp0[:,:,:,:,:,:]  = diff_cs * Mp_r * (spec_sp.Vq_r(Sd[0],q) * sph_post[qs_idx] - spec_sp.Vq_r(scattering_mg[0],q) * sph_pre[qs_idx])
+                tmp1[:,:,:,:]      = np.dot(np.dot(tmp0,WPhi_q),glw_s)
+
+                for p in range(num_p):
+                    for k in range(num_p):
+                        for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
+                            tmp2[:,:,:] = tmp1[p,:,:,:] * spec_sp.basis_eval_radial(incident_mg[0], k, l) * sph_pre_in[lm_idx]
+                            cc_collision[p * num_sh + qs_idx , k * num_sh + lm_idx] = np.dot(np.dot(np.dot(tmp2, WVPhi_q),glw),gmw)
+
         elif(g._type == collisions.CollisionType.EAR_G2):
-            cc_collision = np.array([diff_cs * Mp_r * ( 2 * spec_sp.Vq_r(Sd[0],l) * sph_post[lm_idx] - spec_sp.Vq_r(scattering_mg[0],l) * sph_pre[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
-        
-        cc_collision = cc_collision.reshape(tuple([num_sh,num_p]) + scattering_mg[0].shape)
-        
-        cc_collision = np.dot(cc_collision,WPhi_q)
-        cc_collision = np.dot(cc_collision,glw_s)
+            for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
+                tmp0[:,:,:,:,:,:]  = diff_cs * Mp_r * (2 * spec_sp.Vq_r(Sd[0],q) * sph_post[qs_idx] - spec_sp.Vq_r(scattering_mg[0],q) * sph_pre[qs_idx])
+                tmp1[:,:,:,:]      = np.dot(np.dot(tmp0,WPhi_q),glw_s)
 
-        cc_collision =np.array([cc_collision[qs_idx,p] * spec_sp.basis_eval_radial(incident_mg[0], k, l) * sph_pre_in[lm_idx]  for p in range(num_p) for qs_idx, (q,s) in enumerate(self._sph_harm_lm) for k in range(num_p) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
+                for p in range(num_p):
+                    for k in range(num_p):
+                        for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
+                            tmp2[:,:,:] = tmp1[p,:,:,:] * spec_sp.basis_eval_radial(incident_mg[0], k, l) * sph_pre_in[lm_idx]
+                            cc_collision[p * num_sh + qs_idx , k * num_sh + lm_idx] = np.dot(np.dot(np.dot(tmp2, WVPhi_q),glw),gmw)
 
-        cc_collision = cc_collision.reshape(tuple([num_p,num_sh,num_p,num_sh]) + incident_mg[0].shape)
-        cc_collision = np.dot(cc_collision,WVPhi_q)
-        cc_collision = np.dot(cc_collision,glw)
-        cc_collision = np.dot(cc_collision,gmw)
-        cc_collision = cc_collision.reshape((num_p*num_sh,num_p*num_sh))
+
         
         return cc_collision
         

@@ -63,7 +63,7 @@ g0 = collisions.eAr_G0()
 g2 = collisions.eAr_G2()
 
 tcs_g0 = lambda ev : collisions.Collisions.synthetic_tcs(ev,"g0")
-tcs_g2 = lambda ev : collisions.Collisions.synthetic_tcs(ev,"g2")
+tcs_g2 = lambda ev : collisions.Collisions.synthetic_tcs(ev,"g2smoothstep")
 
 def is_refine_func(dx,tcs,rtol,atol):
     # gx,gw = 0.5 * (dx[1] - dx[0]) * gl.points + 0.5 * (dx[1] + dx[0]), 0.5 * (dx[1]-dx[0]) * gl.weights

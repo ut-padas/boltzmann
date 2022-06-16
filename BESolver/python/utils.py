@@ -11,7 +11,6 @@ MAX_GMX_Q_VR_PTS=278
 
 def choloskey_inv(M):
     #return np.linalg.pinv(M,rcond=1e-30)
-    #return block_jacobi_inv(M)
     rtol=1e-14
     atol=1e-14
     L    = np.linalg.cholesky(M)

@@ -132,8 +132,14 @@ class SpectralExpansionSpherical:
             mm=np.zeros((num_p*num_sh, num_p*num_sh))
             for i,l in enumerate(l_modes):
                 Vq = self.Vq_r(gx, l)
-                mm_l = np.array([(gx**2) * Vq[p,:] * Vq[k,:] for p in range(num_p) for k in range(num_p)])
-                mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+                # below is to make things more mem. efficient
+                # mm_l = np.array([(gx**2) * Vq[p,:] * Vq[k,:] for p in range(num_p) for k in range(num_p)])
+                # mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+                mm_l = np.zeros((num_p,num_p))
+                for p in range(num_p):
+                    for k in range(num_p):
+                        mm_l[p,k]= np.dot((gx**2) * Vq[p,:] * Vq[k,:], gw)
+
                 for lm_idx, (l1,m) in enumerate(self._sph_harm_lm):
                     if(l==l1):
                         for p in range(num_p):
@@ -242,19 +248,34 @@ class SpectralExpansionSpherical:
             
             [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
             
-            Vr  = np.zeros(tuple([num_l,num_p])+gx.shape)
-            Vdr = np.zeros(tuple([num_l,num_p])+gx.shape)
-            for i,l in enumerate(lmodes):
-                Vr[i]  = self.Vq_r(gx,l)
-                Vdr[i] = self.Vdq_r(gx,l,d_order=1)
-                
-            mr = gx**2 
-            mm1 = np.array([mr * Vr[pl,p,:] * Vdr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
-            mm1 = np.dot(mm1,gw)
             
-            mr = gx
-            mm2 = np.array([mr * Vr[pl,p,:] * Vr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
-            mm2 = np.dot(mm2,gw)
+            # Vr  = np.zeros(tuple([num_l,num_p])+gx.shape)
+            # Vdr = np.zeros(tuple([num_l,num_p])+gx.shape)
+            # for i,l in enumerate(lmodes):
+            #     Vr[i]  = self.Vq_r(gx,l)
+            #     Vdr[i] = self.Vdq_r(gx,l,d_order=1)
+                
+            # mr = gx**2 
+            # mm1 = np.array([mr * Vr[pl,p,:] * Vdr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
+            # mm1 = np.dot(mm1,gw)
+            
+            # mr = gx
+            # mm2 = np.array([mr * Vr[pl,p,:] * Vr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
+            # mm2 = np.dot(mm2,gw)
+
+            mm1=np.zeros((num_p,num_p,num_l,num_l))
+            mm2=np.zeros((num_p,num_p,num_l,num_l))
+
+            for pl in range(num_l):
+                Vr_pl  = self.Vq_r(gx,pl)
+                for kl in range(num_l):
+                    Vr_kl  = self.Vq_r(gx,kl)
+                    Vdr_kl = self.Vdq_r(gx,kl,d_order=1)
+                    for p in range(num_p):
+                        for k in range(num_p):
+                            mm1[p,k,pl,kl] = np.dot((gx**2) * Vr_pl[p,:] * Vdr_kl[k,:],gw)
+                            mm2[p,k,pl,kl] = np.dot(gx * Vr_pl[p,:] * Vr_kl[k,:],gw)
+
             
             advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
             for qs_idx,qs in enumerate(self._sph_harm_lm):

@@ -630,18 +630,18 @@ for i, value in enumerate(args.sweep_values):
     sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
     print("singularity pts : ", sig_pts)
 
-    ev_range = (0, ev[-1])
+    ev_range = (0, 1.0*ev[-1])
     k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
 
-    import adaptive_trees
-    adaptive_trees.ev_range=ev_range
-    v_knots = np.sqrt(adaptive_trees.g0_knots(1.e-2,1e-30)) * c_gamma /VTH
-    v_knots = np.append(v_knots, np.sqrt(adaptive_trees.g2_knots(1.e-2,1e-30)) * c_gamma /VTH)
+    # import adaptive_trees
+    # adaptive_trees.ev_range=ev_range
+    # v_knots = np.sqrt(adaptive_trees.g0_knots(1.e-2,1e-30)) * c_gamma /VTH
+    # v_knots = np.append(v_knots, np.sqrt(adaptive_trees.g2_knots(1.e-2,1e-30)) * c_gamma /VTH)
     num_p   = args.NUM_P_RADIAL + 1
     num_k   = 2*SPLINE_ORDER + (num_p -2) + 2
-    dx_max  = (k_domain[1]-k_domain[0])/( num_k-2*SPLINE_ORDER -2)
-    print("desired dx max : ", dx_max)
+    # dx_max  = (k_domain[1]-k_domain[0])/( num_k-2*SPLINE_ORDER -2)
+    # print("desired dx max : ", dx_max)
     
     # v_knots_r = np.array([])
     # for ki in range(1, len(v_knots)):
@@ -653,15 +653,13 @@ for i, value in enumerate(args.sweep_values):
     # v_dx    = np.array([v_knots[i]-v_knots[i-1] for i in range(1,len(v_knots))])
     # print("min = ", np.min(v_dx), " max ", np.max(v_dx))
     # print("adaptive knot length: ", len(v_knots))
-    # if len(v_knots)%2==1:
-    #     v_knots=np.append(np.array([v_knots[0], 0.5*(v_knots[0] + v_knots[1])]), v_knots[1:])
-
+    
     total_pts = num_k-2*SPLINE_ORDER
     v_knots = np.linspace(k_domain[0],k_domain[1], total_pts)
+    idx_v   = np.abs(v_knots - sig_pts[0]).argmin()
     v_knots_r = np.array([])
-    # for ki in range(1, len(v_knots)):
-    #     if(v_knots[ki] > sig_pts[0]):
-    #         v_knots_r= np.append(v_knots_r, np.linspace(v_knots[ki-1],v_knots[ki],3)[1:-1])
+    # for ki in range(idx_v-1, len(v_knots)):
+    #     v_knots_r= np.append(v_knots_r, np.linspace(v_knots[ki-1],v_knots[ki],3)[1:-1])
 
     v_knots = np.sort(np.union1d(v_knots,v_knots_r))
     v_knots = np.append(v_knots[0] * np.ones_like(SPLINE_ORDER), v_knots)

@@ -892,17 +892,17 @@ def compute_radial_components(ev_pts, spec_sp : spec_spherical.SpectralExpansion
 
     for l_idx, lm in enumerate(params.BEVelocitySpace.SPH_HARM_LM):
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
-            output[l_idx, :] = basis.maxpoly.maxpolyserieseval(2*lm[0]+2, vr, cf[l_idx::num_sph_harm])*np.exp(-vr**2)*(vr**lm[0])
+            output[l_idx, :] = basis.maxpoly.maxpolyserieseval(2*lm[0]+2, vr, cf[l_idx::num_sph_harm])*(vr**lm[0])
         else:
-            # radial_component = 0
-            # for i, coeff in enumerate(cf[l_idx::num_sph_harm]):
-            #     radial_component = radial_component + coeff*spec_sp.basis_eval_radial(vr, i, lm[0]) * sph_factor
-            # output[l_idx, : ] = radial_component
-                        
-            sph_factor = spec_sp.basis_eval_spherical(0,0,lm[0],lm[1])
+            # sph_factor = spec_sp.basis_eval_spherical(0,0,lm[0],lm[1])
+            sph_factor = 1
             #print("l,m=(%d,%d)=%.8E" %(lm[0], lm[1], sph_factor))
             Vqr=spec_sp.Vq_r(vr,lm[0],1)
             output[l_idx, :] = sph_factor * np.dot( cf[l_idx::num_sph_harm], Vqr)
+
+    if spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+        output *= np.exp(-vr**2)
+    
     return output
 
 

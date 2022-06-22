@@ -23,7 +23,7 @@ xf_coeffs_exact = np.zeros(max_dofs)
 xf_coeffs_app = np.zeros(max_dofs)
 gauss_q_order_proj = 200
 
-G = 0
+G = 2
 
 [xg, wg] = maxpolygauss(gauss_q_order_proj, G)
 

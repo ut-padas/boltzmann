@@ -83,7 +83,9 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
     """
 
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -111,7 +113,9 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
     WVPhi_q[0]  = 0.5 * WVPhi_q[0]
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
         #weight_func  = spec_sp._basis_p.Wx()
 
@@ -151,7 +155,9 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
 def mean_velocity_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
     
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -179,7 +185,9 @@ def mean_velocity_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_V
     WVPhi_q[0]  = 0.5 * WVPhi_q[0]
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
         #weight_func  = spec_sp._basis_p.Wx()
 
@@ -272,7 +280,9 @@ def mean_velocity_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_V
 
 def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -300,7 +310,9 @@ def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
     WVPhi_q[0]  = 0.5 * WVPhi_q[0]
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
         
         quad_grid    = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
@@ -343,7 +355,9 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     \int_v f(v) dv
     """
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -371,7 +385,9 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
     WVPhi_q[0]  = 0.5 * WVPhi_q[0]
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
         #weight_func  = spec_sp._basis_p.Wx()
 
@@ -438,7 +454,9 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     should be compatible with the weight function of the polynomials. 
     """
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -466,7 +484,9 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     WVPhi_q[0]  = 0.5 * WVPhi_q[0]
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         """
         assumes orthonormal mass matrix. 
         """
@@ -477,7 +497,10 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
         l_modes      = list(set([l for l,_ in spec_sp._sph_harm_lm])) 
         
         Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
-        hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) 
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
+            hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) / (np.exp(-quad_grid[0]**4) + 1.e-16)
+        else:
+            hq   = hv(quad_grid[0],quad_grid[1],quad_grid[2]) / (np.exp(-quad_grid[0]**2) + 1.e-16)
 
         M_klm = np.array([ hq * spec_sp.Vq_r(quad_grid[0],l) * Y_lm[lm_idx] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm)])
         M_klm = np.dot(M_klm,WVPhi_q)
@@ -640,7 +663,9 @@ def vcenter_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw,vth
     num_sh       = len(sph_harm_lm)
 
     if NUM_Q_VR is None:
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+            or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
             NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -666,7 +691,9 @@ def vcenter_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw,vth
     WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
 
     
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         raise NotImplementedError
         
     
@@ -724,7 +751,9 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
     vr[vr<v0_abs]  = 0
     vr[vr>=v0_abs] = vr[vr>=v0_abs] -v0_abs
     
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
         NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -751,7 +780,9 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
 
     quad_grid = np.meshgrid(vr,VTheta_q,VPhi_q,indexing='ij')
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
 
         l_modes      = list(set([l for l,_ in spec_sp._sph_harm_lm])) 
         
@@ -783,7 +814,9 @@ def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, ma
     Compute the reaction rates for specified collision data, 
     """    
 
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+        or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
         NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
@@ -902,6 +935,9 @@ def compute_radial_components(ev_pts, spec_sp : spec_spherical.SpectralExpansion
 
     if spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
         output *= np.exp(-vr**2)
+
+    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
+        output *= np.exp(-vr**4)
     
     return output
 

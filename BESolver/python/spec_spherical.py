@@ -104,7 +104,10 @@ class SpectralExpansionSpherical:
         num_p   = self._p+1
         num_sh  = len(self._sph_harm_lm)
 
-        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or self.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
+             or self.get_radial_basis_type() == basis.BasisType.LAGUERRE\
+             or self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
+             
             [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             l_modes = list(set([l for l,_ in self._sph_harm_lm]))
             
@@ -238,6 +241,8 @@ class SpectralExpansionSpherical:
             return assemble_advection_matix_lp_max(self._p, self._sph_harm_lm)
         elif self.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             return assemble_advection_matix_lp_lag(self._p, self._sph_harm_lm)
+        elif self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
+            return assemble_advection_matix_lp_max_energy(self._p, self._sph_harm_lm)
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
             num_p  = self._p+1
             num_sh = len(self._sph_harm_lm)

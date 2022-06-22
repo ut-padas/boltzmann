@@ -1,7 +1,7 @@
 clear;
 kmax = 300;
 krec = 5;
-G_all = 0.5:1:65.5;
+G_all = -0.5:1:10.5;
 
 gaussnodes_all = zeros(length(G_all), kmax*(kmax + 1)/2);
 gaussweights_all = zeros(length(G_all), kmax*(kmax + 1)/2);

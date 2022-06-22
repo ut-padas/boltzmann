@@ -39,6 +39,11 @@ class CollisionOpSP():
             self._spec = sp.SpectralExpansionSpherical(self._p,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
 
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
+
+            self._spec = sp.SpectralExpansionSpherical(self._p,basis.MaxwellEnergy(),params.BEVelocitySpace.SPH_HARM_LM)
+            self._spec._q_mode = q_mode
+
         elif self._r_basis_type == basis.BasisType.LAGUERRE:
 
             self._spec = sp.SpectralExpansionSpherical(self._p,basis.Laguerre(),params.BEVelocitySpace.SPH_HARM_LM)
@@ -73,7 +78,9 @@ class CollisionOpSP():
         self._num_p            = spec_sp._p +1
         self._num_sh           = len(spec_sp._sph_harm_lm)
 
-        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY\
+            or self._r_basis_type == basis.BasisType.LAGUERRE\
+            or self._r_basis_type == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
         elif self._r_basis_type == basis.BasisType.SPLINES:
             [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR,True)
@@ -303,7 +310,9 @@ class CollisionOpSP():
         sph_pre    = spec_sp.Vq_sph(scattering_mg[1],scattering_mg[2])
         sph_pre_in = spec_sp.Vq_sph(incident_mg[1],incident_mg[2])
         
-        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
+        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY\
+            or self._r_basis_type == basis.BasisType.LAGUERRE\
+            or self._r_basis_type == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             Mp_r    = (scattering_mg_v0[0])*V_TH
 
         elif self._r_basis_type == basis.BasisType.SPLINES:

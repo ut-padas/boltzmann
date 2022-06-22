@@ -25,21 +25,21 @@ The Boltzmann equation is a nonlinear integro-differential equation that describ
 
 We can write the Boltzmann equation in the absence of external force field can be written as below. 
 \begin{equation}
-    \partial_t f + v\cdot \nabla_x f = \frac{1}{\epsilon}Q(f,f) \text{ for } x,v \in \R^3 \label{eq:be}
+    \partial_t f + v\cdot \nabla_x f = C(f) \text{ for } x,v \in \R^3 \label{eq:be}
 \end{equation}
 In the presence of external force field (e.g., electromagnetic field) $L(x,t) : \R^3 \times \R \rightarrow \R$, the full Boltzmann equations can be written as, 
 \begin{equation}
-    \partial_t f + v\cdot \nabla_x f  + L \cdot \nabla_v f = \frac{1}{\epsilon}Q(f,f) \text{ for } x,v \in \R^3 \label{eq:be_full}
+    \partial_t f + v\cdot \nabla_x f  + L \cdot \nabla_v f = C(f) \text{ for } x,v \in \R^3 \label{eq:be_full}
 \end{equation}
 
-The $\epsilon$ is known as the Knudsen number (dimensionless number, $\epsilon > 0$), $Q$ is the collision operator. 
+%The $\epsilon$ is known as the Knudsen number (dimensionless number, $\epsilon > 0$), $C$ is the collision operator. 
 
 \textbf{Note}: Unless stated otherwise, $v^\prime,v_*^\prime$ denotes the post-collision velocities and $v,v_*$ denotes the pre-collision velocities of a binary collision.
 
 The collision operator (i.e., capture the physics of the collisions) can be broken up to two main parts, 
 \begin{enumerate}
-    \item Gain term ($C^+(f,f)$) : For a fixed $(t,x)$ how many particles created with velocity $v$.
-    \item Loss term ($C^-(f,f)$) : For a fixed $(t,x)$ how many particles are lost with velocity $v$.
+    \item $C^+(f)$ particle gain : For a fixed $(t,x)$ how many particles created with velocity $v$.
+    \item $C^-(f)$ particle loss : For a fixed $(t,x)$ how many particles are lost with velocity $v$.
 \end{enumerate} which are defined as follows. 
 
 \subsection{Multi-species binary collisions}
@@ -94,16 +94,16 @@ When $\theta = 0 $, we can pick $\hat{E_0}=\hat{e_i}$, $\hat{E_1}=\hat{e_j}$ and
 
 In spherical coordinates, for a given incident vector $(v_r,\theta,\phi)$ that is not parallel to $\hat{e_i}$,  and scattering angle $(\chi,\gamma)$, we can compute the direction of the scattered particle as 
 
-\begin{align}
-    \theta^\prime &= \tiny \left\{\cos ^{-1}\left(\frac{\cos (\theta ) \left(\cos (\gamma ) \sin (\theta ) \sin (\chi ) \cos (\phi )+\cos (\chi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}\right)-\sin (\gamma ) \sin (\theta ) \sin (\chi ) \sin (\phi )}{\sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}}\right)\right\} \\
-    \phi^\prime &= \tan ^{-1}\left(\frac{\sin (\chi ) \left(\cos (\gamma ) \sin ^2(\theta ) \sin (\phi ) \cos (\phi )+\sin (\gamma ) \cos (\theta )\right)+\sin (\theta ) \cos (\chi ) \sin (\phi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}}{\sin (\theta ) \cos (\chi ) \cos (\phi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}-\cos (\gamma ) \sin (\chi ) \left(\sin ^2(\theta ) \sin ^2(\phi )+\cos ^2(\theta )\right)}\right)
-\end{align}
-
-If the incident vector is parallel to the $\hat{e_i}$, we can compute the above, 
-\begin{align}
-    \theta^\prime &=\left\{\cos ^{-1}(\cos (\gamma ) \sin (\chi ))\right\} \\
-    \phi^\prime &=\tan ^{-1}(\sin (\gamma ) \tan (\chi )) \\
-\end{align}
+%\begin{align}
+%    \theta^\prime &= \tiny \left\{\cos ^{-1}\left(\frac{\cos (\theta ) \left(\cos (\gamma ) \sin (\theta ) \sin (\chi ) \cos (\phi )+\cos (\chi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}\right)-\sin (\gamma ) \sin (\theta ) \sin (\chi ) \sin (\phi )}{\sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}}\right)\right\} \\
+%    \phi^\prime &= \tan ^{-1}\left(\frac{\sin (\chi ) \left(\cos (\gamma ) \sin ^2(\theta ) \sin (\phi ) \cos (\phi )+\sin (\gamma ) \cos (\theta )\right)+\sin (\theta ) \cos (\chi ) \sin (\phi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}}{\sin (\theta ) \cos (\chi ) \cos (\phi ) \sqrt{1-\sin ^2(\theta ) \cos ^2(\phi )}-\cos (\gamma ) \sin (\chi ) \left(\sin ^2(\theta ) \sin ^2(\phi )+\cos ^2(\theta )\right)}\right)
+%\end{align}
+%
+%If the incident vector is parallel to the $\hat{e_i}$, we can compute the above, 
+%\begin{align}
+%    \theta^\prime &=\left\{\cos ^{-1}(\cos (\gamma ) \sin (\chi ))\right\} \\
+%    \phi^\prime &=\tan ^{-1}(\sin (\gamma ) \tan (\chi )) \\
+%\end{align}
 
 
 
@@ -145,11 +145,12 @@ Let $\varepsilon_{ion}$ be the energy threshold for the ionization reaction, the
     \norm{v_1} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{\varepsilon_{ion}}{m}}\\
     \norm{v_2} &= \sqrt{\frac{1}{2}\norm{v_0}^2 - \frac{\varepsilon_{ion}}{m}}
 \end{align}
-The direction of $v_1$ is given by $\hat{v_1}$ as in (\ref{eq:scatter}) and the direction of the $v_2$ derived based on the momentum conservation, assuming the momentum change in the Ar atom is negligible. 
-\begin{align}
-    m v_0 + M v &= Mv + m v_1 + m v_2  \\
-    \hat{v_2} &= \frac{v_0 - v_1}{\norm{v_0 - v_1}}
-\end{align}
+%\textbf{Note} : Currently we use the binary scattering equation for the direction of the scattered electron.
+%The direction of $v_1$ is given by $\hat{v_1}$ as in (\ref{eq:scatter}) and the direction of the $v_2$ derived based on the momentum conservation, assuming the momentum change in the Ar atom is negligible. 
+%\begin{align}
+%    m v_0 + M v &= Mv + m v_1 + m v_2  \\
+%    \hat{v_2} &= \frac{v_0 - v_1}{\norm{v_0 - v_1}}
+%\end{align}
 
 
 
@@ -175,128 +176,8 @@ M(v) = \frac{n}{(\sqrt{\pi}v_{th})^d} \exp{\left(-\left(\frac{v}{v_{th}}\right)^
 
 \section{Collision Operator}
 \label{sec:collision_operator}
-The term $v\cdot \nabla_x f$ makes the distribution $f(v)$ at fixed $(t,x)$ coupled with $f(v)$ defined in neighboring $x$. In operator splitting methods, Boltzmann equation is split in to ``transport'' and ``collision'' part. First we are going to focus on the collision part, given by, 
-\begin{equation}
-    \partial_t f = \frac{1}{\epsilon}C(f,f) \label{eq:col_op}
-\end{equation}
-% Note that without the transport term, for fixed $(t,v)$, for $x\neq x_*$ $f(x)$ and $f(x_*)$ can be evolved independently decoupled way. \emph{This allows, spatially subdivision based parallelization algorithms for the Boltzmann equation.}
-
-% \subsection{Properties of the collision operator}
-% \label{subsec:collision_op_properties}
-% For a given $\R^d$ velocity space,
-% \begin{theorem}
-%     The Boltzmann collision operator conserves few of it moments, namely, mass, momentum, and energy.
-%     \begin{align}
-%         \int_{\R^d} Q(f,f) dv  = 0 \\
-%         \int_{\R^d} Q(f,f) v dv  = 0 \\
-%         \int_{\R^d} Q(f,f) |v|^2dv  = 0 \\
-%     \end{align}
-% \end{theorem}
-
-% The solution for (\ref{eq:col_op}) evolves towards steady state, defined as the Maxwellian, which is given by, 
-% \begin{equation}
-%     f_{\infty}(v) = \frac{\rho}{(2\pi T)^{d/2}} \exp{-\frac{|V-v|^2}{2T}}
-% \end{equation} where, the Maxwellian depends on the quantities computed from the initial distribution. 
-
-% \begin{itemize}
-%     \item \textbf{Density} : $\rho = \int_{\R^d} f(v) dv$ 
-%     \item \textbf{Mean/Bulk velocity}: $V=\frac{1}{\rho} \int_{\R^d} v f(v) dv$ 
-%     \item \textbf{Temperature}: $T= \frac{1}{3\rho} \int_{\R^d} |V-v|^2 f(v) dv$
-% \end{itemize}
-
-\section{Collision operator for electron-neutral elastic collisions}
-\label{sec:electron_neutral_pc}
-\textcolor{red}{\textbf{Note}}: The below derivation only valid for 2-body elastic collisions. For inelastic collisions require jacobian term in the strong form. Without the proper jacobian term, we the derived weak form does not obey the mass conservation. 
-Let $f_e(v,t)$ be the electron density and $f_o(v,t)=\delta(v)$ for all $(t,x)$. Then the evolution of the $f_e$ can be written as, 
-\begin{equation}
-    \partial_t f_e(v,t) = C(f_e,f_0)
-\end{equation}
-Let $(v^\prime,v_*^\prime) \rightarrow (v,v_*)$ be the pre and post collision velocities. The assumption $f_o(v,t)=\delta(v)$, implies neutral particles are mostly centered at velocity $0$. We can write the pre collision velocities as, $v^\prime=v^\prime(v,\omega)$. 
-
-With these assumptions, the generic collision operator, for fixed time $t$ can be simplified for follows. 
-\begin{align}
-    C(f_e,f_0) &= \int_{\R^3}\int_{S^2} B(|v-v_*|,\omega)(f_e(v^\prime)f_0(v_*^\prime) - f_e(v)f_0(v_*) ) d\omega dv_*
-\end{align}
-Change of the integral order (assumes that the integral is finite) with properties of the Dirac's delta function, we can write, 
-\begin{align}
-    C(f_e,f_0) &= \int_{S^2} B(|v|,\omega)(f_e(v^\prime) - f_e(v)) d\omega
-\end{align}
-
-Then we can write the final evolution equation as, 
-\begin{equation}
-    \partial_t f_e(v,t) = \int_{S^2} B(|v|,\omega)(f_e(v^\prime,t) - f_e(v,t)) d\omega
-\end{equation}
-
-Since we know the above evolution will reach the Maxwellian at $t\rightarrow \infty$, we approximate $f_e(v,t)$ as follows, where $M(v)$ denotes the Maxwellian, 
-\begin{equation}
-    f_e(v,t) = M(v)[1 + h(v,t)] \label{eq:maxwelian}
-\end{equation}
-The idea is that when $t\rightarrow \infty$ the time dependent, $h(v,t)\rightarrow 0$.
-Assuming that $\phi(v)$ is our test function with required properties. We can write the variational form for the above as, 
-\begin{equation}
-    \frac{\partial}{\partial t} \int_{\R^3} f_e(v,t) \phi(v) dv = \int_{\R^3} \int_{S^2} B(|v|,\omega)(f_e(v^\prime,t) - f_e(v,t)) \phi(v) d\omega dv \label{eq:0d_wf}
-\end{equation}
-
-Let $P_i(v)$ be orthonormal polynomial basis with the weighted inner product in the velocity space, where $w(v)$ denotes tha weight function. 
-\begin{align}
-    \int_{V} w(v)P_i(v)P_j(v) dv &= k_i\delta_{ij}
-\end{align}
-
-Assuming finite dimensional expansion for fixed time $t$, on $f(v,t)$, we can write, 
-\begin{equation}
-    f(v,t) \approxeq \bar{f}(v,t) = M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \label{eq:basis_expansion}
-\end{equation}
-
-% Substituting (\ref{eq:basis_expansion}) to (\ref{eq:0d_wf}) we can write, 
-% \begin{align}
-%     \partial_t \int_{\R^3} w(v)h(v,t)\phi(v) dv &=  \int_{\R^3} \int_{S^2} (M(v^\prime) - M(v)) \phi(v) B(|v|,\omega) d\omega dv\\
-%     &+\int_{\R^3} \int_{S^2} (M(v^\prime)h(v^\prime,t) - M(v)h(v,t)) B(|v|,\omega) \phi(v) d\omega dv
-% \end{align}
-For the above, By substituting, basis expansion for $f(v,t)$ we can write, 
-\begin{align}
-    \partial_t \int_{\R^3} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) \phi(v) dv &= \\\int_{\R^3} \int_{S^2} M(v^\prime)\sum_{j=0}^{N_v} f_j(t) P_j(v^\prime) & B(|v|,\omega) \phi(v) d\omega dv \nonumber \\
-    -\int_{\R^3} \int_{S^2} M(v)\sum_{j=0}^{N_v} f_j(t) P_j(v) &B(|v|,\omega) \phi(v) d\omega dv
-\end{align}
-By choosing $\phi(v) = P_i(v)$, we can further simplify, 
-\begin{align}
-    \text{diag}(k_i^\prime)\partial_t{f_i} = \sum_{j=0}^{N_v} L_{ij} f_j(t)
-\end{align} where, 
-\begin{equation}
-    L_{ij} = \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv
-\end{equation}
-\begin{equation}
-    k_{i}^\prime = \int_{\R^3} M(v) P_i(v)^2 dv
-\end{equation}
-
-\subsection{Issue of mass conservation when used in inelastic collisions}
-For any smooth distribution, $f(v) = M(v_\alpha) \sum_{klm} f_{klm} \phi_{klm}(v_\alpha)$, and we can write, 
-\begin{align}
-\int_{\RR^3} f dv &= const.  \\
-\frac{d}{dt} \int_{\RR^3} f dv &= 0  \\
-\int_{\RR^3} \partial_t f  dv &= \int_{\RR^3} c(f) dv =0 \\
-% \partial_t f &= c(f) = n_0 \int_{S^2} (f(v^\prime) - f(v)) \norm{v} \sigma(\norm{v},\omega) d\omega \\
-% \frac{d}{dt} \int_{\RR^3} f dv =0  &\implies \int_{\RR^3} c(f) dv = 0 
-\end{align}
-We can further write, 
-\begin{align}
-\int_{\RR^3} c(f) dv  &= \sum_{klm} f_{klm} \int_{\RR^3}\int_{S^2} \bigl( M(v^\prime/\alpha) \phi_{klm}(v^\prime/\alpha) -   M(v/\alpha) \phi_{klm}(v/\alpha) \bigr) \\ &\times\norm{v} \sigma(\norm{v},\omega) d\omega dv, \  \forall f(v,t) \\
-\implies & \int_{\RR^3}\int_{S^2} \bigl( M(v^\prime/\alpha) \phi_{klm}(v^\prime/\alpha) -   M(v/\alpha) \phi_{klm}(v/\alpha) \bigr) \norm{v} \\ \times &\sigma(\norm{v},\omega) d\omega dv =0  \forall klm
-\end{align}
-But the above is not satisfied, take const polynomial $\phi_{000}(x)=1/2\sqrt{\pi}$ with $v^\prime \neq v$.  
-
-
-
-\subsection{Hermite Polynomials}
-Let $H_k (x)$ be the sequence of Hermite polynomials, defined on $(\infty,infty)$ and are orthogonal with respect to the weight function $w(x) = \exp(-x^2/2)$. More precisely we can write, 
-\begin{equation}
-    \int_{-\infty}^{\infty} w(x) H_i(x) H_j(x) dx = \sqrt{2\pi} n! \delta_{ij}
-\end{equation}where the polynomials can be generated using, 
-\begin{equation}
-    H_k(x) = (-1)^k \exp(x^2/2) \frac{d^k}{dx^k} \exp(-x^2/2)
-\end{equation}. The corresponding Gauss-Hermite quadrature can be defined as, 
-\begin{equation}
-    \int_{-\infty}^{\infty} w(x) f(x) \approx \sum_{q=1}^{n} w_i f(x_i)
-\end{equation} where, $x_i$ are the roots of $H_n(x)$, and $w_i$ are the corresponding weights for the Gaussian quadrature. 
+See \S\ref{sec:coll_op_derivation} for detailed derivation of collision operators. 
+  
 
 \section{Computation of the collision operator}
 As described in~\S\ref{subsec:binary_reactions} we can write the binary collision operator as below.  
@@ -389,64 +270,20 @@ E_f(\epsilon) &= \myint_{S^2} f\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\rig
 E_f(\epsilon) &= \myint_{S^2} \sum_{klm} \exp(-\frac{2\epsilon}{m_e}) \hat{f}_{klm} \Phi_{klm}\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\right)} \diff{\omega}
 \end{align*}
 
-\subsection{Collision operator using B-splines}
-\begin{align*}
-M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
-\Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
-\Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
-\end{align*}where $P_k,P_p$ denotes the B-splines polynomials.  
+%\subsection{Collision operator using B-splines}
+%\begin{align*}
+%M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
+%\Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
+%\Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
+%\end{align*}where $P_k,P_p$ denotes the B-splines polynomials.  
 
-\subsection{Collision operator spectrum}
-Let $C : V \rightarrow V$ denotes the infinity dimension collision operator, $P_n V \rightarrow V_n$ be the projection operator for finite dimensional subspace $V_n \subset V$. For orthogonal radial basis choice, $P_n$ is an orthogonal projection, while for B-splines it is not orthogonal.
-
+\textbf{Spectrum of the collision operator} : Let $C : V \rightarrow V$ denotes the infinity dimension collision operator, $P_n V \rightarrow V_n$ be the projection operator for finite dimensional subspace $V_n \subset V$. For orthogonal radial basis choice, $P_n$ is an orthogonal projection, while for B-splines it is not orthogonal.
 \begin{align*}
 C_{n\times n} &= P_n C P_n^T \\
 \norm{C_{n\times n}} = \norm{P_n C P_n^T} &\leq \norm{P_n^2}\norm{C} \\
 \norm{P_n} &=\sqrt{n} \\
 \frac{\norm{C_{n\times n}}}{n} &\leq \norm{C}
 \end{align*}
-
-
-
-%For the electron-Boltzmann equation, the generalized weak form of the collision operator can be written as follows (note: velocity should be normalized by the thermal velocity).
-%\begin{equation}
-%    L_{ij} = n_0 \int_{\R^3} \int_{S^2} (M(v^\prime) P_i(v)P_j(v^\prime)  - M(v) P_i(v) P_j(v) )  B(|v|,\omega) d\omega dv \label{eq:cOp}
-%\end{equation}
-%
-%\begin{equation}
-%    M_{ij} = \int_{\R^3} M(v) P_i(v)P_j(v) dv
-%\end{equation}
-%
-%In spherical coordinates, the above becomes, 
-%
-%\begin{align*}
-%    {L}_{k,l,m}^{p,q,s} &=n_0
-%    \myint_{0}^{+\infty} 
-%    v^2
-%    P^p \of{\frac{v}{\vth}} 
-%    \myint_{S^2}^{}
-%    \myint_{S^2}^{}
-%    B\of{v,\omega} Y^{qs}\of{v_\theta, v_\phi} 
-%     \times
-%    \\
-%    & \times
-%    \left(
-%    M\of{v^\prime} P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime}
-%    -
-%    M\of{v} P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi}
-%    \right)
-%    \diff{\omega}
-%    \diff{v_\omega}
-%    \diff{v} 
-%\end{align*}
-%
-%\begin{align*}
-%    {M}_{k,l,m}^{p,q,s} &=
-%    \myint_{0}^{+\infty} 
-%    v^2
-%    M\of{v} P^p \of{\frac{v}{\vth}}  P_k \of{\frac{v}{\vth}} \delta^{qs}_{lm}
-%    \diff{v} 
-%\end{align*}
 
 \subsection{Tensorized computation of ${L}_{k,l,m}^{p,q,s}$}
 
@@ -867,6 +704,9 @@ e^{-x^2} x^{2q-2} \lagp{q+1/2}{p}
 \left( q \lagp{q+1/2}{p} - 2x^2 \lagp{q+3/2}{p-1} \right)
 \end{align*}
 
+
+
+
 \clearpage
 \subsection{Lagrangian approach with operator splitting}
 \begin{align*}
@@ -1178,6 +1018,7 @@ Experimental setup summary.
 \newpage
 \appendix
 \section{Derivation of Collision operators}
+\label{sec:coll_op_derivation}
 \subsection{Binary reactions}
 \label{subsec:binary_reactions}
 We start with reactions of the type

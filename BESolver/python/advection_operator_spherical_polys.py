@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 def sph_harm_norm(l,m):
     if m == 0:
@@ -22,6 +23,23 @@ CpsiDphiP_max = np.load('polynomials/maxpoly_CpsiDphiP.npy')
 CpsiDphiM_max = np.load('polynomials/maxpoly_CpsiDphiM.npy')
 CphiDpsiP_max = np.load('polynomials/maxpoly_CphiDpsiP.npy')
 CphiDpsiM_max = np.load('polynomials/maxpoly_CphiDpsiM.npy')
+
+CpsiDphiP_max_frac = np.load('polynomials/maxpoly_frac_CpsiDphiP.npy')
+CpsiDphiM_max_frac = np.load('polynomials/maxpoly_frac_CpsiDphiM.npy')
+CphiDpsiP_max_frac = np.load('polynomials/maxpoly_frac_CphiDpsiP.npy')
+CphiDpsiM_max_frac = np.load('polynomials/maxpoly_frac_CphiDpsiM.npy')
+
+# l = 0
+# k = slice(0,16,1)
+# plt.subplot(2,2,1)
+# plt.plot(CpsiDphiP_max_frac[l,k,k])
+# plt.subplot(2,2,2)
+# plt.plot(CpsiDphiM_max_frac[l,k,k])
+# plt.subplot(2,2,3)
+# plt.plot(CphiDpsiP_max_frac[l,k,k])
+# plt.subplot(2,2,4)
+# plt.plot(CphiDpsiM_max_frac[l,k,k])
+# plt.show()
 
 def assemble_advection_matix_lp(Nr, sph_harm_lm, CpsiDphiP, CphiDpsiP, CpsiDphiM, CphiDpsiM):
 
@@ -66,3 +84,7 @@ def assemble_advection_matix_lp_max(Nr, sph_harm_lm):
 def assemble_advection_matix_lp_lag(Nr, sph_harm_lm):
 
     return assemble_advection_matix_lp(Nr, sph_harm_lm, CpsiDphiP_lag, CphiDpsiP_lag, CpsiDphiM_lag, CphiDpsiM_lag)
+
+def assemble_advection_matix_lp_max_energy(Nr, sph_harm_lm):
+
+    return assemble_advection_matix_lp(Nr, sph_harm_lm, CpsiDphiP_max_frac, CphiDpsiP_max_frac, CpsiDphiM_max_frac, CphiDpsiM_max_frac)

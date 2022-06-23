@@ -1,7 +1,7 @@
 clear;
 kmax = 300;
 krec = 5;
-G_all = 0:65;
+G_all = -0.5:1:10.5;
 
 gaussnodes_all = zeros(length(G_all), kmax*(kmax + 1)/2);
 gaussweights_all = zeros(length(G_all), kmax*(kmax + 1)/2);
@@ -125,10 +125,10 @@ for G_idx = 1:length(G_all)
 end
 
 % save results
-writematrix(a_all,['maxpoly_alpha_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
-writematrix(b_all,['maxpoly_beta_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
-writematrix(gaussnodes_all,['maxpoly_nodes_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
-writematrix(gaussweights_all,['maxpoly_weights_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
+writematrix(a_all,['maxpoly_frac_alpha_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
+writematrix(b_all,['maxpoly_frac_beta_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
+writematrix(gaussnodes_all,['maxpoly_frac_nodes_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
+writematrix(gaussweights_all,['maxpoly_frac_weights_',num2str(kmax),'_',num2str(G_all(end)),'.dat']);
 
 
 % %%

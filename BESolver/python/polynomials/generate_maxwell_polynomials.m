@@ -1,6 +1,6 @@
 clear;
 digits(16)
-G_all = 0:2:130;
+G_all = 0.5:1:20.5;
 ktarget = 300;
 kl = 1000;
 ku = 40000;
@@ -105,5 +105,5 @@ hold on
 semilogy(res)
 hold off
 
-writematrix(a_all,['maxpoly_alpha_upto',num2str(ktarget),'.dat']);
-writematrix(b_all,['maxpoly_beta_upto', num2str(ktarget),'.dat']);
+writematrix(a_all,['maxpoly_frac_alpha_upto',num2str(ktarget),'.dat']);
+writematrix(b_all,['maxpoly_frac_beta_upto', num2str(ktarget),'.dat']);

@@ -1176,6 +1176,52 @@ diagonalization?
 \end{align*}
 
 
+Assuming $f_0\of{\vect{v_0}}=\delta(\vect{v_0}-\vect{0})$, 
+\begin{align*}
+C^- = \myint_{R^3} \myint_{S^2}  
+B\of{\vect{v}_e^\prime, \vect{0}, \vect{\omega}} 
+f_e\of{\vect{v}_e^\prime} \delta\of{\vect{v}_e^\prime - \vect{v}_e} 
+\diff{\vect{v}_e^\prime} \diff{\vect{\omega}}. \\
+\end{align*} Let $B_0(\cdot,\cdot) \equiv B(\cdot,\vect{0},\cdot)$, then projecting into spherical harmonics, 
+\begin{align*}
+\myint_{S^2} C^- Y(\omega_{v_e}) \diff{\omega_{v_e}}& = 
+\myint_{R} \myint_{S^2} \myint_{S^2} 
+{v_e^\prime}^2 B_0\of{(v_e^\prime,\vect{\omega_{v_e}}), \vect{\omega}} \times \\
+&f_e\of{(v_e^\prime,\vect{\omega_{v_e}})} \delta\of{v_e^\prime - v_e} Y\of{\vect{\omega_{v_e}}} 
+\diff{v_e^\prime} \diff{\vect{\omega_{v_e}}} \diff{\vect{\omega}}. \\
+\end{align*} Similarly we can write the gain term, 
+\begin{align*}
+C^+ = \myint_{R^3} \myint_{S^2}  
+B_0\of{\vect{v}_e^\prime, \vect{\omega}} 
+f_e\of{\vect{v}_e^\prime} \delta\of{\vect{v}_e^{post}(\vect{v_e}^\prime,\vect{0},\omega)- \vect{v}_e} 
+\diff{\vect{v}_e^\prime} \diff{\vect{\omega}} 
+\end{align*}
+\begin{align*}
+\myint_{S^2} C^+ Y(\omega_{v_e}) \diff{\omega_{v_e}}& = \myint_{R} \myint_{S^2} \myint_{S^2}
+B_0\of{(v_e^\prime,\omega_{v_e}^\prime), \vect{\omega}} {v_e^\prime}^2 \times \\
+&f_e\of{(v_e^\prime,\omega_{v_e}^\prime)} \delta\of{v_e^{post}((v_e^\prime,\omega_{v_e}^\prime),\omega)- {v}_e} Y\of{\omega_{v^{post}}} \diff{v_e^\prime} \diff{\vect{\omega_{v_e}^\prime}} \diff{\vect{\omega}}\\
+&=\myint_{R} \myint_{S^2} \myint_{S^2}
+B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 \times \\
+&f_e\of{(v_e^\prime,\omega_{v_e})} \delta\of{v_e^{post}((v_e^\prime,\omega_{v_e}),\omega)- {v}_e} Y\of{\omega_{v^{post}}} \diff{v_e^\prime} \diff{\vect{\omega_{v_e}}} \diff{\vect{\omega}}
+\end{align*} Therefore, combined collision operator can be written as, 
+\begin{align*}
+\myint_{S^2} C Y\of{\omega_{v_e}} \diff{\omega_{v_e}}& = 
+\myint_{R} \myint_{S^2} \myint_{S^2} 
+B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 \times \\
+\Bigg(
+&\delta\of{v_e^{post}- {v}_e} Y\of{\omega_{v^{post}}} - \delta\of{v_e^\prime - v_e} Y\of{\omega_{v_e}}
+\Bigg)
+\diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v_e^\prime} 
+\end{align*}
+
+
+
+
+
+
+
+
+
 
 \newpage
 \section{Numerical evaluation}

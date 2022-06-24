@@ -989,7 +989,7 @@ Overall algorithm 2: given $\vect{v}_0$, $a_{klm}$ at $t_n$ (without temperature
 %\partial_t \tilde{f} = C[\tilde{f}]
 %\end{align*}
 \clearpage
-\section{Projection of Boltzmann equation onto spherical harmoincs (only left-hand-side so far)}
+\section{Projection of Boltzmann equation onto spherical harmoincs } %(only left-hand-side so far)
 Advection (acceleration) term
 \begin{align*}
 \partial_t f - \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
@@ -1207,17 +1207,46 @@ B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 \times \\
 \begin{align*}
 \myint_{S^2} C Y\of{\omega_{v_e}} \diff{\omega_{v_e}}& = 
 \myint_{R} \myint_{S^2} \myint_{S^2} 
-B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 \times \\
+B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 f_e\of{(v_e^\prime,\omega_{v_e})} \times \\
 \Bigg(
 &\delta\of{v_e^{post}- {v}_e} Y\of{\omega_{v^{post}}} - \delta\of{v_e^\prime - v_e} Y\of{\omega_{v_e}}
 \Bigg)
 \diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v_e^\prime} 
 \end{align*}
 
-
-
-
-
+Let $F_0\of{v} = f_{0,0}\of{v} + f_{1,0}\of{v}$ and $F_1\of{v} = f_{0,0}\of{v} - f_{1,0}\of{v}$ and $c=\frac{E}{\sqrt{3}}$. 
+\begin{align*}
+\partial_t F_0  - c \partial_v F_0 + 2c \frac{1}{v} f_{1,0} &= ... \\
+\partial_t F_1  + c \partial_v F_1 + 2c \frac{1}{v} f_{1,0} &= ...
+\end{align*} Projects to $\psi\of{v}$ radial test functions for $v\in V \subset [0,\infty]$.
+\begin{align*}
+\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v} -& c \myint_{V} \partial_v F_0 \of{v} v^2 \psi\of{v}\diff{v} + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
+\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v}  -c  &\Big[F_0\of{v} v^2 \psi\of{v}\Big]_{\partial V}  + c \myint_{V} F_0\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\
+ +& 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
+\end{align*}
+Similarly for $F_1\of{v}$ we can write, 
+\begin{align*}
+\myint_{V} \partial_t F_1 \of{v} v^2 \psi\of{v} \diff{v}  +c  \Big[F_1\of{v} v^2 \psi\of{v}\Big]_{\partial V}  - c \myint_{V} F_1\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\ + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ...
+\end{align*}
+Let $\phi_{k}\of{v}$ be the trial functions for expansion and $\psi_{p}\of{v}$ be the corresponding test functions. Let $F_0\of{v}=\sum_{k} h_k \phi_k\of{v}$ and  $F_1\of{v}=\sum_{k} g_k \phi_{k}\of{v}$. Notice that $f_{0,0} = \frac{1}{2}(F_{0} + F{1})$, $f_{1,0} = \frac{1}{2}(F_{0} - F{1})$.
+Using the above expansion and discretizing the above we can write, 
+\begin{align*}
+M_{pk} \partial_t \vect{h}  - c\Big[F_0^*\of{v} v^2 \psi\of{v}\Big]_{\partial V} + c (D_{pk} + 2 S_{pk}) \vect{h} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
+M_{pk} \partial_t \vect{g}  + c\Big[F_1^*\of{v} v^2 \psi\of{v}\Big]_{\partial V} - c (D_{pk} + 2 S_{pk}) \vect{g} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
+\end{align*} where the corresponding operators are defined as bellow. 
+\begin{align*}
+	M_{pk} &= \myint_{V} v^2 \psi_{p}\of{v} \phi_{k}\of{v} dv \\
+	D_{pk} &= \myint_{V} v^2 \partial_v \psi_{p}\of{v} \phi_{k}\of{v} dv \\
+	S_{pk} &= \myint_{V} v \psi_{p}\of{v} \phi_{k}\of{v} dv \\
+\end{align*} The source terms (RHS) of the equations should come from the collision operator. The collision operator with the above basis function can be written as, 
+\begin{align*}
+C^{pqs}_{klm} &= \myint_{V}\myint_{S^2}\myint_{S^2} B_0\of{(v_e,\omega_{v_e}), \vect{\omega}} {v_e}^2 \\
+&\phi_{k}\of{v} Y_{lm}(\omega_{v_e}) \Bigg( \psi_p\of{v^{post}_e} Y_{qs}\of{\omega_{v^{post}}} -\psi_{p}(v_e)Y_{qs}\of{\omega_v} \Bigg) \diff{v_e} \diff{\omega_{v_e}}\diff{\omega}
+\end{align*}. Therefore we can write, 
+\begin{align*}
+M_{pk} \partial_t \vect{h}  - c\Big[F_0^*\of{v} v^2 \psi\of{v}\Big]_{\partial V} + c (D_{pk} + 2 S_{pk}) \vect{h} + c S_{pk} (\vect{h}-\vect{g})  &= C^{p00}_{k00} \frac{1}{2} (\vect{h} + \vect{g}) + C^{p00}_{k10} \frac{1}{2} (\vect{h} - \vect{g})  \\
+M_{pk} \partial_t \vect{g}  + c\Big[F_1^*\of{v} v^2 \psi\of{v}\Big]_{\partial V} - c (D_{pk} + 2 S_{pk}) \vect{g} + c S_{pk} (\vect{h}-\vect{g})  &= C^{p10}_{k00} \frac{1}{2} (\vect{h} + \vect{g}) + C^{p10}_{k10} \frac{1}{2} (\vect{h} - \vect{g}) \\
+\end{align*} where $F^*_{\{0,1\}}$ denotes the flux terms for domain boundaries. 
 
 
 

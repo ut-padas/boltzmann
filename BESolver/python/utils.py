@@ -86,7 +86,7 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+            NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
         
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -154,7 +154,7 @@ def mean_velocity_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_V
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+            NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
 
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -275,7 +275,7 @@ def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+            NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
         
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -346,7 +346,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+            NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
         
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -441,7 +441,7 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+            NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
     
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -643,7 +643,7 @@ def vcenter_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw,vth
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+            NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
 
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -727,7 +727,7 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
     if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-        NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+        NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
     
     NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
     NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
@@ -786,7 +786,7 @@ def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, ma
     if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-        NUM_Q_VR     =  basis.BSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+        NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
 
     NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
     NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
@@ -894,8 +894,8 @@ def compute_radial_components(ev_pts, spec_sp : spec_spherical.SpectralExpansion
         if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
             output[l_idx, :] = basis.maxpoly.maxpolyserieseval(2*lm[0]+2, vr, cf[l_idx::num_sph_harm])*(vr**lm[0])
         else:
-            # sph_factor = spec_sp.basis_eval_spherical(0,0,lm[0],lm[1])
-            sph_factor = 1
+            sph_factor = spec_sp.basis_eval_spherical(0,0,lm[0],lm[1])
+            #sph_factor = 1
             #print("l,m=(%d,%d)=%.8E" %(lm[0], lm[1], sph_factor))
             Vqr=spec_sp.Vq_r(vr,lm[0],1)
             output[l_idx, :] = sph_factor * np.dot( cf[l_idx::num_sph_harm], Vqr)

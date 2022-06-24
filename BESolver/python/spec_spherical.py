@@ -126,7 +126,7 @@ class SpectralExpansionSpherical:
 
 
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            [gx, gw] = self._basis_p.Gauss_Pn(basis.BSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
             l_modes = list(set([l for l,_ in self._sph_harm_lm]))
             
             mm=np.zeros((num_p*num_sh, num_p*num_sh))

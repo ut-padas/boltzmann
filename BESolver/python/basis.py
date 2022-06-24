@@ -266,8 +266,9 @@ class XlBSpline(Basis):
             # self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
 
             self._t          = (k_domain[0])*np.ones(spline_order)
-            self._t          = np.append(self._t,np.linspace(0 , k_domain[1] , num_k-2*spline_order -1 , endpoint=False))
-            self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
+            self._t          = np.append(self._t,np.linspace(k_domain[0] , k_domain[1] , num_k-2*spline_order -1 , endpoint=False))
+            self._t          = np.append(self._t, k_domain[1]*np.ones(spline_order+1))
+
         else:
             assert num_k == len(knots_vec) , "specified knot vec of length %d does not match with the required knot points %d"%(len(knots_vec),num_k) 
             self._t = np.copy(knots_vec)
@@ -279,10 +280,6 @@ class XlBSpline(Basis):
                     idx   = np.argmin(abs(self._t - sg))
                     self._t[idx] = sg
         
-        for i in range(spline_order+1):
-            self._t[i]=k_domain[0]
-            self._t[-(i+1)]=k_domain[1]
-
         print("bsplines knots:")
         print(self._t)
         
@@ -295,7 +292,7 @@ class XlBSpline(Basis):
 
 
     def Pn(self,deg,domain=None,window=None):
-        return lambda x,l : np.nan_to_num(self._splines[deg](x)) * x**(l)
+        return lambda x,l : np.nan_to_num(self._splines[deg](x))
         #return lambda x,l : np.nan_to_num(self._splines[deg](x)) if deg>=l else np.nan_to_num(self._splines[deg](x)) * x**(l-deg)
         
         
@@ -305,13 +302,12 @@ class XlBSpline(Basis):
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
-        assert np.allclose(self._t[self._sp_order],0), "specified knot vector element %d is not aligned with zero"%(self._sp_order)
         num_intervals = self._num_c_pts -1
         assert deg % num_intervals == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,num_intervals)
         qx = np.zeros(deg)
         qw = np.zeros(deg)
         for i in range(self._sp_order, self._sp_order + num_intervals):
-            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = 0.5 * (self._t[i+1] - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1] + self._t[i]), 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights #uniform_simpson((self._t[i], self._t[i+1]),self._q_per_knot)
+            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = 0.5 * (self._t[i+1] - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1] + self._t[i]), 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights 
         
         # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
         # print(qx.shape)
@@ -356,7 +352,8 @@ class XlBSpline(Basis):
             raise NotImplementedError
         
         b_deriv = self.derivative(deg,1)
-        return lambda x, l: b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
+        return lambda x,l : b_deriv(x)
+        #return lambda x, l: b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
         #return lambda x,l : b_deriv(x) if deg>=l else x**(l-deg) *b_deriv(x) + self.Pn(deg)(x,0) * (l-deg) * x**(l-deg-1)
 
 

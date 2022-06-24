@@ -6,6 +6,7 @@ import numpy as np
 import enum
 import abc
 import maxpoly
+import maxpoly_frac
 import lagpoly
 import scipy.interpolate
 import quadpy
@@ -26,6 +27,7 @@ class BasisType(enum.Enum):
     LEGENDRE = 4
     LAGUERRE = 5
     SPLINES  = 6
+    MAXWELLIAN_ENERGY_POLY=7
 
 
 class Basis(abc.ABC):
@@ -134,6 +136,30 @@ class Maxwell(Basis):
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
         return maxpoly.maxpolygauss(max(1,deg-1))
+
+    def Wx(self):
+        """
+        Weight function w.r.t. the polynomials are orthogonal
+        """
+        return maxpoly.maxpolyweight
+        
+class MaxwellEnergy(Basis):
+    def __init__(self):
+        self._basis_type = BasisType.MAXWELLIAN_ENERGY_POLY
+
+    def Pn(self,deg,domain=None,window=None):
+        """
+        returns 1d Maxwell polynomial the specified degree 
+        """
+        return maxpoly_frac.basis(deg)
+    
+    def Gauss_Pn(self,deg):
+        """
+        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
+        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
+        """
+        [gmx,gmw] = maxpoly_frac.maxpolygauss(max(1,deg-1))
+        return [np.sqrt(gmx), .5*gmw]
 
     def Wx(self):
         """

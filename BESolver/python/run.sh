@@ -11,4 +11,15 @@
 #/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 500
 #/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 1000
 #/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 5000
-/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 10000
+#/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 10000
+
+
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 50
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 300
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 400
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 500
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 600
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 700
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 800
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 900
+/usr/bin/python3.8 /home/dbochkov/Dropbox/Code/boltzmann/BESolver/python/collision_driver_spherical_eulerian.py -E 1000

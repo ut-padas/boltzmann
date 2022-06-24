@@ -566,12 +566,12 @@ class Collisions(abc.ABC):
             c =-1.40391999e-15
             d = 9.97783291e-14
             e =-3.82647294e-12
-            f =-5.70400826e+01
+            f =-5.70400826e+01-0.535743163918511
 
 
             trans_width = 50
-            # z = ((ev+1e-15)-(15.76))/(trans_width)
-            z = (np.log(ev+1e-15)-np.log(15.76))/np.log(trans_width)
+            z = ((ev+1e-15)-(15.76))/(trans_width)
+            # z = (np.log(ev+1e-15)-np.log(15.76))/np.log(trans_width)
 
             transition = np.zeros_like(z)
             gt0 = z>0
@@ -603,7 +603,7 @@ class Collisions(abc.ABC):
             c =-1.40391999e-15
             d = 9.97783291e-14
             e =-3.82647294e-12
-            f =-5.70400826e+01
+            f =-5.70400826e+01-0.535743163918511
 
 
             trans_width = 3
@@ -623,7 +623,7 @@ class Collisions(abc.ABC):
             x=ev-f
             y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
             y = y * transition
-            y[y<0] = 0
+            y[y<=0] = 0
             
             # y[ev<=15.76]=0
             # y[ev>1e3]=0

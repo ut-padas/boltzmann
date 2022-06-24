@@ -21,7 +21,8 @@ def idx_e(p):
 def lagpolygauss(p):
     return [maxpoly_nodes[idx_s(p):idx_e(p)+1], maxpoly_weights[idx_s(p):idx_e(p)+1]]
 
-lagpolyweight = lambda x: 4/np.sqrt(np.pi)*x**2*np.exp(-x**2)
+# lagpolyweight = lambda x: 4/np.sqrt(np.pi)*x**2*np.exp(-x**2)
+lagpolyweight = lambda x: x**2*np.exp(-x**2)
 
 # quick and dirty 
 # probably should reimplement this using ABCPolyBase

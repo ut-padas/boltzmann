@@ -1159,12 +1159,60 @@ or more explicitly:
 \begin{align*}
 \frac{d}{dt} f_{0,0} - E 
 \left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{1,0} 
-+  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= \ldots
++  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= C^{00}_{00} f_{0,0} + C^{00}_{10} f_{1,0}
 \\
 \frac{d}{dt} f_{1,0} - E 
-\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{0,0} \right) &= \ldots
+\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{0,0} \right) &= C^{10}_{00} f_{0,0} + C^{10}_{10} f_{1,0}
+\end{align*} were $C^{qs}_{lm}$ denotes the projection of the collision operator to $Y_{qs}$, which can be written as, 
+\begin{align*}
+C^{qs}_{lm} &=\myint_{S^2} C Y_{qs}\of{\omega_{v}} \diff{\omega_{v}}= 
+\myint_{R} \myint_{S^2} \myint_{S^2} 
+B_0\of{(v^\prime,\omega_{v}), \vect{\omega}} {v^\prime}^2 Y_{lm}\of{\omega_{v}} \times \\
+\Bigg(
+&\delta\of{v^{post}- {v}} Y_{qs}\of{\omega_{v^{post}}} - \delta\of{v^\prime - v} Y_{qs}\of{\omega_{v}}
+\Bigg)
+\diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v^\prime} 
 \end{align*}
-diagonalization?
+Let $f_{lm}$ be the lm modes used, 
+\begin{align*}
+\partial_tf_{qs}
+-E A^{qs}_{lm} \partial_v f_{lm}  
+-E B^{qs}_{lm} \frac{1}{v}f_{lm}  = 
+C^{qs}_{lm}f_{lm}
+\end{align*}
+\textbf{Note}: Due to the orthogonality structure in the radial advection coordinate diagonals will always be zero, with a banded matrix with width of equal to 1. 
+
+For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
+\begin{align*}
+&\partial_t M^{p}_{k} f_{kqs} -EA^{qs}_{lm}\of{[f_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})f_{klm}} -E B^{qs}_{lm} S^{p}_{k} f_{klm} = C^{pqs}_{klm} f_{klm}  \\
+&\partial_t M^{p}_{k} f_{kqs} = -E \of{\of{2 A^{qs}_{lm} -B^{qs}_{lm}} S^p_{k} + A^{qs}_{lm} D^{p}_{k}}f_{klm} + C^{pqs}_{klm} f_{klm} + EA^{qs}_{lm}[f_{lm}^*(v) v^2 \boldsymbol{\psi}\of{v}]_{D_l}^{D^r}
+\end{align*} where, 
+\begin{align*}
+M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
+\end{align*} 
+The flux term (up-winding, down-winding) determined by $A^{qs}_{lm}$ sign of the eigenvalues. 
+
+Diagonalize then discretize in the radial coordinate. 
+Let $A^{qs}_{lm}=Q\Lambda^{qs}_{lm} Q^T$, let $Q^T f_{km}= y_{lm}$
+\begin{align*}
+\partial_t y_{qs}
+-E\Lambda^{qs}_{lm} \partial_v y_{lm} 
+-E Q^T B^{qs}_{lm} \frac{1}{v} Q y_{lm} = 
+Q^T C^{qs}_{lm} Q y_{lm}
+\end{align*} 
+For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $y_{lm}(v)=\sum_{k} y_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ we can write, 
+\begin{align*}
+&\partial_t M^{p}_{k} y_{kqs} -E\Lambda^{qs}_{lm}\of{[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})y_{klm}} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm}  \\
+&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
+&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
+\end{align*}
+
+
+\newpage
+diagonalization (manually try to diagonalize, hard to keep track of the other terms. )?
 \begin{align*}
 \frac{d}{dt} \left( f_{0,0} + f_{1,0} \right) - E 
 \left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} \left( f_{0,0} + f_{1,0} \right) 
@@ -1175,7 +1223,33 @@ diagonalization?
 +  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= \ldots
 \end{align*}
 
+Let $F_0\of{v} = f_{0,0}\of{v} + f_{1,0}\of{v}$ and $F_1\of{v} = f_{0,0}\of{v} - f_{1,0}\of{v}$ and $c=\frac{E}{\sqrt{3}}$. 
+\begin{align*}
+\partial_t F_0  - c \partial_v F_0 + 2c \frac{1}{v} f_{1,0} &= ... \\
+\partial_t F_1  + c \partial_v F_1 + 2c \frac{1}{v} f_{1,0} &= ...
+\end{align*} Projects to $\psi\of{v}$ radial test functions for $v\in V =[v_L,v_R]\subset [0,\infty]$.
+\begin{align*}
+\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v} -& c \myint_{V} \partial_v F_0 \of{v} v^2 \psi\of{v}\diff{v} + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
+\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v}  -c  &\Big[F_0\of{v} v^2 \psi\of{v}\Big]_{v_L}^{v_R}  + c \myint_{V} F_0\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\
+ +& 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
+\end{align*}
+Similarly for $F_1\of{v}$ we can write, 
+\begin{align*}
+\myint_{V} \partial_t F_1 \of{v} v^2 \psi\of{v} \diff{v}  +c  \Big[F_1\of{v} v^2 \psi\of{v}\Big]_{v_L}^{v_R}  - c \myint_{V} F_1\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\ + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ...
+\end{align*}
 
+For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $F_0\of{v}=\sum_{k} h_k \phi_k\of{\frac{v}{v_{th}}}$ and  $F_1\of{v}=\sum_{k} g_k \phi_{k}\of{\frac{v}{v_{th}}}$. Notice that $f_{0,0} = \frac{1}{2}(F_{0} + F{1})$, $f_{1,0} = \frac{1}{2}(F_{0} - F{1})$.
+Using the above expansion and discretizing the above we can write, 
+\begin{align*}
+M_{pk} \partial_t \vect{h}  - c v_{th}^2 \Big[\vect{h}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} + c (D_{pk} + 2 S_{pk}) \vect{h} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
+M_{pk} \partial_t \vect{g}  + cv_{th}^2 \Big[\vect{g}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} - c (D_{pk} + 2 S_{pk}) \vect{g} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
+\end{align*} where the corresponding operators are defined as bellow (with $x=\frac{v}{v_{th}}$ normalized coordinates). 
+\begin{align*}
+	M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+	D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+	S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+	\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
+\end{align*} The source terms (RHS) of the equations should come from the collision operator. The collision operator with the above basis function can be written as,
 Assuming $f_0\of{\vect{v_0}}=\delta(\vect{v_0}-\vect{0})$, 
 \begin{align*}
 C^- = \myint_{R^3} \myint_{S^2}  
@@ -1212,35 +1286,7 @@ B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 f_e\of{(v_e^\pri
 &\delta\of{v_e^{post}- {v}_e} Y\of{\omega_{v^{post}}} - \delta\of{v_e^\prime - v_e} Y\of{\omega_{v_e}}
 \Bigg)
 \diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v_e^\prime} 
-\end{align*}
-
-Let $F_0\of{v} = f_{0,0}\of{v} + f_{1,0}\of{v}$ and $F_1\of{v} = f_{0,0}\of{v} - f_{1,0}\of{v}$ and $c=\frac{E}{\sqrt{3}}$. 
-\begin{align*}
-\partial_t F_0  - c \partial_v F_0 + 2c \frac{1}{v} f_{1,0} &= ... \\
-\partial_t F_1  + c \partial_v F_1 + 2c \frac{1}{v} f_{1,0} &= ...
-\end{align*} Projects to $\psi\of{v}$ radial test functions for $v\in V =[v_L,v_R]\subset [0,\infty]$.
-\begin{align*}
-\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v} -& c \myint_{V} \partial_v F_0 \of{v} v^2 \psi\of{v}\diff{v} + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
-\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v}  -c  &\Big[F_0\of{v} v^2 \psi\of{v}\Big]_{v_L}^{v_R}  + c \myint_{V} F_0\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\
- +& 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
-\end{align*}
-Similarly for $F_1\of{v}$ we can write, 
-\begin{align*}
-\myint_{V} \partial_t F_1 \of{v} v^2 \psi\of{v} \diff{v}  +c  \Big[F_1\of{v} v^2 \psi\of{v}\Big]_{v_L}^{v_R}  - c \myint_{V} F_1\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\ + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ...
-\end{align*}
-
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $F_0\of{v}=\sum_{k} h_k \phi_k\of{\frac{v}{v_{th}}}$ and  $F_1\of{v}=\sum_{k} g_k \phi_{k}\of{\frac{v}{v_{th}}}$. Notice that $f_{0,0} = \frac{1}{2}(F_{0} + F{1})$, $f_{1,0} = \frac{1}{2}(F_{0} - F{1})$.
-Using the above expansion and discretizing the above we can write, 
-\begin{align*}
-M_{pk} \partial_t \vect{h}  - c v_{th}^2 \Big[\vect{h}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} + c (D_{pk} + 2 S_{pk}) \vect{h} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
-M_{pk} \partial_t \vect{g}  + cv_{th}^2 \Big[\vect{g}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} - c (D_{pk} + 2 S_{pk}) \vect{g} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
-\end{align*} where the corresponding operators are defined as bellow (with $x=\frac{v}{v_{th}}$ normalized coordinates). 
-\begin{align*}
-	M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
-\end{align*} The source terms (RHS) of the equations should come from the collision operator. The collision operator with the above basis function can be written as, 
+\end{align*} 
 \begin{align*}
 C^{pqs}_{klm} &= \myint_{V}\myint_{S^2}\myint_{S^2} B_0\of{(v_e,\omega_{v_e}), \vect{\omega}} {v_e}^2 \\
 &\phi_{k}\of{v} Y_{lm}(\omega_{v_e}) \Bigg( \psi_p\of{v^{post}_e} Y_{qs}\of{\omega_{v^{post}}} -\psi_{p}(v_e)Y_{qs}\of{\omega_v} \Bigg) \diff{v_e} \diff{\omega_{v_e}}\diff{\omega}

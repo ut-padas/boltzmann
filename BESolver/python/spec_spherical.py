@@ -253,21 +253,6 @@ class SpectralExpansionSpherical:
             
             [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
             
-            
-            # Vr  = np.zeros(tuple([num_l,num_p])+gx.shape)
-            # Vdr = np.zeros(tuple([num_l,num_p])+gx.shape)
-            # for i,l in enumerate(lmodes):
-            #     Vr[i]  = self.Vq_r(gx,l)
-            #     Vdr[i] = self.Vdq_r(gx,l,d_order=1)
-                
-            # mr = gx**2 
-            # mm1 = np.array([mr * Vr[pl,p,:] * Vdr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
-            # mm1 = np.dot(mm1,gw)
-            
-            # mr = gx
-            # mm2 = np.array([mr * Vr[pl,p,:] * Vr[kl,k,:] for p in range(num_p) for k in range(num_p) for pl in range(num_l) for kl in range(num_l) ]).reshape(num_p,num_p,num_l,num_l,-1)
-            # mm2 = np.dot(mm2,gw)
-
             mm1=np.zeros((num_p,num_p,num_l,num_l))
             mm2=np.zeros((num_p,num_p,num_l,num_l))
 
@@ -305,5 +290,138 @@ class SpectralExpansionSpherical:
         else:
             raise NotImplementedError
 
+    def compute_advection_matix_ibp(self):
+        if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
+            return assemble_advection_matix_lp_max(self._p, self._sph_harm_lm)
+        elif self.get_radial_basis_type() == basis.BasisType.LAGUERRE:
+            return assemble_advection_matix_lp_lag(self._p, self._sph_harm_lm)
+        elif self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
+            return assemble_advection_matix_lp_max_energy(self._p, self._sph_harm_lm)
+        if self.get_radial_basis_type() == basis.BasisType.SPLINES:
+            num_p  = self._p+1
+            num_sh = len(self._sph_harm_lm)
+    
+            lmodes = list(set([l for l,_ in self._sph_harm_lm]))
+            num_l  = len(lmodes)
+            l_max  = lmodes[-1]
+            
+            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+            
+            
+            D_pk=np.zeros((num_p,num_p))
+            S_pk=np.zeros((num_p,num_p))
+        
+            for p in range(num_p):
+                for k in range(num_p):
+                    D_pk[p,k] = np.dot((gx**2) * self.basis_derivative_eval_radial(gx,p,0,1) * self.basis_eval_radial(gx,k,0), gw)
+                    S_pk[p,k] = np.dot(gx * self.basis_eval_radial(gx,p,0) * self.basis_eval_radial(gx,k,0), gw)
+            
 
+            A_qs_lm=np.zeros((num_sh,num_sh))
+            B_qs_lm=np.zeros((num_sh,num_sh))
+
+            for qs_idx,qs in enumerate(self._sph_harm_lm):
+                lm   =  [qs[0]+1, qs[1]]
+                if lm in self._sph_harm_lm:
+                    lm_idx = self._sph_harm_lm.index(lm)
+                    A_qs_lm[qs_idx,lm_idx] = AM(lm[0],lm[1])
+                    B_qs_lm[qs_idx,lm_idx] = AD(lm[0],lm[1])
+
+                lm     =  [qs[0]-1, qs[1]]
+                if lm in self._sph_harm_lm:
+                    lm_idx = self._sph_harm_lm.index(lm)
+                    A_qs_lm[qs_idx,lm_idx] = BM(lm[0],lm[1])
+                    B_qs_lm[qs_idx,lm_idx] = BD(lm[0],lm[1])
+
+            eA, qA = np.linalg.eig(A_qs_lm)
+            eA     = np.diag(eA)
+            # eA=A_qs_lm
+            # qA=np.eye(A_qs_lm.shape[0])
+
+            #print("eig: ", np.linalg.norm(A_qs_lm- np.matmul(qA, np.matmul(eA, np.transpose(qA)))))
+            S_qs_lm = (2 * eA  - np.matmul(np.transpose(qA), np.matmul(B_qs_lm, qA)))
+            D_qs_km = eA
+
+            #S_qs_lm = (2 * A_qs_lm - B_qs_lm)
+            #D_qs_km = A_qs_lm
+
+            
+            
+            advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
+            for qs_idx,qs in enumerate(self._sph_harm_lm):
+                for lm_idx,lm in enumerate(self._sph_harm_lm):
+                    advec_mat[:,qs_idx,:,lm_idx] = S_pk[:,:] * S_qs_lm[qs_idx, lm_idx]  +  D_pk[:,:] * D_qs_km [qs_idx, lm_idx] 
+
+
+            advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
+
+            k_vec    = self._basis_p._t
+            dg_idx   = self._basis_p._dg_idx
+            sp_order = self._basis_p._sp_order
+
+            f_lr  = np.eye(advec_mat.shape[0])
+            f_rl  = np.eye(advec_mat.shape[0])
+
+            # left to right flux operator
+            for lm_idx,lm in enumerate(self._sph_harm_lm):
+                f_lr[dg_idx[2] * num_sh + lm_idx, :] = 0
+            
+            for lm_idx,lm in enumerate(self._sph_harm_lm):
+                f_lr[dg_idx[2] * num_sh + lm_idx, dg_idx[1] * num_sh + lm_idx] = 1
+
+            # right to left flux operator
+            for lm_idx,lm in enumerate(self._sph_harm_lm):
+                f_rl[dg_idx[1] * num_sh + lm_idx, :] = 0
+            
+            for lm_idx,lm in enumerate(self._sph_harm_lm):
+                f_rl[dg_idx[1] * num_sh + lm_idx, dg_idx[2] * num_sh + lm_idx] = 1
+
+            #print(f_lr)
+            flux_adv=np.zeros_like(advec_mat)
+
+            for i in range(0,len(dg_idx)//2):
+                ib = dg_idx[2*i]
+                ie = dg_idx[2*i+1]
+                eps= np.finfo(float).eps
+                kd = (k_vec[ib], k_vec[ie + sp_order+1])
+
+                
+                ff1 = np.zeros((num_p,num_p))
+                ff0 = np.zeros((num_p,num_p))
+                
+                for p in range(num_p):
+                    for k in range(num_p):
+                        if k_vec[p + sp_order]==kd[1] and k_vec[k + sp_order]==kd[1] and k_vec[k + sp_order]!=k_vec[-1]:
+                            ff1[p,k] = kd[1]**2
+                        else:
+                            ff1[p,k] = 0
+
+                for p in range(num_p):
+                    for k in range(num_p):
+                        if k_vec[p + sp_order]==kd[0] and k_vec[k + sp_order]==kd[0] and k_vec[k + sp_order]!=k_vec[-1]:
+                            ff0[p,k] = kd[0]**2
+                        else:
+                            ff0[p,k] = 0
+
+
+                # print(ff1)
+                # print(ff0)
+                # print(ff1-ff0)
+
+                for lm_idx,lm in enumerate(self._sph_harm_lm):
+                    if eA[lm_idx, lm_idx]>0:
+                        f_op=f_lr
+                    else:
+                        f_op=f_rl
+
+                    for p in range(num_p):
+                        for k in range(num_p):
+                            flux_adv[p * num_sh + lm_idx, k * num_sh + lm_idx] = eA[lm_idx, lm_idx] * (ff1[p,k]  - ff0[p,k]) * f_op[p*num_sh + lm_idx, k*num_sh + lm_idx] 
+
+            print(flux_adv)
+            advec_mat -=flux_adv
+
+            return advec_mat, eA, qA
+        else:
+            raise NotImplementedError
 

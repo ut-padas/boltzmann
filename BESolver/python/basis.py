@@ -294,10 +294,12 @@ class XlBSpline(Basis):
             self._t          = (k_domain[0])*np.ones(spline_order)
             self._t          = np.append(self._t,np.linspace(k_domain[0] , k_domain[1] , num_k-2*spline_order -1 , endpoint=False))
             self._t          = np.append(self._t, k_domain[1]*np.ones(spline_order+1))
+            self._kdomain    = (k_domain[0], k_domain[1])
 
         else:
             assert num_k == len(knots_vec) , "specified knot vec of length %d does not match with the required knot points %d"%(len(knots_vec),num_k) 
             self._t = np.copy(knots_vec)
+            self._kdomain    = (self._t[0], self._t[-1])
             
 
         if(sig_pts is not None):
@@ -313,6 +315,14 @@ class XlBSpline(Basis):
         self._sp_order   = spline_order
         self._q_per_knot = XLBSPLINE_NUM_Q_PTS_PER_KNOT
         self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(num_p)]
+
+        self._dg_idx     = list()
+        for i in range(num_p):
+            if len(np.unique(self._t[i:i+spline_order+2])) < len(self._t[i:i+spline_order+2]):
+                self._dg_idx.append(i)
+
+        print(self._dg_idx)
+
         self._scheme     = quadpy.c1.gauss_legendre(self._q_per_knot)
         
 

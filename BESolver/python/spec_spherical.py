@@ -344,9 +344,6 @@ class SpectralExpansionSpherical:
 
             #S_qs_lm = (2 * A_qs_lm - B_qs_lm)
             #D_qs_km = A_qs_lm
-
-            
-            
             advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
             for qs_idx,qs in enumerate(self._sph_harm_lm):
                 for lm_idx,lm in enumerate(self._sph_harm_lm):
@@ -354,73 +351,102 @@ class SpectralExpansionSpherical:
 
 
             advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
-
+            
             k_vec    = self._basis_p._t
             dg_idx   = self._basis_p._dg_idx
             sp_order = self._basis_p._sp_order
 
-            f_lr  = np.eye(advec_mat.shape[0])
-            f_rl  = np.eye(advec_mat.shape[0])
 
-            # left to right flux operator
-            for lm_idx,lm in enumerate(self._sph_harm_lm):
-                f_lr[dg_idx[2] * num_sh + lm_idx, :] = 0
-            
-            for lm_idx,lm in enumerate(self._sph_harm_lm):
-                f_lr[dg_idx[2] * num_sh + lm_idx, dg_idx[1] * num_sh + lm_idx] = 1
+            if len(dg_idx)>=4:
+                # flux reconstruction operators
+                f_lr  = np.eye(num_p) 
+                f_rl  = np.eye(num_p) 
 
-            # right to left flux operator
-            for lm_idx,lm in enumerate(self._sph_harm_lm):
-                f_rl[dg_idx[1] * num_sh + lm_idx, :] = 0
-            
-            for lm_idx,lm in enumerate(self._sph_harm_lm):
-                f_rl[dg_idx[1] * num_sh + lm_idx, dg_idx[2] * num_sh + lm_idx] = 1
+                # left to right flux reconstruction
+                f_lr[dg_idx[2]:, :]         = 0
 
-            #print(f_lr)
-            flux_adv=np.zeros_like(advec_mat)
+                # right to left flux reconstruction
+                f_rl[0 : dg_idx[1] + 1 , :] = 0
+                # print("l to r")
+                # print(f_lr)
+                # print("r to l")
+                # print(f_rl)
 
-            for i in range(0,len(dg_idx)//2):
-                ib = dg_idx[2*i]
-                ie = dg_idx[2*i+1]
-                eps= np.finfo(float).eps
-                kd = (k_vec[ib], k_vec[ie + sp_order+1])
+                # face loop
+                flux_mat=np.zeros_like(advec_mat)
+                face_ids=[(1,2)]
+                for f in face_ids:
+                    fx = k_vec[dg_idx[f[0]] + sp_order]
+                    assert fx== k_vec[dg_idx[f[1]] + sp_order], "flux assembly face coords does not match"
+                    eps= 2*np.finfo(float).eps
+
+                    d1 = (dg_idx[f[0]-1], dg_idx[f[0]+1])
+                    d2 = (dg_idx[f[1]], dg_idx[f[1]+1])
+
+                    f_pk_left  = np.zeros(num_p) 
+                    f_pk_right = np.zeros(num_p) 
+
+                    v_fx=np.array([self.basis_eval_radial(fx-eps,p,0) for p in range(num_p)])
+                    
+                    v_fx[v_fx<1e-10] = 0
+                    v_fx[v_fx>1-eps] = 1.0
+                    v_fx=v_fx.reshape(1,num_p)
+                    
+                    f_pk_left = np.matmul(np.transpose(v_fx),v_fx) * fx**2
+
+                    v_fx=np.array([self.basis_eval_radial(fx+eps,p,0) for p in range(num_p)])
+                    v_fx[v_fx<1e-10] = 0
+                    v_fx[v_fx>1-eps] = 1.0
+                    v_fx=v_fx.reshape(1,num_p)
+                    
+                    f_pk_right = np.matmul(np.transpose(v_fx),v_fx) * fx**2
+                    
+                    flux_from_left  = np.matmul(f_pk_left, f_lr)
+                    flux_from_right = np.matmul(f_pk_right, f_rl)
+
+                    #print(flux_from_left)
+                    #print(flux_from_right)
+                    
+                    for lm_idx,lm in enumerate(self._sph_harm_lm):
+                        if eA[lm_idx, lm_idx]>0:
+                            for k in range(num_p):
+                                flux_mat[dg_idx[f[0]] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flux_from_left[dg_idx[f[0]],k]
+                                flux_mat[dg_idx[f[1]] * num_sh + lm_idx, k*num_sh + lm_idx] -= eA[lm_idx, lm_idx] * flux_from_left[dg_idx[f[0]],k]
+                            
+                        else:
+                            for k in range(num_p):
+                                flux_mat[dg_idx[f[1]] * num_sh + lm_idx, k*num_sh + lm_idx] -= eA[lm_idx, lm_idx] * flux_from_right[dg_idx[f[1]],k]
+                                flux_mat[dg_idx[f[0]] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flux_from_right[dg_idx[f[1]],k]
 
                 
-                ff1 = np.zeros((num_p,num_p))
-                ff0 = np.zeros((num_p,num_p))
+                # fx = k_vec[dg_idx[-1] + sp_order]
+                # eps= 2*np.finfo(float).eps
+
+                # f_pk  = np.zeros(num_p) 
+                # v_fx=np.array([self.basis_eval_radial(fx-eps,p,0) for p in range(num_p)])
                 
-                for p in range(num_p):
-                    for k in range(num_p):
-                        if k_vec[p + sp_order]==kd[1] and k_vec[k + sp_order]==kd[1] and k_vec[k + sp_order]!=k_vec[-1]:
-                            ff1[p,k] = kd[1]**2
-                        else:
-                            ff1[p,k] = 0
+                # v_fx[v_fx<1e-10] = 0
+                # v_fx[v_fx>1-eps] = 1.0
+                # v_fx=v_fx.reshape(1,num_p)
+                
+                # f_pk = np.matmul(np.transpose(v_fx),v_fx) * fx**2
 
-                for p in range(num_p):
-                    for k in range(num_p):
-                        if k_vec[p + sp_order]==kd[0] and k_vec[k + sp_order]==kd[0] and k_vec[k + sp_order]!=k_vec[-1]:
-                            ff0[p,k] = kd[0]**2
-                        else:
-                            ff0[p,k] = 0
+                # flux_right_bdy  = np.matmul(f_pk, f_rl)
+                # #flux_from_right = np.matmul(f_pk_right, f_rl)
+                # print("bdy: flux left")
+                # print(flux_right_bdy)
+                
+                # for lm_idx,lm in enumerate(self._sph_harm_lm):
+                #     if eA[lm_idx, lm_idx]>0:
+                #         for k in range(num_p):
+                #             flux_mat[dg_idx[-1] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flux_right_bdy[dg_idx[-1],k]
+                #     else:
+                #         advec_mat[(dg_idx[-1]) * num_sh + lm_idx, :] = 0
+                #         advec_mat[(dg_idx[-1]) * num_sh + lm_idx, (dg_idx[-1]-1) * num_sh + lm_idx] = -1
+                #         advec_mat[(dg_idx[-1]) * num_sh + lm_idx, (dg_idx[-1]) * num_sh + lm_idx] = 1
+                #         pass
 
-
-                # print(ff1)
-                # print(ff0)
-                # print(ff1-ff0)
-
-                for lm_idx,lm in enumerate(self._sph_harm_lm):
-                    if eA[lm_idx, lm_idx]>0:
-                        f_op=f_lr
-                    else:
-                        f_op=f_rl
-
-                    for p in range(num_p):
-                        for k in range(num_p):
-                            flux_adv[p * num_sh + lm_idx, k * num_sh + lm_idx] = eA[lm_idx, lm_idx] * (ff1[p,k]  - ff0[p,k]) * f_op[p*num_sh + lm_idx, k*num_sh + lm_idx] 
-
-            print(flux_adv)
-            advec_mat -=flux_adv
-
+                advec_mat-=flux_mat
             return advec_mat, eA, qA
         else:
             raise NotImplementedError

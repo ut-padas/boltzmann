@@ -37,43 +37,74 @@ module list
 pwd
 date
 
-python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0
+python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0
+python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0
 
-python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e4 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 5e3 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
 
-python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2Regul
+python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2Regul
+python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2Regul
+python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2Regul
+python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2Regul
+python3 collision_driver_spherical_eulerian.py -E 5e3 -radial_poly maxwell -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2Regul
 
-python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e4 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0
+python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0
+python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0
 
-python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e4 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128 256 -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128 256 -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128 256 -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128 256  -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128 256 -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
+python3 collision_driver_spherical_eulerian.py -E 5e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 32 64 128 256 -dt 1e-8 -T 1e-3 -q_vr 200 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4 -c g0 g2
 
-python3 collision_driver_spherical_eulerian.py -E 1e0 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e1 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 5e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e3 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
-python3 collision_driver_spherical_eulerian.py -E 1e4 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
 
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e4 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0Const -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e0 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e1 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 5e2 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e3 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e4 -radial_poly bspline -sp_order 1 -spline_qpts 2 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e0 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e1 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 5e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e3 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e4 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2smoothstep -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e0 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e1 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 5e2 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e3 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+# python3 collision_driver_spherical_eulerian_dg.py -E 1e4 -radial_poly bspline -sp_order 2 -spline_qpts 4 -sweep_values 64 128 256 -dt 1e-8 -T 1e-3 -c g0 g2 -q_vt 4 -q_vp 4 -q_st 4 -q_sp 4
+
+#exit

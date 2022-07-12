@@ -11,6 +11,7 @@ import string
 import scipy
 import scipy.optimize
 import scipy.interpolate
+from sympy import rad
 from maxpoly import maxpolyserieseval
 import basis
 import spec_spherical as sp
@@ -240,7 +241,7 @@ def create_dg_grid(g_domain, singularity_pts, nr, sp_order):
     
     g_len = (g_domain[1]-g_domain[0]) 
     #rr    = np.array([(w[1]-w[0])/g_len for w in dg_domains]) #0.5 * np.ones(len(dg_domains)) #
-    rr     = (1/len(dg_domains)) * np.ones(len(dg_domains)) 
+    rr    = (1/len(dg_domains)) * np.ones(len(dg_domains)) 
 
     nr_dg     = np.floor(rr * nr)
     nr_dg[-1] = nr-np.sum(nr_dg[0:-1])
@@ -295,9 +296,7 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
 
     
     h_init    = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
-    spec_sp   = spec 
-     
-    h_t = np.array(h_init)
+    h_t       = np.array(h_init)
     
     ne_t      = MNE
     mw_vth    = BEUtils.get_maxwellian_3d(vth,ne_t)
@@ -504,10 +503,11 @@ ev = bolsig_ev
 params.BEVelocitySpace.SPH_HARM_LM = [[i,0] for i in range(args.l_max+1)]
 num_sph_harm = len(params.BEVelocitySpace.SPH_HARM_LM)
 
-radial = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial     = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial_cg  = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 radial_projection = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
-radial_base = np.zeros((len(args.sweep_values), len(ev)))
-radial_intial = np.zeros((num_sph_harm, len(ev)))
+#radial_base = np.zeros((len(args.sweep_values), len(ev)))
+#radial_intial = np.zeros((num_sph_harm, len(ev)))
 
 coeffs_projection = list()
 
@@ -589,22 +589,35 @@ for i, value in enumerate(args.sweep_values):
     print("""============================================================""")
     params.print_parameters()
 
+    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+    
     # v_knots = uniform_knots(k_domain, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER) 
     # cf      = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=sig_pts, knot_vec=v_knots)
+    # spec    = cf._spec
+    
+    # mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
+    # temp_op   = BEUtils.temp_op(spec, None, 64, 2, 1)
+    # avg_vop   = BEUtils.mean_velocity_op(spec, None, 64, 4, 1)
+    # eavg_to_K = (2/(3*scipy.constants.Boltzmann))
+    # ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+
+    # data               = solve_collop_dg(args.steady_state, [cf], maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
+    # radial_cg[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)
+    # scale              = 1./( np.trapz(radial_cg[i,0,:]*np.sqrt(ev),x=ev) )
+    # radial_cg[i, :, :] *= scale
+    
+
     v_knots = create_dg_grid(k_domain, sig_pts, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER)
     cf      = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=None, knot_vec=v_knots)
     spec    = cf._spec
-
     mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
     temp_op   = BEUtils.temp_op(spec, None, 64, 2, 1)
     avg_vop   = BEUtils.mean_velocity_op(spec, None, 64, 4, 1)
     eavg_to_K = (2/(3*scipy.constants.Boltzmann))
     ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
-    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
 
     data            = solve_collop_dg(args.steady_state, [cf], maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
     radial[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)
-
     scale            = 1./( np.trapz(radial[i,0,:]*np.sqrt(ev),x=ev) )
     radial[i, :, :] *= scale
     
@@ -647,13 +660,13 @@ if (1):
 
     num_subplots = num_sph_harm + 2
 
-    plt.subplot(2, num_subplots, num_subplots + 1 + 0)
+    plt.subplot(2, num_subplots,  1 + 0)
     plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
     
     # print(np.trapz( bolsig[:,1]*np.sqrt(bolsig[:,0]), x=bolsig[:,0] ))
     # print(np.trapz( scale*radial[i, 0]*np.sqrt(ev), x=ev ))
 
-    plt.subplot(2, num_subplots, num_subplots + 1 + 1)
+    plt.subplot(2, num_subplots,  1 + 1)
     plt.semilogy(bolsig_ev,  abs(bolsig_f0*bolsig_a * spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0)), '-k', label="bolsig")
 
     for i, value in enumerate(args.sweep_values):
@@ -666,28 +679,37 @@ if (1):
 
         for l_idx in range(num_sph_harm):
 
-            plt.subplot(2, num_subplots, 1+l_idx)
+            plt.subplot(2, num_subplots, num_subplots + 1+l_idx)
 
             color = next(plt.gca()._get_lines.prop_cycler)['color']
             plt.plot(np.abs(data[-1,l_idx::num_sph_harm]),label=lbl, color=color)
-            plt.plot(np.abs(data_projection[l_idx::num_sph_harm]), '--',label=lbl+" (proj)", color=color)
+            #plt.plot(np.abs(data_projection[l_idx::num_sph_harm]), '--',label=lbl+" (proj)", color=color)
+            #plt.plot(ev, abs(radial[i, l_idx]-radial_cg[i,l_idx]), '-', label=lbl, color=color)
+            # if l_idx==0:
+            #     plt.plot(ev, abs(radial[i, l_idx]-radial_cg[i,l_idx]), '-', label=lbl, color=color)
+            #     #plt.plot(ev, abs(radial_cg[i, l_idx]-bolsig_f0), '-', label=lbl+ "(cg)", color=color)
+            # elif l_idx==1:
+            #     #plt.plot(ev, abs(radial[i, l_idx]-bolsig_f0*bolsig_a * spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0)), '-', label=lbl + "(dg)", color=color)
+            #     #plt.plot(ev, abs(radial_cg[i, l_idx]-bolsig_f0*bolsig_a * spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0)), '-', label=lbl+ "(cg)", color=color)
+
+
 
             plt.title(label="l=%d"%l_idx)
             plt.yscale('log')
-            plt.xlabel("Coeff. #")
-            plt.ylabel("Coeff. magnitude")
+            plt.xlabel("energy (eV)")
+            plt.ylabel("CG vs. DG abs(error)")
             plt.grid(visible=True)
             if l_idx == 0:
                 plt.legend()
 
-            plt.subplot(2, num_subplots, num_subplots + 1 + l_idx)
+            plt.subplot(2, num_subplots, 1 + l_idx)
 
             # if args.steady_state == False:
             #     plt.semilogy(ev,  abs(radial_initial[l_idx]), '-', label="Initial")
 
             color = next(plt.gca()._get_lines.prop_cycler)['color']
             plt.semilogy(ev,  abs(radial[i, l_idx]), '-', label=lbl, color=color)
-            plt.semilogy(ev,  abs(radial_projection[i, l_idx]), '--', label=lbl+" (proj)", color=color)
+            #plt.semilogy(ev,  abs(radial_projection[i, l_idx]), '--', label=lbl+" (proj)", color=color)
             # if l_idx == 0:
             #     plt.semilogy(ev,  abs(radial_base[i]), ':', label=lbl+" (base)", color=color)
                 
@@ -698,8 +720,8 @@ if (1):
             plt.xlabel("Energy, eV")
             plt.ylabel("Radial component")
             plt.grid(visible=True)
-            # if l_idx == 0:
-                # plt.legend()
+            if l_idx == 0:
+                plt.legend()
             # plt.legend()
 
         # plt.subplot(2, num_subplots, num_sph_harm + 1)

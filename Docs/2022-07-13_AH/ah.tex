@@ -172,7 +172,7 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 		\quad
 		\partial_t f + \frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}}f = C(f)
 		\quad \rightarrow \quad
-		\partial_t \myint{R^3}{} f \phi\of{\vect{v}} \ud \vect{v} = 
+		\partial_t \myint_{R^3} f \phi\of{\vect{v}} \ud \vect{v} = 
 		\myint_{R^3} C(f) \phi\of{\vect{v}} \ud \vect{v} - \myint_{R^3} \of{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}} f} \phi(\vect{v}) \ud\vect{v}
 		$
 
@@ -189,6 +189,7 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 		$ \displaystyle
 		\quad 
 		\sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  \of{\underbrace{C_{p,q,s}^{k,l,m}}_{\text{collision op.}}  - \underbrace{E_{p,q,s}^{k,l,m}}_{\text{advection op.}}} h_{k,l,m}\of{t}$
+		\item \textbf{Discretized operators}: For $N_r, N_{lm}$ be number of basis functions used in radial and angular directions, then matrices are $(N_rN_{lm} \times N_rN_{lm})$.
 	\end{itemize}
 \end{frame}
 
@@ -243,7 +244,7 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 			\item G0 : $e + A \rightarrow e + A$ 
 			\item G2 (ionization) : $e + A \rightarrow 2e + A^+$ 
 		\end{itemize}
-		\item We use \texttt{numpy} contractions for efficient computation of $C(f)$ (i.e., 5d quadrature with grid sizes of $512\times 8\times 8 \times 8 \times 8$). 
+		\item We use \texttt{numpy} contractions for efficient computation of $C(f)$ (i.e., 5d quadrature with grid sizes of $256\times 4\times 4 \times 4 \times 4$). 
 	\end{itemize}
 \end{frame}
 
@@ -266,7 +267,8 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 \begin{frame}
 	\frametitle{Steady-state solution}
 	\begin{itemize}
-		\item With $\vect{E}\neq 0$, the normalized distribution function should reach a steady state. 
+		\item $\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}}f$ acceleration of electrons due to the $E$ field (i.e., adds energy to system), $C(f)$ causes to lose energy due to collisions. 
+		\item With $\vect{E}\neq 0$, the normalized distribution function should reach a steady state. Note: Ionization does not preserve mass (i.e., $n_e(t)=\myint_{R^3} f(\vect{v},t) \diff{\vect{v}}$).
 		$
 		\displaystyle
 		\quad
@@ -321,13 +323,23 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 \end{frame}
 
 \begin{frame}
-	\frametitle{Maxwell polynomials}
-	\only<+>{\textbullet~ E=1 V/m    \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E1.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=10 V/m   \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E10.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=100 V/m  \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E100.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=500 V/m  \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E500.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=1000 V/m \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E1000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=5000 V/m \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E5000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
+	\frametitle{Maxwell polynomials (in speed)}
+	\only<+>{E=1 V/m    \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E1.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=10 V/m   \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E10.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=100 V/m  \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E100.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=500 V/m  \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E500.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=1000 V/m \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E1000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=5000 V/m \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E5000.0_poly_maxwell_nr128_bscale1.0_sweeping_Nr.png}}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Maxwell polynomials (in energy)}
+	\only<+>{E=1 V/m    \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E1.0_poly_maxwell_energy_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=10 V/m   \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E10.0_poly_maxwell_energy_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=100 V/m  \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E100.0_poly_maxwell_energy_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=500 V/m  \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E500.0_poly_maxwell_energy_nr128_bscale1.0_sweeping_Nr.png}}
+	% \only<+>{E=1000 V/m \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E1000.0_poly_maxwell_energy_nr128_bscale1.0_sweeping_Nr.png}}
+	% \only<+>{E=5000 V/m \includegraphics[width=\textwidth]{fig/maxwell_vs_bolsig_g0_g2_E5000.0_poly_maxwell_energy_nr128_bscale1.0_sweeping_Nr.png}}
 \end{frame}
 
 % \begin{frame}
@@ -343,12 +355,12 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 
 \begin{frame}
 	\frametitle{Linear B-splines}
-	\only<+>{\textbullet~ E=1 V/m    \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E1.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=10 V/m   \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E10.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=100 V/m  \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E100.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=500 V/m  \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E500.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=1000 V/m \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E1000.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
-	\only<+>{\textbullet~ E=5000 V/m \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E5000.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=1 V/m    \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E1.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=10 V/m   \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E10.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=100 V/m  \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E100.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=500 V/m  \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E500.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=1000 V/m \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E1000.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=5000 V/m \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E5000.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}}
 \end{frame}
 
 \begin{frame}
@@ -371,12 +383,20 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 \end{frame}
 
 \begin{frame}
+	\frametitle{B-Splines with constant cross-section data}
+	\only<+>{E=1 V/m \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0Const_E1.0_poly_bspline_sp_1_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=10 V/m \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0Const_E10.0_poly_bspline_sp_1_nr128_bscale1.0_sweeping_Nr.png}}
+	\only<+>{E=100 V/m \includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0Const_E100.0_poly_bspline_sp_1_nr128_bscale1.0_sweeping_Nr.png}}
+\end{frame}
+
+\begin{frame}
 	\frametitle{Observations}
 	\begin{itemize}
-		\item All cases have tail oscillations, with LXCAT cross-section data. 
+		\item All cases have \textbf{tail oscillations}. %with LXCAT cross-section data. 
 		\begin{itemize}
-			\item Discontinuities in ionization cross-section data
-			\item Linear B-Splines advection is equivalent to central finite differencing. Therefore, upwinding issues ?
+			\item Discontinuities in ionization cross-section data, makes the $f$ non-smooth causing tail oscillations.
+			\item \textbf{Constant cross-section}: Global polynomials can completely resolve the tails, while B-Splines convergence rate decays with increasing $E$. Ideally $f$ should get scaled with a constant factor. 
+			\item \textbf{Hypothesis}: Linear B-Splines advection is equivalent to central differencing, Absence of upwinding cause tail oscillations ?
 		\end{itemize}
 		\item Global polynomials (Maxwell, Laguerre)
 		\begin{itemize}
@@ -395,7 +415,7 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 		\begin{itemize}
 			\item Pros
 			\begin{itemize}
-				\item Flexibility
+				\item Flexibility in quadrature, and knot placement. 
 				\item With LXCAT data tails are comparatively better than global polynomials. 
 			\end{itemize}
 			\item Cons
@@ -444,13 +464,27 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 \end{frame}
 
 \begin{frame}
-	\frametitle{DG with linear B-Splines}
-	\begin{center}
-		\includegraphics[width=0.85\textwidth]{fig/bspline_dg_vs_bolsig_g0_g2_E100.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}
-	\end{center}
-	\pause
+	\frametitle{DG vs. CG with linear B-Splines}
+	\only<+>{
+		\begin{itemize}
+			\item DG
+		\end{itemize}
+		\includegraphics[width=0.9\textwidth]{fig/bspline_dg_vs_bolsig_g0_g2_E100.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}
+	}
+	\only<+>{
+		\begin{itemize}
+			\item CG
+		\end{itemize}
+		\includegraphics[width=\textwidth]{fig/bspline_cg_vs_bolsig_g0_g2_E100.0_poly_bspline_sp_1_nr256_bscale1.0_sweeping_Nr.png}
+	}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Futrue work}
 	\begin{itemize}
-		\item \textbf{Path forward}: Try Chebyshev with DG can help with the tail oscillations ??
+		\item Try Chebyshev polynomials with DG, assuming that Chebyshev can resolve the updwinding issues in the advection. 
+		\item Once numerical issues are sorted, move towards GPU solver. 
+		\item Move toward spatially inhomogeneous case. 
 	\end{itemize}
 \end{frame}
 

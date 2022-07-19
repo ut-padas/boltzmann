@@ -35,36 +35,23 @@ class CollisionOpSP():
         self._r_basis_type = poly_type
 
         if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY:
-
             self._spec = sp.SpectralExpansionSpherical(self._p,basis.Maxwell(),params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
-
-        if self._r_basis_type == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
-
+        elif self._r_basis_type == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             self._spec = sp.SpectralExpansionSpherical(self._p,basis.MaxwellEnergy(),params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
-
         elif self._r_basis_type == basis.BasisType.LAGUERRE:
-
             self._spec = sp.SpectralExpansionSpherical(self._p,basis.Laguerre(),params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
-        
+        elif self._r_basis_type == basis.BasisType.CHEBYSHEV_POLY:
+            self._spec = sp.SpectralExpansionSpherical(self._p,basis.Chebyshev(domain=(-1,1), window=k_domain) , params.BEVelocitySpace.SPH_HARM_LM)
+            self._spec._q_mode = q_mode
         elif self._r_basis_type == basis.BasisType.SPLINES:
             spline_order = basis.BSPLINE_BASIS_ORDER
             splines      = basis.XlBSpline(k_domain,spline_order,self._p+1, sig_pts=sig_pts, knots_vec=knot_vec)
             self._spec   = sp.SpectralExpansionSpherical(self._p,splines,params.BEVelocitySpace.SPH_HARM_LM)
             self._spec._q_mode = q_mode
 
-            # import matplotlib.pyplot as plt
-            # gx,gw= basis.uniform_simpson((knots_vec[0],knots_vec[-1]),1001)
-            # for i in range(self._p +1):
-            #     plt.plot(gx,splines.Pn(i)(gx),label="i=%d"%i)
-            
-            # plt.grid()
-            # plt.show()
-            #exit(0)
-
-        
         self.__alloc_internal_vars()
 
     def __alloc_internal_vars(self):
@@ -83,7 +70,12 @@ class CollisionOpSP():
             or self._r_basis_type == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
         elif self._r_basis_type == basis.BasisType.SPLINES:
-            [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR,True)
+            [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+        elif self._r_basis_type == basis.BasisType.CHEBYSHEV_POLY:
+            [self._gmx,self._gmw]  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+        else:
+            raise NotImplementedError
+
 
         
         legendre                  = basis.Legendre()
@@ -115,28 +107,7 @@ class CollisionOpSP():
         self._scattering_mg  = np.meshgrid(self._gmx,self._VTheta_q,self._VPhi_q,Chi_q,Phi_q,indexing='ij')
 
         return
-        ## remove return for storing the quadrature matrices - high mem. footprint, but less redundant computations, when reassembling the collision matrix. 
-        self._l_modes  = list(set([l for l,_ in self._sph_harm_lm]))
-        self._radial_poly_l_pre       = list() # radial poly evaluated on the incident grid. 
-        self._radial_poly_l_pre_on_sg = list() # radial poly evaluated on the scattering grid.          
-        for l in self._l_modes:
-            self._radial_poly_l_pre.append(self._spec.Vq_r(self._incident_mg[0],l))
-            self._radial_poly_l_pre_on_sg.append(self._spec.Vq_r(self._scattering_mg[0],l))
-
-
-        self._sph_pre       = self._spec.Vq_sph(self._incident_mg[1],self._incident_mg[2])
-        self._sph_pre_on_sg = self._spec.Vq_sph(self._scattering_mg[1],self._scattering_mg[2])
-
-        if self._r_basis_type == basis.BasisType.MAXWELLIAN_POLY or self._r_basis_type == basis.BasisType.LAGUERRE:
-            self._full_basis_pre = np.array([(self._incident_mg[0]**(l)) * self._radial_poly_l_pre[self._l_modes.index(l)] *self._sph_pre[lm_idx] for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
-        elif self._r_basis_type == basis.BasisType.SPLINES:
-            self._full_basis_pre = np.array([self._radial_poly_l_pre[self._l_modes.index(l)] *self._sph_pre[lm_idx] for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])
         
-        # for each lm mode we have num_sh, num_p, mesh grid dimensions
-        self._full_basis_pre=self._full_basis_pre.reshape(tuple([len(self._sph_harm_lm),self._num_p]) + self._incident_mg[0].shape)
-        #print(self._full_basis_pre.shape)
-        
-
         
     def _LOp(self, collision, maxwellian, vth, v0):
         """
@@ -314,9 +285,12 @@ class CollisionOpSP():
             or self._r_basis_type == basis.BasisType.LAGUERRE\
             or self._r_basis_type == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             Mp_r    = (scattering_mg_v0[0])*V_TH
-
         elif self._r_basis_type == basis.BasisType.SPLINES:
             Mp_r    = (scattering_mg_v0[0] * V_TH) * (scattering_mg[0]**2)
+        elif self._r_basis_type == basis.BasisType.CHEBYSHEV_POLY:
+            Mp_r    = (scattering_mg_v0[0] * V_TH) * self._spec._basis_p.Wx()(scattering_mg[0])
+        else:
+            raise NotImplementedError
         
         # if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
         #     cc_collision = np.array([diff_cs * Mp_r * ( spec_sp.Vq_r(Sd[0],l) * sph_post[lm_idx] - spec_sp.Vq_r(scattering_mg[0],l) * sph_pre[lm_idx]) for lm_idx, (l,m) in enumerate(self._sph_harm_lm)])

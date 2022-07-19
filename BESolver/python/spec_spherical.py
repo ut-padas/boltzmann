@@ -34,9 +34,12 @@ class SpectralExpansionSpherical:
         self._basis_p  = basis_p
         self._basis_1d = list()
         self._q_mode   = QuadMode.GMX
-        
+
         for deg in range(self._p+1):
-            self._basis_1d.append(self._basis_p.Pn(deg,self._domain,self._window))
+            self._basis_1d.append(self._basis_p.Pn(deg))
+
+    def get_radial_basis(self):
+        return self._basis_p
 
     def get_radial_basis_type(self):
         return self._basis_p._basis_type   
@@ -129,7 +132,7 @@ class SpectralExpansionSpherical:
 
 
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot))
             l_modes = list(set([l for l,_ in self._sph_harm_lm]))
             
             mm=np.zeros((num_p*num_sh, num_p*num_sh))
@@ -150,9 +153,27 @@ class SpectralExpansionSpherical:
                                 idx_pqs = p * num_sh + lm_idx
                                 idx_klm = k * num_sh + lm_idx
                                 mm[idx_pqs, idx_klm] = mm_l[p,k]
-            
-            
             return mm
+        elif self.get_radial_basis_type() == basis.BasisType.CHEBYSHEV_POLY:
+            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+            l_modes  = list(set([l for l,_ in self._sph_harm_lm]))
+            
+            mm=np.zeros((num_p*num_sh, num_p*num_sh))
+            for i,l in enumerate(l_modes):
+                Vq   = self.Vq_r(gx, l)
+                mm_l = np.array([ self._basis_p.Wx()(gx) * Vq[p,:] * Vq[k,:] for p in range(num_p) for k in range(num_p)])
+                mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+
+                for lm_idx, (l1,m) in enumerate(self._sph_harm_lm):
+                    if(l==l1):
+                        for p in range(num_p):
+                            for k in range(num_p):
+                                idx_pqs = p * num_sh + lm_idx
+                                idx_klm = k * num_sh + lm_idx
+                                mm[idx_pqs, idx_klm] = mm_l[p,k]
+
+            return mm
+            
            
     def Vq_r(self, v_r, l, scale=1):
         """
@@ -297,7 +318,7 @@ class SpectralExpansionSpherical:
             return assemble_advection_matix_lp_lag(self._p, self._sph_harm_lm)
         elif self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             return assemble_advection_matix_lp_max_energy(self._p, self._sph_harm_lm)
-        if self.get_radial_basis_type() == basis.BasisType.SPLINES:
+        elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
             num_p  = self._p+1
             num_sh = len(self._sph_harm_lm)
     
@@ -448,6 +469,71 @@ class SpectralExpansionSpherical:
 
                 advec_mat-=flux_mat
             return advec_mat, eA, qA
+        elif self.get_radial_basis_type() == basis.BasisType.CHEBYSHEV_POLY:
+            num_p  = self._p+1
+            num_sh = len(self._sph_harm_lm)
+    
+            lmodes = list(set([l for l,_ in self._sph_harm_lm]))
+            num_l  = len(lmodes)
+            l_max  = lmodes[-1]
+            
+            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+            
+            D_pk=np.zeros((num_p,num_p))
+            S_pk=np.zeros((num_p,num_p))
+        
+            for p in range(num_p):
+                for k in range(num_p):
+                    D_pk[p,k] = np.dot(self._basis_p.Wx()(gx) * self.basis_derivative_eval_radial(gx,p,0,1) * self.basis_eval_radial(gx,k,0), gw)
+                    S_pk[p,k] = np.dot((1/gx) * self._basis_p.Wx()(gx) * self.basis_eval_radial(gx,p,0) * self.basis_eval_radial(gx,k,0), gw)
+            
+
+            A_qs_lm=np.zeros((num_sh,num_sh))
+            B_qs_lm=np.zeros((num_sh,num_sh))
+
+            for qs_idx,qs in enumerate(self._sph_harm_lm):
+                lm   =  [qs[0]+1, qs[1]]
+                if lm in self._sph_harm_lm:
+                    lm_idx = self._sph_harm_lm.index(lm)
+                    A_qs_lm[qs_idx,lm_idx] = AM(lm[0],lm[1])
+                    B_qs_lm[qs_idx,lm_idx] = AD(lm[0],lm[1])
+
+                lm     =  [qs[0]-1, qs[1]]
+                if lm in self._sph_harm_lm:
+                    lm_idx = self._sph_harm_lm.index(lm)
+                    A_qs_lm[qs_idx,lm_idx] = BM(lm[0],lm[1])
+                    B_qs_lm[qs_idx,lm_idx] = BD(lm[0],lm[1])
+
+            advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
+            for qs_idx,qs in enumerate(self._sph_harm_lm):
+                for lm_idx,lm in enumerate(self._sph_harm_lm):
+                    advec_mat[:,qs_idx,:,lm_idx] = A_qs_lm[qs_idx,lm_idx] * (D_pk[:,:] + 2 * S_pk[:,:]) - B_qs_lm[qs_idx,lm_idx] * S_pk[:,:]
+
+            advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
+            return advec_mat, np.eye(num_sh) , np.eye(num_sh)
+
+            #eA, qA = np.linalg.eig(A_qs_lm)
+            #eA     = np.diag(eA)
+            #eA=A_qs_lm
+            #qA=np.eye(A_qs_lm.shape[0])
+
+            #print("eig: ", np.linalg.norm(A_qs_lm- np.matmul(qA, np.matmul(eA, np.transpose(qA)))))
+            # S_qs_lm = (2 * eA  - np.matmul(np.transpose(qA), np.matmul(B_qs_lm, qA)))
+            # D_qs_km = eA
+
+            # #S_qs_lm = (2 * A_qs_lm - B_qs_lm)
+            # #D_qs_km = A_qs_lm
+            # advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
+            # for qs_idx,qs in enumerate(self._sph_harm_lm):
+            #     for lm_idx,lm in enumerate(self._sph_harm_lm):
+            #         advec_mat[:,qs_idx,:,lm_idx] = S_pk[:,:] * S_qs_lm[qs_idx, lm_idx]  +  D_pk[:,:] * D_qs_km [qs_idx, lm_idx] 
+
+
+            # advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
+            
+            # k_vec    = self._basis_p._t
+            # dg_idx   = self._basis_p._dg_idx
+            # sp_order = self._basis_p._sp_order
         else:
             raise NotImplementedError
 

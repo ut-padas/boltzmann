@@ -137,7 +137,7 @@ class CollissionMode(enum.Enum):
     ELASTIC_W_EXCITATION_W_IONIZATION=3
 
 collisions.AR_NEUTRAL_N=3.22e22
-collisions.MAXWELLIAN_N=1e18
+collisions.MAXWELLIAN_N=1
 collisions.AR_IONIZED_N=collisions.AR_NEUTRAL_N #collisions.MAXWELLIAN_N
 parser = argparse.ArgumentParser()
 
@@ -170,28 +170,6 @@ def uniform_knots(k_domain, nr, sp_order):
 def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
     
     spec_sp = collOp._spec
-
-    if (args.radial_poly == "maxwell" or args.radial_poly == "laguerre"):
-        scale = (np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/VTH)**3*(2./np.sqrt(np.pi))/basis.maxpoly.maxpolyeval(2,0,0)
-        hv    = lambda v,vt,vp : np.exp((v**2)*(1.-1./(vratio**2)))/vratio**3
-    if (args.radial_poly == "maxwell_energy"):
-        scale = (np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/VTH)**3*(2./np.sqrt(np.pi))/basis.maxpoly_frac.maxpolyeval(2,0,0)
-        hv    = lambda v,vt,vp : np.exp((v**2)*(1.-1./(vratio**2)))/vratio**3
-    elif (args.radial_poly == "bspline"):
-        scale =  (2 *(np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/VTH)**3) / np.sqrt(np.pi)
-        hv    = lambda v,vt,vp : np.exp(-((v*vratio)**2))/(1/vratio**3)
-
-
-    f0_cf = interp1d(ev, bolsig_f0, kind='cubic', bounds_error=False, fill_value=(bolsig_f0[0],bolsig_f0[-1]))
-    fa_cf = interp1d(ev, bolsig_a, kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
-    ftestt = lambda v,vt,vp : f0_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*(1. + fa_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
-    # ftestt = lambda v,vt,vp : np.exp(-v**2)*np.cos(3*v)
-    htest      = BEUtils.function_to_basis(spec,ftestt,maxwellian,None,None,None)
-    radial_projection[i, :, :] = BEUtils.compute_radial_components(ev, spec, htest, maxwellian, VTH, 1)
-    scale = 1./( np.trapz(radial_projection[i, 0, :]*np.sqrt(ev),x=ev) )
-    radial_projection[i, :, :] *= scale
-    coeffs_projection.append(htest)
-
     t1=time()
     M  = spec_sp.compute_mass_matrix()
     t2=time()
@@ -201,12 +179,31 @@ def solve_collop(steady_state, collOp:colOpSp.CollisionOpSP, maxwellian, vth, E_
     #Minv = BEUtils.block_jacobi_inv(M)
     assert np.allclose(np.matmul(M,Minv),np.eye(M.shape[0]), rtol=1e-12, atol=1e-12), "mass inverse not with in machine precision"
 
+    vratio = np.sqrt(1.0/args.basis_scale)
+
+    if (args.radial_poly == "maxwell" or args.radial_poly == "laguerre"):
+        hv    = lambda v,vt,vp : np.exp((v**2)*(1.-1./(vratio**2)))/vratio**3
+    if (args.radial_poly == "maxwell_energy"):
+        hv    = lambda v,vt,vp : np.exp((v**2)*(1.-1./(vratio**2)))/vratio**3
+    elif (args.radial_poly == "bspline"):
+        hv    = lambda v,vt,vp : np.exp(-((v/vratio)**2))/(vratio**3)
+
+    f0_cf = interp1d(ev, bolsig_f0, kind='cubic', bounds_error=False, fill_value=(bolsig_f0[0],bolsig_f0[-1]))
+    fa_cf = interp1d(ev, bolsig_a, kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
+    ftestt = lambda v,vt,vp : f0_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*(1. + fa_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
+    
+    htest      = BEUtils.function_to_basis(spec,ftestt,maxwellian,None,None,None, Minv=Minv)
+    radial_projection[i, :, :] = BEUtils.compute_radial_components(ev, spec, htest, maxwellian, VTH, 1)
+    scale = 1./( np.trapz(radial_projection[i, 0, :]*np.sqrt(ev),x=ev) )
+    radial_projection[i, :, :] *= scale
+    coeffs_projection.append(htest)
+
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     print("==========================================================================")
 
-    h_init    = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
+    h_init    = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None,Minv=Minv)
     h_t       = np.array(h_init)
     
     ne_t      = MNE
@@ -697,8 +694,6 @@ for i, value in enumerate(args.sweep_values):
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 
     BASIS_EV = args.electron_volt*args.basis_scale
-    vratio = np.sqrt(1.0/args.basis_scale)
-
     collisions.MAXWELLIAN_TEMP_K   = BASIS_EV * collisions.TEMP_K_1EV
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
     VTH                            = collisions.ELECTRON_THEMAL_VEL

@@ -9,6 +9,8 @@ import maxpoly
 import maxpoly_frac
 import lagpoly
 import scipy.interpolate
+import scipy
+import scipy.special
 import quadpy
 
 # some parameters related to splines. 
@@ -28,15 +30,16 @@ class BasisType(enum.Enum):
     LAGUERRE = 5
     SPLINES  = 6
     MAXWELLIAN_ENERGY_POLY=7
+    CHEBYSHEV_POLY=8
 
 
 class Basis(abc.ABC):
     abc.abstractmethod
-    def __init__(self):
+    def __init__(self, domain, window):
         pass
     
     abc.abstractmethod
-    def Pn(self,deg,domain=None,window=None):
+    def Pn(self,deg):
         pass
 
     abc.abstractmethod
@@ -51,14 +54,16 @@ class Basis(abc.ABC):
         pass
 
 class HermiteE(Basis):
-    def __init__(self):
+    def __init__(self, domain=None, window=None):
         self._basis_type = BasisType.HERMITE_E_POLY
+        self._domain     = domain
+        self._window     = window
 
-    def Pn(self,deg,domain=None,window=None):
+    def Pn(self,deg):
         """
         returns 1d He polynomial the specified degree (normalized probabilist's)
         """
-        return np.polynomial.hermite_e.HermiteE.basis(deg,domain,window)
+        return np.polynomial.hermite_e.HermiteE.basis(deg)
     
     def Gauss_Pn(self,deg):
         """
@@ -73,16 +78,17 @@ class HermiteE(Basis):
         """
         return np.polynomial.hermite_e.hermeweight
 
-
 class Hermite(Basis):
-    def __init__(self):
+    def __init__(self,domain=None, window=None):
         self._basis_type = BasisType.HERMITE_POLY
+        self._domain     = domain
+        self._window     = window
 
-    def Pn(self,deg,domain=None,window=None):
+    def Pn(self,deg):
         """
         returns 1d Hn polynomial the specified degree 
         """
-        return np.polynomial.hermite.Hermite.basis(deg,domain,window)
+        return np.polynomial.hermite.Hermite.basis(deg,self._domain, self._window)
     
     def Gauss_Pn(self,deg):
         """
@@ -98,14 +104,16 @@ class Hermite(Basis):
         return np.polynomial.hermite.hermweight
 
 class Legendre(Basis):
-    def __init__(self):
+    def __init__(self, domain=None, window=None):
         self._basis_type = BasisType.LEGENDRE
+        self._domain     = domain
+        self._window     = window
 
     def Pn(self,deg,domain=None,window=None):
         """
         returns 1d He polynomial the specified degree 
         """
-        return np.polynomial.legendre.Legendre.basis(deg,domain,window)
+        return np.polynomial.legendre.Legendre.basis(deg,self._domain, self._window)
         
     def Gauss_Pn(self,deg):
         """
@@ -119,10 +127,50 @@ class Legendre(Basis):
         """
         I = lambda x: 1
         return I
+
+class Chebyshev(Basis):
+    def __init__(self,domain=(-1,1), window=(-1,1)):
+        self._basis_type = BasisType.CHEBYSHEV_POLY
+        self._domain     = domain
+        self._window     = window
+        assert (self._domain[0],self._domain[1]) == (-1,1), "Chebushev polynomial domain should match [-1,1]"
+
+    def Pn(self,deg):
+        """
+        returns 1d He polynomial the specified degree 
+        """
+        (a,b) = (self._window[0], self._window[1])
+        return lambda x, l : scipy.special.eval_chebyt(deg, ((x - 0.5 * (a+b))/(0.5 * (b-a)))) 
         
+    def Gauss_Pn(self,deg):
+        """
+        Gauss-legendre quadrature 1d points for specified degree.
+        """
+        gx,gw  = scipy.special.roots_chebyt(deg, mu=False)
+        (a,b)  = (self._window[0], self._window[1])
+        gx     = (np.flip(gx) * (b-a) * 0.5) +  0.5 * (a+b)  
+        gw     = np.flip(gw)  * (b-a) * 0.5
+        
+        return gx,gw
+
+    def Wx(self):
+        """
+        Weight function w.r.t. the polynomials are orthogonal
+        """
+        (a,b)  = (self._window[0], self._window[1])
+        return lambda x : (1.0/np.polynomial.chebyshev.chebweight((x - 0.5 * (a+b))/(0.5 * (b-a)))) * (x**2) * np.exp(-x**2)
+        
+
+    def diff(self,deg, dorder,domain=None,window=None):
+        (a,b) = (self._window[0], self._window[1])
+        return lambda x, l : deg * scipy.special.eval_chebyu(deg-1, ((x - 0.5 * (a+b))/(0.5 * (b-a)))) / (0.5 * (b-a))
+        
+
 class Maxwell(Basis):
-    def __init__(self):
+    def __init__(self, domain=None, window=None):
         self._basis_type = BasisType.MAXWELLIAN_POLY
+        self._domain     = domain
+        self._window     = window
 
     def Pn(self,deg,domain=None,window=None):
         """
@@ -144,8 +192,10 @@ class Maxwell(Basis):
         return maxpoly.maxpolyweight
         
 class MaxwellEnergy(Basis):
-    def __init__(self):
+    def __init__(self, domain=None, window=None):
         self._basis_type = BasisType.MAXWELLIAN_ENERGY_POLY
+        self._domain     = domain
+        self._window     = window
 
     def Pn(self,deg,domain=None,window=None):
         """
@@ -168,8 +218,10 @@ class MaxwellEnergy(Basis):
         return maxpoly.maxpolyweight
         
 class Laguerre(Basis):
-    def __init__(self):
+    def __init__(self, domain=None, window=None):
         self._basis_type = BasisType.LAGUERRE
+        self._domain     = domain
+        self._window     = window
 
     def Pn(self,deg,domain=None,window=None):
         """
@@ -191,13 +243,14 @@ class Laguerre(Basis):
         return lagpoly.lagpolyweight
 
 class BSpline(Basis):
-
     @staticmethod
     def get_num_q_pts(p_order, s_order, pts_per_knot):
         return pts_per_knot*(p_order)
 
     def __init__(self,k_domain,spline_order, num_p):
         self._basis_type = BasisType.SPLINES
+        self._domain     = k_domain
+        self._window     = k_domain
         """
         x x x     | * * * * * * * * * * | x  x  x
          sp + 1          num_p -2          sp+1   
@@ -213,7 +266,7 @@ class BSpline(Basis):
         self._q_per_knot = BSPLINE_NUM_Q_PTS_PER_KNOT
         self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(num_p)]
 
-    def Pn(self,deg,domain=None,window=None):
+    def Pn(self,deg):
         return self._splines[deg]
 
     def Gauss_Pn(self,deg,from_zero=True):
@@ -278,6 +331,8 @@ class XlBSpline(Basis):
 
     def __init__(self,k_domain,spline_order, num_p, sig_pts=None, knots_vec=None):
         self._basis_type = BasisType.SPLINES
+        self._domain     = k_domain
+        self._window     = k_domain
         """
         x x x     | * * * * * * * * * * | x  x  x
          sp + 1          num_p -2          sp+1   
@@ -327,11 +382,9 @@ class XlBSpline(Basis):
         
 
 
-    def Pn(self,deg,domain=None,window=None):
+    def Pn(self,deg):
         return lambda x,l : np.nan_to_num(self._splines[deg](x))
         #return lambda x,l : np.nan_to_num(self._splines[deg](x)) if deg>=l else np.nan_to_num(self._splines[deg](x)) * x**(l-deg)
-        
-        
         
     def Gauss_Pn(self,deg,from_zero=True):
         """
@@ -391,30 +444,5 @@ class XlBSpline(Basis):
         return lambda x,l : b_deriv(x)
         #return lambda x, l: b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
         #return lambda x,l : b_deriv(x) if deg>=l else x**(l-deg) *b_deriv(x) + self.Pn(deg)(x,0) * (l-deg) * x**(l-deg-1)
-
-
-
-def uniform_simpson(domain, pts):
-    assert pts%2==1, "simpson requires even number of intervals"
-    assert pts>1   , "composite simpson require more than 1"
-    gx = np.linspace(domain[0],domain[1],pts)
-    dx = (domain[1]-domain[0])/(pts-1)
-    gw = np.ones_like(gx) * (dx/3.0)
-    gw[range(2,pts-1,2)]  *= 2.0
-    gw[range(1,pts,2)]    *= 4.0
-    return gx,gw
-
-
-def uniform_simpson_3b8(domain, pts):
-    assert (pts-1)%3==0, "simpson requires intervals divisable by 3"
-    assert pts>1   , "composite simpson require more than 1"
-    gx = np.linspace(domain[0],domain[1],pts)
-    dx = (domain[1]-domain[0])/(pts-1)
-    gw = np.ones_like(gx) * (3.0 * dx / 8.0)
-    gw[range(1,pts-1,3)]  *= 3.0
-    gw[range(2,pts-1,3)]  *= 3.0
-    gw[range(3,pts-1,3)]  *= 2.0
-    
-    return gx,gw
 
 

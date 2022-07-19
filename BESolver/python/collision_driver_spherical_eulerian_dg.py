@@ -213,7 +213,7 @@ class CollissionMode(enum.Enum):
     ELASTIC_W_EXCITATION_W_IONIZATION=3
 
 collisions.AR_NEUTRAL_N=3.22e22
-collisions.MAXWELLIAN_N=1e18
+collisions.MAXWELLIAN_N=1
 collisions.AR_IONIZED_N=collisions.AR_NEUTRAL_N #collisions.MAXWELLIAN_N
 parser = argparse.ArgumentParser()
 
@@ -262,40 +262,38 @@ def create_dg_grid(g_domain, singularity_pts, nr, sp_order):
 
 def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
 
-    if args.radial_poly != "bspline":
-        raise NotImplementedError
-    
     collOp  = cf_list[0]
     spec_sp = collOp._spec
+
+    Mmat = spec_sp.compute_mass_matrix()
+    print("Condition number of M= %.8E"%np.linalg.cond(Mmat))
+    Minv = BEUtils.choloskey_inv(Mmat)
+    mm_inv_error=np.linalg.norm(np.matmul(Mmat,Minv)-np.eye(Mmat.shape[0]))/np.linalg.norm(np.eye(Mmat.shape[0]))
+    if mm_inv_error >1e-12:
+        print("Warning ::: mass matrix inversion error = %.12E"%(mm_inv_error))
+    #assert np.allclose(np.matmul(Mmat,Minv),np.eye(Mmat.shape[0]), rtol=1e-12, atol=1e-12), "mass inverse not with in machine precision"
+    
+    # if not (spec_sp.get_radial_basis_type()==basis.BasisType.CHEBYSHEV_POLY or spec_sp.get_radial_basis_type()==basis.BasisType.SPLINES):
+    #     raise NotImplementedError
 
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     print("==========================================================================")
+    vratio = np.sqrt(1.0/args.basis_scale)
 
     if (args.radial_poly == "maxwell" or args.radial_poly == "laguerre"):
-        scale = (np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/VTH)**3*(2./np.sqrt(np.pi))/basis.maxpoly.maxpolyeval(2,0,0)
         hv    = lambda v,vt,vp : np.exp((v**2)*(1.-1./(vratio**2)))/vratio**3
-    if (args.radial_poly == "maxwell_energy"):
-        scale = (np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/VTH)**3*(2./np.sqrt(np.pi))/basis.maxpoly_frac.maxpolyeval(2,0,0)
+    elif (args.radial_poly == "maxwell_energy"):
         hv    = lambda v,vt,vp : np.exp((v**2)*(1.-1./(vratio**2)))/vratio**3
+    elif(args.radial_poly == "chebyshev"):
+        hv    = lambda v,vt,vp : np.exp(-((v/vratio)**2)) / vratio**3
     elif (args.radial_poly == "bspline"):
-        scale =  (2 *(np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/VTH)**3) / np.sqrt(np.pi)
-        hv    = lambda v,vt,vp : np.exp(-((v*vratio)**2))/(1/vratio**3)
+        hv    = lambda v,vt,vp : np.exp(-((v/vratio)**2)) / vratio**3
+    else:
+        raise NotImplementedError
 
-
-    f0_cf = interp1d(ev, bolsig_f0, kind='cubic', bounds_error=False, fill_value=(bolsig_f0[0],bolsig_f0[-1]))
-    fa_cf = interp1d(ev, bolsig_a, kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
-    ftestt = lambda v,vt,vp : f0_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*(1. + fa_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
-    
-    htest      = BEUtils.function_to_basis(spec,ftestt,maxwellian,None,None,None)
-    radial_projection[i, :, :] = BEUtils.compute_radial_components(ev, spec, htest, maxwellian, VTH, 1)
-    scale = 1./( np.trapz(radial_projection[i, 0, :]*np.sqrt(ev),x=ev) )
-    radial_projection[i, :, :] *= scale
-    coeffs_projection.append(htest)
-
-    
-    h_init    = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None)
+    h_init    = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None,Minv=Minv)
     h_t       = np.array(h_init)
     
     ne_t      = MNE
@@ -308,6 +306,19 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     print("Initial mass : " , m0_t0 )
 
 
+    f0_cf = interp1d(ev, bolsig_f0, kind='cubic', bounds_error=False, fill_value=(bolsig_f0[0],bolsig_f0[-1]))
+    fa_cf = interp1d(ev, bolsig_a, kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
+    ftestt = lambda v,vt,vp : f0_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*(1. + fa_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
+    
+    htest      = BEUtils.function_to_basis(spec,ftestt,maxwellian,None,None,None,Minv=Minv)
+    radial_projection[i, :, :] = BEUtils.compute_radial_components(ev, spec, htest, maxwellian, VTH, 1)
+    scale = 1./( np.trapz(radial_projection[i, 0, :]*np.sqrt(ev),x=ev) )
+    radial_projection[i, :, :] *= scale
+    coeffs_projection.append(htest)
+    # solution_vector = np.zeros((2,h_init.shape[0]))
+    # return solution_vector
+
+    
     FOp = 0
     t1=time()
     if "g0" in collisions_included:
@@ -373,11 +384,6 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     FOp   = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
     h_init= np.dot(np.transpose(qA),h_init)
     
-    Mmat = spec_sp.compute_mass_matrix()
-    print("Condition number of M= %.8E"%np.linalg.cond(Mmat))
-    Minv = BEUtils.choloskey_inv(Mmat)
-    assert np.allclose(np.matmul(Mmat,Minv),np.eye(Mmat.shape[0]), rtol=1e-12, atol=1e-12), "mass inverse not with in machine precision"
-    
     Cmat = np.matmul(Minv, FOp)
     Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
@@ -387,11 +393,11 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
 
         
         u        = mass_op / (np.sqrt(np.pi)**3) 
-        print(u.shape)
         u        = np.matmul(np.transpose(u), qA)
-        print(u.shape)
         h_prev   = np.copy(h_init)
+        print("initial mass : %.12E"%(np.dot(u, h_prev)))
         h_prev   = h_prev / np.dot(u, h_prev)
+        
         
         nn       = Cmat.shape[0]
         Ji       = np.zeros((nn+1,nn))
@@ -406,6 +412,8 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
 
         while (iteration_error > 1e-14 and iteration_steps < 1000) or iteration_steps < 5:
             Rf = residual_func(h_prev) 
+            if(iteration_steps%100==0):
+                print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
             
             Ji[0:nn, 0:nn] = -2 * np.eye(nn) * np.dot(u, np.matmul(Cmat,h_prev)) + (Cmat-Emat)
             Ji[nn  , 0:nn] = u
@@ -426,9 +434,6 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
                 break
 
             iteration_error = np.linalg.norm(residual_func(h_prev + alpha *p))
-            if(iteration_steps%100==0):
-                print("Iteration ", iteration_steps, ": Residual =", iteration_error)
-
             h_prev += p*alpha
             iteration_steps = iteration_steps + 1
 
@@ -444,12 +449,10 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
         ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e16)
         #ode_solver = ode(f_rhs,jac=None).set_integrator("lsode", method='bdf', order=1, rtol=t_tol, atol=1e-30, nsteps=1e8)
         ode_solver.set_initial_value(h_init,t=0.0)
-        ode_solver.integrate(10*dt)
-        h_prev=ode_solver.y
-
-        solution_vector = np.zeros((1,h_init.shape[0]))
-        solution_vector[0,0::num_sh] = (h_prev[0:nn]  + h_prev[nn:2*nn]) * 0.5 # (h+g)/2 
-        solution_vector[0,1::num_sh] = (h_prev[0:nn]  - h_prev[nn:2*nn]) * 0.5 # (h-g)/2
+        ode_solver.integrate(100*dt)
+        solution_vector = np.zeros((2,h_init.shape[0]))
+        solution_vector[0,:] = h_init
+        solution_vector[1,:] = ode_solver.y
         return solution_vector
 
    
@@ -548,15 +551,15 @@ for i, value in enumerate(args.sweep_values):
     if (args.radial_poly == "maxwell"):
         r_mode = basis.BasisType.MAXWELLIAN_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
-
-    if (args.radial_poly == "maxwell_energy"):
+    elif (args.radial_poly == "maxwell_energy"):
         r_mode = basis.BasisType.MAXWELLIAN_ENERGY_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
-        
     elif (args.radial_poly == "laguerre"):
         r_mode = basis.BasisType.LAGUERRE
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
-
+    elif (args.radial_poly == "chebyshev"):
+        r_mode = basis.BasisType.CHEBYSHEV_POLY
+        params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
     elif (args.radial_poly == "bspline"):
         r_mode = basis.BasisType.SPLINES
         params.BEVelocitySpace.NUM_Q_VR  = basis.XlBSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
@@ -567,9 +570,7 @@ for i, value in enumerate(args.sweep_values):
     params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 
-    BASIS_EV = args.electron_volt*args.basis_scale
-    vratio = np.sqrt(1.0/args.basis_scale)
-
+    BASIS_EV                       = args.electron_volt*args.basis_scale
     collisions.MAXWELLIAN_TEMP_K   = BASIS_EV * collisions.TEMP_K_1EV
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
     VTH                            = collisions.ELECTRON_THEMAL_VEL
@@ -577,7 +578,7 @@ for i, value in enumerate(args.sweep_values):
     sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
     print("singularity pts : ", sig_pts)
 
-    ev_range = ((0*VTH/c_gamma)**2, 1*ev[-1])
+    ev_range = ((0*VTH/c_gamma)**2, ev[-1] + 4 * np.finfo(float).eps)
     k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
 
@@ -607,9 +608,10 @@ for i, value in enumerate(args.sweep_values):
     # radial_cg[i, :, :] *= scale
     
 
-    v_knots = create_dg_grid(k_domain, sig_pts, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER)
+    v_knots = uniform_knots(k_domain, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER) #create_dg_grid(k_domain, sig_pts, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER)
     cf      = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=None, knot_vec=v_knots)
     spec    = cf._spec
+    spec._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
     mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
     temp_op   = BEUtils.temp_op(spec, None, 64, 2, 1)
     avg_vop   = BEUtils.mean_velocity_op(spec, None, 64, 4, 1)
@@ -696,8 +698,8 @@ if (1):
 
             plt.title(label="l=%d"%l_idx)
             plt.yscale('log')
-            plt.xlabel("energy (eV)")
-            plt.ylabel("CG vs. DG abs(error)")
+            plt.xlabel("coeff #")
+            plt.ylabel("abs(coeff)")
             plt.grid(visible=True)
             if l_idx == 0:
                 plt.legend()
@@ -792,7 +794,7 @@ if (1):
     else:
         fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")")
         # plt.show()
-        plt.savefig("maxwell_vs_bolsig_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly) + "_nr" + str(args.NUM_P_RADIAL) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
+        plt.savefig("us_vs_bolsig_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly) + "_nr" + str(args.NUM_P_RADIAL) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
 
 
     

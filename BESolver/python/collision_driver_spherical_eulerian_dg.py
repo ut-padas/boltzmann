@@ -217,48 +217,6 @@ collisions.MAXWELLIAN_N=1
 collisions.AR_IONIZED_N=collisions.AR_NEUTRAL_N #collisions.MAXWELLIAN_N
 parser = argparse.ArgumentParser()
 
-def uniform_knots(k_domain, nr, sp_order):
-    num_p   = nr + 1
-    num_k   = 2*sp_order + (num_p -2) + 2
-    
-    v_knots = np.array([])
-    v_knots = np.append(v_knots, k_domain[0]*np.ones(sp_order))
-    v_knots = np.append(v_knots, np.linspace(k_domain[0],k_domain[1],num_p-1, endpoint=False))
-    v_knots = np.append(v_knots, k_domain[1]*np.ones(sp_order+1))
-
-    return v_knots
-
-def create_dg_grid(g_domain, singularity_pts, nr, sp_order):
-    """num domains will be equal to the number of singularity points"""
-    dg_domains=list()
-    dg_domains.append((g_domain[0],singularity_pts[0]))
-
-    for i in range(1, len(singularity_pts)-1):
-        dg_domains.append((singularity_pts[i], singularity_pts[i+1]))
-    
-    dg_domains.append((singularity_pts[-1], g_domain[1]))
-    print("discontinous domains:  ", dg_domains)
-    
-    g_len = (g_domain[1]-g_domain[0]) 
-    #rr    = np.array([(w[1]-w[0])/g_len for w in dg_domains]) #0.5 * np.ones(len(dg_domains)) #
-    rr    = (1/len(dg_domains)) * np.ones(len(dg_domains)) 
-
-    nr_dg     = np.floor(rr * nr)
-    nr_dg[-1] = nr-np.sum(nr_dg[0:-1])
-    nr_dg     = np.array([int(w) for w in nr_dg])
-    print(nr_dg)
-
-    knot_vec=np.array([])
-    knot_vec=np.append(knot_vec, uniform_knots(dg_domains[0], nr_dg[0], sp_order))
-    
-    for i in range(1, len(dg_domains)-1):
-        knot_vec=np.append(knot_vec, np.linspace(dg_domains[i][0], dg_domains[i][1], nr_dg[i] + sp_order + 2)[1:])
-    
-    knot_vec = np.append(knot_vec, np.linspace(dg_domains[-1][0], dg_domains[-1][1], max(0,nr_dg[-1]-  sp_order), endpoint=False)[1:])
-    knot_vec = np.append(knot_vec, np.ones(sp_order+1) * dg_domains[-1][1])
-
-    return knot_vec
-
 
 def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
 
@@ -266,12 +224,10 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     spec_sp = collOp._spec
 
     Mmat = spec_sp.compute_mass_matrix()
-    print("Condition number of M= %.8E"%np.linalg.cond(Mmat))
-    Minv = BEUtils.choloskey_inv(Mmat)
+    Minv = spec_sp.inverse_mass_mat(Mmat=Mmat)
     mm_inv_error=np.linalg.norm(np.matmul(Mmat,Minv)-np.eye(Mmat.shape[0]))/np.linalg.norm(np.eye(Mmat.shape[0]))
-    if mm_inv_error >1e-12:
-        print("Warning ::: mass matrix inversion error = %.12E"%(mm_inv_error))
-    #assert np.allclose(np.matmul(Mmat,Minv),np.eye(Mmat.shape[0]), rtol=1e-12, atol=1e-12), "mass inverse not with in machine precision"
+    print("cond(M) = %.4E"%np.linalg.cond(Mmat))
+    print("|I-M M^{-1}| error = %.12E"%(mm_inv_error))
     
     # if not (spec_sp.get_radial_basis_type()==basis.BasisType.CHEBYSHEV_POLY or spec_sp.get_radial_basis_type()==basis.BasisType.SPLINES):
     #     raise NotImplementedError
@@ -377,9 +333,13 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     
-    advmat, eA, qA = spec_sp.compute_advection_matix_ibp()
+    advmat, eA, qA = spec_sp.compute_advection_matix_dg()
 
-    qA = np.kron(np.eye(num_p), qA)
+    eA = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
+    qA = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
+    #print(qA)
+    #print(np.kron(np.eye(num_p*2), qA))
+
 
     FOp   = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
     h_init= np.dot(np.transpose(qA),h_init)
@@ -530,6 +490,22 @@ for i in enumerate(args.collisions):
 
 for i, value in enumerate(args.sweep_values):
 
+    BASIS_EV                       = args.electron_volt*args.basis_scale
+    collisions.MAXWELLIAN_TEMP_K   = BASIS_EV * collisions.TEMP_K_1EV
+    collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
+    VTH                            = collisions.ELECTRON_THEMAL_VEL
+    c_gamma = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+    if "g2Smooth" in args.collisions or "g2" in args.collisions or "g2step" in args.collisions or "g2Regular" in args.collisions:
+        sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
+    else:
+        sig_pts = None
+    print("singularity pts : ", sig_pts)
+
+    ev_range = ((0*VTH/c_gamma)**2, (1.+ 1e-2) * ev[-1])
+    k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
+    print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
+
+
     if args.sweep_param == "Nr":
         args.NUM_P_RADIAL = value
     # elif args.sweep_param == "l_max":
@@ -562,7 +538,9 @@ for i, value in enumerate(args.sweep_values):
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
     elif (args.radial_poly == "bspline"):
         r_mode = basis.BasisType.SPLINES
-        params.BEVelocitySpace.NUM_Q_VR  = basis.XlBSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+        #params.BEVelocitySpace.NUM_Q_VR  = basis.XlBSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+        bb = basis.XlBSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts, None)
+        params.BEVelocitySpace.NUM_Q_VR = bb._num_knot_intervals * basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT
 
     params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta
     params.BEVelocitySpace.NUM_Q_VP  = args.quad_phi
@@ -570,48 +548,30 @@ for i, value in enumerate(args.sweep_values):
     params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
 
-    BASIS_EV                       = args.electron_volt*args.basis_scale
-    collisions.MAXWELLIAN_TEMP_K   = BASIS_EV * collisions.TEMP_K_1EV
-    collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
-    VTH                            = collisions.ELECTRON_THEMAL_VEL
-    c_gamma = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
-    sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
-    print("singularity pts : ", sig_pts)
-
-    ev_range = ((0*VTH/c_gamma)**2, ev[-1] + 4 * np.finfo(float).eps)
-    k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
-    print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
+    
 
     print("""===========================Parameters ======================""")
     print("\tMAXWELLIAN_N        : ", collisions.MAXWELLIAN_N)
     print("\tELECTRON_THEMAL_VEL : ", VTH," ms^-1")
     print("\tBASIS_EV            : ", BASIS_EV,"eV")
-    print("\tDT : ", params.BEVelocitySpace().VELOCITY_SPACE_DT, " s")
+    print("\tDT : ", params.BEVelocitySpace.VELOCITY_SPACE_DT, " s")
     print("""============================================================""")
     params.print_parameters()
 
     maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    
-    # v_knots = uniform_knots(k_domain, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER) 
-    # cf      = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=sig_pts, knot_vec=v_knots)
-    # spec    = cf._spec
-    
-    # mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
-    # temp_op   = BEUtils.temp_op(spec, None, 64, 2, 1)
-    # avg_vop   = BEUtils.mean_velocity_op(spec, None, 64, 4, 1)
-    # eavg_to_K = (2/(3*scipy.constants.Boltzmann))
-    # ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+    cf      = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=sig_pts, knot_vec=None)
 
-    # data               = solve_collop_dg(args.steady_state, [cf], maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
-    # radial_cg[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)
-    # scale              = 1./( np.trapz(radial_cg[i,0,:]*np.sqrt(ev),x=ev) )
-    # radial_cg[i, :, :] *= scale
-    
-
-    v_knots = uniform_knots(k_domain, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER) #create_dg_grid(k_domain, sig_pts, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER)
-    cf      = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=None, knot_vec=v_knots)
     spec    = cf._spec
-    spec._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
+    spec._num_q_radial=params.BEVelocitySpace.NUM_Q_VR
+
+    if (args.radial_poly == "chebyshev"):
+        if sig_pts is not None and sig_pts[0] < k_domain[1] and sig_pts[0] >= k_domain[0]:
+            spec._r_grid   = [(k_domain[0], sig_pts[0]) ,  (sig_pts[0] , k_domain[1])]
+            spec._r_basis_p= [basis.Chebyshev(domain=(-1,1), window=ele_domain) for ele_domain in spec._r_grid]
+        else:
+            spec._r_grid   = [(k_domain[0], k_domain[1])]
+            spec._r_basis_p= [basis.Chebyshev(domain=(-1,1), window=ele_domain) for ele_domain in spec._r_grid]
+        
     mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
     temp_op   = BEUtils.temp_op(spec, None, 64, 2, 1)
     avg_vop   = BEUtils.mean_velocity_op(spec, None, 64, 4, 1)
@@ -645,7 +605,7 @@ for i, value in enumerate(args.sweep_values):
         total_cs += cs
         rates[col_idx].append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)*np.trapz(radial[i,0,:]*ev*cs,x=ev) )
 
-        if col == "g2" or col == "g2Const" or col == "g2Smooth":
+        if col == "g2" or col == "g2Const" or col == "g2Smooth" or col=="g2step":
             total_cs += rates[col_idx][-1]/np.sqrt(ev)/np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)
 
     D.append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(radial[i,0,:]*ev/total_cs,x=ev) )
@@ -788,9 +748,9 @@ if (1):
     fig.subplots_adjust(wspace=0.4)
 
     if (args.radial_poly == "bspline"):
-        fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")")
+        fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + "q_per_knot="+str(args.spline_q_pts_per_knot))
         # plt.show()
-        plt.savefig("bspline_dg_vs_bolsig_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
+        plt.savefig("us_vs_bolsig_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
     else:
         fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")")
         # plt.show()

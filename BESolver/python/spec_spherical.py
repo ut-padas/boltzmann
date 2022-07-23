@@ -3,6 +3,7 @@
 
 """
 import numpy as np
+import scipy
 import basis 
 import enum
 from scipy.special import sph_harm
@@ -35,8 +36,12 @@ class SpectralExpansionSpherical:
         self._basis_1d = list()
         self._q_mode   = QuadMode.GMX
 
-        for deg in range(self._p+1):
-            self._basis_1d.append(self._basis_p.Pn(deg))
+        #radial grid domains
+        self._r_grid     = [self._window]
+        self._r_basis_p  = [self._basis_p]
+
+        # for deg in range(self._p+1):
+        #     self._basis_1d.append(self._basis_p.Pn(deg))
 
     def get_radial_basis(self):
         return self._basis_p
@@ -66,7 +71,7 @@ class SpectralExpansionSpherical:
         """
         Evaluates 
         """
-        return np.nan_to_num(self._basis_1d[k](r,l))
+        return np.nan_to_num(self._basis_p.Pn(k)(r,l)) #np.nan_to_num(self._basis_1d[k](r,l))
     
     def basis_derivative_eval_radial(self,r,k,l,dorder):
         """
@@ -81,14 +86,14 @@ class SpectralExpansionSpherical:
         return self._sph_harm_real(l, m, theta, phi)
 
     def create_vec(self,dtype=float):
-        num_c = (self._p +1)*len(self._sph_harm_lm)
+        num_c = (self._p +1)*len(self._sph_harm_lm) * len(self._r_grid)
         return np.zeros((num_c,1),dtype=dtype)
 
     def create_mat(self,dtype=float):
         """
         Create a matrix w.r.t the number of spectral coefficients. 
         """
-        num_c = (self._p +1)*len(self._sph_harm_lm)
+        num_c = (self._p +1)*len(self._sph_harm_lm) * len(self._r_grid)
         return np.zeros((num_c,num_c),dtype=dtype)
     
     def get_num_coefficients(self):
@@ -96,7 +101,13 @@ class SpectralExpansionSpherical:
         returns the number of coefficients in  the spectral
         representation. 
         """
-        return (self._p +1)*len(self._sph_harm_lm)
+        return (self._p +1) * len(self._sph_harm_lm) * len(self._r_grid)
+
+    def get_num_radial_domains(self):
+        return len(self._r_grid)
+    
+    def get_dof_per_radial_domain(self):
+        return (self._p+1) * len(self._sph_harm_lm)
 
     def compute_mass_matrix(self, v_th=1.0):
         """
@@ -132,7 +143,7 @@ class SpectralExpansionSpherical:
 
 
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot))
+            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             l_modes = list(set([l for l,_ in self._sph_harm_lm]))
             
             mm=np.zeros((num_p*num_sh, num_p*num_sh))
@@ -155,26 +166,47 @@ class SpectralExpansionSpherical:
                                 mm[idx_pqs, idx_klm] = mm_l[p,k]
             return mm
         elif self.get_radial_basis_type() == basis.BasisType.CHEBYSHEV_POLY:
-            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             l_modes  = list(set([l for l,_ in self._sph_harm_lm]))
-            
-            mm=np.zeros((num_p*num_sh, num_p*num_sh))
-            for i,l in enumerate(l_modes):
-                Vq   = self.Vq_r(gx, l)
-                mm_l = np.array([ self._basis_p.Wx()(gx) * Vq[p,:] * Vq[k,:] for p in range(num_p) for k in range(num_p)])
-                mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
+            mm       = self.create_mat()
+            for e_id , ele in enumerate(self._r_grid):
+                self._basis_p  = self._r_basis_p[e_id]
+                print(self._basis_p._window)
+                [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+                for i,l in enumerate(l_modes):
+                    Vq   = self.Vq_r(gx, l)
+                    mm_l = np.array([ self._basis_p.Wx()(gx) * Vq[p,:] * Vq[k,:] for p in range(num_p) for k in range(num_p)])
+                    mm_l = np.dot(mm_l,gw).reshape(num_p,num_p)
 
-                for lm_idx, (l1,m) in enumerate(self._sph_harm_lm):
-                    if(l==l1):
-                        for p in range(num_p):
-                            for k in range(num_p):
-                                idx_pqs = p * num_sh + lm_idx
-                                idx_klm = k * num_sh + lm_idx
-                                mm[idx_pqs, idx_klm] = mm_l[p,k]
-
+                    for lm_idx, (l1,m) in enumerate(self._sph_harm_lm):
+                        if(l==l1):
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    idx_pqs = e_id * (num_p * num_sh) + p * num_sh + lm_idx
+                                    idx_klm = e_id * (num_p * num_sh) + k * num_sh + lm_idx
+                                    mm[idx_pqs, idx_klm] = mm_l[p,k]
             return mm
+
+    def inverse_mass_mat(self, v_th=1, Mmat=None):
+        
+        if Mmat is None:
+            Mmat=self.compute_mass_matrix(v_th)
+
+        def c_inv(mmat):
+            L    = np.linalg.cholesky(mmat)
+            Linv = scipy.linalg.solve_triangular(L, np.identity(mmat.shape[0]),lower=True) 
+            #print("cholesky solver inverse : ", np.linalg.norm(np.matmul(L,Linv)-np.eye(L.shape[0]))/np.linalg.norm(np.eye(L.shape[0])))
+            return np.matmul(np.transpose(Linv),Linv)
             
-           
+        
+        minv         = self.create_mat()
+        dof_per_elem = (self._p+1) * len(self._sph_harm_lm)
+        for e_id, ele_domain in enumerate(self._r_grid):
+            ib = (e_id) * dof_per_elem
+            ie = (e_id+1) * dof_per_elem
+            minv[ib:ie,ib:ie] = c_inv(Mmat[ib : ie, ib : ie])
+        
+        return minv
+
     def Vq_r(self, v_r, l, scale=1):
         """
         compute the basis Vandermonde for the all the basis function
@@ -190,7 +222,23 @@ class SpectralExpansionSpherical:
             Vq[i] = scale * self.basis_eval_radial(v_r,i,l)
         
         return Vq
-    
+
+    def dg_Vq_r(self,v_r, l, e_i, scale=1.0):
+        num_p        = self._p+1
+        num_q_v_r    = len(v_r)
+
+        _shape = tuple([num_p]) + v_r.shape
+        Vq = np.zeros(_shape)
+
+        vw  = self._r_basis_p[e_i]._window
+        idx_set = np.logical_and(v_r>= vw[0], v_r <=vw[1])
+
+        for p in range(num_p):
+            Vq[p, idx_set] = self._r_basis_p[e_i].Pn(p)(v_r[idx_set],l)
+        #print(Vq)
+        return Vq
+
+
     def Vdq_r(self, v_r, l, d_order=1, scale=1):
         """
         compute the basis Vandermonde for the all the basis function
@@ -272,7 +320,7 @@ class SpectralExpansionSpherical:
             num_l  = len(lmodes)
             l_max  = lmodes[-1]
             
-            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             
             mm1=np.zeros((num_p,num_p,num_l,num_l))
             mm2=np.zeros((num_p,num_p,num_l,num_l))
@@ -311,7 +359,7 @@ class SpectralExpansionSpherical:
         else:
             raise NotImplementedError
 
-    def compute_advection_matix_ibp(self):
+    def compute_advection_matix_dg(self):
         if self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
             return assemble_advection_matix_lp_max(self._p, self._sph_harm_lm)
         elif self.get_radial_basis_type() == basis.BasisType.LAGUERRE:
@@ -326,7 +374,7 @@ class SpectralExpansionSpherical:
             num_l  = len(lmodes)
             l_max  = lmodes[-1]
             
-            [gx, gw] = self._basis_p.Gauss_Pn(basis.XlBSpline.get_num_q_pts(self._p,self._basis_p._sp_order,self._basis_p._q_per_knot),True)
+            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             
             
             D_pk=np.zeros((num_p,num_p))
@@ -376,98 +424,61 @@ class SpectralExpansionSpherical:
             k_vec    = self._basis_p._t
             dg_idx   = self._basis_p._dg_idx
             sp_order = self._basis_p._sp_order
-
-
-            if len(dg_idx)>=4:
-                # flux reconstruction operators
+            
+            eps= 2*np.finfo(float).eps
+            flux_mat=np.zeros_like(advec_mat)
+            for f_id in range(1, len(dg_idx)-2):
                 f_lr  = np.eye(num_p) 
                 f_rl  = np.eye(num_p) 
 
-                # left to right flux reconstruction
-                f_lr[dg_idx[2]:, :]         = 0
+                f_lr[dg_idx[f_id+1]:, :]       = 0
+                f_rl[0 : dg_idx[f_id] + 1 , :] = 0
 
-                # right to left flux reconstruction
-                f_rl[0 : dg_idx[1] + 1 , :] = 0
-                # print("l to r")
-                # print(f_lr)
-                # print("r to l")
-                # print(f_rl)
+                f=(dg_idx[f_id], dg_idx[f_id+1])
+                fx = k_vec[f[0] + sp_order]
+                assert fx == k_vec[f[1] + sp_order], "flux assembly face coords does not match"
+                
+                fpk_left  = np.array([self.basis_eval_radial(fx-eps,p,0) for p in range(num_p)])
+                fpk_right = np.array([self.basis_eval_radial(fx+eps,p,0) for p in range(num_p)])
+                                    
+                fpk_left  *= fx**2 * self.basis_eval_radial(fx-eps,f[0],0)
+                fpk_right *= fx**2 * self.basis_eval_radial(fx+eps,f[1],0)
 
-                # face loop
-                flux_mat=np.zeros_like(advec_mat)
-                face_ids=[(1,2)]
-                for f in face_ids:
-                    fx = k_vec[dg_idx[f[0]] + sp_order]
-                    assert fx== k_vec[dg_idx[f[1]] + sp_order], "flux assembly face coords does not match"
-                    eps= 2*np.finfo(float).eps
+                flx_left  = np.dot(fpk_left , f_lr)
+                flx_right = np.dot(fpk_right, f_rl)
 
-                    d1 = (dg_idx[f[0]-1], dg_idx[f[0]+1])
-                    d2 = (dg_idx[f[1]], dg_idx[f[1]+1])
+                #print(flux_from_left)
+                #print(flux_from_right)
+                for lm_idx,lm in enumerate(self._sph_harm_lm):
+                    if eA[lm_idx, lm_idx]>0:
+                        for k in range(num_p):
+                            flux_mat[f[0] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flx_left[k]
+                            flux_mat[f[1] * num_sh + lm_idx, k*num_sh + lm_idx] -= eA[lm_idx, lm_idx] * flx_left[k]
+                    else:
+                        for k in range(num_p):
+                            flux_mat[f[1] * num_sh + lm_idx, k*num_sh + lm_idx] -= eA[lm_idx, lm_idx] * flx_right[k]
+                            flux_mat[f[0] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flx_right[k]
 
-                    f_pk_left  = np.zeros(num_p) 
-                    f_pk_right = np.zeros(num_p) 
 
-                    v_fx=np.array([self.basis_eval_radial(fx-eps,p,0) for p in range(num_p)])
+                if (f_id+2 == len(dg_idx)-1):
                     
-                    v_fx[v_fx<1e-10] = 0
-                    v_fx[v_fx>1-eps] = 1.0
-                    v_fx=v_fx.reshape(1,num_p)
-                    
-                    f_pk_left = np.matmul(np.transpose(v_fx),v_fx) * fx**2
-
-                    v_fx=np.array([self.basis_eval_radial(fx+eps,p,0) for p in range(num_p)])
-                    v_fx[v_fx<1e-10] = 0
-                    v_fx[v_fx>1-eps] = 1.0
-                    v_fx=v_fx.reshape(1,num_p)
-                    
-                    f_pk_right = np.matmul(np.transpose(v_fx),v_fx) * fx**2
-                    
-                    flux_from_left  = np.matmul(f_pk_left, f_lr)
-                    flux_from_right = np.matmul(f_pk_right, f_rl)
-
-                    #print(flux_from_left)
-                    #print(flux_from_right)
+                    fx = k_vec[dg_idx[f_id+2] + sp_order]
+                    fpk_left  = np.array([self.basis_eval_radial(fx-eps,p,0) for p in range(num_p)])
+                    fpk_left  *= fx**2 * self.basis_eval_radial(fx-eps,f[0],0)
+                    flx_left  = np.dot(fpk_left , f_lr)
                     
                     for lm_idx,lm in enumerate(self._sph_harm_lm):
-                        if eA[lm_idx, lm_idx]>0:
+                        if eA[lm_idx, lm_idx] > 0:
                             for k in range(num_p):
-                                flux_mat[dg_idx[f[0]] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flux_from_left[dg_idx[f[0]],k]
-                                flux_mat[dg_idx[f[1]] * num_sh + lm_idx, k*num_sh + lm_idx] -= eA[lm_idx, lm_idx] * flux_from_left[dg_idx[f[0]],k]
+                                flux_mat[dg_idx[f_id+2] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flx_left[k]
+                        # else:
+                        #     for k in range(num_p):
+                        #         flux_mat[dg_idx[f_id+2] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flx_left[k]
                             
-                        else:
-                            for k in range(num_p):
-                                flux_mat[dg_idx[f[1]] * num_sh + lm_idx, k*num_sh + lm_idx] -= eA[lm_idx, lm_idx] * flux_from_right[dg_idx[f[1]],k]
-                                flux_mat[dg_idx[f[0]] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flux_from_right[dg_idx[f[1]],k]
+                    
 
                 
-                # fx = k_vec[dg_idx[-1] + sp_order]
-                # eps= 2*np.finfo(float).eps
-
-                # f_pk  = np.zeros(num_p) 
-                # v_fx=np.array([self.basis_eval_radial(fx-eps,p,0) for p in range(num_p)])
-                
-                # v_fx[v_fx<1e-10] = 0
-                # v_fx[v_fx>1-eps] = 1.0
-                # v_fx=v_fx.reshape(1,num_p)
-                
-                # f_pk = np.matmul(np.transpose(v_fx),v_fx) * fx**2
-
-                # flux_right_bdy  = np.matmul(f_pk, f_rl)
-                # #flux_from_right = np.matmul(f_pk_right, f_rl)
-                # print("bdy: flux left")
-                # print(flux_right_bdy)
-                
-                # for lm_idx,lm in enumerate(self._sph_harm_lm):
-                #     if eA[lm_idx, lm_idx]>0:
-                #         for k in range(num_p):
-                #             flux_mat[dg_idx[-1] * num_sh + lm_idx, k*num_sh + lm_idx] += eA[lm_idx, lm_idx] * flux_right_bdy[dg_idx[-1],k]
-                #     else:
-                #         advec_mat[(dg_idx[-1]) * num_sh + lm_idx, :] = 0
-                #         advec_mat[(dg_idx[-1]) * num_sh + lm_idx, (dg_idx[-1]-1) * num_sh + lm_idx] = -1
-                #         advec_mat[(dg_idx[-1]) * num_sh + lm_idx, (dg_idx[-1]) * num_sh + lm_idx] = 1
-                #         pass
-
-                advec_mat-=flux_mat
+            advec_mat-=flux_mat
             return advec_mat, eA, qA
         elif self.get_radial_basis_type() == basis.BasisType.CHEBYSHEV_POLY:
             num_p  = self._p+1
@@ -476,18 +487,8 @@ class SpectralExpansionSpherical:
             lmodes = list(set([l for l,_ in self._sph_harm_lm]))
             num_l  = len(lmodes)
             l_max  = lmodes[-1]
-            
-            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
-            
-            D_pk=np.zeros((num_p,num_p))
-            S_pk=np.zeros((num_p,num_p))
-        
-            for p in range(num_p):
-                for k in range(num_p):
-                    D_pk[p,k] = np.dot(self._basis_p.Wx()(gx) * self.basis_derivative_eval_radial(gx,p,0,1) * self.basis_eval_radial(gx,k,0), gw)
-                    S_pk[p,k] = np.dot((1/gx) * self._basis_p.Wx()(gx) * self.basis_eval_radial(gx,p,0) * self.basis_eval_radial(gx,k,0), gw)
-            
 
+            # compute the advection coefficient matrices
             A_qs_lm=np.zeros((num_sh,num_sh))
             B_qs_lm=np.zeros((num_sh,num_sh))
 
@@ -503,37 +504,92 @@ class SpectralExpansionSpherical:
                     lm_idx = self._sph_harm_lm.index(lm)
                     A_qs_lm[qs_idx,lm_idx] = BM(lm[0],lm[1])
                     B_qs_lm[qs_idx,lm_idx] = BD(lm[0],lm[1])
-
-            advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
-            for qs_idx,qs in enumerate(self._sph_harm_lm):
-                for lm_idx,lm in enumerate(self._sph_harm_lm):
-                    advec_mat[:,qs_idx,:,lm_idx] = A_qs_lm[qs_idx,lm_idx] * (D_pk[:,:] + 2 * S_pk[:,:]) - B_qs_lm[qs_idx,lm_idx] * S_pk[:,:]
-
-            advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
-            return advec_mat, np.eye(num_sh) , np.eye(num_sh)
-
-            #eA, qA = np.linalg.eig(A_qs_lm)
-            #eA     = np.diag(eA)
-            #eA=A_qs_lm
-            #qA=np.eye(A_qs_lm.shape[0])
-
-            #print("eig: ", np.linalg.norm(A_qs_lm- np.matmul(qA, np.matmul(eA, np.transpose(qA)))))
-            # S_qs_lm = (2 * eA  - np.matmul(np.transpose(qA), np.matmul(B_qs_lm, qA)))
-            # D_qs_km = eA
-
-            # #S_qs_lm = (2 * A_qs_lm - B_qs_lm)
-            # #D_qs_km = A_qs_lm
-            # advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
-            # for qs_idx,qs in enumerate(self._sph_harm_lm):
-            #     for lm_idx,lm in enumerate(self._sph_harm_lm):
-            #         advec_mat[:,qs_idx,:,lm_idx] = S_pk[:,:] * S_qs_lm[qs_idx, lm_idx]  +  D_pk[:,:] * D_qs_km [qs_idx, lm_idx] 
-
-
-            # advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
             
-            # k_vec    = self._basis_p._t
-            # dg_idx   = self._basis_p._dg_idx
-            # sp_order = self._basis_p._sp_order
+
+            eA, qA = np.linalg.eig(A_qs_lm)
+            eA     = np.diag(eA)
+
+            S_qs_lm = (2 * eA  - np.matmul(np.transpose(qA), np.matmul(B_qs_lm, qA)))
+            D_qs_km = eA
+
+            advmat_diag = list()
+            for e_id, ele_domain  in enumerate(self._r_grid):
+                self._basis_p = self._r_basis_p[e_id]
+                [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+                
+                D_pk=np.zeros((num_p,num_p))
+                S_pk=np.zeros((num_p,num_p))
+            
+                for p in range(num_p):
+                    for k in range(num_p):
+                        D_pk[p,k] = np.dot(self._basis_p.Wx()(gx) * self.basis_derivative_eval_radial(gx,p,0,1) * self.basis_eval_radial(gx,k,0), gw)
+                        S_pk[p,k] = np.dot((1/gx) * self._basis_p.Wx()(gx) * self.basis_eval_radial(gx,p,0) * self.basis_eval_radial(gx,k,0), gw)
+                
+                # # without diagonalization. 
+                # advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
+                # for qs_idx,qs in enumerate(self._sph_harm_lm):
+                #     for lm_idx,lm in enumerate(self._sph_harm_lm):
+                #         advec_mat[:,qs_idx,:,lm_idx] = A_qs_lm[qs_idx,lm_idx] * (D_pk[:,:] + 2 * S_pk[:,:]) - B_qs_lm[qs_idx,lm_idx] * S_pk[:,:]
+
+                # advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)
+                advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
+                for qs_idx,qs in enumerate(self._sph_harm_lm):
+                    for lm_idx,lm in enumerate(self._sph_harm_lm):
+                        advec_mat[:,qs_idx,:,lm_idx] = S_qs_lm[qs_idx, lm_idx] * S_pk[:,:]   +  D_qs_km [qs_idx, lm_idx] * D_pk[:,:]
+
+                advec_mat = advec_mat.reshape((num_p * num_sh, num_p * num_sh))
+                advmat_diag.append(advec_mat)
+
+            advec_mat      = scipy.linalg.block_diag(*advmat_diag)
+            flux_mat       = self.create_mat()
+            
+            dof_p_d        = (self._p+1) * len(self._sph_harm_lm)
+            
+            for e_id in range(len(self._r_grid)-1):
+                fx = self._r_grid[e_id][1]
+                assert fx == self._r_grid[e_id + 1][0], "radial grid faces are not aligned. "
+                fx_fac = (fx**2) * np.exp(-fx**2)
+                for lm_idx,lm in enumerate(self._sph_harm_lm):
+                    if eA[lm_idx, lm_idx]>0:
+                        for p in range(num_p):
+                            for k in range(num_p):
+                                rid = e_id * dof_p_d + p * num_sh + lm_idx
+                                cid = e_id * dof_p_d + k * num_sh + lm_idx
+                                flux_mat[rid   ,         cid]   +=  eA[lm_idx, lm_idx] * fx_fac * self._r_basis_p[e_id].Pn(p)(fx,0)   * self._r_basis_p[e_id].Pn(k)(fx,0)   
+                                flux_mat[rid + dof_p_d , cid]   += -eA[lm_idx, lm_idx] * fx_fac * self._r_basis_p[e_id+1].Pn(p)(fx,0) * self._r_basis_p[e_id].Pn(k)(fx,0)  
+                    else:
+                        for p in range(num_p):
+                            for k in range(num_p):
+                                rid = (e_id+1) * dof_p_d  + p * num_sh + lm_idx
+                                cid = (e_id+1) * dof_p_d  + k * num_sh + lm_idx
+                                flux_mat[rid           , cid]   += -eA[lm_idx, lm_idx] * fx_fac * self._r_basis_p[e_id+1].Pn(p)(fx,0) * self._r_basis_p[e_id+1].Pn(k)(fx,0)
+                                flux_mat[rid-dof_p_d   , cid]   +=  eA[lm_idx, lm_idx] * fx_fac * self._r_basis_p[e_id].Pn(p)(fx,0)   * self._r_basis_p[e_id+1].Pn(k)(fx,0)
+
+            e_id    = len(self._r_grid)-1
+            fx      = self._r_grid[-1][1]
+            fx_fac  = (fx**2) * np.exp(-fx**2)
+            for lm_idx,lm in enumerate(self._sph_harm_lm):
+                if eA[lm_idx, lm_idx]>0:
+                    for p in range(num_p):
+                        for k in range(num_p):
+                            rid = e_id * dof_p_d + p * num_sh + lm_idx
+                            cid = e_id * dof_p_d + k * num_sh + lm_idx
+                            flux_mat[rid , cid]   +=  eA[lm_idx, lm_idx] * fx_fac * self._r_basis_p[e_id].Pn(p)(fx,0)   * self._r_basis_p[e_id].Pn(k)(fx,0)
+            #     else:
+            #         for p in range(num_p):
+            #             for k in range(num_p):
+            #                 rid = e_id * dof_p_d + p * num_sh + lm_idx
+            #                 cid = e_id * dof_p_d + k * num_sh + lm_idx
+            #                 flux_mat[rid , cid]   +=  eA[lm_idx, lm_idx] * fx_fac * self._r_basis_p[e_id].Pn(p)(fx,0)   * self._r_basis_p[e_id].Pn(k)(fx,0)
+
+                            
+             
+
+            advec_mat = advec_mat - flux_mat
+            #print(flux_mat)
+            #print(advec_mat)
+            return advec_mat, eA, qA
+
         else:
             raise NotImplementedError
 

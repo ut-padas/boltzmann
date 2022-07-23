@@ -118,7 +118,7 @@ class Collisions(abc.ABC):
         s_theta = np.sin(theta[index_set])
         
         ## 04/21/22 : note this is only needed for b-spline case since it has 0 in the velocity bounds
-        s_theta[s_theta==0]+=np.finfo(float).eps
+        #s_theta[s_theta==0]+=np.finfo(float).eps
 
         E1    = np.cross(E0,ei)
         E1[index_set,0] = E1[index_set,0]/s_theta
@@ -527,7 +527,7 @@ class Collisions(abc.ABC):
             G2 cross section data fit with analytical function (ionization)
             """
             y=np.zeros_like(ev)
-            y[ev>15.76]=5e-20
+            y[ev>15.76]=5e-21
             #(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1))
             # a= 15.76
             # b= 1000.76

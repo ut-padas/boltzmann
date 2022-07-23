@@ -2,6 +2,7 @@
 @package: basis functions utilities
 """
 
+from random import uniform
 import numpy as np
 import enum
 import abc
@@ -148,8 +149,8 @@ class Chebyshev(Basis):
         """
         gx,gw  = scipy.special.roots_chebyt(deg, mu=False)
         (a,b)  = (self._window[0], self._window[1])
-        gx     = (np.flip(gx) * (b-a) * 0.5) +  0.5 * (a+b)  
-        gw     = np.flip(gw)  * (b-a) * 0.5
+        gx     = (gx * (b-a) * 0.5) +  0.5 * (a+b)  
+        gw     = gw  * (b-a) * 0.5
         
         return gx,gw
 
@@ -329,42 +330,70 @@ class XlBSpline(Basis):
     def get_num_q_pts(p_order, s_order, pts_per_knot):
         return pts_per_knot*(p_order)
 
-    def __init__(self,k_domain,spline_order, num_p, sig_pts=None, knots_vec=None):
-        self._basis_type = BasisType.SPLINES
-        self._domain     = k_domain
-        self._window     = k_domain
+    @staticmethod
+    def uniform_knots(k_domain, num_p, sp_order):
         """
         x x x     | * * * * * * * * * * | x  x  x
          sp + 1          num_p -2          sp+1   
         """
+        num_k      = 2*sp_order + (num_p -(sp_order+1)) + 2
+        t          = (k_domain[0])*np.ones(sp_order)
+        t          = np.append(t,np.linspace(k_domain[0] , k_domain[1] , num_k-2*sp_order -1 , endpoint=False))
+        t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+        assert len(t)==num_k , "knot length of %d does not match with spline order %d"%(len(t),sp_order)
+        return t
+
+    @staticmethod
+    def uniform_dg_knots(k_domain, num_p, sp_order, dg_pts):
+        if dg_pts is None:
+            return XlBSpline.uniform_knots(k_domain, num_p, sp_order)
+
+        _dg_pts = dg_pts[np.logical_and(dg_pts>k_domain[0], dg_pts<k_domain[1])]
+        if len(_dg_pts)==0:
+            return XlBSpline.uniform_knots(k_domain, num_p, sp_order)
+        
+        dg_domains = [(k_domain[0], _dg_pts[0])]
+        dg_domains.extend([(dg_pts[i-1], dg_pts[i]) for i in range(1, len(_dg_pts))])
+        dg_domains.append((_dg_pts[-1], k_domain[1]))
+        
+        num_d      = len(dg_domains)
+        _num_p     = np.ones(num_d,dtype=int) * ((num_p) //num_d) #np.array(,dtype=int)
+        #_num_p     = np.array([int(np.floor(num_p*(dg_domains[i][1]-dg_domains[i][0])/(k_domain[1]-k_domain[0]))) for i in range(0,num_d)])
+        _num_p[-1] = num_p-np.sum(_num_p[0:-1])
+
+        # if(_num_p[-1]<2*sp_order):
+        #     _num_p[-2]-=2*sp_order
+        #     _num_p[-1]+=2*sp_order
+
+        print("domains : ", dg_domains)
+        print("nr: ", _num_p)
+        assert (_num_p>0).all(), "invalide radial polynomial partition"
+        
+        t = XlBSpline.uniform_knots(dg_domains[0], _num_p[0], sp_order)
+        for i in range(1, num_d):
+            t=np.append(t, XlBSpline.uniform_knots(dg_domains[i], _num_p[i], sp_order)[sp_order+1:])
+        
+        #print(t)
+        num_k      = np.sum(np.array([(2*sp_order + (_num_p[i] -(sp_order+1)) + 2) for i in range(num_d)])) - (num_d-1)*(sp_order+1)
+        assert len(t)==num_k , "knot length of %d does not match with spline order %d"%(len(t),sp_order)
+        return t
+    
+
+    def __init__(self,k_domain,spline_order, num_p, sig_pts=None, knots_vec=None):
+        self._basis_type = BasisType.SPLINES
+        self._domain     = k_domain
+        self._window     = k_domain
+        self._kdomain    = (k_domain[0], k_domain[1])
+        
         # first and last splines have repeated knots, 
-        num_k            = 2*spline_order + (num_p -2) + 2
+        num_k            = 2*spline_order + (num_p -(spline_order+1)) + 2
         knot_base        = 2
 
         if knots_vec is None:
-            # self._t          = (k_domain[0])*np.ones(spline_order+1)
-            # self._t          = np.append(self._t,np.logspace(-3, np.log(k_domain[1])/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base, endpoint=False))
-            # self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
-
-            self._t          = (k_domain[0])*np.ones(spline_order)
-            self._t          = np.append(self._t,np.linspace(k_domain[0] , k_domain[1] , num_k-2*spline_order -1 , endpoint=False))
-            self._t          = np.append(self._t, k_domain[1]*np.ones(spline_order+1))
-            self._kdomain    = (k_domain[0], k_domain[1])
-
+            self._t      = XlBSpline.uniform_dg_knots(k_domain, num_p, spline_order, sig_pts)
         else:
-            assert num_k == len(knots_vec) , "specified knot vec of length %d does not match with the required knot points %d"%(len(knots_vec),num_k) 
             self._t = np.copy(knots_vec)
             self._kdomain    = (self._t[0], self._t[-1])
-            
-
-        if(sig_pts is not None):
-            for sg in sig_pts:
-                if sg >=k_domain[0] and sg<k_domain[1]:
-                    idx   = np.argmin(abs(self._t - sg))
-                    self._t[idx] = sg
-        
-        print("bsplines knots:")
-        print(self._t)
         
         self._num_c_pts  = num_p
         self._sp_order   = spline_order
@@ -373,15 +402,26 @@ class XlBSpline(Basis):
 
         self._dg_idx     = list()
         for i in range(num_p):
-            if len(np.unique(self._t[i:i+spline_order+2])) < len(self._t[i:i+spline_order+2]):
+            #print("i", i , "uq", np.unique(self._t[i:i+spline_order+2]), "k", self._t[i:i+spline_order+2])
+            if len(np.unique(self._t[i:i+spline_order+2])) == 2:
                 self._dg_idx.append(i)
 
-        print(self._dg_idx)
+        
+        x_bdy = np.unique(np.array([self._t[self._dg_idx[i] + spline_order] for i in range(len(self._dg_idx))])) 
+        self._dg_domains = [(x_bdy[i], x_bdy[i+1]) for i in range(len(x_bdy)-1)]
 
+        self._num_knot_intervals=0
+        for i in range(len(self._t)-1):
+            if self._t[i] != self._t[i+1]:
+                self._num_knot_intervals+=1
+
+        #print("bsplines knots:")
+        #print(self._t)
+        #print(self._num_knot_intervals)
+        print("dg basis idx ", self._dg_idx)
+        print("dg domains   ", self._dg_domains)
         self._scheme     = quadpy.c1.gauss_legendre(self._q_per_knot)
         
-
-
     def Pn(self,deg):
         return lambda x,l : np.nan_to_num(self._splines[deg](x))
         #return lambda x,l : np.nan_to_num(self._splines[deg](x)) if deg>=l else np.nan_to_num(self._splines[deg](x)) * x**(l-deg)
@@ -391,20 +431,23 @@ class XlBSpline(Basis):
         Quadrature points and the corresponding weights for 1d Gauss quadrature. 
         The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
         """
-        num_intervals = self._num_c_pts -1
-        assert deg % num_intervals == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,num_intervals)
-        qx = np.zeros(deg)
-        qw = np.zeros(deg)
-        for i in range(self._sp_order, self._sp_order + num_intervals):
-            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = 0.5 * (self._t[i+1] - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1] + self._t[i]), 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights 
+        # num_intervals = self._num_c_pts -1
+        # assert deg % num_intervals == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,num_intervals)
+        # qx = np.zeros(deg)
+        # qw = np.zeros(deg)
+        # for i in range(self._sp_order, self._sp_order + num_intervals):
+        #     qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = 0.5 * (self._t[i+1] - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1] + self._t[i]), 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights 
         
-        # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
-        # print(qx.shape)
-        # print("t",self._t)
-        # print(qx)
-        # print(qw)
-        # print(np.sum(qw))
-        # print(qx)
+        # assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "weights computed for splines does not match the knots domain"
+        # return qx,qw
+        qx=np.array([])
+        qw=np.array([])
+        for i in range(len(self._t)-1):
+            if self._t[i] != self._t[i+1]:
+                qx = np.append(qx, 0.5 * (self._t[i+1] - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1] + self._t[i]))
+                qw = np.append(qw, 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights)
+
+        assert deg == len(qx), "qx len %d is not the requested %d"%(len(qx), deg)
         assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "weights computed for splines does not match the knots domain"
         return qx,qw
     

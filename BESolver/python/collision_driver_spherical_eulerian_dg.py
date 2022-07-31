@@ -358,7 +358,6 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
         print("initial mass : %.12E"%(np.dot(u, h_prev)))
         h_prev   = h_prev / np.dot(u, h_prev)
         
-        
         nn       = Cmat.shape[0]
         Ji       = np.zeros((nn+1,nn))
         Rf       = np.zeros(nn+1)
@@ -466,7 +465,8 @@ ev = bolsig_ev
 params.BEVelocitySpace.SPH_HARM_LM = [[i,0] for i in range(args.l_max+1)]
 num_sph_harm = len(params.BEVelocitySpace.SPH_HARM_LM)
 
-radial     = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial      = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial_base = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 radial_cg  = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 radial_projection = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 #radial_base = np.zeros((len(args.sweep_values), len(ev)))
@@ -497,13 +497,17 @@ for i, value in enumerate(args.sweep_values):
     c_gamma = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
     if "g2Smooth" in args.collisions or "g2" in args.collisions or "g2step" in args.collisions or "g2Regular" in args.collisions:
         sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
+        print("singularity pts : ", sig_pts,"v/vth", (sig_pts * VTH/c_gamma)**2,"eV")
     else:
         sig_pts = None
-    print("singularity pts : ", sig_pts)
+        #sig_pts = np.sqrt(np.array([0.3 * ev[-1], 0.5 * ev[-1]])) * c_gamma/VTH
+        
 
-    ev_range = ((0*VTH/c_gamma)**2, (1.+ 1e-2) * ev[-1])
+    ev_range = ((0*VTH/c_gamma)**2, (2) * ev[-1])
     k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
+    if(sig_pts is not None):
+        print("sig energy ", (sig_pts*VTH/c_gamma)**2)
 
 
     if args.sweep_param == "Nr":
@@ -566,10 +570,11 @@ for i, value in enumerate(args.sweep_values):
 
     if (args.radial_poly == "chebyshev"):
         if sig_pts is not None and sig_pts[0] < k_domain[1] and sig_pts[0] >= k_domain[0]:
-            spec._r_grid   = [(k_domain[0], sig_pts[0]) ,  (sig_pts[0] , k_domain[1])]
+            spec._r_grid   = [(k_domain[0], sig_pts[0]) , (sig_pts[0], sig_pts[1]), (sig_pts[1] , k_domain[1])]
             spec._r_basis_p= [basis.Chebyshev(domain=(-1,1), window=ele_domain) for ele_domain in spec._r_grid]
         else:
-            spec._r_grid   = [(k_domain[0], k_domain[1])]
+            d_intervals    = np.linspace(k_domain[0],k_domain[1],1)
+            spec._r_grid   = [(d_intervals[i], d_intervals[i+1]) for i in range(len(d_intervals)-1)]
             spec._r_basis_p= [basis.Chebyshev(domain=(-1,1), window=ele_domain) for ele_domain in spec._r_grid]
         
     mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
@@ -578,10 +583,11 @@ for i, value in enumerate(args.sweep_values):
     eavg_to_K = (2/(3*scipy.constants.Boltzmann))
     ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
 
-    data            = solve_collop_dg(args.steady_state, [cf], maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
-    radial[i, :, :] = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)
-    scale            = 1./( np.trapz(radial[i,0,:]*np.sqrt(ev),x=ev) )
-    radial[i, :, :] *= scale
+    data               = solve_collop_dg(args.steady_state, [cf], maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
+    radial_base[i,:,:] = BEUtils.compute_radial_components(ev, spec, data[0,:], maxwellian, VTH, 1)
+    radial[i, :, :]    = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)
+    scale              = 1./( np.trapz(radial[i,0,:]*np.sqrt(ev),x=ev) )
+    radial[i, :, :]   *= scale
     
     run_data.append(data)
 
@@ -671,9 +677,9 @@ if (1):
 
             color = next(plt.gca()._get_lines.prop_cycler)['color']
             plt.semilogy(ev,  abs(radial[i, l_idx]), '-', label=lbl, color=color)
-            #plt.semilogy(ev,  abs(radial_projection[i, l_idx]), '--', label=lbl+" (proj)", color=color)
-            # if l_idx == 0:
-            #     plt.semilogy(ev,  abs(radial_base[i]), ':', label=lbl+" (base)", color=color)
+            # plt.semilogy(ev,  abs(radial_projection[i, l_idx]), '--', label=lbl+" (proj)", color=color)
+            if l_idx == 0 and i==len(args.sweep_values)-1:
+                plt.semilogy(ev,  abs(radial_base[-1,l_idx]), ':', label=lbl+" (base)", color=color)
                 
             # plt.semilogy(ev, -radial[i, l_idx], 'o', label=lbl, color=color, markersize=3, markerfacecolor='white')
 

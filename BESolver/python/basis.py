@@ -358,7 +358,7 @@ class XlBSpline(Basis):
         
         num_d      = len(dg_domains)
         _num_p     = np.ones(num_d,dtype=int) * ((num_p) //num_d) #np.array(,dtype=int)
-        #_num_p     = np.array([int(np.floor(num_p*(dg_domains[i][1]-dg_domains[i][0])/(k_domain[1]-k_domain[0]))) for i in range(0,num_d)])
+        #_num_p     = np.array([max(2*sp_order + 2, int(np.floor(num_p*(dg_domains[i][1]-dg_domains[i][0])/(k_domain[1]-k_domain[0])))) for i in range(0,num_d)])
         _num_p[-1] = num_p-np.sum(_num_p[0:-1])
 
         # if(_num_p[-1]<2*sp_order):

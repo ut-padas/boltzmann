@@ -3,7 +3,6 @@
 """
 
 import numpy as np
-import numba as nb
 import typing as tp
 # this is the read lxCat data file.
 import lxcat_data_parser as ldp

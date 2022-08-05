@@ -159,48 +159,54 @@ class CollisionOpSP():
             dg_idx   = self._spec._basis_p._dg_idx
             sp_order = self._spec._basis_p._sp_order
             cc_collision = np.zeros((num_p * num_sh, num_p * num_sh))
+
+            # idx_set     = np.logical_and(self._gmx>=xb, self._gmx <=xe)
+            # gx_e , gw_e = self._gmx[idx_set],self._gmw[idx_set]
+            gx_e , gw_e = self._gmx , self._gmw
+            
+            g.reset_scattering_direction_sp_mat()
+            self._incident_mg    = np.meshgrid(gx_e,self._VTheta_q,self._VPhi_q,indexing='ij')
+            self._scattering_mg  = np.meshgrid(gx_e,self._VTheta_q,self._VPhi_q,self._Chi_q,self._Phi_q,indexing='ij')
+
+            diff_cs = g.assemble_diff_cs_mat(self._scattering_mg[0]*V_TH , self._scattering_mg[3]) * g.get_cross_section_scaling()
+            Sd      = g.post_scattering_velocity_sp(self._scattering_mg[0]*V_TH, self._scattering_mg[1], self._scattering_mg[2],self._scattering_mg[3],self._scattering_mg[4])
+            Sd[0]  /=V_TH
+
+            sph_post   = spec_sp.Vq_sph(Sd[1],Sd[2])
+            sph_pre    = spec_sp.Vq_sph(self._scattering_mg[1], self._scattering_mg[2])
+            sph_pre_in = spec_sp.Vq_sph(self._incident_mg[1]  , self._incident_mg[2])
+            Mp_r       = (self._scattering_mg[0] * V_TH) * (self._scattering_mg[0]**2)
+
+            tmp0 = np.zeros(tuple([num_p]) + self._scattering_mg[0].shape)
+            tmp1 = np.zeros(tuple([num_p]) + self._incident_mg[0].shape)
+            tmp2 = np.zeros(self._incident_mg[0].shape)
+
+
             for e_id in range(0,len(dg_idx),2):
                 ib=dg_idx[e_id]
                 ie=dg_idx[e_id+1]
-                
+
                 xb=k_vec[ib]
                 xe=k_vec[ie+sp_order+1]
-
-                idx_set     = np.logical_and(self._gmx>=xb, self._gmx <=xe)
-                gx_e , gw_e = self._gmx[idx_set],self._gmw[idx_set]
-
-                g.reset_scattering_direction_sp_mat()
-                self._incident_mg    = np.meshgrid(gx_e,self._VTheta_q,self._VPhi_q,indexing='ij')
-                self._scattering_mg  = np.meshgrid(gx_e,self._VTheta_q,self._VPhi_q,self._Chi_q,self._Phi_q,indexing='ij')
-
-                diff_cs = g.assemble_diff_cs_mat(self._scattering_mg[0]*V_TH , self._scattering_mg[3]) * g.get_cross_section_scaling()
-                Sd      = g.post_scattering_velocity_sp(self._scattering_mg[0]*V_TH, self._scattering_mg[1], self._scattering_mg[2],self._scattering_mg[3],self._scattering_mg[4])
-                Sd[0]  /=V_TH
-            
-                sph_post   = spec_sp.Vq_sph(Sd[1],Sd[2])
-                sph_pre    = spec_sp.Vq_sph(self._scattering_mg[1], self._scattering_mg[2])
-                sph_pre_in = spec_sp.Vq_sph(self._incident_mg[1]  , self._incident_mg[2])
-                Mp_r       = (self._scattering_mg[0] * V_TH) * (self._scattering_mg[0]**2)
                 
-                tmp0 = np.zeros(tuple([num_p]) + self._scattering_mg[0].shape)
-                tmp1 = np.zeros(tuple([num_p]) + self._incident_mg[0].shape)
-                tmp2 = np.zeros(self._incident_mg[0].shape)
-
                 if(g._type == collisions.CollisionType.EAR_G0 or g._type == collisions.CollisionType.EAR_G1):
                     for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
-                        tmp0[:,:,:,:,:,:]  = diff_cs * Mp_r * (spec_sp.Vq_r(Sd[0],q) * sph_post[qs_idx] - spec_sp.Vq_r(self._scattering_mg[0],q) * sph_pre[qs_idx])
-                        tmp1[:,:,:,:]      = np.dot(np.dot(tmp0,self._WPhi_q),self._glw_s)
+                        for p in range(ib,ie+1):
+                            tmp0[p,:,:,:,:,:]  = diff_cs * Mp_r * (spec_sp.basis_eval_radial(Sd[0], p, q) * sph_post[qs_idx] - spec_sp.basis_eval_radial(self._scattering_mg[0],p,q) * sph_pre[qs_idx])
+                            tmp1[p,:,:,:]      = np.dot(np.dot(tmp0[p],self._WPhi_q),self._glw_s)
 
                         for p in range(ib,ie+1):
                             for k in range(ib,ie+1):
                                 for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
                                     tmp2[:,:,:] = tmp1[p,:,:,:] * spec_sp.basis_eval_radial(self._incident_mg[0], k, l) * sph_pre_in[lm_idx]
-                                    cc_collision[p * num_sh + qs_idx , k * num_sh + lm_idx] = np.dot(np.dot(np.dot(tmp2, self._WVPhi_q),self._glw), gw_e)
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + lm_idx] += np.dot(np.dot(np.dot(tmp2, self._WVPhi_q),self._glw), gw_e)
+                                    
 
                 elif(g._type == collisions.CollisionType.EAR_G2):
                     for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
-                        tmp0[:,:,:,:,:,:]  = diff_cs * Mp_r * (2 * spec_sp.Vq_r(Sd[0],q) * sph_post[qs_idx] - spec_sp.Vq_r(self._scattering_mg[0],q) * sph_pre[qs_idx])
-                        tmp1[:,:,:,:]      = np.dot(np.dot(tmp0,self._WPhi_q),self._glw_s)
+                        for p in range(ib,ie+1):
+                            tmp0[p,:,:,:,:,:]  = diff_cs * Mp_r * (2 * spec_sp.Vq_r(Sd[0],q) * sph_post[qs_idx] - spec_sp.Vq_r(self._scattering_mg[0],q) * sph_pre[qs_idx])
+                            tmp1[p,:,:,:]      = np.dot(np.dot(tmp0[p],self._WPhi_q),self._glw_s)
 
                         for p in range(ib,ie+1):
                             for k in range(ib,ie+1):
@@ -348,7 +354,7 @@ class CollisionOpSP():
     
     def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3)):
         #Lij = self._LOp_reduced_memory(collision,maxwellian,vth,v0) 
-        Lij =self._LOp_Eulerian(collision,maxwellian,vth)
+        Lij = self._LOp_Eulerian(collision,maxwellian,vth)
         return Lij
         
         

@@ -1,6 +1,7 @@
 from cProfile import label
 import enum
 from random import randrange
+
 import basis
 import spec_spherical as sp
 import scipy.integrate
@@ -12,13 +13,16 @@ import utils as BEUtils
 import parameters as params
 import collisions
 
-def create_xlbspline_spec(spline_order, k_domain, Nr, sph_harm_lm):
-    splines      = basis.XlBSpline(k_domain,spline_order,Nr+1)
+def create_xlbspline_spec(spline_order, k_domain, Nr, sph_harm_lm, sig_pts=None):
+    splines      = basis.XlBSpline(k_domain,spline_order,Nr+1, sig_pts)
     spec         = sp.SpectralExpansionSpherical(Nr,splines,sph_harm_lm)
     return spec
 
 def assemble_advection_matrix_lp(spec: sp.SpectralExpansionSpherical):
     return spec.compute_advection_matix()
+
+def assemble_advection_matrix_dg(spec: sp.SpectralExpansionSpherical):
+    return spec.compute_advection_matix_dg()
     
 def backward_euler(FOp,y0,t_end,nsteps):
     dt = t_end/nsteps
@@ -37,7 +41,7 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     V_DOMAIN      = v_doamin
     VTH           = 1.0
     spline_order  = sp_order
-    basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT = 3 #2*spline_order+1
+    basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT = 8 #2*spline_order+1
     basis.BSPLINE_BASIS_ORDER=spline_order
 
     num_p = NR+1
@@ -46,8 +50,11 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = NR
     params.BEVelocitySpace.SPH_HARM_LM = sph_lm
 
+    sig_pts = np.array([0.5 * (v_doamin[0] + v_doamin[1])])
+    print("dg points : ", sig_pts)
+    spec_xlbspline = create_xlbspline_spec(spline_order,V_DOMAIN,NR,sph_lm, sig_pts=sig_pts)
 
-    NUM_Q_VR = basis.XlBSpline.get_num_q_pts(NR,spline_order,basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
+    NUM_Q_VR = spec_xlbspline._basis_p._num_knot_intervals * basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT
     NUM_Q_VT = 4
     NUM_Q_VP = 2
 
@@ -56,12 +63,12 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     params.BEVelocitySpace.NUM_Q_VP  = NUM_Q_VP
     params.BEVelocitySpace.NUM_Q_CHI = 2
     params.BEVelocitySpace.NUM_Q_PHI = 2
+    spec_xlbspline._num_q_radial     = params.BEVelocitySpace.NUM_Q_VR
     params.print_parameters()
 
-    spec_xlbspline = create_xlbspline_spec(spline_order,V_DOMAIN,NR,sph_lm)
     M    = spec_xlbspline.compute_mass_matrix()
     print("mass mat condition number = %.2E"%np.linalg.cond(M))
-    Minv = BEUtils.choloskey_inv(M)
+    Minv = spec_xlbspline.inverse_mass_mat(M) #BEUtils.choloskey_inv(M)
     print("|I-M^{-1} M| = %.16E " %np.linalg.norm(np.matmul(Minv,M)-np.eye(M.shape[0])))
     #print(M[0,:])
 
@@ -70,20 +77,25 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     VTH_C        = vth_factor * VTH
     maxwellian   = BEUtils.get_maxwellian_3d(VTH_C, 1)
     hv           = lambda v,vt,vp : np.exp(-v**2)
-    h_vec        = BEUtils.function_to_basis(spec_xlbspline,hv,maxwellian,NUM_Q_VR, NUM_Q_VT, NUM_Q_VP)
+    h_vec        = BEUtils.function_to_basis(spec_xlbspline,hv,maxwellian,NUM_Q_VR, NUM_Q_VT, NUM_Q_VP,Minv=Minv)
 
-    coeffs_new=h_vec
-    coeffs = h_vec
+    spec_sp        = spec_xlbspline
+   
+    advmat, eA, qA = spec_sp.compute_advection_matix_dg()
+    eA = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
+    qA = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
 
-
-    L=assemble_advection_matrix_lp(spec_xlbspline)
-    advmat=np.matmul(Minv,L)
-    #print(advmat)
+    coeffs_new  = np.matmul(np.transpose(qA), h_vec)
+    coeffs      = np.matmul(np.transpose(qA), h_vec)
+    advmat      = np.matmul(Minv, advmat)
+        
     
     func = lambda t,a: -np.matmul(advmat,a)
     sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45',atol=1e-15, rtol=2.220446049250313e-14)
     # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='BDF')
-    coeffs_new = sol.y[:,-1]
+    coeffs_new = np.matmul(qA, sol.y[:,-1])
+    coeffs     = np.matmul(qA, coeffs)
+
 
     spec_sp=spec_xlbspline
     vth=VTH_C
@@ -93,6 +105,8 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     avg_vop   = BEUtils.mean_velocity_op(spec_sp, None, 64, 4, 1)
     eavg_to_K = (2/(3*scipy.constants.Boltzmann))
     ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
+
+    sol.y=np.matmul(qA, sol.y)
 
     for i in range(0,sol.y.shape[1],500):
         current_mass     = np.dot(sol.y[:,i],mass_op) * vth**3 * current_mw(0)
@@ -122,19 +136,20 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     return coeffs,coeffs_new,spec_xlbspline
 
 
-num_dofs_all = [(16,1), (32,2), (64,4)]
+num_dofs_all = [(64,1), (128, 1), (256,1)]
+#num_dofs_all = [(16,1),(32,1), (64,1)]
 error_linf = np.zeros(len(num_dofs_all))
 error_l2 = np.zeros(len(num_dofs_all))
 error_linf_2d = np.zeros(len(num_dofs_all))
 error_l2_2d = np.zeros(len(num_dofs_all))
 
-t_end = 1e-1
+t_end = 1e-2
 # nsteps = 400000
 nsteps = 10000
 dt = t_end/nsteps
 
-x = np.linspace(-2,2,500)
-z = np.linspace(-2,2,500)
+x = np.linspace(0,9.9,500)
+z = np.linspace(0,9.9,500)
 quad_grid = np.meshgrid(x,z,indexing='ij')
 
 y = np.zeros_like(quad_grid[0])
@@ -152,7 +167,7 @@ f_initial_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
 f_exact_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
 
 V_DOMAIN = (0,10)
-SP_ORDER = 1
+SP_ORDER = 4
 for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     nr = num_dofs[0]
     l_max = num_dofs[1]
@@ -182,7 +197,7 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     
     f_eval_mat=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(theta,0,lm[0],lm[1]) * Vq_r[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
     f_eval_mat_t=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(theta,0,lm[0],lm[1]) * Vq_rt[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
-    
+
     f_num[num_dofs_idx,:]     = np.dot(f_eval_mat,ct)
     f_initial[num_dofs_idx,:] = np.dot(f_eval_mat,c)
     f_exact[num_dofs_idx,:]   = np.dot(f_eval_mat_t,c)
@@ -219,14 +234,14 @@ ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotte
 plt.gca().set_aspect('equal')
 
 plt.subplot(1,3,3)
-plt.plot(error_linf, '-o')
+plt.semilogy(error_linf, '-o')
 plt.ylabel('Error')
 plt.grid()
 
 
 fig = plt.gcf()
-fig.set_size_inches(16, 8)
-fig.savefig("adv_splines.png", dpi=100)
+fig.set_size_inches(16, 4)
+fig.savefig("adv_splines.png", dpi=300)
 
 #plt.savefig()
 #plt.show()

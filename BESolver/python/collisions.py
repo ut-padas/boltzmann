@@ -99,8 +99,8 @@ class Collisions(abc.ABC):
 
     def compute_scattering_direction_sp(self,v_r,v_theta,v_phi,polar_angle,azimuthal_angle):
 
-        if self._is_scattering_mat_assembled :
-            return self._sc_direction_mat
+        # if self._is_scattering_mat_assembled :
+        #     return self._sc_direction_mat
         
         # v_phi[np.isclose(v_phi,0)] +=1e-6
         # v_phi[np.isclose(v_phi,np.pi)] +=1e-6
@@ -197,7 +197,7 @@ class Collisions(abc.ABC):
         # theta_p[np.logical_not(check1)] = t1
         # phi_p  [np.logical_not(check1)] = p1
 
-        self._is_scattering_mat_assembled=True
+        #self._is_scattering_mat_assembled=True
         self._sc_direction_mat=[r1,theta_p,phi_p]
         return self._sc_direction_mat
         
@@ -788,10 +788,7 @@ class eAr_G0(Collisions):
         return v1 
     
     def post_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
-        if self._is_scattering_mat_assembled == False:
-            #self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
-            self._v_scale = np.sqrt(1- 2*MASS_R_EARGON)
-
+        self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         vel_fac  = vr * self._v_scale #-for the time disable the energy loss. 
         vs[0]    = vel_fac

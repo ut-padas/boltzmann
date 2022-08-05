@@ -421,12 +421,9 @@ class SpectralExpansionSpherical:
             S_qs_lm = (2 * eA  - np.matmul(np.transpose(qA), np.matmul(B_qs_lm, qA)))
             D_qs_km = eA
 
-            print(k_vec)
             for e_id in range(0,len(dg_idx),2):
                 ib=dg_idx[e_id]
                 ie=dg_idx[e_id+1]
-                print("dg_b: ", ib, "knots : ", k_vec[ib : ib + sp_order +2])
-                print("dg_e: ", ie, "knots : ", k_vec[ie : ie + sp_order +2])
                 
                 xb=k_vec[ib]
                 xe=k_vec[ie+sp_order+1]

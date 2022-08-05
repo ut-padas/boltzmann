@@ -29,6 +29,7 @@ from advection_operator_spherical_polys import *
 import scipy.ndimage
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+import sys
 
 # from adaptive import Runner, Learner1D
 # class ALearner1D:
@@ -339,7 +340,9 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     qA = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
     #print(qA)
     #print(np.kron(np.eye(num_p*2), qA))
-
+    #np.set_printoptions(2,threshold=sys.maxsize)
+    #print(FOp[0::num_sh, 0::num_sh])
+    #print(FOp[1::num_sh, 1::num_sh])
 
     FOp   = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
     h_init= np.dot(np.transpose(qA),h_init)
@@ -500,10 +503,10 @@ for i, value in enumerate(args.sweep_values):
         print("singularity pts : ", sig_pts,"v/vth", (sig_pts * VTH/c_gamma)**2,"eV")
     else:
         sig_pts = None
-        #sig_pts = np.sqrt(np.array([0.3 * ev[-1], 0.5 * ev[-1]])) * c_gamma/VTH
+        #sig_pts = np.sqrt(np.array([0.5 * ev[-1]])) * c_gamma/VTH
         
 
-    ev_range = ((0*VTH/c_gamma)**2, (2) * ev[-1])
+    ev_range = ((0*VTH/c_gamma)**2, 1.01 * ev[-1])
     k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
     if(sig_pts is not None):
@@ -624,7 +627,7 @@ for i, value in enumerate(args.sweep_values):
 # print(data[1,:])
 
 if (1):
-    fig = plt.figure(figsize=(19, 9), dpi=300)
+    fig = plt.figure(figsize=(21, 9), dpi=300)
 
     num_subplots = num_sph_harm + 2
 
@@ -703,6 +706,7 @@ if (1):
     # plt.legend()
     plt.xlabel(args.sweep_param)
     plt.ylabel("Rel. error in mean energy")
+    plt.grid()
 
     # if args.sweep_param != "radial_poly":
         # plt.gca().ticklabel_format(useOffset=False)
@@ -715,6 +719,7 @@ if (1):
     plt.legend()
     plt.xlabel(args.sweep_param)
     plt.ylabel("Rel. error in reaction rates")
+    plt.grid()
 
     # if args.sweep_param != "radial_poly":
         # plt.gca().ticklabel_format(useOffset=False)
@@ -727,6 +732,7 @@ if (1):
     # plt.legend()
     plt.xlabel(args.sweep_param)
     plt.ylabel("Rel. error in mobility")
+    plt.grid()
 
     # if args.sweep_param != "radial_poly":
         # plt.gca().ticklabel_format(useOffset=False)
@@ -738,6 +744,7 @@ if (1):
     # plt.legend()
     plt.xlabel(args.sweep_param)
     plt.ylabel("Rel. error in diffusion coefficient")
+    plt.grid()
 
     # if args.sweep_param != "radial_poly":
         # plt.gca().ticklabel_format(useOffset=False)
@@ -756,7 +763,10 @@ if (1):
     if (args.radial_poly == "bspline"):
         fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + "q_per_knot="+str(args.spline_q_pts_per_knot))
         # plt.show()
-        plt.savefig("us_vs_bolsig_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
+        if len(spec._basis_p._dg_idx)==2:
+            plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
+        else:
+            plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
     else:
         fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")")
         # plt.show()

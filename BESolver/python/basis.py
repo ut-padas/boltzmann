@@ -13,6 +13,7 @@ import scipy.interpolate
 import scipy
 import scipy.special
 import quadpy
+import math
 
 # some parameters related to splines. 
 XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 3
@@ -459,31 +460,65 @@ class XlBSpline(Basis):
         return I
 
     def derivative(self, deg, dorder):
-        if(dorder > 1):
-            raise NotImplementedError
-        
+        # if(dorder > 1):
+        #     raise NotImplementedError
+        # i=deg
+        # p=self._sp_order
+        # c1 = self._t[i+p] - self._t[i]
+        # c2 = self._t[i+p+1] - self._t[i+1]
+
+        # if(c2!=0):
+        #     f_c2 = lambda x : - (p / c2) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i+1:i+1 + p+1],False)(x)) 
+        # else:
+        #     f_c2 = lambda x : np.zeros_like(x)
+
+        # if(c1!=0):
+        #     f_c1 = lambda x : (p / c1) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i:i + p + 1],False)(x))
+        # else:
+        #     f_c1 = lambda x : np.zeros_like(x)
+
+        # return lambda x : np.nan_to_num(f_c1(x)) + np.nan_to_num(f_c2(x))
+
         i=deg
         p=self._sp_order
-        c1 = self._t[i+p] - self._t[i]
-        c2 = self._t[i+p+1] - self._t[i+1]
+        f1 = math.factorial(p)/math.factorial(p-dorder)
 
-        if(c2!=0):
-            f_c2 = lambda x : - (p / c2) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i+1:i+1 + p+1],False)(x)) 
-        else:
-            f_c2 = lambda x : np.zeros_like(x)
+        def f_alpha(k,j):
+            if k==0 and j==0:
+                return 1
+            elif j==0:
+                d1 = self._t[i+p-k+1] - self._t[i]
+                if d1!=0:
+                    return f_alpha(k-1,0) / d1
+                else:
+                    return 0
+            elif j>0 and j<k:
+                d1 = self._t[i+p+j-k+1] - self._t[i+j]
+                if d1!=0:
+                    return (f_alpha(k-1,j)- f_alpha(k-1,j-1))/d1
+                else:
+                    return 0
+            elif k==j:
+                d1 = self._t[i+p+1] - self._t[i+k]
+                if d1!=0:
+                    return -f_alpha(k-1,k-1)/d1
+                else:
+                    return 0
+            else:
+                raise NotImplementedError
 
-        if(c1!=0):
-            f_c1 = lambda x : (p / c1) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i:i + p + 1],False)(x))
-        else:
-            f_c1 = lambda x : np.zeros_like(x)
-
-        return lambda x : np.nan_to_num(f_c1(x)) + np.nan_to_num(f_c2(x))
+        def deriv_spline(x):
+            y=0
+            for j in range(0,dorder+1):
+                #print(i+j, "to",  (i+j) + (p-dorder) + 2, self._t[i+j: (i+j) + (p-dorder) + 2], f_alpha(dorder,j))
+                y+=f_alpha(dorder,j) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i+j: (i+j) + (p-dorder) + 2],False)(x))
+            
+            return y*f1
+        
+        return deriv_spline
 
     def diff(self,deg, dorder):
-        if(dorder > 1):
-            raise NotImplementedError
-        
-        b_deriv = self.derivative(deg,1)
+        b_deriv = self.derivative(deg,dorder)
         return lambda x,l : b_deriv(x)
         #return lambda x, l: b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
         #return lambda x,l : b_deriv(x) if deg>=l else x**(l-deg) *b_deriv(x) + self.Pn(deg)(x,0) * (l-deg) * x**(l-deg-1)

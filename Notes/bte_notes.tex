@@ -10,7 +10,10 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 
-\title{Scalable deterministic numerical methods for the Boltzmann equation}
+
+
+
+\title{Deterministic solvers for the Boltzmann equation}
 %\author{Milinda Fernando}
 %\date{February 2014}
 
@@ -20,6 +23,8 @@
 \maketitle
 %\end{titlepage}
 
+\tableofcontents
+\clearpage
 \section{Boltzmann Equation summary}
 The Boltzmann equation is a nonlinear integro-differential equation that describes the evolution of the particle density function $f : \R^3 \times \R^3 \times \R \rightarrow \R^{+}_0$. Independent variables for the above density function denotes, time ($t$), position vector ($x$), and the velocity ($v$). For a fixed time $t$, $f(x,v,t)dx dv$ represent the number of particles for the phase space volume element $dxdv$. 
 
@@ -177,9 +182,7 @@ M(v) = \frac{n}{(\sqrt{\pi}v_{th})^d} \exp{\left(-\left(\frac{v}{v_{th}}\right)^
 \section{Collision Operator}
 \label{sec:collision_operator}
 See \S\ref{sec:coll_op_derivation} for detailed derivation of collision operators. 
-  
 
-\section{Computation of the collision operator}
 As described in~\S\ref{subsec:binary_reactions} we can write the binary collision operator as below.  
 \begin{align*}
 \myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
@@ -207,196 +210,379 @@ f_e\of{\vect{v}_e}
 \diff{\vect{v}_e} \diff{\vect{\omega}}
 \end{align*}
 
-We can try to use a fixed radial basis for each lm mode, by extracting out the $(\cdot)^{l}$ factor as follows. 
-\textbf{Note} : The below basis produce ill-conditioned mass matrix. 
+\subsection{Collision operator simplifications}
+Let $\vect{v} = (v_r, v_\theta, v_\phi) $ and scattering solid angle $\vect{\omega} = (\chi, \phi)$. Further we write the test and trial functions decomposed to radial and angular components as below. 
 \begin{align*}
-M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
-\Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
-\Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
+\phi_{klm}\of{\vect{v}} &= S_{k}\of{v_r} Y_{lm} \of{v_\theta, v_\phi}\\
+\psi_{pqs}\of{\vect{v}} &= T_{p}\of{v_r} Y_{qs} \of{v_\theta, v_\phi}
 \end{align*}
 
-We can write the basis expansion for $f(\vect{v})$ as,  
+Let $\vect{v}^{\prime} = (v_r^\prime, v_\theta^\prime, v_\phi^\prime) =\vect{v}^{post}\of{\vect{v},\vect{0},\vect{\omega}}$ be the post scattering velocity. We can show, 
 \begin{align*}
-	f(\vect{v})  = \sum_{klm} \hat{f}_{klm} \Phi_{klm} (\vect{v})
-\end{align*}
-Then the discretized collision operator becomes, 
+\cos v_\theta^\prime = \cos v_\theta \cos\chi + \sin v_\theta \sin \chi \cos\of{v_\phi-\phi}
+\end{align*} Using the spherical harmonic addition theorem we can write, 
 \begin{align*}
-{L}_{k,l,m}^{p,q,s} &=n_0 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} v_r^2 \norm{\vect{v}} \sigma(\vect{v},\omega) \Phi_{klm}(\vect{v})   (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \diff{v_r} \\
-{L}_{k,l,m}^{p,q,s} &=n_0 (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} \left(\frac{v_r}{v_{th}}\right)^{(2+l)} \norm{\vect{v}} \sigma(\vect{v},\omega) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right) \\
-&P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi)  (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
-{M}_{k,l,m}^{p,q,s} &= \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2}  v_r^2 \Psi_{pqs}(\vect{v}) \Phi_{klm}(\vect{v}) \diff{\omega} \diff{\omega_v} \diff{v_r}\\
-{M}_{k,l,m}^{p,q,s} &= (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} 
-					   \left(\frac{v_r}{v_{th}}\right)^{(2+l+q)} P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  \\& P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}}
+P_l^{0} = P_l\of{\cos v_\theta^\prime} =  P_l\of{\cos v_\theta} P_l\of{\cos v_\phi} + 2\sum_{m=1}^{l} P_l^{m}\of{\cos v_\theta} P_l^{m}\of{\cos v_\phi} \cos \of{ m (v_\phi-\phi)}
 \end{align*}
 
-Using orthogonalized radial basis for each lm mode we can discretize the collision operator as follows. 
+Spherical harmonics
 \begin{align*}
-M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
-\Phi_{klm} (\vect{v}) &= \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  P_{kl}\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
-\Psi_{pqs} (\vect{v}) &= P_{pq}\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
+Y_{lm}\of{\vtheta,\vphi} = U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\end{align*}
+\begin{align*}
+U_{lm} &= 
+\begin{cases}
+(-1)^m \sqrt{2} \sqrt{\frac{2l+1}{4\pi} \frac{(l-|m|)!}{(l+|m|!}}, &m\neq 0 \\
+\sqrt{\frac{2l+1}{4\pi}}, &m = 0
+\end{cases}
+\\
+\alpha_m\of{\vphi}
+&=
+\begin{cases}
+\sin\of{|m|\phi}, &m < 0 \\
+1, &m = 0\\
+\cos\of{m\phi}, &m > 0
+\end{cases}
+\end{align*}
+
+The discretized collision operator approximation can be written as follows. 
+\begin{align*}
+C^{pqs}_{klm} &= n_0 \myint_{R^3} \myint_{S^2} B\of{\vect{v},\vect{0}, \vect{\omega}} 
+\phi_{klm}\of{\vect{v}} \of{\psi_{pqs}\of{\vect{v}^\prime} -\psi_{pqs}\of{\vect{v}}} \diff{\omega}\diff{\vect{v}} \\
+C^{pqs}_{klm} &= n_0 \myint_{R^3} \myint_{S^2} v_r^2 B\of{\vect{v},\vect{0}, \vect{\omega}} S_{k}\of{v_r} Y_{lm}\of{v_\theta,v_\phi }
+\of{T_{p}\of{v^\prime_r} Y_{qs}\of{v^\prime_\theta, v^\prime_\phi} -T_{p}\of{v_r} Y_{qs}\of{v_\theta, v_\phi} } \diff{\omega}\diff{\vect{v}}
+\end{align*} Assuming isotropic scattering collision kernel $B(v_r,\chi) = \frac{B(v_r)}{4\pi}  $ we can simplify
+\begin{align*}
+C^{pqs}_{klm} &= n_0 \myint_{R} v_r^2 B\of{v_r} S_k\of{v_r} 
+\myint_{S^2} \myint_{S^2} Y_{lm}\of{v_\theta,v_\phi}
+\of{T_{p}\of{v^\prime_r} Y_{qs}\of{v^\prime_\theta, v^\prime_\phi} - T_{p}\of{v} Y_{qs}\of{v_\theta, v_\phi}} \diff{\omega} \diff{\omega_{v}}\diff{v_r}
+\end{align*} Let us write the angular integral part separately as follows. 
+\begin{align*}
+W^{qs}_{lm} \of{v_r}= \myint_{S^2} \myint_{S^2}  Y_{lm}\of{v_\theta,v_\phi}
+\of{T_{p}\of{v^\prime_r} Y_{qs}\of{v^\prime_\theta, v^\prime_\phi} - T_{p}\of{v_r} Y_{qs}\of{v_\theta, v_\phi}} \diff{\omega} \diff{\omega_{v}} = {W^{qs}_{lm}}^+ - {W^{qs}_{lm}}^-
+\end{align*}Due to the orthogonality of the spherical harmonics, we can write, 
+\begin{align*}
+{W^{qs}_{lm}}^- =  T_{p}\of{v_r} \myint_{S^2} \myint_{S^2}  Y_{lm}\of{v_\theta,v_\phi} Y_{qs}\of{v_\theta, v_\phi}  \diff{\omega} \diff{\omega_{v}} 
+= T_p\of{v_r} 4\pi \delta_{ql} \delta_{sm}
+\end{align*}
+Assuming the distribution function is independent of the azimuthal angle (i.e., azimulthal mode is 0 in spherical harmonic expansion) we can further simplify, ${W^{q0}_{l0}}^-= T_p\of{v_r} 4\pi \delta_{ql}$. For simplifying the ${W^{qs}_{lm}}^+ $ term we apply the spherical harmonics addition theorem. Also we assume that $v_r^\prime$ is independent of  $\omega$ for further simplifying the collision operator. 
+\begin{align*}
+{W^{qs}_{lm}}^+ &= \myint_{S^2} \myint_{S^2}  Y_{lm}\of{v_\theta,v_\phi} T_{p}\of{v^\prime_r} Y_{qs}\of{v^\prime_\theta, v^\prime_\phi} \diff{\omega} \diff{\omega_{v}}\\
+& = T_{p}\of{v^\prime_r} U_{l0} U_{q0} \myint_{S^2} \myint_{S^2}  P_l\of{\cos v_\theta} P_q\of{\cos v^\prime_\theta} \diff{\omega} \diff{\omega_{v}} \\
+& = T_{p}\of{v^\prime_r} U_{l0} U_{q0} \myint_{S^2} \myint_{S^2}  P_l\of{\cos v_\theta} \of{P_q\of{\cos v_\theta} P_q\of{\cos \chi} + \cdots} \diff{\omega} \diff{\omega_{v}} \\
+& = T_{p}\of{v^\prime_r} U_{l0} U_{q0} \myint_{S^2} P_l\of{\cos v_\theta} P_q\of{\cos v_\theta} \diff{\omega_{v}} \myint_{S^2} P_0\of{\cos \chi}P_q\of{\cos \chi} \diff{\omega}\\
+& = 4\pi T_{p}\of{v^\prime_r} \sqrt{\frac{2l+1}{2q+1}} \delta_{ql} \delta_{q0}
+\end{align*}Therefore, we can writ the discretized collision operator as follows. 
+\begin{align*}
+C^{pq0}_{kl0}  = n_0 \myint_{R} v_r^2 B(v_r) S_k\of{v_r} \delta_{ql} \of{T_p\of{v^\prime_r}\delta_{q0} - T_p\of{v_r}} \diff{v_r} 
+\end{align*}. If we use normalized coordinates for the radial direction we can re-write the above as,
+\begin{align*}
+C^{pq0}_{kl0}  = n_0 v_{th}^3 \myint_{R} x^2 B(x v_{th}) S_k\of{x} \delta_{ql} \of{T_p\of{x^\prime}\delta_{q0} - T_p\of{x}} \diff{x}  
+\end{align*}
+
+
+We can further simplify using, $B(v_r)= v_r \sigma\of{\of{\frac{v_r}{\gamma}}^2}$, 
+\begin{align*}
+C^{pq0}_{kl0}  = n_0 v_{th}^4 \myint_{R} x^3 \sigma\of{\varepsilon} S_k\of{x} \delta_{ql} \of{T_p\of{x^\prime}\delta_{q0} - T_p\of{x}} \diff{x} 
+\end{align*}where $\varepsilon=(\frac{x v_{th}}{\gamma})^2$
+%Further we can write, 
+%\begin{align*}
+%C^{p00}_{k00}  &= n_0 \myint_{R} v_r^3 \sigma\of{v_r} S_k\of{v_r} \of{T_p\of{v^\prime_r} - T_p\of{v_r}} \diff{v_r}  \\
+%C^{p10}_{k10}  &= -n_0 \myint_{R} v_r^3 \sigma\of{v_r} S_k\of{v_r} T_p\of{v_r} \diff{v_r} 
+%\end{align*}
+We can write the post collision velocity 
+\begin{align*}
+v^{\prime}_r = \of{\sqrt{1- \mu}} v_r \implies  x^{\prime} = \of{\sqrt{1- \mu}} x
+\end{align*}where $\mu=\frac{2m}{M}$. When $\mu$ is small we can write $\of{\sqrt{1- \mu}} \approx 1 - \frac{\mu}{2}$
+\begin{align*}
+&x^{\prime} = x - \frac{\mu}{2} x 
+\end{align*} assuming $\mu x$ is small (i.e., which is true at lower eV temperatures), we can write the Taylor expansion, of $T_p$
+\begin{align*}
+T_p\of{x^{\prime}} =  T_p\of{x - \frac{\mu}{2} x } = T_p\of{x} - \frac{\mu x}{2} \partial_{x} T_p\of{x} + \cdots
+\end{align*} hence, 
+\begin{align*}
+C^{p00}_{k00}  &= -n_0 v_{th}^4 \frac{\mu}{2} \myint_{R} x^4 \sigma\of{\varepsilon} S_k\of{x}\partial_{x} T_p\of{x} \diff{x}  \\
+C^{p10}_{k10}  &= -n_0 v_{th}^4 \myint_{R} x^3 \sigma\of{\varepsilon} S_k\of{x} T_p\of{x} \diff{x} 
+\end{align*}
+
+
+\section{Advection term (Eulerian approach + DG) } %(only left-hand-side so far)
+Advection (acceleration) term
+\begin{align*}
+\partial_t f - \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
+\end{align*}
+In spherical coordinates
+\begin{align*}
+\nabla_{\vect{v}} 
+= \vrunit \frac{\partial}{\partial \vr}
++ \vthetaunit \frac{1}{\vr} \frac{\partial}{\partial \vtheta}
++ \vphiunit \frac{1}{\vr \sin\of{\vtheta}} \frac{\partial}{\partial \vphi}
+\end{align*}
+\begin{align*}
+\vect{E} 
+= E \hat{\vect{z}} 
+= E \left( \cos\of{\vtheta} \vrunit - \sin\of{\vtheta} \vthetaunit \right)
+\end{align*}
+\begin{align*}
+\vect{E}\cdot \nabla_{\vect{v}} f
+= E 
+\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
+- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right)
+\end{align*}
+Expansion in terms of spherical harmonics
+\begin{align*}
+f = 
+\sum_{lm} f_{l,m}\of{\vr} Y_{l,m}\of{\vtheta,\vphi}
+\end{align*}
+Spherical harmonics
+\begin{align*}
+Y_{lm}\of{\vtheta,\vphi} = U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\end{align*}
+\begin{align*}
+U_{lm} &= 
+\begin{cases}
+(-1)^m \sqrt{2} \sqrt{\frac{2l+1}{4\pi} \frac{(l-|m|)!}{(l+|m|!}}, &m\neq 0 \\
+\sqrt{\frac{2l+1}{4\pi}}, &m = 0
+\end{cases}
+\\
+\alpha_m\of{\vphi}
+&=
+\begin{cases}
+\sin\of{|m|\phi}, &m < 0 \\
+1, &m = 0\\
+\cos\of{m\phi}, &m > 0
+\end{cases}
+\end{align*}
+Useful relationships
+\begin{align*}
+x P^m_l\of{x} 
+&= \frac{l+m}{2l+1} P^m_{l-1}\of{x}
++ \frac{l-m+1}{2l+1} P^m_{l+1}\of{x}
+\\
+&= \alpha_M\of{l,m} P^m_{l-1}\of{x}
++ \beta_M\of{l,m} P^m_{l+1}\of{x}
+\\
+(1-x^2) \frac{d}{dx} P^m_l\of{x} 
+&= \frac{(l+1)(l+m)}{2l+1} P^m_{l-1}\of{x} 
+- \frac{l(l-m+1)}{2l+1} P^m_{l+1}\of{x}
+\\
+&= \alpha_D\of{l,m} P^m_{l-1}\of{x} 
++ \beta_D\of{l,m} P^m_{l+1}\of{x}
+\end{align*}
+Now we can show
+\begin{align*}
+\cos\of{\vtheta} Y_{lm}\of{\vtheta,\vphi}
+&=
+\cos\of{\vtheta} U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+\cos\of{\vtheta} U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+U_{lm} \left( \alpha_M\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} 
++ \beta_M\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} \right) \alpha_m\of{\vphi}
+\\
+&=
+\alpha_M\of{l,|m|} \frac{U_{lm}}{U_{(l-1)m}} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ \beta_M\of{l,|m|} \frac{U_{lm}}{U_{(l+1)m}} Y_{(l+1)m}\of{\vtheta,\vphi}
+\\
+&=
+A_M\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ 
+B_M\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi}
+\end{align*}
+
+\begin{align*}
+-\sin\of{\vtheta} \frac{d}{d\vtheta} Y_{lm}\of{\vtheta,\vphi}
+&=
+-\sin\of{\vtheta} U_{lm} \frac{d}{d\vtheta} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+\left(\sin\of{\vtheta}\right)^2 U_{lm} \frac{d}{d\cos\of{\vtheta}} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+\left(1 - \left(\cos\of{\vtheta}\right)^2\right) U_{lm} \frac{d}{d\cos\of{\vtheta}} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
+\\
+&=
+U_{lm} \left( \alpha_D\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} 
++ \beta_D\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} \right) \alpha_m\of{\vphi}
+\\
+&=
+\alpha_D\of{l,|m|} \frac{U_{lm}}{U_{(l-1)m}} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ \beta_D\of{l,|m|} \frac{U_{lm}}{U_{(l+1)m}} Y_{(l+1)m}\of{\vtheta,\vphi}
+\\
+&=
+A_D\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ 
+B_D\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi}
+\end{align*}
+Substituting into advection term
+\begin{align*}
+\vect{E}\cdot \nabla_{\vect{v}} f
+&= E 
+\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
+- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right)
+\\
+&= E 
+\sum_{lm}
+\Bigg(
+\frac{d}{d\vr}f_{lm}\of{\vr}
+\left( A_M\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ B_M\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi} \right)
+\\
+&+
+\frac{1}{\vr}f_{lm}\of{\vr}
+\left( A_D\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
++ B_D\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi} \right) 
+\Bigg)
+\\
+&= E 
+\sum_{lm} 
+\Bigg(
+\left( A_M\of{l,m} \frac{d}{d\vr}f_{lm}\of{\vr} 
++ A_D\of{l,m} \frac{1}{\vr}f_{lm}\of{\vr} \right)
+Y_{(l-1)m}\of{\vtheta,\vphi} 
+\\
+&+
+\left( B_M\of{l,m} \frac{d}{d\vr}f_{lm}\of{\vr} 
++ B_D\of{l,m} \frac{1}{\vr}f_{lm}\of{\vr} \right)
+Y_{(l+1)m}\of{\vtheta,\vphi} 
+\Bigg)
+\end{align*}
+Projecting onto test spherical harmonics
+\begin{multline*}
+\myint \vect{E}\cdot \nabla_{\vect{v}} f Y_{qs}\of{\theta,\phi} \diff{\vomega}\\
+= E 
+\Bigg(
+\left( A_M\of{q+1,s} \frac{d}{d\vr} f_{q+1,s} \of{\vr} 
++ A_D\of{q+1,s} \frac{1}{\vr} f_{q+1,s} \of{\vr} \right)
+\\
++ \left( B_M\of{q-1,s} \frac{d}{d\vr} f_{q-1,s} \of{\vr} 
++ B_D\of{q-1,s} \frac{1}{\vr} f_{q-1,s} \of{\vr} \right)
+\Bigg)
+\end{multline*}
+
+Two term expansion ($l = 0,1$, $m=0$):
+\begin{align*}
+\frac{d}{dt} f_{0,0} - E 
+\left( A_M\of{1,0} \frac{d}{d\vr} f_{1,0} 
++ A_D\of{1,0} \frac{1}{\vr} f_{1,0} \right) &= \ldots
+\\
+\frac{d}{dt} f_{1,0} - E 
+\left( B_M\of{0,0} \frac{d}{d\vr} f_{0,0} 
++ B_D\of{0,0} \frac{1}{\vr} f_{0,0} \right) &= \ldots
+\end{align*}
+or more explicitly:
+\begin{align*}
+\frac{d}{dt} f_{0,0} - E 
+\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{1,0} 
++  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= C^{00}_{00} f_{0,0} + C^{00}_{10} f_{1,0}
+\\
+\frac{d}{dt} f_{1,0} - E 
+\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{0,0} \right) &= C^{10}_{00} f_{0,0} + C^{10}_{10} f_{1,0}
+\end{align*} were $C^{qs}_{lm}$ denotes the projection of the collision operator to $Y_{qs}$, which can be written as, 
+\begin{align*}
+C^{qs}_{lm} &=\myint_{S^2} C Y_{qs}\of{\omega_{v}} \diff{\omega_{v}}= 
+\myint_{R} \myint_{S^2} \myint_{S^2} 
+B_0\of{(v^\prime,\omega_{v}), \vect{\omega}} {v^\prime}^2 Y_{lm}\of{\omega_{v}} \times \\
+\Bigg(
+&\delta\of{v^{post}- {v}} Y_{qs}\of{\omega_{v^{post}}} - \delta\of{v^\prime - v} Y_{qs}\of{\omega_{v}}
+\Bigg)
+\diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v^\prime} 
+\end{align*}
+Let $f_{lm}$ be the lm modes used, 
+\begin{align*}
+\partial_tf_{qs}
+-E A^{qs}_{lm} \partial_v f_{lm}  
+-E B^{qs}_{lm} \frac{1}{v}f_{lm}  = 
+C^{qs}_{lm}f_{lm}
+\end{align*}
+\textbf{Note}: Due to the orthogonality structure in the radial advection coordinate diagonals will always be zero, with a banded matrix with width of equal to 1. 
+
+For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
+\begin{align*}
+&\partial_t M^{p}_{k} f_{kqs} -EA^{qs}_{lm}\of{[f_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})f_{klm}} -E B^{qs}_{lm} S^{p}_{k} f_{klm} = C^{pqs}_{klm} f_{klm}  \\
+&\partial_t M^{p}_{k} f_{kqs} = -E \of{\of{2 A^{qs}_{lm} -B^{qs}_{lm}} S^p_{k} + A^{qs}_{lm} D^{p}_{k}}f_{klm} + C^{pqs}_{klm} f_{klm} + EA^{qs}_{lm}[f_{lm}^*(v) v^2 \boldsymbol{\psi}\of{v}]_{D_l}^{D^r}
 \end{align*} where, 
 \begin{align*}
-	P_{pq}\of{x}  &= x^q \mathcal{P}^{2q+2}_p(x)  \\
-   \myint_{0}^{+\infty} P_{pq}\of{x} P_{pl} \exp(-x^2) x^2 dx &= \delta_{ql}
-\end{align*} with $\mathcal{P}^{2q+2}_p$ denotes the derived Maxwell polynomials. 
+M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
+\end{align*} 
+The flux term (up-winding) determined by $A^{qs}_{lm}$ sign of the eigenvalues. 
 
-
+Diagonalize then discretize in the radial coordinate. 
+Let $A^{qs}_{lm}=Q\Lambda^{qs}_{lm} Q^T$, let $Q^T f_{km}= y_{lm}$
 \begin{align*}
-{L}_{k,l,m}^{p,q,s} &=n_0 (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} \left(\frac{v_r}{v_{th}}\right)^{2} \norm{\vect{v}} \sigma(\vect{v},\omega) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right) \\
-&P_{kl}\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi)  (\Psi_{pqs}(\vect{v}_e^{post}(\vect{v},\omega)) - \Psi_{pqs}(\vect{v})) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
-{M}_{k,l,m}^{p,q,s} &= (v_{th})^3 \myint_{0}^{+\infty} \myint_{S^2} \myint_{S^2} 
- \left(\frac{v_r}{v_{th}}\right)^{2} P_{pq}\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi) \exp\left(-\left(\frac{v_r}{v_{th}}\right) ^ 2\right)  \\& P_{kl}\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \diff{\omega} \diff{\omega_v} \frac{\diff{v_r}}{v_{th}} \\
- {M}_{k,l,m}^{p,q,s} &= \delta^p_q \delta^q_l \delta^m_s
+\partial_t y_{qs}
+-E\Lambda^{qs}_{lm} \partial_v y_{lm} 
+-E Q^T B^{qs}_{lm} \frac{1}{v} Q y_{lm} = 
+Q^T C^{qs}_{lm} Q y_{lm}
+\end{align*} 
+For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $y_{lm}(v)=\sum_{k} y_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ we can write, 
+\begin{align*}
+&\partial_t M^{p}_{k} y_{kqs} -E\Lambda^{qs}_{lm}\of{[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})y_{klm}} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm}  \\
+&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
+&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
 \end{align*}
 
-For given distribution function of the form, $f(\vect{v}) = \exp\of{-\left(\frac{v_r}{v_{th}}\right)^2}h(\vect{v})$ we can compute the expansion coefficients $\hat{f}_{klm}$ as, 
+\subsection{Using piecewise polynomials}
+$P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,1]$. For $\of{\frac{v}{v_{th}}} \in [a,b]$, we can write 
 \begin{align*}
-	\hat{f}_{klm} = \myint_{R^3} \Psi_{klm}(\vect{v}) f(\vect{v}) \diff{\vect{v}}
+x=\of{\frac{v}{v_{th}}} &= \of{\frac{b-a}{2}}t + \of{\frac{a+b}{2}} \\
+\phi_k\of{\frac{v}{v_{th}}} &= \exp\of{-\of{\frac{v}{v_{th}}}^2} P_k(t) \\
+\psi_k\of{\frac{v}{v_{th}}} &= P_k(t) \\
+M^p_k = &\myint_{av_{th}}^{b v_{th}} v^2 \psi_p\of{\frac{v}{v_{th}}} \phi_k\of{\frac{v}{v_{th}}} dv = v_{th}^3  \myint_{a}^{b} x^2 \psi_p\of{x} \phi_k\of{x}dx\\
+&=v_{th}^3 \myint_{-1}^{1} x^2 \exp\of{-x^2}  P_k(t) P_p(t) \of{\frac{b-a}{2}} dt
+\end{align*} Where full mass matrix (i.e., with spherical basis)
+\begin{align*}
+M^{pqs}_{klm} = M^{p}_k \delta^{q}_{l} \delta^{s}_{m}
 \end{align*}
 
-The $n^{th}$ moment of the distribution function can be computed,
+\subsection{Advection + Collision operator}
+This section attempt to understand collective effect on advection + collision operators. For simplicity of the analysis, we assume we use $l=0,1$ polar and $m=0$ in the azimuthal direction. We use $S_k\of{x}$, $T_p\of{x}$ to denote trial and test basis respectively. Important coordinate relations are listed below. 
 \begin{align*}
-	m_n&=\myint_{R^3} \norm{v}^n f(\vect{v}) \diff{\vect{v}}\\
-	m_n&=(v_{th})^{3+n}\myint_{0}^{+\infty} \myint_{S^2} \of{\frac{v_r}{v_{th}}}^{2+n} \sum_{klm} \hat{f}_{klm} \Phi_{klm}(\vect{v}) \diff{\omega}\frac{\diff{v_r}}{v_{th}}
+x =\frac{v_r}{v_{th}} \text{, } \varepsilon = \of{\frac{v_r}{\gamma}}^2 \text{ where } \gamma = \sqrt{2 e / m_e}
+\end{align*}
+Recall, the simplified collision operator projected on to spherical harmonics can be written as follows. 
+\begin{align*}
+C^{q}_{l} &= \myint_{R} {v^\prime_r}^2 B(v^\prime_r) f_l \delta_{ql}\of{\delta\of{v^{post}(v^\prime_r)-v_r} \delta_{q0} - \delta\of{v^\prime_r -v_r}} \diff{v^\prime_r}
+\end{align*} We can write the collision operator with advection terms, 
+\begin{align*}
+\partial_t M^{q}_{l} f_{l}
+-E A^{q}_{l} \partial_{v_r} f_{l}  
+-E B^{q}_{l} \frac{1}{v_r}f_{l}  = 
+C^{q}_{l}f_{l}
+\end{align*} Now with expanding each radial component with trial basis and projecting it onto the test space we can write, 
+\begin{align*}
+f_l\of{v_r} &= \sum_{k} f_{kl} S_k(x) 
+\end{align*}
+\begin{align*}
+\partial_t M^{pq}_{kl} f_{kl} = -\of{\of{2 A^{q}_{l} -B^{q}_{l}} W^p_{k} + A^{q}_{l} D^{p}_{k}}f_{kl} + C^{pq}_{kl} f_{kl} + EA^{q}_{l}[f_{l}^*(v) v^2 \boldsymbol{T}\of{v}]_{D_l}^{D^r}
+\end{align*}Where, 
+\begin{align*}
+M^{pq}_{kl} &= v_{th}^3 \myint_{R} x^2 T_p \of{x} S_k\of{x} dx \\
+W^{p}_{k}   &= v_{th}^2 \frac{E q}{m_e} \myint_{R} x T_p \of{x} S_k\of{x} dx \\
+D^{p}_{k}   &= v_{th}^2 \frac{E q}{m_e} \myint_{R} x^2 \partial_x T_p \of{x} S_k\of{x} dx \\
+A^{q}_{l} &=\begin{pmatrix}
+0  & 1/\sqrt{3} \\
+1/\sqrt{3}  & 0 \\
+\end{pmatrix} \text{ , } 
+B^{q}_{l} = \begin{pmatrix}
+0 & 2/\sqrt{3}\\
+0 & 0 
+\end{pmatrix}\\
+C^{pq}_{kl} &= \begin{pmatrix}
+C^{p0}_{k0} & 0 \\
+0  & C^{p1}_{k1} \\
+\end{pmatrix}\text{where, } \\
+C^{p0}_{k0}  &= -n_0 v_{th}^4 \frac{\mu}{2} \myint_{R} x^4 \sigma\of{\varepsilon} S_k\of{x}\partial_{x} T_p\of{x} \diff{x}  \\
+C^{p1}_{k1}  &= -n_0 v_{th}^4 \myint_{R} x^3 \sigma\of{\varepsilon} S_k\of{x} T_p\of{x} \diff{x} 
 \end{align*}
 
-The electron temperature is defined as, 
-\begin{align*}
-T_e & = \frac{1}{3k_B} m_e \frac{m_2}{m_0}
-\end{align*}
-The electron energy distribution function (EEDF) can be computed with, 
-\begin{align*}
-E_f(\epsilon) &= \myint_{S^2} f\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\right)} \diff{\omega} \\
-E_f(\epsilon) &= \myint_{S^2} \sum_{klm} \exp(-\frac{2\epsilon}{m_e}) \hat{f}_{klm} \Phi_{klm}\of{\left(\sqrt{\frac{2\epsilon}{m_e}},\omega\right)} \diff{\omega}
-\end{align*}
-
-%\subsection{Collision operator using B-splines}
-%\begin{align*}
-%M(v) & = \frac{n_e}{(\sqrt{\pi}v_{th})^3} \exp{\left(-\left(\frac{v}{v_{th}}\right)^2 \right)} \\
-%\Phi_{klm} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^l P_k\of{\frac{v_r}{v_{th}}} Y_{lm}(v_\theta,v_\phi) \\
-%\Psi_{pqs} (\vect{v}) &= \left(\frac{v_r}{v_{th}}\right)^q P_p\of{\frac{v_r}{v_{th}}} Y_{qs}(v_\theta,v_\phi)
-%\end{align*}where $P_k,P_p$ denotes the B-splines polynomials.  
-
-\textbf{Spectrum of the collision operator} : Let $C : V \rightarrow V$ denotes the infinity dimension collision operator, $P_n V \rightarrow V_n$ be the projection operator for finite dimensional subspace $V_n \subset V$. For orthogonal radial basis choice, $P_n$ is an orthogonal projection, while for B-splines it is not orthogonal.
-\begin{align*}
-C_{n\times n} &= P_n C P_n^T \\
-\norm{C_{n\times n}} = \norm{P_n C P_n^T} &\leq \norm{P_n^2}\norm{C} \\
-\norm{P_n} &=\sqrt{n} \\
-\frac{\norm{C_{n\times n}}}{n} &\leq \norm{C}
-\end{align*}
-
-\subsection{Tensorized computation of ${L}_{k,l,m}^{p,q,s}$}
-
-%\begin{align*}
-%    {L}_{k,l,m}^{p,q,s} &= {L^{+}}_{k,l,m}^{p,q,s} - {L^{-}}_{k,l,m}^{p,q,s}
-%\end{align*} where, 
-%\begin{align*}
-%    {L^{+}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
-%                               \int_{S^2(v_\theta,v_\phi)}
-%                               \int_{S^2(\chi,\gamma)} & 
-%                               v^2 M(v^\prime) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v^\prime}{\vth}} Y_{lm}\of{v_\theta^\prime, v_\phi^\prime} |v|\sigma(|v|,\chi) d\omega d\omega_v dv \\
-%    {L^{-}}_{k,l,m}^{p,q,s} = n_0 \int_{v_r} 
-%                              \int_{S^2(v_\theta,v_\phi)}
-%                              \int_{S^2(\chi,\gamma)} & 
-%                              v^2 M(v) P^p \of{\frac{v}{\vth}} Y^{qs}\of{v_\theta, v_\phi} \times \\ & P_k\of{\frac{v}{\vth}} Y_{lm}\of{v_\theta, v_\phi} |v|\sigma(|v|,\chi) d\omega d\omega_v dv
-%\end{align*}
-
-The list of tensors that can be precomputed
-\begin{itemize}
-    \item $V_r$ - quadrature points on the radial direction (incident velocities)
-    \item $W_r$ - quadrature weights on the radial direction
-    \item $V_\theta$ - quadrature points on the polar direction 
-    \item $W_\theta$ - quadrature weights for theta
-    \item $V_\phi$ - quadrature points on the azimuthal direction 
-    \item $S_\chi$ - quadrature points on the scattering angle
-    \item $S_\gamma$ - quadrature points on the azimuthal angle (for scattering direction)
-    \item $W_\chi$ - quadrature weights
-    \item $\sigma_{r\chi}$ - differential cross section tensor (rank 2)
-    \item $Y_{lm}^{\theta\phi}$ - $lm$-mode spherical harmonic function evaluated at $(V_\theta, V_\phi)$. The sparse version (i.e., for given $l$ mode not selecting all the $m$ modes) , but generally can be considered as rank 4 tensor. 
-    \item $M_r$ - Maxwellian times $v_r$ evaluated at $V_r$
-    \item $P_{kr}$     - $k^{th}$ Maxwell polynomial evaluated at the $V_r$ $r^{th}$ location.
-\end{itemize}
-Notation : Same index up-down denotes contraction, $\otimes$ for kronecker product, same level index, same index (i.e., up-up, down down) denotes the element-wise multiplication. 
-The total cross section $\sigma_r$, can be written as, 
-\begin{align}
-    \sigma_r &= \frac{\pi}{|S\chi|} \sigma_{r,\chi} W^\chi
-\end{align}
-
-The weighted spherical harmonic tensor, 
-\begin{align}
-    \tilde{Y}^{qsr}_{\theta\phi} = \mleft({Y}^{qs}_{\theta\phi} W_\theta \frac{\pi}{|V\chi|} \mright) 
-\end{align}
-
-Then we can write, 
-\begin{align}
-    {L^{-}}_{k,l,m}^{p,q,s} &= ((P^p_r W_r \sigma_r) (P^r_k M^r) ) \otimes Y_{lm}^{\theta\phi} \tilde{Y}^{qs}_{\theta\phi} \\
-    {L^{-}}_{k,l,m}^{p,q,s} &= ((P^p_r W_r \sigma_r) (P^r_k M^r) ) \otimes \delta^{qs}\delta_{lm} %Y_{lm}^{\theta\phi} \tilde{Y}^{qs}_{\theta\phi} 
-\end{align}
 
 
-More additional tensors that we need to compute the $L^{+}$ component. 
-
-\begin{itemize}
-    \item $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime}$ : Scattering velocity tensor, for each $v=(r,\theta,\phi)$ and scattering solid angle $(\chi,\gamma)$ computes $(r^\prime,\theta^\prime,\phi^\prime)$ scattered or newly created particle velocity (i.e., in G2 ejected electron). This is a rank 8 tensor where it might be too expensive to compute. For cases $G0$, $G1$ we can compute $S^{r\theta\phi\chi\gamma}_{r^\prime\theta^\prime \phi^\prime} = {S^r}_{r^\prime} \otimes S^{\theta\phi\chi\gamma}_{\theta^\prime \phi^\prime}$ since radial component only depends on energy, while for reactions like $G2$ it's depends on both energy and direction (i.e., for momentum conservation).
-    \item $P^{r\theta\phi\chi\gamma}_{k}$ - radial polynomial evaluated at differed velocity for given incident particle ($r,\theta,\phi,\chi,\gamma$)
-    \item $M^{r\theta\phi\chi\gamma}$ - Maxwellian times $v_r$ evaluated for the differed particle for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-    \item $Y^{r\theta\phi\chi\gamma}_{lm}$ - $lm$ spherical harmonic mode evaluated differed particle direction for a given incident particle ($r,\theta,\phi,\chi,\gamma$)
-    \item $\sigma^{r\theta\phi\chi\gamma}$ - differential cross section broadcasted on scattering cross section angles. 
-    \item $B^{r\theta\phi}_{pqs}$ - $pqs$ basis evaluated at the incident grid.              
-\end{itemize}
-
-For the general case, of the differed particle, (i.e., differed particle all velocity components are functions of $r,\theta,\phi,\chi,\gamma$) we can write the following. Note, $A$ is obtained for contraction on the $\gamma$ azimuthal of angle of the scattered particle, $B$ is obtained with contraction on the polar angle of the scattering direction, $C$ is obtained contraction on $(\theta,\phi)$ for the velocity space angular directions, and finally $L^{+}$ obtained using radical direction contraction. 
-
-\begin{align}
-    A^{r\theta\phi}_{klm}   &=  ( P^{r\theta\phi\chi\gamma}_{k} M^{r\theta\phi\chi\gamma} Y^{r\theta\phi\chi\gamma}_{lm}) W{\gamma} W_{\chi} \\
-    {L^{+}}_{k,l,m}^{p,q,s} &=  B^{r\theta\phi}_{pqs} A^{r\theta\phi}_{klm} W_\phi W_\theta W_r
-    % B^{r\theta\phi}_{klm}      & = \frac{\pi}{|S_\gamma|} \sigma^{r\chi} (W_\chi A^{r\theta\phi}_{\chi klm}) \\
-    % C^{rqs}_{klm}              & = \tilde{Y}^{qs}_{\theta\phi} B^{r\theta\phi}_{klm} \\
-    %{L^{+}}_{k,l,m}^{p,q,s}     & = {P^p}_r C^{rqs}_{klm}
-\end{align}
-
-\subsection{Distribution moments in basis expansion}
-Let $f(v) = M(v_\alpha) \sum_{klm} f_{klm} \phi_{klm}(v_\alpha)$, where $v_\alpha = v/\alpha$. Then we can write the zeroth moment (number of species particles) of the distribution, 
-\begin{align}
-    n_e & = \int_{R^3} f(v) dv \\
-\end{align} which can be written as, 
-\begin{align}
-    n_e & = q^{klm} f_{klm}  
-\end{align} where, 
-\begin{align}
-    q_{klm} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = 0  \text{ if } klm \neq 000 \\
-    q_{000} & = \int_{\R^3} M(v_\alpha) \phi_{klm}(v_\alpha) dv = \frac{n}{4\pi} 
-\end{align}
-
-
-
-\subsection{Varying thermal velocity}
-Let $\alpha,\beta$ be two thermal velocities, and their corresponding normalized velocity be $v_\alpha=v/\alpha,v_\beta=v/\beta$.
-Let $f(v) = M(v_\alpha) h(v_\alpha)$. Let $h^{(\alpha)}$ be the basis coefficients w.r.t. the chosen basis. Let us try to expand $f(v)$ using maxwellian at different temperature say at $\beta$, let $h^{(\beta)}$ be the coefficients for the expansion.
-\begin{equation}
-    M^{(\beta)} h^{(\beta)} = W^{(\alpha)} h^{(\alpha)}
-\end{equation} where, 
-\begin{align}
-    M^{(\beta)}_{ij} &= \int_{v} \int_{S^2} M(v_\beta) \phi_i(v_\beta) \phi_j(v_\beta) d\omega dv  = \frac{n}{4\pi} \delta_{ij} \\
-    W^{(\alpha)}_{ij} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_i(v_\beta) \phi_j(v_\alpha) d\omega dv   \label{eq:bchnage}
-\end{align}
-
-For $W_ij^{(\alpha)}$, let i=0, then we can write (Note : $\phi_0(v_\beta)=1$)
-\begin{align*}
-    W^{(\alpha)}_{0j} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_0(v_\beta) \phi_j(v_\alpha) d\omega dv\\
-    W^{(\alpha)}_{0j} &= \int_{v} \int_{S^2} M(v_\alpha) \phi_j(v_\alpha) d\omega dv = \frac{n}{4\pi} \delta_{0j}
-\end{align*}
-Therefore, we can write $h^{(\beta)}_0=h^{(\alpha)}_0$. There zeroth coefficient always match hence we should preserve zeroth moment of the distribution under basis change.  
-
-\subsection{Bounds on the tails for the basis change}
-The thermal velocity basis change operator is given by, \eqref{eq:bchnage}, using orthogonality in the angular directions we can only operate in the radial direction. Therefore, the above simplifies to following (note that we can consider scaling of the 1d Maxwellian)
-\begin{align}
-    W_{ij} &= \int_{\reals} M(v_\alpha) P_i(v_\beta) P_j(v_\alpha)dv \label{eq:basis_change}
-\end{align}
-Let $\epsilon >0$, $\alpha = \beta + \epsilon$. Then we can write the simplified $W_{ij}$ as, 
-\begin{align}
-    W_{ij} &= \frac{n}{\sqrt{\pi}^{3}}  \int_{\reals}  \exp(-v_\alpha^2) P_i (v_\alpha (1 + \frac{\epsilon}{\beta})) P_j(v_\alpha) \frac{dv}{\alpha} \\
-\end{align}
 
 
 
@@ -988,456 +1174,177 @@ Overall algorithm 2: given $\vect{v}_0$, $a_{klm}$ at $t_n$ (without temperature
 %\begin{align*}
 %\partial_t \tilde{f} = C[\tilde{f}]
 %\end{align*}
-\clearpage
-\section{Projection of Boltzmann equation onto spherical harmoincs } %(only left-hand-side so far)
-Advection (acceleration) term
-\begin{align*}
-\partial_t f - \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
-\end{align*}
-In spherical coordinates
-\begin{align*}
-\nabla_{\vect{v}} 
-= \vrunit \frac{\partial}{\partial \vr}
-+ \vthetaunit \frac{1}{\vr} \frac{\partial}{\partial \vtheta}
-+ \vphiunit \frac{1}{\vr \sin\of{\vtheta}} \frac{\partial}{\partial \vphi}
-\end{align*}
-\begin{align*}
-\vect{E} 
-= E \hat{\vect{z}} 
-= E \left( \cos\of{\vtheta} \vrunit - \sin\of{\vtheta} \vthetaunit \right)
-\end{align*}
-\begin{align*}
-\vect{E}\cdot \nabla_{\vect{v}} f
-= E 
-\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
-- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right)
-\end{align*}
-Expansion in terms of spherical harmonics
-\begin{align*}
-f = 
-\sum_{lm} f_{l,m}\of{\vr} Y_{l,m}\of{\vtheta,\vphi}
-\end{align*}
-Spherical harmonics
-\begin{align*}
-Y_{lm}\of{\vtheta,\vphi} = U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
-\end{align*}
-\begin{align*}
-U_{lm} &= 
-\begin{cases}
-(-1)^m \sqrt{2} \sqrt{\frac{2l+1}{4\pi} \frac{(l-|m|)!}{(l+|m|!}}, &m\neq 0 \\
-\sqrt{\frac{2l+1}{4\pi}}, &m = 0
-\end{cases}
-\\
-\alpha_m\of{\vphi}
-&=
-\begin{cases}
-\sin\of{|m|\phi}, &m < 0 \\
-1, &m = 0\\
-\cos\of{m\phi}, &m > 0
-\end{cases}
-\end{align*}
-Useful relationships
-\begin{align*}
-x P^m_l\of{x} 
-&= \frac{l+m}{2l+1} P^m_{l-1}\of{x}
-+ \frac{l-m+1}{2l+1} P^m_{l+1}\of{x}
-\\
-&= \alpha_M\of{l,m} P^m_{l-1}\of{x}
-+ \beta_M\of{l,m} P^m_{l+1}\of{x}
-\\
-(1-x^2) \frac{d}{dx} P^m_l\of{x} 
-&= \frac{(l+1)(l+m)}{2l+1} P^m_{l-1}\of{x} 
-- \frac{l(l-m+1)}{2l+1} P^m_{l+1}\of{x}
-\\
-&= \alpha_D\of{l,m} P^m_{l-1}\of{x} 
-+ \beta_D\of{l,m} P^m_{l+1}\of{x}
-\end{align*}
-Now we can show
-\begin{align*}
-\cos\of{\vtheta} Y_{lm}\of{\vtheta,\vphi}
-&=
-\cos\of{\vtheta} U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
-\\
-&=
-\cos\of{\vtheta} U_{lm} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
-\\
-&=
-U_{lm} \left( \alpha_M\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} 
-+ \beta_M\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} \right) \alpha_m\of{\vphi}
-\\
-&=
-\alpha_M\of{l,|m|} \frac{U_{lm}}{U_{(l-1)m}} Y_{(l-1)m}\of{\vtheta,\vphi} 
-+ \beta_M\of{l,|m|} \frac{U_{lm}}{U_{(l+1)m}} Y_{(l+1)m}\of{\vtheta,\vphi}
-\\
-&=
-A_M\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
-+ 
-B_M\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi}
-\end{align*}
 
-\begin{align*}
--\sin\of{\vtheta} \frac{d}{d\vtheta} Y_{lm}\of{\vtheta,\vphi}
-&=
--\sin\of{\vtheta} U_{lm} \frac{d}{d\vtheta} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
-\\
-&=
-\left(\sin\of{\vtheta}\right)^2 U_{lm} \frac{d}{d\cos\of{\vtheta}} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
-\\
-&=
-\left(1 - \left(\cos\of{\vtheta}\right)^2\right) U_{lm} \frac{d}{d\cos\of{\vtheta}} P^{|m|}_l\of{\cos\of{\vtheta}} \alpha_m\of{\vphi}
-\\
-&=
-U_{lm} \left( \alpha_D\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} 
-+ \beta_D\of{l,|m|} P^{|m|}_{l-1}\of{\cos\of{\vtheta}} \right) \alpha_m\of{\vphi}
-\\
-&=
-\alpha_D\of{l,|m|} \frac{U_{lm}}{U_{(l-1)m}} Y_{(l-1)m}\of{\vtheta,\vphi} 
-+ \beta_D\of{l,|m|} \frac{U_{lm}}{U_{(l+1)m}} Y_{(l+1)m}\of{\vtheta,\vphi}
-\\
-&=
-A_D\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
-+ 
-B_D\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi}
-\end{align*}
-Substituting into advection term
-\begin{align*}
-\vect{E}\cdot \nabla_{\vect{v}} f
-&= E 
-\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
-- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right)
-\\
-&= E 
-\sum_{lm}
-\Bigg(
-\frac{d}{d\vr}f_{lm}\of{\vr}
-\left( A_M\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
-+ B_M\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi} \right)
-\\
-&+
-\frac{1}{\vr}f_{lm}\of{\vr}
-\left( A_D\of{l,m} Y_{(l-1)m}\of{\vtheta,\vphi} 
-+ B_D\of{l,m} Y_{(l+1)m}\of{\vtheta,\vphi} \right) 
-\Bigg)
-\\
-&= E 
-\sum_{lm} 
-\Bigg(
-\left( A_M\of{l,m} \frac{d}{d\vr}f_{lm}\of{\vr} 
-+ A_D\of{l,m} \frac{1}{\vr}f_{lm}\of{\vr} \right)
-Y_{(l-1)m}\of{\vtheta,\vphi} 
-\\
-&+
-\left( B_M\of{l,m} \frac{d}{d\vr}f_{lm}\of{\vr} 
-+ B_D\of{l,m} \frac{1}{\vr}f_{lm}\of{\vr} \right)
-Y_{(l+1)m}\of{\vtheta,\vphi} 
-\Bigg)
-\end{align*}
-Projecting onto test spherical harmonics
-\begin{multline*}
-\myint \vect{E}\cdot \nabla_{\vect{v}} f Y_{qs}\of{\theta,\phi} \diff{\vomega}\\
-= E 
-\Bigg(
-\left( A_M\of{q+1,s} \frac{d}{d\vr} f_{q+1,s} \of{\vr} 
-+ A_D\of{q+1,s} \frac{1}{\vr} f_{q+1,s} \of{\vr} \right)
-\\
-+ \left( B_M\of{q-1,s} \frac{d}{d\vr} f_{q-1,s} \of{\vr} 
-+ B_D\of{q-1,s} \frac{1}{\vr} f_{q-1,s} \of{\vr} \right)
-\Bigg)
-\end{multline*}
 
-Two term expansion ($l = 0,1$, $m=0$):
-\begin{align*}
-\frac{d}{dt} f_{0,0} - E 
-\left( A_M\of{1,0} \frac{d}{d\vr} f_{1,0} 
-+ A_D\of{1,0} \frac{1}{\vr} f_{1,0} \right) &= \ldots
-\\
-\frac{d}{dt} f_{1,0} - E 
-\left( B_M\of{0,0} \frac{d}{d\vr} f_{0,0} 
-+ B_D\of{0,0} \frac{1}{\vr} f_{0,0} \right) &= \ldots
-\end{align*}
-or more explicitly:
-\begin{align*}
-\frac{d}{dt} f_{0,0} - E 
-\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{1,0} 
-+  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= C^{00}_{00} f_{0,0} + C^{00}_{10} f_{1,0}
-\\
-\frac{d}{dt} f_{1,0} - E 
-\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{0,0} \right) &= C^{10}_{00} f_{0,0} + C^{10}_{10} f_{1,0}
-\end{align*} were $C^{qs}_{lm}$ denotes the projection of the collision operator to $Y_{qs}$, which can be written as, 
-\begin{align*}
-C^{qs}_{lm} &=\myint_{S^2} C Y_{qs}\of{\omega_{v}} \diff{\omega_{v}}= 
-\myint_{R} \myint_{S^2} \myint_{S^2} 
-B_0\of{(v^\prime,\omega_{v}), \vect{\omega}} {v^\prime}^2 Y_{lm}\of{\omega_{v}} \times \\
-\Bigg(
-&\delta\of{v^{post}- {v}} Y_{qs}\of{\omega_{v^{post}}} - \delta\of{v^\prime - v} Y_{qs}\of{\omega_{v}}
-\Bigg)
-\diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v^\prime} 
-\end{align*}
-Let $f_{lm}$ be the lm modes used, 
-\begin{align*}
-\partial_tf_{qs}
--E A^{qs}_{lm} \partial_v f_{lm}  
--E B^{qs}_{lm} \frac{1}{v}f_{lm}  = 
-C^{qs}_{lm}f_{lm}
-\end{align*}
-\textbf{Note}: Due to the orthogonality structure in the radial advection coordinate diagonals will always be zero, with a banded matrix with width of equal to 1. 
 
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
+\section{Steady-State solutions}
 \begin{align*}
-&\partial_t M^{p}_{k} f_{kqs} -EA^{qs}_{lm}\of{[f_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})f_{klm}} -E B^{qs}_{lm} S^{p}_{k} f_{klm} = C^{pqs}_{klm} f_{klm}  \\
-&\partial_t M^{p}_{k} f_{kqs} = -E \of{\of{2 A^{qs}_{lm} -B^{qs}_{lm}} S^p_{k} + A^{qs}_{lm} D^{p}_{k}}f_{klm} + C^{pqs}_{klm} f_{klm} + EA^{qs}_{lm}[f_{lm}^*(v) v^2 \boldsymbol{\psi}\of{v}]_{D_l}^{D^r}
-\end{align*} where, 
+n_e(t) &= \int_{\vect{v}} f(t, \vect{v}) \diff{\vect{v}} \text{ and } a(t) = \frac{1}{n_e(t)}
+\end{align*}
+The normalized distribution function $\hat{f}(t,\vect{v}) = a(t) f(t, \vect{v})$. Write the Boltzmann equation in the normalized $\hat{f}(t, \vect{v})$. For distribution function $f$, we can write, 
 \begin{align*}
-M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
+\partial_t f\of{t,\vect{v}} &= (C-E)f \\
+\partial_t\of{a\of{t} f\of{t,\vect{v}}} &= \dot{a}\of{t}f\of{t,\vect{v}} + a\of{t} \dot{f}\of{t,\vect{v}} \\
+&= \dot{a}\of{t}f + a\of{t} (C-E)f \\
+&= -\dot{n}_e\of{t} a^2\of{t} f + a\of{t} (C-E)f \\
+\end{align*}
+we can re-write the above with the normalized distribution $\hat{f}$, 
+\begin{align*}
+\partial_t\of{\hat{f}(t,\vect{v})} &=-\dot{n}_e\of{t} a\of{t} \hat{f} + (C-E)\hat{f}
+\end{align*}. In the continuous form, 
+\begin{align*}
+\dot{n}_e (t) = \int_\vect{v} \dot{f} \diff{\vect{v}} &= \int_\vect{v} C(f) \diff{v} - \int_\vect{v} \vect{E} \cdot \nabla_\vect{v} f \diff{\vect{v}} \\
+&= \int_\vect{v} C(f) \diff{v} -\int_\vect{v} \nabla_\vect{v} \cdot (\vect{E} f) \diff{\vect{v}} \\
+&= \int_\vect{v} C(f) \diff{v} -\int_{\partial\vect{v}} (\vect{E} f) \cdot \vect{n} \diff\vect{s}
+\end{align*} Assuming $f$ is zero at the boundary, 
+\begin{align*}
+\dot{n}_e (t) = \int \dot{f} dv &= \int (C-E) f dv = \int C f dv \\
+\frac{\dot{n}_e (t)}{n_e(t)} &=\int C \hat{f} dv \\
+\partial_t\of{\hat{f}(t,\vect{v})} &=-\left(\int C \hat{f} dv \right) \hat{f} + (C-E)\hat{f}
+\end{align*}
+For the steady state, we can write, 
+\begin{align*}
+\partial_t\of{\hat{f}} &=0 \implies -\left(\int C \hat{f} dv \right) \hat{f} + (C-E)\hat{f} =0 \\ 
+\end{align*}
+let $u^T f$ be the mass of the distribution function, by construction, $u^T \hat{f}=1$.
+\begin{align*}
+-(u^T C \hat{f}) \hat{f} + (C-E)\hat{f} =0 \\ 
 \end{align*} 
-The flux term (up-winding, down-winding) determined by $A^{qs}_{lm}$ sign of the eigenvalues. 
-
-Diagonalize then discretize in the radial coordinate. 
-Let $A^{qs}_{lm}=Q\Lambda^{qs}_{lm} Q^T$, let $Q^T f_{km}= y_{lm}$
+Let, 
 \begin{align*}
-\partial_t y_{qs}
--E\Lambda^{qs}_{lm} \partial_v y_{lm} 
--E Q^T B^{qs}_{lm} \frac{1}{v} Q y_{lm} = 
-Q^T C^{qs}_{lm} Q y_{lm}
-\end{align*} 
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $y_{lm}(v)=\sum_{k} y_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ we can write, 
+R(f)&=
+\begin{pmatrix}
+-(u^T C f) f + (C-E)f \\
+u^Tf-1
+\end{pmatrix}
+\end{align*} For the steady  state we need $R(f) = \vect{0}$. The Jacobian for the $R$ is given by, 
 \begin{align*}
-&\partial_t M^{p}_{k} y_{kqs} -E\Lambda^{qs}_{lm}\of{[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})y_{klm}} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm}  \\
-&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
-&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
+J(f)&=
+\begin{pmatrix}
+-2(u^T C f) I + (C-E) \\
+u^T
+\end{pmatrix}
 \end{align*}
 
-
-
-
+\subsection{Orthogonal polynomials}
+Expansion
+%\begin{align*}
+%f\of{\vect{v},t} = \sum h_{klm}\of{t} \exp\of{-\frac{v^2}{\vth^2}} \left( \frac{v}{\vth} \right)^{l} P_{kl}\of{\frac{v}{\vth}} Y_{lm}\of{\vtheta, \vphi}
+%\end{align*}
+\begin{align*}
+f\of{\vect{v},t} = \sum h_{klm}\of{t} \Phi_{kl}\of{\vr} Y_{lm}\of{\vtheta, \vphi}
+\end{align*}
+Total number of electrons
+\begin{align*}
+n = \myint_{R^3} f\of{\vect{v},t} d\vect{v} = h_{000}\of{t} \myint_{R^3} \Phi_{00}\of{\vr} Y_{00}\of{\vtheta, \vphi} d\vect{v} = \alpha h_{000}\of{t}
+\end{align*}
+\begin{align*}
+Y_{00}\of{\vtheta, \vphi} &= \sqrt{\frac1{4\pi}}
+\\
+\Phi_{00}\of{\vr} &= \exp\of{ -\left( \frac{v}{\vth} \right)^2 } P_{00} \of{\frac{v}{\vth}}
+\end{align*}
+\begin{align*}
+\alpha = \frac\pi{2} P_{00}\of{0} \vth^3
+\end{align*}
+System of ODEs for coefficients
+\begin{align*}
+\frac{d \vect{h}}{dt} + E \vect{h} = C \vect{h}
+\end{align*}
+Factor out the very first coefficient $h_0\of{t}$:
+\begin{align*}
+\vect{h} = 
+\begin{pmatrix}
+h_0 \\ \vect{h}_\ast
+\end{pmatrix}
+,\quad
+E = 
+\begin{pmatrix}
+0 & \vect{0}^T \\
+\vect{e}_{0\ast} & E_{\ast\ast}
+\end{pmatrix}
+,\quad
+C = 
+\begin{pmatrix}
+C_{00} & \vect{c}_{\ast 0}^T \\
+\vect{c}_{0\ast} & C_{\ast\ast}
+\end{pmatrix}
+\end{align*}
+A slightly more explicit systems of ODEs
+\begin{align*}
+\frac{dh_0}{dt} &= h_0 \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right)
+\\
+\frac{d \vect{h}_\ast}{dt} &= - \vect{e}_{0\ast} h_0 
+- E_{\ast\ast} \vect{h}_\ast
+- \vect{c}_{0\ast} h_0 
+- C_{\ast\ast} \vect{h}_\ast
+\end{align*}
+Deriving an equation for scaled coefficients $\frac{\vect{h}_\ast}{h_0}$
+\begin{align*}
+\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) + \frac{\vect{h}_\ast}{h_0^2} \frac{dh_0}{dt} &= 
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
++ \left( C_{\ast\ast} - E_{\ast\ast} \right) \frac{\vect{h}_\ast}{h_0}
+\end{align*}
+Substituting equation for $\frac{dh_0}{dt}$
+\begin{align*}
+\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) 
++ \frac{\vect{h}_\ast}{h_0} \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) &= 
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
++ \left( C_{\ast\ast} - E_{\ast\ast} \right) \frac{\vect{h}_\ast}{h_0}
+\end{align*}
+\begin{align*}
+\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) 
+&= 
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
++ \left( C_{\ast\ast} - E_{\ast\ast} - \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) I \right) \frac{\vect{h}_\ast}{h_0}
+\end{align*}
+Steady-state solution
+\begin{align*}
+\frac{\vect{h}_\ast}{h_0} = 
+\left( \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) I
+- \left( C_{\ast\ast} - E_{\ast\ast} \right) \right)^{-1}
+\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
+\end{align*}
 
 
 \newpage
-diagonalization (manually try to diagonalize, hard to keep track of the other terms. )?
+
+
+System of ODEs for coefficients
 \begin{align*}
-\frac{d}{dt} \left( f_{0,0} + f_{1,0} \right) - E 
-\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} \left( f_{0,0} + f_{1,0} \right) 
-+  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= \ldots
+\frac{d \vect{h}}{dt} + E \vect{h} = C \vect{h}
+\end{align*}
+
+Let $\vect{u}$ be some vector, e.g. if $\vect{u} = \begin{pmatrix}
+1 & \ldots & 1 
+\end{pmatrix}^T$, then $\vect{u}^T \vect{h} = \sum h_i$.
+Equation for $\hat{\vect{h}} = \frac{\vect{h}}{\vect{u}^T \vect{h}}$:
+\begin{align*}
+\frac{d \hat{\vect{h}}}{dt} 
+=
+\frac{d}{dt} \left( \frac{\vect{h}}{\vect{u}^T \vect{h}} \right) 
+&= 
+\frac{1}{\vect{u}^T \vect{h}} \frac{d\vect{h}}{dt}
+- \frac{\vect{h}}{\vect{u}^T \vect{h}} \frac{\vect{u}^T d\vect{h}/dt}{\vect{u}^T \vect{h}}
 \\
-\frac{d}{dt} \left( f_{0,0} - f_{1,0} \right) - E 
-\left( - \frac{1}{\sqrt{3}} \frac{d}{d\vr} \left( f_{0,0} - f_{1,0} \right) 
-+  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= \ldots
+&= \left( C - E \right) \hat{\vect{h}} - \hat{\vect{h}} \vect{u}^T \left( C - E \right) \hat{\vect{h}}
 \end{align*}
 
-Let $F_0\of{v} = f_{0,0}\of{v} + f_{1,0}\of{v}$ and $F_1\of{v} = f_{0,0}\of{v} - f_{1,0}\of{v}$ and $c=\frac{E}{\sqrt{3}}$. 
+Transient equation for $\hat{\vect{h}}$
 \begin{align*}
-\partial_t F_0  - c \partial_v F_0 + 2c \frac{1}{v} f_{1,0} &= ... \\
-\partial_t F_1  + c \partial_v F_1 + 2c \frac{1}{v} f_{1,0} &= ...
-\end{align*} Projects to $\psi\of{v}$ radial test functions for $v\in V =[v_L,v_R]\subset [0,\infty]$.
-\begin{align*}
-\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v} -& c \myint_{V} \partial_v F_0 \of{v} v^2 \psi\of{v}\diff{v} + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
-\myint_{V} \partial_t F_0 \of{v} v^2 \psi\of{v} \diff{v}  -c  &\Big[F_0\of{v} v^2 \psi\of{v}\Big]_{v_L}^{v_R}  + c \myint_{V} F_0\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\
- +& 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ... \\
-\end{align*}
-Similarly for $F_1\of{v}$ we can write, 
-\begin{align*}
-\myint_{V} \partial_t F_1 \of{v} v^2 \psi\of{v} \diff{v}  +c  \Big[F_1\of{v} v^2 \psi\of{v}\Big]_{v_L}^{v_R}  - c \myint_{V} F_1\of{v} \left(v^2\partial_v \psi\of{v} + 2v\psi\of{v}\right) dv\\ + 2c \myint_{V} v f_{1,0} \of{v} \psi\of{v} dv = ...
+\frac{d \hat{\vect{h}}}{dt} 
+= \left( C - E - \vect{u}^T \left( C - E \right) \hat{\vect{h}} I \right) \hat{\vect{h}}
 \end{align*}
 
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $F_0\of{v}=\sum_{k} h_k \phi_k\of{\frac{v}{v_{th}}}$ and  $F_1\of{v}=\sum_{k} g_k \phi_{k}\of{\frac{v}{v_{th}}}$. Notice that $f_{0,0} = \frac{1}{2}(F_{0} + F{1})$, $f_{1,0} = \frac{1}{2}(F_{0} - F{1})$.
-Using the above expansion and discretizing the above we can write, 
+Transient equation for $\vect{u}^T \hat{\vect{h}}$
 \begin{align*}
-M_{pk} \partial_t \vect{h}  - c v_{th}^2 \Big[\vect{h}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} + c (D_{pk} + 2 S_{pk}) \vect{h} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
-M_{pk} \partial_t \vect{g}  + cv_{th}^2 \Big[\vect{g}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} - c (D_{pk} + 2 S_{pk}) \vect{g} + c S_{pk} (\vect{h}-\vect{g})  &= ... \\
-\end{align*} where the corresponding operators are defined as bellow (with $x=\frac{v}{v_{th}}$ normalized coordinates). 
-\begin{align*}
-	M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
-\end{align*} The source terms (RHS) of the equations should come from the collision operator. The collision operator with the above basis function can be written as,
-Assuming $f_0\of{\vect{v_0}}=\delta(\vect{v_0}-\vect{0})$, 
-\begin{align*}
-C^- = \myint_{R^3} \myint_{S^2}  
-B\of{\vect{v}_e^\prime, \vect{0}, \vect{\omega}} 
-f_e\of{\vect{v}_e^\prime} \delta\of{\vect{v}_e^\prime - \vect{v}_e} 
-\diff{\vect{v}_e^\prime} \diff{\vect{\omega}}. \\
-\end{align*} Let $B_0(\cdot,\cdot) \equiv B(\cdot,\vect{0},\cdot)$, then projecting into spherical harmonics, 
-\begin{align*}
-\myint_{S^2} C^- Y(\omega_{v_e}) \diff{\omega_{v_e}}& = 
-\myint_{R} \myint_{S^2} \myint_{S^2} 
-{v_e^\prime}^2 B_0\of{(v_e^\prime,\vect{\omega_{v_e}}), \vect{\omega}} \times \\
-&f_e\of{(v_e^\prime,\vect{\omega_{v_e}})} \delta\of{v_e^\prime - v_e} Y\of{\vect{\omega_{v_e}}} 
-\diff{v_e^\prime} \diff{\vect{\omega_{v_e}}} \diff{\vect{\omega}}. \\
-\end{align*} Similarly we can write the gain term, 
-\begin{align*}
-C^+ = \myint_{R^3} \myint_{S^2}  
-B_0\of{\vect{v}_e^\prime, \vect{\omega}} 
-f_e\of{\vect{v}_e^\prime} \delta\of{\vect{v}_e^{post}(\vect{v_e}^\prime,\vect{0},\omega)- \vect{v}_e} 
-\diff{\vect{v}_e^\prime} \diff{\vect{\omega}} 
+\frac{d \vect{u}^T \hat{\vect{h}}}{dt} 
+= \left( 1 - \vect{u}^T \hat{\vect{h}} \right) \vect{u}^T \left( C - E \right) \hat{\vect{h}}
 \end{align*}
-\begin{align*}
-\myint_{S^2} C^+ Y(\omega_{v_e}) \diff{\omega_{v_e}}& = \myint_{R} \myint_{S^2} \myint_{S^2}
-B_0\of{(v_e^\prime,\omega_{v_e}^\prime), \vect{\omega}} {v_e^\prime}^2 \times \\
-&f_e\of{(v_e^\prime,\omega_{v_e}^\prime)} \delta\of{v_e^{post}((v_e^\prime,\omega_{v_e}^\prime),\omega)- {v}_e} Y\of{\omega_{v^{post}}} \diff{v_e^\prime} \diff{\vect{\omega_{v_e}^\prime}} \diff{\vect{\omega}}\\
-&=\myint_{R} \myint_{S^2} \myint_{S^2}
-B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 \times \\
-&f_e\of{(v_e^\prime,\omega_{v_e})} \delta\of{v_e^{post}((v_e^\prime,\omega_{v_e}),\omega)- {v}_e} Y\of{\omega_{v^{post}}} \diff{v_e^\prime} \diff{\vect{\omega_{v_e}}} \diff{\vect{\omega}}
-\end{align*} Therefore, combined collision operator can be written as, 
-\begin{align*}
-\myint_{S^2} C Y\of{\omega_{v_e}} \diff{\omega_{v_e}}& = 
-\myint_{R} \myint_{S^2} \myint_{S^2} 
-B_0\of{(v_e^\prime,\omega_{v_e}), \vect{\omega}} {v_e^\prime}^2 f_e\of{(v_e^\prime,\omega_{v_e})} \times \\
-\Bigg(
-&\delta\of{v_e^{post}- {v}_e} Y\of{\omega_{v^{post}}} - \delta\of{v_e^\prime - v_e} Y\of{\omega_{v_e}}
-\Bigg)
-\diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v_e^\prime} 
-\end{align*} 
-\begin{align*}
-C^{pqs}_{klm} &= \myint_{V}\myint_{S^2}\myint_{S^2} B_0\of{(v_e,\omega_{v_e}), \vect{\omega}} {v_e}^2 \\
-&\phi_{k}\of{v} Y_{lm}(\omega_{v_e}) \Bigg( \psi_p\of{v^{post}_e} Y_{qs}\of{\omega_{v^{post}}} -\psi_{p}(v_e)Y_{qs}\of{\omega_v} \Bigg) \diff{v_e} \diff{\omega_{v_e}}\diff{\omega}
-\end{align*}.
-We can write, 
-\begin{align*}
-M_{pk} \partial_t \vect{h}  - c v_{th}^2 \Big[\vect{h}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} + c (D_{pk} + 2 S_{pk}) \vect{h} + c S_{pk} (\vect{h}-\vect{g})  &= C^{p00}_{k00} \frac{1}{2} (\vect{h} + \vect{g}) + C^{p00}_{k10} \frac{1}{2} (\vect{h} - \vect{g})  \\
-M_{pk} \partial_t \vect{g}  + cv_{th}^2 \Big[\vect{g}^* \of{\frac{v}{v_{th}}}^2 \boldsymbol{\psi}\of{\frac{v}{v_{th}}}\Big]_{D^l}^{D^{r}} - c (D_{pk} + 2 S_{pk}) \vect{g} + c S_{pk} (\vect{h}-\vect{g})  &= C^{p10}_{k00} \frac{1}{2} (\vect{h} + \vect{g}) + C^{p10}_{k10} \frac{1}{2} (\vect{h} - \vect{g}) \\
-\end{align*} %where $F^*_{\{0,1\}}$ denotes the flux terms for domain boundaries. 
-
-\begin{align*}
-\begin{bmatrix}
-M_{pk} & 0      \\
-0      & M_{pk} 
-\end{bmatrix} \partial_t \vect{F} &= -\begin{bmatrix}
-c(D_{pk} + 3S_{pk}) & -cS_{pk} \\
-cS_{pk} & -c(D_{pk} + 3S_{pk})
-\end{bmatrix} \vect{F}   + \begin{bmatrix}
-\frac{C^{p00}_{k00} + C^{p00}_{k10} }{2} & \frac{C^{p00}_{k00} - C^{p00}_{k10} }{2} \\
-\frac{C^{p10}_{k00} + C^{p10}_{k10} }{2} & \frac{C^{p10}_{k00} - C^{p10}_{k10} }{2} \\
-\end{bmatrix}\vect{F} - W\vect{F^*}
-\end{align*} where $\vect{F}=[\vect{h},\vect{g}]^T$, with $F^*$ denotes the flux terms, coupling the discontinuous domains.  
+Note that, if $\vect{u}^T \hat{\vect{h}} = 1$ at the initial time instant $t=0$, then $\frac{d \vect{u}^T \hat{\vect{h}}}{dt} = 0$ and $\vect{u}^T \hat{\vect{h}} = 1$ for any $t>0$. \textbf{Question:} if $\vect{u}^T \hat{\vect{h}} = 1+\varepsilon$ due to machine precision, would it lead to instability?
 
 
+At the steady-state one should have $\frac{d \hat{\vect{h}}}{dt} = 0$ subject to $\vect{u}^T \hat{\vect{h}} = 1$ (by construction).
 
-
-
-
-\newpage
-\section{Numerical evaluation}
-This section presents, a numerical evaluation of the spatially homogeneous Boltzmann equation without external force field. Recall, under the above assumptions we can write the collision source term as \eqref{eq:nr_be}, 
-\begin{equation}
-	\partial_t f_e(v,t) = \sum_{k} n_k C_k(f_e) \label{eq:nr_be}
-\end{equation} where the $C_k$ denotes the collision operator for the $k^{th}$ collision. We consider the following experiments in the study. 
-\begin{itemize}
-\item G0: $e + Ar \rightarrow e + Ar $ 
-\item G1: $e + Ar \rightarrow e + Ar^*$
-\item G2: $e + Ar \rightarrow e + Ar^+ + e$ 
-\end{itemize} The post collision velocities for the above collisions are summerized in \S\ref{sec:col_op_torch}.
-
-
-\subsection{Handling changing temperature}
-Due to the kinetic energy loss in $e-Ar$ collisions, the thermal velocity decreases with the time. Since we use quadrature points on the normalized velocity (i.e., $\frac{v}{v_th}$) we need transform the solution from one temperature to another. If the temperature drop is significant and if we don't have enough basis functions in the radial direction, the projection between temperature cause an aliasing effect and gives larger tails. 
-
-Let $T_\alpha$ be the current temperature and we want to transform the solution to $T_\beta=T_\alpha (1+ \epsilon)$ where $\epsilon \in [-a,a]$ for $a>0$.
-
-\begin{align}
-W_{ij} &= \int_{\reals} M(v_\alpha) P_i(v_\beta) P_j(v_\alpha)dv \label{eq:basis_change}
-\end{align}
-Let $\epsilon >0$, $\alpha = \beta + \epsilon$. Then we can write the simplified $W_{ij}$ as, 
-\begin{align}
-W_{ij} &= \frac{n}{\sqrt{\pi}^{3}}  \int_{\reals}  \exp(-v_\alpha^2) P_i (v_\alpha (1 + \frac{\epsilon}{\beta})) P_j(v_\alpha) \frac{dv}{\alpha} \\
-\end{align}
-
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_grid.png}
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_tail.png}
-	\caption{The left most figure shows the $f(v)$ expansion evaluated at uniform grid in the radial direction followed by normed difference computation for increasing $N_r$ polynomials. For a given Maxwellian distribution (i.e., $h^{\alpha}=1$) we compute the projection of the solution to $T_\beta=T_\alpha (1+\epsilon)$ with computed $W_{\beta\alpha}$, where $h^{\beta} = W_{\beta \alpha} h^{\alpha}$. The right most figure shows the tail of the computed $h^{\beta}$ with increasing polynomials in the radial direction.  \label{fig:basis_projection_error}
-	}
-\end{figure}
-\begin{figure}[!hbtp]
-	\centering
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_3.png}
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_3.png}
-	
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_7.png}
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_7.png}
-	
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_15.png}
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_15.png}
-
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_f_NR_31.png}
-	\includegraphics[width=0.48\textwidth]{fig/basis_1ev_log_f_NR_31.png}
-	\caption{ For each row the the right most figure shows the log scale to emphasis the variation in the tails of the distribution function. Each row corresponds to a temperature change indicated byt the $\epsilon$ parameter, and projected coefficient evaluated at a uniformly space grid of $10^5$ points in the range of $(0,6V_th)$. 
-		\label{fig:basis_grid_plot}
-	}
-\end{figure}
-
-
-\newpage
-\section{Numerical results with picewise linear synthetic cross section data}
-Experimental setup summary. 
-\begin{itemize}
-	\item Collision operator assembled using composite Simpson rule with 1601 points in the radial direction. 
-\end{itemize}
-\begin{figure}[!tbhp]
-	\centering
-	\includegraphics[width=0.8\textwidth]{fig/dat_1ev_cs.png}
-	\caption{Total cross-section plots with different synthetic functions. For modes 3,4,5,6 the kink is at an exact quadrature point while mode 7 kink location is not co-located with a quadrature point. For all the experiment differential cross-section computed with uniform distribution.}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m0_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m0_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m0_temp.png}
-	\caption{Mode 0}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m1_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m1_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m1_temp.png}
-	\caption{Mode 1}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m2_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m2_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m2_temp.png}
-	\caption{Mode 2}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m3_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m3_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m3_temp.png}
-	\caption{Mode 3}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m4_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m4_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m4_temp.png}
-	\caption{Mode 4}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m5_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m5_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m5_temp.png}
-	\caption{Mode 5}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m6_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m6_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m6_temp.png}
-	\caption{Mode 6}
-\end{figure}
-\begin{figure}[!htbp]
-	\centering
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m7_tail.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m7_temp_error.png}
-	\includegraphics[width=0.32\textwidth]{fig/dat_1ev_cs_m7_temp.png}
-	\caption{Mode 7}
-\end{figure}
 
 
 \bibliographystyle{plain}
@@ -1446,7 +1353,16 @@ Experimental setup summary.
 
 \newpage
 \appendix
+
+
+
+
+
+
+
+	
 \section{Derivation of Collision operators}
+
 \label{sec:coll_op_derivation}
 \subsection{Binary reactions}
 \label{subsec:binary_reactions}
@@ -3551,195 +3467,18 @@ e^{-x^2} x^{q} \left( \lp{q}{k} - \lp{q}{k-1} \right)
 + (q-1) \sum_{j=0}^{p} \nfun{q-1}{j} \delta_{j,k}
 \end{multline*}
 
-\newpage
-Constant cross-section $t_{end} = 10^{-6}$ s\\
-\includegraphics[width=0.99\textwidth]{fig/different_vth_const_1e-6.png}
-
-Data-fitted cross section $t_{end} = 10^{-6}$ s\\
-\includegraphics[width=0.99\textwidth]{fig/different_vth_real_1e-6.png}
-
-Constant cross-section $t_{end} = 10^{-5}$ s\\
-\includegraphics[width=0.99\textwidth]{fig/different_vth_const_1e-5.png}
-
-Data-fitted cross section $t_{end} = 10^{-5}$ s\\
-\includegraphics[width=0.99\textwidth]{fig/different_vth_real_1e-5.png}
-
-\newpage
-\section{Analytical solutions}
-
-Expansion
-%\begin{align*}
-%f\of{\vect{v},t} = \sum h_{klm}\of{t} \exp\of{-\frac{v^2}{\vth^2}} \left( \frac{v}{\vth} \right)^{l} P_{kl}\of{\frac{v}{\vth}} Y_{lm}\of{\vtheta, \vphi}
-%\end{align*}
-\begin{align*}
-f\of{\vect{v},t} = \sum h_{klm}\of{t} \Phi_{kl}\of{\vr} Y_{lm}\of{\vtheta, \vphi}
-\end{align*}
-Total number of electrons
-\begin{align*}
-n = \myint_{R^3} f\of{\vect{v},t} d\vect{v} = h_{000}\of{t} \myint_{R^3} \Phi_{00}\of{\vr} Y_{00}\of{\vtheta, \vphi} d\vect{v} = \alpha h_{000}\of{t}
-\end{align*}
-\begin{align*}
-Y_{00}\of{\vtheta, \vphi} &= \sqrt{\frac1{4\pi}}
-\\
-\Phi_{00}\of{\vr} &= \exp\of{ -\left( \frac{v}{\vth} \right)^2 } P_{00} \of{\frac{v}{\vth}}
-\end{align*}
-\begin{align*}
-\alpha = \frac\pi{2} P_{00}\of{0} \vth^3
-\end{align*}
-System of ODEs for coefficients
-\begin{align*}
-\frac{d \vect{h}}{dt} + E \vect{h} = C \vect{h}
-\end{align*}
-Factor out the very first coefficient $h_0\of{t}$:
-\begin{align*}
-\vect{h} = 
-\begin{pmatrix}
-h_0 \\ \vect{h}_\ast
-\end{pmatrix}
-,\quad
-E = 
-\begin{pmatrix}
-0 & \vect{0}^T \\
-\vect{e}_{0\ast} & E_{\ast\ast}
-\end{pmatrix}
-,\quad
-C = 
-\begin{pmatrix}
-C_{00} & \vect{c}_{\ast 0}^T \\
-\vect{c}_{0\ast} & C_{\ast\ast}
-\end{pmatrix}
-\end{align*}
-A slightly more explicit systems of ODEs
-\begin{align*}
-\frac{dh_0}{dt} &= h_0 \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right)
-\\
-\frac{d \vect{h}_\ast}{dt} &= - \vect{e}_{0\ast} h_0 
-- E_{\ast\ast} \vect{h}_\ast
-- \vect{c}_{0\ast} h_0 
-- C_{\ast\ast} \vect{h}_\ast
-\end{align*}
-Deriving an equation for scaled coefficients $\frac{\vect{h}_\ast}{h_0}$
-\begin{align*}
-\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) + \frac{\vect{h}_\ast}{h_0^2} \frac{dh_0}{dt} &= 
-\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
-+ \left( C_{\ast\ast} - E_{\ast\ast} \right) \frac{\vect{h}_\ast}{h_0}
-\end{align*}
-Substituting equation for $\frac{dh_0}{dt}$
-\begin{align*}
-\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) 
-+ \frac{\vect{h}_\ast}{h_0} \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) &= 
-\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
-+ \left( C_{\ast\ast} - E_{\ast\ast} \right) \frac{\vect{h}_\ast}{h_0}
-\end{align*}
-\begin{align*}
-\frac{d}{dt} \left( \frac{\vect{h}_\ast}{h_0} \right) 
-&= 
-\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
-+ \left( C_{\ast\ast} - E_{\ast\ast} - \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) I \right) \frac{\vect{h}_\ast}{h_0}
-\end{align*}
-Steady-state solution
-\begin{align*}
-\frac{\vect{h}_\ast}{h_0} = 
-\left( \left(C_{00} + \vect{c}_{\ast 0}^T \frac{\vect{h}_\ast}{h_0} \right) I
-- \left( C_{\ast\ast} - E_{\ast\ast} \right) \right)^{-1}
-\left( \vect{c}_{0\ast} - \vect{e}_{0\ast} \right)
-\end{align*}
-
-
-\newpage
-
-
-System of ODEs for coefficients
-\begin{align*}
-\frac{d \vect{h}}{dt} + E \vect{h} = C \vect{h}
-\end{align*}
-
-Let $\vect{u}$ be some vector, e.g. if $\vect{u} = \begin{pmatrix}
-1 & \ldots & 1 
-\end{pmatrix}^T$, then $\vect{u}^T \vect{h} = \sum h_i$.
-Equation for $\hat{\vect{h}} = \frac{\vect{h}}{\vect{u}^T \vect{h}}$:
-\begin{align*}
-\frac{d \hat{\vect{h}}}{dt} 
-=
-\frac{d}{dt} \left( \frac{\vect{h}}{\vect{u}^T \vect{h}} \right) 
-&= 
-\frac{1}{\vect{u}^T \vect{h}} \frac{d\vect{h}}{dt}
-- \frac{\vect{h}}{\vect{u}^T \vect{h}} \frac{\vect{u}^T d\vect{h}/dt}{\vect{u}^T \vect{h}}
-\\
-&= \left( C - E \right) \hat{\vect{h}} - \hat{\vect{h}} \vect{u}^T \left( C - E \right) \hat{\vect{h}}
-\end{align*}
-
-Transient equation for $\hat{\vect{h}}$
-\begin{align*}
-\frac{d \hat{\vect{h}}}{dt} 
-= \left( C - E - \vect{u}^T \left( C - E \right) \hat{\vect{h}} I \right) \hat{\vect{h}}
-\end{align*}
-
-Transient equation for $\vect{u}^T \hat{\vect{h}}$
-\begin{align*}
-\frac{d \vect{u}^T \hat{\vect{h}}}{dt} 
-= \left( 1 - \vect{u}^T \hat{\vect{h}} \right) \vect{u}^T \left( C - E \right) \hat{\vect{h}}
-\end{align*}
-Note that, if $\vect{u}^T \hat{\vect{h}} = 1$ at the initial time instant $t=0$, then $\frac{d \vect{u}^T \hat{\vect{h}}}{dt} = 0$ and $\vect{u}^T \hat{\vect{h}} = 1$ for any $t>0$. \textbf{Question:} if $\vect{u}^T \hat{\vect{h}} = 1+\varepsilon$ due to machine precision, would it lead to instability?
-
-
-At the steady-state one should have $\frac{d \hat{\vect{h}}}{dt} = 0$ subject to $\vect{u}^T \hat{\vect{h}} = 1$ (by construction). 
-
-\newpage
-
-\begin{align*}
-n_e(t) &= \int_{\vect{v}} f(t, \vect{v}) \diff{\vect{v}} \text{ and } a(t) = \frac{1}{n_e(t)}
-\end{align*}
-The normalized distribution function $\hat{f}(t,\vect{v}) = a(t) f(t, \vect{v})$. Write the Boltzmann equation in the normalized $\hat{f}(t, \vect{v})$. For distribution function $f$, we can write, 
-\begin{align*}
-	\partial_t f\of{t,\vect{v}} &= (C-E)f \\
-	\partial_t\of{a\of{t} f\of{t,\vect{v}}} &= \dot{a}\of{t}f\of{t,\vect{v}} + a\of{t} \dot{f}\of{t,\vect{v}} \\
-											&= \dot{a}\of{t}f + a\of{t} (C-E)f \\
-											&= -\dot{n}_e\of{t} a^2\of{t} f + a\of{t} (C-E)f \\
-\end{align*}
-we can re-write the above with the normalized distribution $\hat{f}$, 
-\begin{align*}
-\partial_t\of{\hat{f}(t,\vect{v})} &=-\dot{n}_e\of{t} a\of{t} \hat{f} + (C-E)\hat{f}
-\end{align*}. In the continuous form, 
-\begin{align*}
-\dot{n}_e (t) = \int_\vect{v} \dot{f} \diff{\vect{v}} &= \int_\vect{v} C(f) \diff{v} - \int_\vect{v} \vect{E} \cdot \nabla_\vect{v} f \diff{\vect{v}} \\
-&= \int_\vect{v} C(f) \diff{v} -\int_\vect{v} \nabla_\vect{v} \cdot (\vect{E} f) \diff{\vect{v}} \\
-&= \int_\vect{v} C(f) \diff{v} -\int_{\partial\vect{v}} (\vect{E} f) \cdot \vect{n} \diff\vect{s}
-\end{align*}
-
-
-where, 
-\begin{align*}
-\dot{n}_e (t) = \int \dot{f} dv &= \int (C-E) f dv = \int C f dv \\
-\frac{\dot{n}_e (t)}{n_e(t)} &=\int C \hat{f} dv \\
-\partial_t\of{\hat{f}(t,\vect{v})} &=-\left(\int C \hat{f} dv \right) \hat{f} + (C-E)\hat{f}
-\end{align*}
-For the steady state, we can write, 
-\begin{align*}
-	\partial_t\of{\hat{f}} &=0 \implies -\left(\int C \hat{f} dv \right) \hat{f} + (C-E)\hat{f} =0 \\ 
-\end{align*}
-let $u^T f$ be the mass of the distribution function, by construction, $u^T \hat{f}=1$.
-\begin{align*}
- -(u^T C \hat{f}) \hat{f} + (C-E)\hat{f} =0 \\ 
-\end{align*} 
-Let, 
-\begin{align*}
-R(f)&=
-\begin{pmatrix}
--(u^T C f) f + (C-E)f \\
-u^Tf-1
-\end{pmatrix}
-\end{align*} For the steady  state we need $R(f) = \vect{0}$. The Jacobian for the $R$ is given by, 
-\begin{align*}
-J(f)&=
-\begin{pmatrix}
--2(u^T C f) I + (C-E) \\
-u^T
-\end{pmatrix}
-\end{align*}
-
-
-
+%\newpage
+%Constant cross-section $t_{end} = 10^{-6}$ s\\
+%\includegraphics[width=0.99\textwidth]{fig/different_vth_const_1e-6.png}
+%
+%Data-fitted cross section $t_{end} = 10^{-6}$ s\\
+%\includegraphics[width=0.99\textwidth]{fig/different_vth_real_1e-6.png}
+%
+%Constant cross-section $t_{end} = 10^{-5}$ s\\
+%\includegraphics[width=0.99\textwidth]{fig/different_vth_const_1e-5.png}
+%
+%Data-fitted cross section $t_{end} = 10^{-5}$ s\\
+%\includegraphics[width=0.99\textwidth]{fig/different_vth_real_1e-5.png}
 
 %\begin{align*}
 %\partial_t\of{a\of{t} f\of{t,\vect{v}}} + \vect{E} \cdot \nabla_\vect{v}\of{a\of{t} f\of{t,\vect{v}}}  & = C\of{a(t) f(t, \vect{v})} \\

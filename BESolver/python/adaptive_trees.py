@@ -1,12 +1,9 @@
 """
 linear adaptive trees
 """
-
 import numpy as np
 import collisions
 import basis
-import scipy
-import scipy.integrate
 import quadpy
 
 max_depth = 15

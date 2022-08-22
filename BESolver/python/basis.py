@@ -14,6 +14,7 @@ import scipy
 import scipy.special
 import quadpy
 import math
+import matplotlib.pyplot as plt
 
 # some parameters related to splines. 
 XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 3
@@ -245,210 +246,46 @@ class Laguerre(Basis):
         return lagpoly.lagpolyweight
 
 class BSpline(Basis):
-    @staticmethod
-    def get_num_q_pts(p_order, s_order, pts_per_knot):
-        return pts_per_knot*(p_order)
-
-    def __init__(self,k_domain,spline_order, num_p):
-        self._basis_type = BasisType.SPLINES
-        self._domain     = k_domain
-        self._window     = k_domain
-        """
-        x x x     | * * * * * * * * * * | x  x  x
-         sp + 1          num_p -2          sp+1   
-        """
-        # first and last splines have repeated knots, 
-        num_k            = 2*spline_order + (num_p -2) + 2
-        self._t          = (k_domain[0])*np.ones(spline_order+1)
-        knot_base        = 1.5
-        self._t          = np.append(self._t,np.logspace(-2, np.log(k_domain[1]-2)/np.log(knot_base) , num_k-2*spline_order -2 ,base=knot_base))
-        self._t          = np.append(self._t,k_domain[1]*np.ones(spline_order+1))
-        self._num_c_pts  = num_p
-        self._sp_order   = spline_order
-        self._q_per_knot = BSPLINE_NUM_Q_PTS_PER_KNOT
-        self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(num_p)]
-
-    def Pn(self,deg):
-        return self._splines[deg]
-
-    def Gauss_Pn(self,deg,from_zero=True):
-        """
-        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
-        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
-        """
-        assert np.allclose(self._t[self._sp_order],0), "specified knot vector element %d is not aligned with zero"%(self._sp_order)
-        num_intervals = self._num_c_pts -1
-        assert deg % num_intervals == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,num_intervals)
-        qx = np.zeros(deg)
-        qw = np.zeros(deg)
-        for i in range(self._sp_order, self._sp_order + num_intervals):
-            qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = uniform_simpson((self._t[i], self._t[i+1]),self._q_per_knot)
-        
-        # qx,qw=uniform_simpson((self._t[ti], self._t[-ti]),4097)
-        # print(qx.shape)
-        # print(qx)
-        # print(np.sum(qw))
-        # print(qx)
-        assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0])), "simpson weights computed for splines does not match the knots domain"
-        return qx,qw
     
-    def Wx(self):
-        """
-        Weight function w.r.t. the polynomials are orthogonal
-        """
-        I = lambda x: np.ones_like(x)
-        return I
-
-    def derivative(self, deg, dorder):
-        assert dorder==1, "not implemented for HO derivatives"
-        i=deg
-        p=self._sp_order
-        c1 = self._t[i+p] - self._t[i]
-        c2 = self._t[i+p+1] - self._t[i+1]
-
-        if(c2!=0):
-            f_c2 = lambda x : - (p / c2) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i+1:i+1 + p+1],False)(x)) 
-        else:
-            f_c2 = lambda x : np.zeros_like(x)
-
-        if(c1!=0):
-            f_c1 = lambda x : (p / c1) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i:i + p + 1],False)(x))
-        else:
-            f_c1 = lambda x : np.zeros_like(x)
-
-        return lambda x : np.nan_to_num(f_c1(x)) + np.nan_to_num(f_c2(x))
-
-    def diff(self,deg, dorder):
-        return self._splines[deg].derivative(dorder)
-
-class XlBSpline(Basis):
-    """
-    Scaled b-splines for advection. 
-    b_{kl}= b_k(x) x^l
-    b_0 and b_last are used as boundary splines with repeated knots. 
-    """
-    @staticmethod
-    def get_num_q_pts(p_order, s_order, pts_per_knot):
-        return pts_per_knot*(p_order)
-
-    @staticmethod
-    def uniform_knots(k_domain, num_p, sp_order):
-        """
-        x x x     | * * * * * * * * * * | x  x  x
-         sp + 1          num_p -2          sp+1   
-        """
-        num_k      = 2*sp_order + (num_p -(sp_order+1)) + 2
-        t          = (k_domain[0])*np.ones(sp_order)
-        t          = np.append(t,np.linspace(k_domain[0] , k_domain[1] , num_k-2*sp_order -1 , endpoint=False))
-        t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
-        assert len(t)==num_k , "knot length of %d does not match with spline order %d"%(len(t),sp_order)
-        return t
-
-    @staticmethod
-    def uniform_dg_knots(k_domain, num_p, sp_order, dg_pts):
-        if dg_pts is None:
-            return XlBSpline.uniform_knots(k_domain, num_p, sp_order)
-
-        _dg_pts = dg_pts[np.logical_and(dg_pts>k_domain[0], dg_pts<k_domain[1])]
-        if len(_dg_pts)==0:
-            return XlBSpline.uniform_knots(k_domain, num_p, sp_order)
-        
-        dg_domains = [(k_domain[0], _dg_pts[0])]
-        dg_domains.extend([(dg_pts[i-1], dg_pts[i]) for i in range(1, len(_dg_pts))])
-        dg_domains.append((_dg_pts[-1], k_domain[1]))
-        
-        num_d      = len(dg_domains)
-        _num_p     = np.ones(num_d,dtype=int) * ((num_p) //num_d) #np.array(,dtype=int)
-        #_num_p     = np.array([max(2*sp_order + 2, int(np.floor(num_p*(dg_domains[i][1]-dg_domains[i][0])/(k_domain[1]-k_domain[0])))) for i in range(0,num_d)])
-        _num_p[-1] = num_p-np.sum(_num_p[0:-1])
-
-        # if(_num_p[-1]<2*sp_order):
-        #     _num_p[-2]-=2*sp_order
-        #     _num_p[-1]+=2*sp_order
-
-        print("domains : ", dg_domains)
-        print("nr: ", _num_p)
-        assert (_num_p>0).all(), "invalide radial polynomial partition"
-        
-        t = XlBSpline.uniform_knots(dg_domains[0], _num_p[0], sp_order)
-        for i in range(1, num_d):
-            t=np.append(t, XlBSpline.uniform_knots(dg_domains[i], _num_p[i], sp_order)[sp_order+1:])
-        
-        #print(t)
-        num_k      = np.sum(np.array([(2*sp_order + (_num_p[i] -(sp_order+1)) + 2) for i in range(num_d)])) - (num_d-1)*(sp_order+1)
-        assert len(t)==num_k , "knot length of %d does not match with spline order %d"%(len(t),sp_order)
-        return t
-    
-
-    def __init__(self,k_domain,spline_order, num_p, sig_pts=None, knots_vec=None):
+    def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=None, knots_vec=None):
         self._basis_type = BasisType.SPLINES
         self._domain     = k_domain
         self._window     = k_domain
         self._kdomain    = (k_domain[0], k_domain[1])
-        
-        # first and last splines have repeated knots, 
-        num_k            = 2*spline_order + (num_p -(spline_order+1)) + 2
-        knot_base        = 2
-
-        if knots_vec is None:
-            self._t      = XlBSpline.uniform_dg_knots(k_domain, num_p, spline_order, sig_pts)
-        else:
-            self._t = np.copy(knots_vec)
-            self._kdomain    = (self._t[0], self._t[-1])
-        
-        self._num_c_pts  = num_p
         self._sp_order   = spline_order
-        self._q_per_knot = XLBSPLINE_NUM_Q_PTS_PER_KNOT
-        self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(num_p)]
-
-        self._dg_idx     = list()
-        for i in range(num_p):
-            #print("i", i , "uq", np.unique(self._t[i:i+spline_order+2]), "k", self._t[i:i+spline_order+2])
-            if len(np.unique(self._t[i:i+spline_order+2])) == 2:
-                self._dg_idx.append(i)
-
         
-        x_bdy = np.unique(np.array([self._t[self._dg_idx[i] + spline_order] for i in range(len(self._dg_idx))])) 
-        self._dg_domains = [(x_bdy[i], x_bdy[i+1]) for i in range(len(x_bdy)-1)]
-
+        if knots_vec is None:
+            self._t      = BSpline.uniform_knots(k_domain, num_p, spline_order)
+            self._num_p  = num_p
+        else:
+            self._t         = np.append(np.ones(self._sp_order) * knots_vec[0], knots_vec)
+            self._t         = np.append(self._t, np.ones(self._sp_order) * knots_vec[-1])
+            self._kdomain   = (self._t[0], self._t[-1])
+            self._num_p     = len(self._t) - (self._sp_order+1)
+            
+        self._splines    = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(self._num_p)]
         self._num_knot_intervals=0
         for i in range(len(self._t)-1):
             if self._t[i] != self._t[i+1]:
                 self._num_knot_intervals+=1
 
-        #print("bsplines knots:")
-        #print(self._t)
-        #print(self._num_knot_intervals)
-        print("dg basis idx ", self._dg_idx)
-        print("dg domains   ", self._dg_domains)
-        self._scheme     = quadpy.c1.gauss_legendre(self._q_per_knot)
+        self._dg_idx     = [0, self._num_p-1]
         
     def Pn(self,deg):
         return lambda x,l : np.nan_to_num(self._splines[deg](x))
-        #return lambda x,l : np.nan_to_num(self._splines[deg](x)) if deg>=l else np.nan_to_num(self._splines[deg](x)) * x**(l-deg)
         
-    def Gauss_Pn(self,deg,from_zero=True):
-        """
-        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
-        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
-        """
-        # num_intervals = self._num_c_pts -1
-        # assert deg % num_intervals == 0, "specified # quadrature points %d not evenly divided by the number of control points %d" %(deg,num_intervals)
-        # qx = np.zeros(deg)
-        # qw = np.zeros(deg)
-        # for i in range(self._sp_order, self._sp_order + num_intervals):
-        #     qx[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot], qw[(i-self._sp_order)*self._q_per_knot: (i-self._sp_order)*self._q_per_knot + self._q_per_knot] = 0.5 * (self._t[i+1] - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1] + self._t[i]), 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights 
-        
-        # assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "weights computed for splines does not match the knots domain"
-        # return qx,qw
+    def Gauss_Pn(self,deg):
+        q_per_knot    = deg // self._num_knot_intervals
+        self._q_pts   = quadpy.c1.gauss_legendre(q_per_knot)
+
         qx=np.array([])
         qw=np.array([])
         for i in range(len(self._t)-1):
             if self._t[i] != self._t[i+1]:
-                qx = np.append(qx, 0.5 * (self._t[i+1] - self._t[i]) * self._scheme.points + 0.5 * (self._t[i+1] + self._t[i]))
-                qw = np.append(qw, 0.5 * (self._t[i+1]-self._t[i]) * self._scheme.weights)
+                qx = np.append(qx, 0.5 * (self._t[i+1] - self._t[i]) * self._q_pts.points + 0.5 * (self._t[i+1] + self._t[i]))
+                qw = np.append(qw, 0.5 * (self._t[i+1]-self._t[i]) * self._q_pts.weights)
 
-        assert deg == len(qx), "qx len %d is not the requested %d"%(len(qx), deg)
+        #assert deg == len(qx), "qx len %d is not the requested %d"%(len(qx), deg)
         assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "weights computed for splines does not match the knots domain"
         return qx,qw
     
@@ -460,25 +297,6 @@ class XlBSpline(Basis):
         return I
 
     def derivative(self, deg, dorder):
-        # if(dorder > 1):
-        #     raise NotImplementedError
-        # i=deg
-        # p=self._sp_order
-        # c1 = self._t[i+p] - self._t[i]
-        # c2 = self._t[i+p+1] - self._t[i+1]
-
-        # if(c2!=0):
-        #     f_c2 = lambda x : - (p / c2) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i+1:i+1 + p+1],False)(x)) 
-        # else:
-        #     f_c2 = lambda x : np.zeros_like(x)
-
-        # if(c1!=0):
-        #     f_c1 = lambda x : (p / c1) * np.nan_to_num(scipy.interpolate.BSpline.basis_element(self._t[i:i + p + 1],False)(x))
-        # else:
-        #     f_c1 = lambda x : np.zeros_like(x)
-
-        # return lambda x : np.nan_to_num(f_c1(x)) + np.nan_to_num(f_c2(x))
-
         i=deg
         p=self._sp_order
         f1 = math.factorial(p)/math.factorial(p-dorder)
@@ -520,7 +338,109 @@ class XlBSpline(Basis):
     def diff(self,deg, dorder):
         b_deriv = self.derivative(deg,dorder)
         return lambda x,l : b_deriv(x)
-        #return lambda x, l: b_deriv(x) if l==0 else x**(l) *b_deriv(x) + self.Pn(deg)(x,0) * (l) * x**(l-1)
-        #return lambda x,l : b_deriv(x) if deg>=l else x**(l-deg) *b_deriv(x) + self.Pn(deg)(x,0) * (l-deg) * x**(l-deg-1)
 
+    def plot(self):
+        dd = self._kdomain
+        x  = np.linspace(dd[0], dd[1], self._num_p * 100)
+        for i in range(self._num_p):
+            plt.plot(x, self.Pn(i)(x,0), label="b_%d"%(i), linewidth=2)
+
+        plt.legend()
+        plt.grid()
+        plt.show()
+        plt.close()
+
+    def fit(self, f):
+        num_p    = self._num_p
+        sp_order = self._sp_order 
+        m_mat    = np.zeros((num_p, num_p))
+        gx, gw   = self.Gauss_Pn( (self._sp_order+1) * self._num_knot_intervals)
+        
+        for i in range(num_p):
+            for j in range(num_p):#(max(0, i-sp_order-1), min(num_p, i + sp_order+1)):
+                m_mat[i,j] = np.dot(gw, self.Pn(i)(gx,0) * self.Pn(j)(gx,0))
+
+        t_mat, q_mat = scipy.linalg.schur(m_mat)
+        t_mat_inv    = scipy.linalg.solve_triangular(t_mat, np.identity(m_mat.shape[0]),lower=False)
+        m_mat_inv    = np.matmul(np.linalg.inv(np.transpose(q_mat)), np.matmul(t_mat_inv, np.linalg.inv(q_mat))) 
+        
+        # l_mat      = np.linalg.cholesky(m_mat)
+        # l_inv_mat  = scipy.linalg.solve_triangular(l_mat, np.identity(m_mat.shape[0]),lower=True)
+        # m_mat_inv  = np.matmul(np.transpose(l_inv_mat),l_inv_mat)
+        f_vec      = np.array([np.dot(gw, f(gx) * self.Pn(i)(gx,0)) for i in range(num_p)])
+        assert np.allclose(np.matmul(m_mat_inv,m_mat),np.eye(m_mat.shape[0]), rtol=1e-12, atol=1e-12), "mass mat inverse failed with %.2E rtol"%(1e-12)
+        return np.dot(m_mat_inv,f_vec)
+
+    @staticmethod
+    def adaptive_fit(f, k_domain, rtol=1e-12, atol=1e-12, sp_order=4, min_lev=3, max_lev=10, sig_pts=np.array([])):
+        t0 = k_domain[0]
+        t1 = k_domain[1]
+
+        ele_old    = []
+        ele_new    = []
+
+        if sig_pts is None:
+            sp    = BSpline((t0, t1), sp_order, sp_order+1)
+            ele_old.append(sp)
+            refine_lev = 0
+        else:
+            ss    = sig_pts[sig_pts>t0 and sig_pts<t1]
+            sp    = BSpline((t0, ss[0]), sp_order, sp_order+1)
+            ele_old.append(sp)
+            for i in range(1, len(ss)):
+                sp    = BSpline((ss[i-1], ss[i]), sp_order, sp_order+1)
+                ele_old.append(sp)
+            
+            sp    = BSpline((ss[-1], t1), sp_order, sp_order+1)
+            ele_old.append(sp)
+            
+
+        is_refine  = True
+        refine_lev = int(np.log2(len(ele_old)))
+
+        while is_refine and refine_lev < max_lev:
+            is_refine=False
+            for sp in ele_old:
+                t0   = sp._kdomain[0]
+                t1   = sp._kdomain[1]
+
+                fc       = sp.fit(f)
+                tt , _   = sp.Gauss_Pn((sp_order+1) * 2)
+                f1       = np.sum(np.array([fc[i] * sp.Pn(i)(tt,0) for i in range(sp._num_p)]),axis=0)
+                f2       = f(tt)
+                error    = np.max(np.abs(f2 -f1))
+                
+                if error  > atol + rtol * np.max(np.abs(f2)) or refine_lev < min_lev:
+                    ele_new.append(BSpline((t0, 0.5 * (t0+t1)), sp_order, sp_order+1))
+                    ele_new.append(BSpline((0.5 * (t0+t1), t1), sp_order, sp_order+1))
+                    is_refine=True
+                else:
+                    ele_new.append(BSpline((t0, t1), sp_order, sp_order+1))
+
+            
+            ele_old = ele_new
+            ele_new = list()
+            refine_lev += 1
+            
+
+        tt = np.array([])
+        for sp in ele_old:
+            tt=np.append(tt, np.unique(sp._t))
+        
+        tt = np.sort(np.unique(tt))
+        assert tt[0] == k_domain[0]
+        return tt
+        # req_p = len(tt) + 2
+        # tt = np.append((tt[0]) * np.ones(sp_order), tt)
+        # tt = np.append(tt, tt[-1] * np.ones(sp_order))
+
+        # return BSpline(k_domain,sp_order, req_p, knots_vec=tt)
+
+    @staticmethod
+    def uniform_knots(k_domain, num_p, sp_order):
+        t          = (k_domain[0])*np.ones(sp_order)
+        t          = np.append(t,np.linspace(k_domain[0] , k_domain[1] , num_p-sp_order , endpoint=False))
+        t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+        return t
+            
 

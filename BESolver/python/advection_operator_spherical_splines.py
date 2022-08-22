@@ -91,8 +91,7 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
         
     
     func = lambda t,a: -np.matmul(advmat,a)
-    sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45',atol=1e-15, rtol=2.220446049250313e-14)
-    # sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='BDF')
+    sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=dt, method='RK45',atol=1e-15, rtol=2.220446049250313e-14,t_eval=np.linspace(0,t_end,10))
     coeffs_new = np.matmul(qA, sol.y[:,-1])
     coeffs     = np.matmul(qA, coeffs)
 
@@ -108,7 +107,7 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
 
     sol.y=np.matmul(qA, sol.y)
 
-    for i in range(0,sol.y.shape[1],500):
+    for i in range(0,sol.y.shape[1]):
         current_mass     = np.dot(sol.y[:,i],mass_op) * vth**3 * current_mw(0)
         current_temp     = np.dot(sol.y[:,i],temp_op) * vth**5 * current_mw(0) * 0.5 * collisions.MASS_ELECTRON * eavg_to_K / current_mass
         print("time %.4E mass = %.14E temp= %.8E"%(sol.t[i],current_mass,current_temp))
@@ -136,8 +135,8 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     return coeffs,coeffs_new,spec_xlbspline
 
 
-num_dofs_all = [(64,1), (128, 1), (256,1)]
-#num_dofs_all = [(16,1),(32,1), (64,1)]
+#num_dofs_all = [(64,1), (128, 1), (256,1)]
+num_dofs_all = [(16,1),(32,1), (64,1)]
 error_linf = np.zeros(len(num_dofs_all))
 error_l2 = np.zeros(len(num_dofs_all))
 error_linf_2d = np.zeros(len(num_dofs_all))
@@ -148,8 +147,8 @@ t_end = 1e-2
 nsteps = 10000
 dt = t_end/nsteps
 
-x = np.linspace(0,9.9,500)
-z = np.linspace(0,9.9,500)
+x = np.linspace(0,9.9,200)
+z = np.linspace(0,9.9,200)
 quad_grid = np.meshgrid(x,z,indexing='ij')
 
 y = np.zeros_like(quad_grid[0])
@@ -162,9 +161,9 @@ f_num = np.zeros([len(num_dofs_all), len(x)])
 f_initial = np.zeros([len(num_dofs_all), len(x)])
 f_exact = np.zeros([len(num_dofs_all), len(x)])
 
-f_num_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
-f_initial_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
-f_exact_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+# f_num_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+# f_initial_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
+# f_exact_2d = np.zeros([len(num_dofs_all), len(x), len(z)])
 
 V_DOMAIN = (0,10)
 SP_ORDER = 4
@@ -178,22 +177,22 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     print("Nr=%d sph=%s"%(nr,sph_lm))
     c,ct,spec_xlbspline = solve_advection(nr,sph_lm,SP_ORDER,V_DOMAIN,t_end)
 
-    Vq_r_2d    = np.zeros(tuple([l_max+1,num_p]) + sph_coord_init[0].shape)
-    Vq_rt_2d   = np.zeros(tuple([l_max+1,num_p]) + sph_coord_init[0].shape)
+    # Vq_r_2d    = np.zeros(tuple([l_max+1,num_p]) + sph_coord_init[0].shape)
+    # Vq_rt_2d   = np.zeros(tuple([l_max+1,num_p]) + sph_coord_init[0].shape)
     
     Vq_r       = np.zeros(tuple([l_max+1,num_p]) + x.shape)
     Vq_rt      = np.zeros(tuple([l_max+1,num_p]) + x.shape) 
     
     for l in range(l_max+1):
-        Vq_r_2d[l]   = spec_xlbspline.Vq_r(sph_coord_init[0],l)
-        Vq_rt_2d[l]  = spec_xlbspline.Vq_r(sph_coord_end[0],l)
+        # Vq_r_2d[l]   = spec_xlbspline.Vq_r(sph_coord_init[0],l)
+        # Vq_rt_2d[l]  = spec_xlbspline.Vq_r(sph_coord_end[0],l)
 
         Vq_r[l]      = spec_xlbspline.Vq_r(np.abs(x),l)
         Vq_rt[l]     = spec_xlbspline.Vq_r(np.abs(x-t_end),l)
         
-    f_eval_mat_2d = np.transpose(np.array([spec_xlbspline.basis_eval_spherical(sph_coord_init[1],sph_coord_init[2],lm[0],lm[1]) * Vq_r_2d[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
+    # f_eval_mat_2d = np.transpose(np.array([spec_xlbspline.basis_eval_spherical(sph_coord_init[1],sph_coord_init[2],lm[0],lm[1]) * Vq_r_2d[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
 
-    f_eval_mat_2d_t = np.transpose(np.array([spec_xlbspline.basis_eval_spherical(sph_coord_init[1],sph_coord_init[2],lm[0],lm[1]) * Vq_rt_2d[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
+    # f_eval_mat_2d_t = np.transpose(np.array([spec_xlbspline.basis_eval_spherical(sph_coord_init[1],sph_coord_init[2],lm[0],lm[1]) * Vq_rt_2d[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
     
     f_eval_mat=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(theta,0,lm[0],lm[1]) * Vq_r[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
     f_eval_mat_t=np.transpose(np.array([spec_xlbspline.basis_eval_spherical(theta,0,lm[0],lm[1]) * Vq_rt[lm[0],k,:]   for k in range(num_p) for lm_idx, lm in enumerate(sph_lm)]).reshape(num_p*num_sph,-1))
@@ -202,46 +201,48 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
     f_initial[num_dofs_idx,:] = np.dot(f_eval_mat,c)
     f_exact[num_dofs_idx,:]   = np.dot(f_eval_mat_t,c)
 
-    f_num_2d[num_dofs_idx,:]     = np.dot(f_eval_mat_2d,ct).reshape((len(x),len(z)))
-    f_initial_2d[num_dofs_idx,:] = np.dot(f_eval_mat_2d,c).reshape((len(x),len(z)))
-    f_exact_2d[num_dofs_idx,:]   = np.dot(f_eval_mat_2d_t,c).reshape((len(x),len(z)))
+    # f_num_2d[num_dofs_idx,:]     = np.dot(f_eval_mat_2d,ct).reshape((len(x),len(z)))
+    # f_initial_2d[num_dofs_idx,:] = np.dot(f_eval_mat_2d,c).reshape((len(x),len(z)))
+    # f_exact_2d[num_dofs_idx,:]   = np.dot(f_eval_mat_2d_t,c).reshape((len(x),len(z)))
 
 for num_dofs_idx, num_dofs in enumerate(num_dofs_all):   
     error_linf[num_dofs_idx] = np.max(abs(f_num[num_dofs_idx,:]-f_exact[-1,:]))
     ii_index=np.argmax(abs(f_num[num_dofs_idx,:]-f_exact[-1,:]))
     print("max : %.14E  = (%.14E, %.14E) occurs at x=%.14E" %(error_linf[num_dofs_idx],f_num[num_dofs_idx,ii_index], f_exact[-1,ii_index] , x[ii_index]))
-    error_l2[num_dofs_idx] = np.linalg.norm(f_num[num_dofs_idx,:]-f_exact[-1,:])
+    error_l2[num_dofs_idx] = np.linalg.norm(f_num[num_dofs_idx,:]-f_exact[-1,:])/np.linalg.norm(f_exact[-1,:])
 
-    error_linf_2d[num_dofs_idx] = np.max(abs(f_num_2d[num_dofs_idx,:]-f_exact_2d[-1,:]))
-    error_l2_2d[num_dofs_idx] = np.linalg.norm(f_num_2d[num_dofs_idx,:]-f_exact_2d[-1,:])
+    # error_linf_2d[num_dofs_idx] = np.max(abs(f_num_2d[num_dofs_idx,:]-f_exact_2d[-1,:]))
+    # error_l2_2d[num_dofs_idx] = np.linalg.norm(f_num_2d[num_dofs_idx,:]-f_exact_2d[-1,:])
 
-plt.subplot(1,3,1)
-plt.semilogy(x, f_initial[-1,:], label="initial")
-plt.plot(x, f_exact[-1,:], label="exact")
+plt.subplot(1,2,1)
+plt.semilogy(x, np.abs(f_initial[-1,:]), label="initial")
+plt.plot(x, np.abs(f_exact[-1,:]), label="exact")
 for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
-    plt.plot(x, f_num[num_dofs_idx,:], '--', label="(%d,%d)"%(num_dofs[0],num_dofs[1]))
+    plt.plot(x, np.abs(f_num[num_dofs_idx,:]), '--', label="(%d,%d)"%(num_dofs[0],num_dofs[1]))
 
 plt.legend()
 plt.grid()
-plt.ylabel('Distribution function')
+plt.ylabel('f(v_z)')
 plt.xlabel('$v_z$')
 
 
-plt.subplot(1,3,2)
-plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[-1,:,:], linestyles='solid', colors='grey', linewidths=1)
-plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[-1,:,:], linestyles='dashed', colors='red', linewidths=2)
-ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotted', colors='blue', linewidths=2)
-plt.gca().set_aspect('equal')
+# plt.subplot(1,3,2)
+# plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[-1,:,:], linestyles='solid', colors='grey', linewidths=1,levels=4)
+# plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[-1,:,:], linestyles='dashed', colors='red', linewidths=2)
+# ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotted', colors='blue', linewidths=2)
+# plt.gca().set_aspect('equal')
 
-plt.subplot(1,3,3)
-plt.semilogy(error_linf, '-o')
-plt.ylabel('Error')
+plt.subplot(1,2,2)
+plt.semilogy(np.array(num_dofs_all)[:,0], error_l2, '-o')
+plt.ylabel('error')
 plt.grid()
 
-
 fig = plt.gcf()
-fig.set_size_inches(16, 4)
-fig.savefig("adv_splines.png", dpi=300)
+fig.set_size_inches(12, 8)
+if len(spec_xlbspline._basis_p._dg_idx)==2:
+    fig.savefig("adv_splines_cg.png", dpi=300)
+else:
+    fig.savefig("adv_splines_dg.png", dpi=300)
 
 #plt.savefig()
 #plt.show()

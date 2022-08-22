@@ -147,57 +147,6 @@ class Collisions(abc.ABC):
         theta_p = theta_p.reshape(v_r.shape)
         phi_p   = phi_p.reshape(v_r.shape)
 
-        # check1 = np.isclose(v_theta,np.pi/2)
-        # check2 = np.logical_or(np.isclose(v_phi,0),np.isclose(v_phi,np.pi))
-        # check2 = np.logical_or(check2, np.isclose(v_phi,2*np.pi))
-
-        # check1 = np.logical_and(check1 , check2)
-        
-        # [v_theta_0, v_theta_1] = [v_theta[check1] , v_theta[np.logical_not(check1)]]
-        # [v_phi_0, v_phi_1]     = [v_phi[check1]   , v_phi[np.logical_not(check1)]]
-        
-        
-        # [chi_0, chi_1]         = [polar_angle[check1], polar_angle[np.logical_not(check1)]]
-        # [az_0, az_1]           = [azimuthal_angle[check1], azimuthal_angle[np.logical_not(check1)]]
-        
-        # t0 = np.arccos( np.cos(az_0) * np.sin(chi_0) )
-        # p0 = np.arctan( np.sin(az_0) * np.tan(chi_0) )
-        # p0 = np.mod(p0,2*np.pi)
-
-        # f1 = np.sqrt(1 - (np.cos(v_phi_1)**2) * (np.sin(v_theta_1)**2))
-
-        # W= (-np.sin(az_1) * np.sin(v_theta_1) * np.sin(v_phi_1) * np.sin(chi_1) + \
-        #      np.cos(v_theta_1) * (np.cos(chi_1) * f1 + np.cos(az_1) * np.cos(v_phi_1) *np.sin(v_theta_1) *np.sin(chi_1))) / f1
-
-        # # just to make sure, we don't get NANs in the scattering direction computations. 
-        # if((np.max(np.abs(W))) > 1.0):
-        #     print("Scattering direction : arcos(W) , W(min,max) = (%.16E,%.16E)" %(np.min(W),np.max(W)))
-        #     c1= W > 1.0
-        #     c2= W < -1.0
-        #     W[c1] =1.0
-        #     W[c2]=-1.0
-        
-        # t1 = np.arccos(W)
-        # yy = np.cos(chi_1) * np.sin(v_theta_1) * f1 * np.sin(v_phi_1) + np.sin(chi_1) * ( np.cos(v_theta_1)* np.sin(az_1) + np.cos(az_1) * np.cos(v_phi_1) * (np.sin(v_theta_1)**2) * np.sin(v_phi_1))
-        # xx= (np.cos(v_phi_1) * np.cos(chi_1) * np.sin(v_theta_1) * f1 - np.cos(az_1) * ( np.cos(v_theta_1)**2 + (np.sin(v_theta_1)**2) * (np.sin(v_phi_1)**2)) * np.sin(chi_1) )
-        # p1 = np.arctan2(yy,xx)
-        # p1 = np.mod(p1,2*np.pi)
-        
-        # r1      = np.ones_like(v_theta)
-        # theta_p = np.zeros_like(v_theta)
-        # phi_p   = np.zeros_like(v_phi)
-        
-        # theta_p[check1] = t0
-        # phi_p[check1]   = p0
-
-        # # print(np.isnan(t1).shape)
-        # # print(v_theta[np.isnan(t1)[0]])
-        # # print(v_theta[np.logical_not(check1)])
-
-        # theta_p[np.logical_not(check1)] = t1
-        # phi_p  [np.logical_not(check1)] = p1
-
-        #self._is_scattering_mat_assembled=True
         self._sc_direction_mat=[r1,theta_p,phi_p]
         return self._sc_direction_mat
         
@@ -634,7 +583,7 @@ class Collisions(abc.ABC):
 
             return  9.9e-21 * np.ones_like(ev)
             
-        elif mode == "g0Const":
+        elif mode == "g0Const" or mode=="g0ConstNoLoss":
             """
             G0 cross section data fit with analytical function
             (constant)
@@ -781,7 +730,6 @@ class eAr_G0(Collisions):
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
-
         v1_dir   = Collisions.compute_scattering_direction(v0,polar_angle, azimuthal_angle)
         vel_fac  = np.linalg.norm(v0,2) * np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         v1       = vel_fac  * v1_dir
@@ -795,9 +743,7 @@ class eAr_G0(Collisions):
         return vs
 
     def pre_scattering_velocity_sp(self,vr,vt,vp, polar_angle, azimuthal_angle):
-        if self._is_scattering_mat_assembled == False:
-            self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
-
+        self._v_scale = np.sqrt(1- 2*MASS_R_EARGON*(1-np.cos(polar_angle)))
         vs       = self.compute_scattering_direction_sp(vr,vt,vp,polar_angle,azimuthal_angle)
         vel_fac  = vr / self._v_scale
         vs[0]    = vel_fac

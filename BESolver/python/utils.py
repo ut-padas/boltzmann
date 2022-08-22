@@ -526,7 +526,7 @@ def vcenter_projection(spec_sp: spec_spherical.SpectralExpansionSpherical,mw,vth
             or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
         elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+            NUM_Q_VR     =  params.BEVelocitySpace.NUM_Q_VR
 
     if NUM_Q_VT is None:
         NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
@@ -614,7 +614,7 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
         or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
         NUM_Q_VR     = min(MAX_GMX_Q_VR_PTS,params.BEVelocitySpace.NUM_Q_VR)
     elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-        NUM_Q_VR     =  basis.XlBSpline.get_num_q_pts(spec_sp._p,spec_sp._basis_p._sp_order,spec_sp._basis_p._q_per_knot)
+        NUM_Q_VR     =  params.BEVelocitySpace.NUM_Q_VR
     
     NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
     NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
@@ -739,7 +739,6 @@ def sample_distriubtion(vx, vy, vz, spec_sp : spec_spherical.SpectralExpansionSp
             result += cf[k*num_sph+lm_idx]*spec_sp.basis_eval_full(sph_coord[0], sph_coord[1], sph_coord[2], k, lm[0], lm[1])*maxwellian(sph_coord[0])*(sph_coord[0]**lm[0])
 
     return result
-
 
 def sample_distriubtion_spherical(sph_coord, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth,scale=1):
 

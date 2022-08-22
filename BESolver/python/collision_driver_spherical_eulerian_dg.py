@@ -3,7 +3,6 @@
 """
 
 from cProfile import run
-from cmath import sqrt
 from dataclasses import replace
 import enum
 from math import ceil
@@ -11,8 +10,8 @@ import string
 import scipy
 import scipy.optimize
 import scipy.interpolate
-from sympy import rad
-from maxpoly import maxpolyserieseval
+from   sympy import rad
+from   maxpoly import maxpolyserieseval
 import basis
 import spec_spherical as sp
 import numpy as np
@@ -20,7 +19,7 @@ import collision_operator_spherical as colOpSp
 import collisions 
 import parameters as params
 import os
-from time import perf_counter as time
+from time import perf_counter as time, sleep
 import utils as BEUtils
 import argparse
 import scipy.integrate
@@ -28,19 +27,9 @@ from scipy.integrate import ode
 from advection_operator_spherical_polys import *
 import scipy.ndimage
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from scipy.interpolate import interp1d
 import sys
-
-# from adaptive import Runner, Learner1D
-# class ALearner1D:
-#     def setup(self,x, y, bounds):
-#         self.func1d  = scipy.interpolate.interp1d(x,y)
-#         self.learner = Learner1D(self.func1d, bounds=bounds)
-#         self.learner.tell_many(x, map(self.func1d, x))
-
-#     def get_pts(self, num_points):
-#         points, _ = self.learner.ask(num_points)
-#         return np.sort(np.array(points))
 
 def deriv_fd(x, y):
     mid = (y[1:len(x)]-y[0:len(x)-1])/(x[1:len(x)]-x[0:len(x)-1])
@@ -131,7 +120,7 @@ def replace_line(file_name, line_num, text):
     out.writelines(lines)
     out.close()
 
-def run_bolsig(args):
+def run_bolsig(args, run_convergence=False):
     """
     run the bolsig code. 
     """
@@ -203,8 +192,137 @@ def run_bolsig(args):
     replace_line(args.bolsig_dir+"run.sh", 2, "cd " + args.bolsig_dir + "\n")
     replace_line(args.bolsig_dir+"minimal-argon.dat", 8, "\""+bolsig_cs_file+"\"   / File\n")
     replace_line(args.bolsig_dir+"minimal-argon.dat", 13, str(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+" / Electric field / N (Td)\n")
-    os.system("sh "+args.bolsig_dir+"run.sh")
 
+    if (run_convergence):
+        bolsig_rundata=list()
+        for i, value in enumerate(args.sweep_values):
+            if args.sweep_param == "Nr":
+                args.NUM_P_RADIAL = value
+            else:
+                print("Warning : unsupported sweep argument for the Bolsig code, setting num pts to 500")
+                args.NUM_P_RADIAL = 500
+
+            replace_line(args.bolsig_dir+"minimal-argon.dat", 27, str(args.NUM_P_RADIAL)+" / # of grid points\n")
+            os.system("sh "+args.bolsig_dir+"run.sh")
+            sleep(2)
+            #[0,            1,             2,       3,          4,        5,        6,          7  ]
+            #[bolsig_ev, bolsig_f0, bolsig_a, bolsig_E, bolsig_mu, bolsig_M, bolsig_D, bolsig_rates] 
+            b_data=parse_bolsig(args.bolsig_dir+"argon.out",len(args.collisions))
+            bolsig_rundata.append(b_data)
+
+        if (1):
+            mpl.style.use('default')
+            fig = plt.figure(figsize=(21, 9), dpi=300)
+            num_sph_harm = 2
+            num_subplots = num_sph_harm + 2
+
+            def sph_harm_real(l, m, theta, phi):
+                # in python's sph_harm phi and theta are swapped
+                Y = scipy.special.sph_harm(abs(m), l, phi, theta)
+                if m < 0:
+                    Y = np.sqrt(2) * (-1)**m * Y.imag
+                elif m > 0:
+                    Y = np.sqrt(2) * (-1)**m * Y.real
+                else:
+                    Y = Y.real
+
+                return Y 
+
+            mu = list()
+            M  = list()
+            D  = list()
+
+            rates = list()
+            
+            bolsig_mu    = bolsig_rundata[-1][4] 
+            bolsig_M     = bolsig_rundata[-1][5] 
+            bolsig_D     = bolsig_rundata[-1][6] 
+            bolsig_rates = bolsig_rundata[-1][7] 
+            sph_fac = sph_harm_real(0, 0, 0, 0)/sph_harm_real(1, 0, 0, 0)
+
+            for i in range(len(args.sweep_values)):
+                value=args.sweep_values[i]
+
+                data=bolsig_rundata[i]
+                bolsig_ev = data[0] 
+                bolsig_f0 = data[1] 
+                bolsig_a  = data[2]
+
+                # print("i", i)
+                # print(bolsig_ev)
+
+                mu.append(data[4])  
+                M .append(data[5]) 
+                D .append(data[6])
+                rates.append(data[7])
+                    
+
+                lbl = "b_" + args.sweep_param+"="+str(value)
+                color = 'C%d'%(i+1)#next(plt.gca()._get_lines.prop_cycler)['color']
+
+                plt.subplot(2, num_subplots,  1)
+                plt.semilogy(bolsig_ev,  abs(bolsig_f0), label=lbl, color=color)
+                plt.grid(True)
+                plt.legend()
+
+                plt.subplot(2, num_subplots,  2)
+                plt.semilogy(bolsig_ev,  abs(bolsig_f0*bolsig_a * sph_fac),color=color)
+                plt.grid(True)
+
+                #print(bolsig_f0.shape)
+                #print(bolsig_rundata[-1][0].shape)
+                plt.subplot(2, num_subplots,  5)
+                # rel_error= (bolsig_f0/bolsig_rundata[-1][1]-1)
+                # plt.semilogy(bolsig_ev,  abs(rel_error) ,color=color)
+                # plt.xlabel("Energy (eV)")
+                # plt.ylabel("Rel. error f0")
+                # plt.grid()
+
+                plt.subplot(2, num_subplots,  6)
+                # rel_error= bolsig_f0*bolsig_a/bolsig_rundata[-1][1] * bolsig_rundata[-1][2]-1
+                # plt.semilogy(bolsig_ev,  abs(rel_error) ,color=color)
+                # plt.xlabel("Energy (eV)")
+                # plt.ylabel("Rel. error f1")
+                # plt.grid()
+
+            rates=np.array(rates)
+            plt.subplot(2, num_subplots,  3)
+            plt.plot(args.sweep_values, np.abs(np.array(mu)/bolsig_mu-1), 'o-')
+            plt.xlabel(args.sweep_param)
+            plt.ylabel("Rel. error in mean energy")
+            plt.grid()
+
+            plt.subplot(2, num_subplots,  4)
+            for col_idx, col in enumerate(args.collisions):
+                if bolsig_rates[col_idx] != 0:
+                    plt.semilogy(args.sweep_values, abs(rates[:,col_idx]/bolsig_rates[col_idx]-1), 'o-', label=col)
+                    # plt.axhline(y=0, label='bolsig '+col, color='k')
+            plt.legend()
+            plt.xlabel(args.sweep_param)
+            plt.ylabel("Rel. error in reaction rates")
+            plt.grid()
+
+            plt.subplot(2, num_subplots,  7)
+            plt.semilogy(args.sweep_values, np.abs(np.array(M)/bolsig_M-1), 'o-')
+            # plt.legend()
+            plt.xlabel(args.sweep_param)
+            plt.ylabel("Rel. error in mobility")
+            plt.grid()
+
+            plt.subplot(2, num_subplots, 8)
+            # plt.plot(args.sweep_values, D, 'o-', label='us')
+            # plt.axhline(y=bolsig_D, label='bolsig', color='k')
+            plt.semilogy(args.sweep_values, np.abs(np.array(D)/bolsig_D-1), 'o-')
+            # plt.legend()
+            plt.xlabel(args.sweep_param)
+            plt.ylabel("Rel. error in diffusion coefficient")
+            plt.grid()
+
+        fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", Nr = " + str(args.NUM_P_RADIAL) +  " (sweeping " + args.sweep_param + ")")
+        plt.savefig("bolsig_vs_bolsig_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_nr" + str(args.NUM_P_RADIAL) +  "_sweeping_" + args.sweep_param + ".png")
+
+    replace_line(args.bolsig_dir+"minimal-argon.dat", 27, str(1000)+" / # of grid points\n")
+    os.system("sh "+args.bolsig_dir+"run.sh")
     return
     
 class CollissionMode(enum.Enum):
@@ -219,9 +337,8 @@ collisions.AR_IONIZED_N=collisions.AR_NEUTRAL_N #collisions.MAXWELLIAN_N
 parser = argparse.ArgumentParser()
 
 
-def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
+def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
 
-    collOp  = cf_list[0]
     spec_sp = collOp._spec
 
     Mmat = spec_sp.compute_mass_matrix()
@@ -230,9 +347,6 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     print("cond(M) = %.4E"%np.linalg.cond(Mmat))
     print("|I-M M^{-1}| error = %.12E"%(mm_inv_error))
     
-    # if not (spec_sp.get_radial_basis_type()==basis.BasisType.CHEBYSHEV_POLY or spec_sp.get_radial_basis_type()==basis.BasisType.SPLINES):
-    #     raise NotImplementedError
-
     MVTH  = vth
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
@@ -250,7 +364,7 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     else:
         raise NotImplementedError
 
-    h_init    = BEUtils.function_to_basis(spec,hv,maxwellian,None,None,None,Minv=Minv)
+    h_init    = BEUtils.function_to_basis(spec_sp,hv,maxwellian,None,None,None,Minv=Minv)
     h_t       = np.array(h_init)
     
     ne_t      = MNE
@@ -267,8 +381,8 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     fa_cf = interp1d(ev, bolsig_a, kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
     ftestt = lambda v,vt,vp : f0_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*(1. + fa_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
     
-    htest      = BEUtils.function_to_basis(spec,ftestt,maxwellian,None,None,None,Minv=Minv)
-    radial_projection[i, :, :] = BEUtils.compute_radial_components(ev, spec, htest, maxwellian, VTH, 1)
+    htest      = BEUtils.function_to_basis(spec_sp,ftestt,maxwellian,None,None,None,Minv=Minv)
+    radial_projection[i, :, :] = BEUtils.compute_radial_components(ev, spec_sp, htest, maxwellian, VTH, 1)
     scale = 1./( np.trapz(radial_projection[i, 0, :]*np.sqrt(ev),x=ev) )
     radial_projection[i, :, :] *= scale
     coeffs_projection.append(htest)
@@ -283,6 +397,11 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
         g0.reset_scattering_direction_sp_mat()
         FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g0, mw_vth, vth_curr)
 
+    if "g0ConstNoLoss" in collisions_included:
+        g0noloss  = collisions.eAr_G0_NoEnergyLoss(cross_section="g0Const")
+        g0noloss.reset_scattering_direction_sp_mat()
+        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g0noloss, mw_vth, vth_curr)
+    
     if "g0NoLoss" in collisions_included:
         g0noloss  = collisions.eAr_G0_NoEnergyLoss()
         g0noloss.reset_scattering_direction_sp_mat()
@@ -334,19 +453,16 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     
-    advmat, eA, qA = spec_sp.compute_advection_matix_dg()
+    # advmat, eA, qA = spec_sp.compute_advection_matix_dg()
+    # eA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
+    # qA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
 
-    eA = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
-    qA = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
-    #print(qA)
-    #print(np.kron(np.eye(num_p*2), qA))
-    #np.set_printoptions(2,threshold=sys.maxsize)
-    #print(FOp[0::num_sh, 0::num_sh])
-    #print(FOp[1::num_sh, 1::num_sh])
-
-    FOp   = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
-    h_init= np.dot(np.transpose(qA),h_init)
+    advmat = spec_sp.compute_advection_matix()
+    qA     = np.eye(advmat.shape[0])
     
+    FOp    = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
+    h_init = np.dot(np.transpose(qA),h_init)
+
     Cmat = np.matmul(Minv, FOp)
     Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
@@ -369,18 +485,23 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
         iteration_steps = 0
 
         def residual_func(x):
-            y = -np.dot(u, np.matmul(Cmat, x)) * x  + np.matmul((Cmat - Emat), x)
+            y  = np.matmul(Cmat-Emat, x)
+            y  = -np.dot(u, y) * x  + y
             return np.append(y, np.dot(u, x)-1 )
 
-        while (iteration_error > 1e-14 and iteration_steps < 1000) or iteration_steps < 5:
+        def jacobian_func(x):
+            Ji = -2 * np.eye(nn) * np.dot(u, np.matmul(Cmat,x)) + (Cmat-Emat)
+            Ji = np.vstack((Ji,u))
+            return Ji
+
+        while (iteration_error > 1e-14 and iteration_steps < 1000):
             Rf = residual_func(h_prev) 
             if(iteration_steps%100==0):
                 print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
             
-            Ji[0:nn, 0:nn] = -2 * np.eye(nn) * np.dot(u, np.matmul(Cmat,h_prev)) + (Cmat-Emat)
-            Ji[nn  , 0:nn] = u
-
-            p = np.matmul(np.linalg.pinv(Ji,rcond=1e-14), -Rf)
+            Ji = jacobian_func(h_prev)
+            p  = np.matmul(np.linalg.pinv(Ji,rcond=1e-14), -Rf)
+            
             alpha=1e-1
             nRf=np.linalg.norm(Rf)
             is_diverged = False
@@ -391,7 +512,7 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
                     break
             
             if(is_diverged):
-                print("Iteration ", iteration_steps, ": Residual =", iteration_error)
+                print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
                 print("line search step size becomes too small")
                 break
 
@@ -407,14 +528,21 @@ def solve_collop_dg(steady_state, cf_list : list[colOpSp.CollisionOpSP], maxwell
     else:
         def f_rhs(t,y):
             return np.matmul(Cmat-Emat, y)
+
+        rel_error=1
+        t_curr=0
+        h_curr = h_init
+        dt_fac = 1000 
+        while rel_error>1e-3:
+            sol = scipy.integrate.solve_ivp(f_rhs, (t_curr, t_curr + dt_fac * dt), h_curr, max_step=dt, method='RK45',atol=1e-15, rtol=2.220446049250313e-14,t_eval=np.linspace(t_curr, t_curr + dt_fac * dt, 10))
+            rel_error = (np.linalg.norm(sol.y[:,-2] - sol.y[:,-1]))/np.linalg.norm(sol.y[:,-1])
+            print("timestepper solution converged: %.8E"%rel_error)
+            h_curr = sol.y[:,-1]
+            t_curr+= dt_fac * dt
             
-        ode_solver = ode(f_rhs,jac=None).set_integrator("dopri5",verbosity=1, rtol=t_tol, atol=t_tol, nsteps=1e16)
-        #ode_solver = ode(f_rhs,jac=None).set_integrator("lsode", method='bdf', order=1, rtol=t_tol, atol=1e-30, nsteps=1e8)
-        ode_solver.set_initial_value(h_init,t=0.0)
-        ode_solver.integrate(100*dt)
         solution_vector = np.zeros((2,h_init.shape[0]))
-        solution_vector[0,:] = h_init
-        solution_vector[1,:] = ode_solver.y
+        solution_vector[0,:] = np.matmul(qA, h_init)
+        solution_vector[1,:] = np.matmul(qA, sol.y[:,-1]) 
         return solution_vector
 
    
@@ -440,15 +568,17 @@ parser.add_argument("-E", "--E_field"                         , help="Electric f
 parser.add_argument("-dv", "--dv_target"                      , help="target displacement of distribution in v_th units", type=float, default=0)
 parser.add_argument("-nt", "--num_timesteps"                  , help="target number of time steps", type=float, default=100)
 parser.add_argument("-steady", "--steady_state"               , help="Steady state or transient", type=bool, default=True)
+parser.add_argument("-run_bolsig_only", "--run_bolsig_only"   , help="run the bolsig code only", type=bool, default=False)
 parser.add_argument("-bolsig", "--bolsig_dir"                 , help="Bolsig directory", type=str, default="../../Bolsig/")
 parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", nargs='+', type=int, default=[24, 48, 96])
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
 
 args = parser.parse_args()
 print(args)
-
 run_bolsig(args)
 
+if (args.run_bolsig_only):
+    sys.exit(0)
 
 [bolsig_ev, bolsig_f0, bolsig_a, bolsig_E, bolsig_mu, bolsig_M, bolsig_D, bolsig_rates] = parse_bolsig(args.bolsig_dir+"argon.out",len(args.collisions))
 
@@ -468,9 +598,9 @@ ev = bolsig_ev
 params.BEVelocitySpace.SPH_HARM_LM = [[i,0] for i in range(args.l_max+1)]
 num_sph_harm = len(params.BEVelocitySpace.SPH_HARM_LM)
 
-radial      = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
-radial_base = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
-radial_cg  = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial            = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial_base       = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
+radial_cg         = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 radial_projection = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 #radial_base = np.zeros((len(args.sweep_values), len(ev)))
 #radial_intial = np.zeros((num_sph_harm, len(ev)))
@@ -497,21 +627,19 @@ for i, value in enumerate(args.sweep_values):
     collisions.MAXWELLIAN_TEMP_K   = BASIS_EV * collisions.TEMP_K_1EV
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
     VTH                            = collisions.ELECTRON_THEMAL_VEL
-    c_gamma = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
-    if "g2Smooth" in args.collisions or "g2" in args.collisions or "g2step" in args.collisions or "g2Regular" in args.collisions:
+    maxwellian                     = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
+    c_gamma                        = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+    if "g2Smooth" in args.collisions or "g2" in args.collisions or "g2step" in args.collisions or "g2Regul" in args.collisions:
         sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
-        print("singularity pts : ", sig_pts,"v/vth", (sig_pts * VTH/c_gamma)**2,"eV")
     else:
         sig_pts = None
-        #sig_pts = np.sqrt(np.array([0.5 * ev[-1]])) * c_gamma/VTH
         
-
-    ev_range = ((0*VTH/c_gamma)**2, 1.01 * ev[-1])
+    #ev_range = ((0*VTH/c_gamma)**2, (1+1e-10) * ev[-1])
+    ev_range = ((0*VTH/c_gamma)**2, (4*VTH/c_gamma)**2)
     k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
     if(sig_pts is not None):
-        print("sig energy ", (sig_pts*VTH/c_gamma)**2)
-
+        print("singularity pts : ", sig_pts,"v/vth", (sig_pts * VTH/c_gamma)**2,"eV")
 
     if args.sweep_param == "Nr":
         args.NUM_P_RADIAL = value
@@ -530,32 +658,48 @@ for i, value in enumerate(args.sweep_values):
         args.quad_radial = value
 
     params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL
-    
+    tt_vec = None
     if (args.radial_poly == "maxwell"):
-        r_mode = basis.BasisType.MAXWELLIAN_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+        spec_sp  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, basis.Maxwell(), params.BEVelocitySpace.SPH_HARM_LM)
+        spec_sp._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
     elif (args.radial_poly == "maxwell_energy"):
-        r_mode = basis.BasisType.MAXWELLIAN_ENERGY_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+        spec_sp  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, basis.MaxwellEnergy(), params.BEVelocitySpace.SPH_HARM_LM)
+        spec_sp._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
     elif (args.radial_poly == "laguerre"):
-        r_mode = basis.BasisType.LAGUERRE
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+        spec_sp  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, basis.Laguerre(), params.BEVelocitySpace.SPH_HARM_LM)
+        spec_sp._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
     elif (args.radial_poly == "chebyshev"):
-        r_mode = basis.BasisType.CHEBYSHEV_POLY
         params.BEVelocitySpace.NUM_Q_VR  = args.quad_radial
+        spec_sp  = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, basis.Chebyshev(domain=(-1,1), window=k_domain) , params.BEVelocitySpace.SPH_HARM_LM)
+        spec_sp._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
     elif (args.radial_poly == "bspline"):
-        r_mode = basis.BasisType.SPLINES
-        #params.BEVelocitySpace.NUM_Q_VR  = basis.XlBSpline.get_num_q_pts(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, SPLINE_ORDER, basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT)
-        bb = basis.XlBSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts, None)
-        params.BEVelocitySpace.NUM_Q_VR = bb._num_knot_intervals * basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT
+        r_mode                          = basis.BasisType.SPLINES
+        max_lev                         = int(np.ceil(np.log2(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER)))
+
+        def refine_func(x):
+            y    = np.zeros_like(x)
+            x_ev = (x * VTH / c_gamma)**2
+            collisions_included = args.collisions
+            for c in collisions_included:
+                y+= VTH * (x**3) * maxwellian(x) * collisions.Collisions.synthetic_tcs(x_ev, c) * collisions.AR_NEUTRAL_N
+            
+            return maxwellian(x)
+
+        tt_vec                          = basis.BSpline.adaptive_fit(refine_func, k_domain, sp_order=SPLINE_ORDER, min_lev=4, max_lev=max_lev, sig_pts=sig_pts, atol=1e-40, rtol=1e-12)
+        bb                              = basis.BSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts=None, knots_vec=tt_vec)
+        params.BEVelocitySpace.NUM_Q_VR = bb._num_knot_intervals * args.spline_q_pts_per_knot
+        params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = bb._num_p-1
+        spec_sp               = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, bb,params.BEVelocitySpace.SPH_HARM_LM)
+        spec_sp._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
 
     params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta
     params.BEVelocitySpace.NUM_Q_VP  = args.quad_phi
     params.BEVelocitySpace.NUM_Q_CHI = args.quad_s_theta
     params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
-
-    
 
     print("""===========================Parameters ======================""")
     print("\tMAXWELLIAN_N        : ", collisions.MAXWELLIAN_N)
@@ -565,30 +709,20 @@ for i, value in enumerate(args.sweep_values):
     print("""============================================================""")
     params.print_parameters()
 
-    maxwellian = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    cf      = colOpSp.CollisionOpSP(params.BEVelocitySpace.VELOCITY_SPACE_DIM,params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER,poly_type=r_mode,k_domain=k_domain, sig_pts=sig_pts, knot_vec=None)
-
-    spec    = cf._spec
-    spec._num_q_radial=params.BEVelocitySpace.NUM_Q_VR
-
-    if (args.radial_poly == "chebyshev"):
-        if sig_pts is not None and sig_pts[0] < k_domain[1] and sig_pts[0] >= k_domain[0]:
-            spec._r_grid   = [(k_domain[0], sig_pts[0]) , (sig_pts[0], sig_pts[1]), (sig_pts[1] , k_domain[1])]
-            spec._r_basis_p= [basis.Chebyshev(domain=(-1,1), window=ele_domain) for ele_domain in spec._r_grid]
-        else:
-            d_intervals    = np.linspace(k_domain[0],k_domain[1],1)
-            spec._r_grid   = [(d_intervals[i], d_intervals[i+1]) for i in range(len(d_intervals)-1)]
-            spec._r_basis_p= [basis.Chebyshev(domain=(-1,1), window=ele_domain) for ele_domain in spec._r_grid]
-        
-    mass_op   = BEUtils.mass_op(spec, None, 64, 2, 1)
-    temp_op   = BEUtils.temp_op(spec, None, 64, 2, 1)
-    avg_vop   = BEUtils.mean_velocity_op(spec, None, 64, 4, 1)
+    cf   = colOpSp.CollisionOpSP(spec_sp = spec_sp)
+    
+    mass_op   = BEUtils.mass_op(spec_sp, None, 64, 2, 1)
+    temp_op   = BEUtils.temp_op(spec_sp, None, 64, 2, 1)
+    avg_vop   = BEUtils.mean_velocity_op(spec_sp, None, 64, 4, 1)
     eavg_to_K = (2/(3*scipy.constants.Boltzmann))
     ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
 
-    data               = solve_collop_dg(args.steady_state, [cf], maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
-    radial_base[i,:,:] = BEUtils.compute_radial_components(ev, spec, data[0,:], maxwellian, VTH, 1)
-    radial[i, :, :]    = BEUtils.compute_radial_components(ev, spec, data[-1,:], maxwellian, VTH, 1)
+    data                = solve_collop_dg(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
+    radial_base[i,:,:]  = BEUtils.compute_radial_components(ev, spec_sp, data[0,:], maxwellian, VTH, 1)
+    scale               = 1./( np.trapz(radial_base[i,0,:]*np.sqrt(ev),x=ev) )
+    radial_base[i,:,:] *= scale
+
+    radial[i, :, :]    = BEUtils.compute_radial_components(ev, spec_sp, data[-1,:], maxwellian, VTH, 1)
     scale              = 1./( np.trapz(radial[i,0,:]*np.sqrt(ev),x=ev) )
     radial[i, :, :]   *= scale
     
@@ -623,9 +757,6 @@ for i, value in enumerate(args.sweep_values):
     run_temp.append(temp_evolution)
 
 
-# np.set_printoptions(precision=16)
-# print(data[1,:])
-
 if (1):
     fig = plt.figure(figsize=(21, 9), dpi=300)
 
@@ -638,7 +769,7 @@ if (1):
     # print(np.trapz( scale*radial[i, 0]*np.sqrt(ev), x=ev ))
 
     plt.subplot(2, num_subplots,  1 + 1)
-    plt.semilogy(bolsig_ev,  abs(bolsig_f0*bolsig_a * spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0)), '-k', label="bolsig")
+    plt.semilogy(bolsig_ev,  abs(bolsig_f0*bolsig_a * spec_sp._sph_harm_real(0, 0, 0, 0)/spec_sp._sph_harm_real(1, 0, 0, 0)), '-k', label="bolsig")
 
     for i, value in enumerate(args.sweep_values):
         data=run_data[i]
@@ -660,8 +791,8 @@ if (1):
             #     plt.plot(ev, abs(radial[i, l_idx]-radial_cg[i,l_idx]), '-', label=lbl, color=color)
             #     #plt.plot(ev, abs(radial_cg[i, l_idx]-bolsig_f0), '-', label=lbl+ "(cg)", color=color)
             # elif l_idx==1:
-            #     #plt.plot(ev, abs(radial[i, l_idx]-bolsig_f0*bolsig_a * spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0)), '-', label=lbl + "(dg)", color=color)
-            #     #plt.plot(ev, abs(radial_cg[i, l_idx]-bolsig_f0*bolsig_a * spec._sph_harm_real(0, 0, 0, 0)/spec._sph_harm_real(1, 0, 0, 0)), '-', label=lbl+ "(cg)", color=color)
+            #     #plt.plot(ev, abs(radial[i, l_idx]-bolsig_f0*bolsig_a * spec_sp._sph_harm_real(0, 0, 0, 0)/spec_sp._sph_harm_real(1, 0, 0, 0)), '-', label=lbl + "(dg)", color=color)
+            #     #plt.plot(ev, abs(radial_cg[i, l_idx]-bolsig_f0*bolsig_a * spec_sp._sph_harm_real(0, 0, 0, 0)/spec_sp._sph_harm_real(1, 0, 0, 0)), '-', label=lbl+ "(cg)", color=color)
 
 
 
@@ -763,7 +894,7 @@ if (1):
     if (args.radial_poly == "bspline"):
         fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + "q_per_knot="+str(args.spline_q_pts_per_knot))
         # plt.show()
-        if len(spec._basis_p._dg_idx)==2:
+        if len(spec_sp._basis_p._dg_idx)==2:
             plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
         else:
             plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")

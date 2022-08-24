@@ -6,15 +6,15 @@
 /READCOLLISIONS can be called multiple times to read from different files
 
 READCOLLISIONS
-"g0_g2.txt"   / File
+"g0Const.txt"   / File
 Ar
 1                        / Extrapolate: 0= No 1= Yes
 
 CONDITIONS
-232.9192546583851 / Electric field / N (Td)
+0.031055900621118016 / Electric field / N (Td)
 0.        / Angular field frequency / N (m3/s)
 0.        / Cosine of E-B field angle
-0.0001    / Gas temperature (K)
+1e-16     / Gas temperature (K)
 0         / Excitation temperature (K)
 0.        / Transition energy (eV)
 0.        / Ionization degree
@@ -25,7 +25,7 @@ CONDITIONS
 1         / Energy sharing: 1=Equal*; 2=One takes all
 1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
 0.        / Maxwellian mean energy (eV)
-500       / # of grid points
+1000 / # of grid points
 0         / Manual grid: 0=No; 1=Linear; 2=Parabolic
 100.      / Manual maximum energy (eV)
 1e-20     / Precision

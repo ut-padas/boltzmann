@@ -118,6 +118,11 @@ def solve_collop(collOp : colOpSp.CollisionOpSP, maxwellian, vth, E_field, t_end
         g0noloss  = collisions.eAr_G0_NoEnergyLoss()
         g0noloss.reset_scattering_direction_sp_mat()
         FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g0noloss, mw_vth, vth_curr)
+    
+    if "g0ConstNoLoss" in collisions_included:
+        g0noloss  = collisions.eAr_G0_NoEnergyLoss(cross_section="g0Const")
+        g0noloss.reset_scattering_direction_sp_mat()
+        FOp = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g0noloss, mw_vth, vth_curr)
 
     if "g0Const" in collisions_included:
         g0const  = collisions.eAr_G0(cross_section="g0Const")
@@ -258,17 +263,18 @@ for i, value in enumerate(args.sweep_values):
     collisions.ELECTRON_THEMAL_VEL = collisions.electron_thermal_velocity(collisions.MAXWELLIAN_TEMP_K) 
     VTH                            = collisions.ELECTRON_THEMAL_VEL
     maxwellian                     = BEUtils.get_maxwellian_3d(VTH,collisions.MAXWELLIAN_N)
-    c_gamma = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+    c_gamma   = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+    ev_range  = ((0*VTH/c_gamma)**2, 1.01 * ev[-1])
+    k_domain  = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
+
     if "g2Smooth" in args.collisions or "g2" in args.collisions or "g2step" in args.collisions or "g2Regular" in args.collisions:
         sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
     else:
-        sig_pts = None
-        
-    ev_range  = ((0*VTH/c_gamma)**2, 1.01 * ev[-1])
-    k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
+        sig_pts = np.array([0.5 * (k_domain[0] + k_domain[1])]) #None
+    
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
     if(sig_pts is not None):
-        print("sig energy ", (sig_pts*VTH/c_gamma)**2)
+        print("sig energy = ", (sig_pts*VTH/c_gamma)**2, " v/vth = ", sig_pts)
 
 
     if args.sweep_param == "Nr":
@@ -319,10 +325,12 @@ for i, value in enumerate(args.sweep_values):
             return maxwellian(x)
 
         tt_vec                          = basis.BSpline.adaptive_fit(refine_func, k_domain, sp_order=SPLINE_ORDER, min_lev=4, max_lev=max_lev, sig_pts=sig_pts, atol=1e-40, rtol=1e-12)
-        bb                              = basis.BSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts=None, knots_vec=tt_vec)
+        bb                              = basis.BSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts=sig_pts, knots_vec=tt_vec)
         params.BEVelocitySpace.NUM_Q_VR = bb._num_knot_intervals * args.spline_q_pts_per_knot
-        params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = bb._num_p-1
-        spec_sp               = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER, bb,params.BEVelocitySpace.SPH_HARM_LM)
+        params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = bb._num_p
+        if args.sweep_param == "Nr":
+            args.sweep_values[i] = params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER
+        spec_sp               = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER-1, bb,params.BEVelocitySpace.SPH_HARM_LM)
         spec_sp._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
 
     params.BEVelocitySpace.NUM_Q_VT  = args.quad_theta

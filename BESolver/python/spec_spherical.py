@@ -155,7 +155,7 @@ class SpectralExpansionSpherical:
             l_max  = l_modes[-1]
             [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             mm=np.zeros((num_p*num_sh, num_p*num_sh))
-
+            print(dg_idx)
             for e_id in range(0,len(dg_idx),2):
                 ib=dg_idx[e_id]
                 ie=dg_idx[e_id+1]

@@ -261,8 +261,10 @@ class BSpline(Basis):
             if sig_pts is not None:
                 for i in range(len(sig_pts)):
                     if sig_pts[i] > k_domain[0] and sig_pts[i] < k_domain[1]:
-                        s = sig_pts[i]
-                        self._t[np.argmin( np.abs(self._t - s) )] = s
+                        s   = sig_pts[i]
+                        idx = np.argmin( np.abs(self._t - s))
+                        if (idx > spline_order+1) and (idx < len(self._t)-spline_order-1):
+                            self._t[idx] = s
 
         else:
             if sig_pts is not None and False:
@@ -427,12 +429,14 @@ class BSpline(Basis):
                 t1   = sp._kdomain[1]
 
                 fc       = sp.fit(f)
-                tt , _   = sp.Gauss_Pn((sp_order+1) * 2)
+                tt , _   = sp.Gauss_Pn((sp_order+1) * 8)
                 f1       = np.sum(np.array([fc[i] * sp.Pn(i)(tt,0) for i in range(sp._num_p)]),axis=0)
                 f2       = f(tt)
-                error    = np.max(np.abs(f2 -f1))
+                aerror    = np.max(np.abs(f2 -f1))
+                rerror   = aerror/np.max(np.abs(f2))
+
                 
-                if error  > (atol + rtol * np.max(np.abs(f2))) or refine_lev < min_lev:
+                if aerror  > atol and rerror >rtol :#(atol + rtol * np.max(np.abs(f2))) or refine_lev < min_lev:
                     #print("ele = (%f, %f)  split (%f,%f) and (%f, %f) "  %(t0,t1, t0, 0.5 * (t0 + t1), 0.5 * (t0 + t1), t1))
                     ele_new.append(BSpline((t0, 0.5 * (t0+t1)), sp_order, sp_order+1))
                     ele_new.append(BSpline((0.5 * (t0+t1), t1), sp_order, sp_order+1))

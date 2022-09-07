@@ -211,6 +211,7 @@ f_e\of{\vect{v}_e}
 \end{align*}
 
 \subsection{Collision operator simplifications}
+\label{sec:collop_simplifications}
 Let $\vect{v} = (v_r, v_\theta, v_\phi) $ and scattering solid angle $\vect{\omega} = (\chi, \phi)$. Further we write the test and trial functions decomposed to radial and angular components as below. 
 \begin{align*}
 \phi_{klm}\of{\vect{v}} &= S_{k}\of{v_r} Y_{lm} \of{v_\theta, v_\phi}\\
@@ -306,7 +307,7 @@ C^{p10}_{k10}  &= -n_0 v_{th}^4 \myint_{R} x^3 \sigma\of{\varepsilon} S_k\of{x} 
 \end{align*}
 
 
-\section{Advection term (Eulerian approach + DG) } %(only left-hand-side so far)
+\section{Eulerian approach advection with collisions} 
 Advection (acceleration) term
 \begin{align*}
 \partial_t f - \vect{E}\cdot \nabla_{\vect{v}} f = C[f]
@@ -472,32 +473,94 @@ Two term expansion ($l = 0,1$, $m=0$):
 \left( B_M\of{0,0} \frac{d}{d\vr} f_{0,0} 
 + B_D\of{0,0} \frac{1}{\vr} f_{0,0} \right) &= \ldots
 \end{align*}
+Recall, the simplified collision operator (see \S\ref{sec:collop_simplifications}), 
+\begin{align*}
+C^{pq0}_{kl0}  = n_0 v_{th}^4 \myint_{R} x^3 \sigma\of{\varepsilon} S_k\of{x} \delta_{ql} \of{T_p\of{x^\prime}\delta_{q0} - T_p\of{x}} \diff{x} 
+\end{align*} 
+
 or more explicitly:
 \begin{align*}
 \frac{d}{dt} f_{0,0} - E 
 \left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{1,0} 
-+  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= C^{00}_{00} f_{0,0} + C^{00}_{10} f_{1,0}
++  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) &= \tilde{C}^{00}_{00} f_{0,0} = \tilde{C_0} f_{0,0}
 \\
 \frac{d}{dt} f_{1,0} - E 
-\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{0,0} \right) &= C^{10}_{00} f_{0,0} + C^{10}_{10} f_{1,0}
-\end{align*} were $C^{qs}_{lm}$ denotes the projection of the collision operator to $Y_{qs}$, which can be written as, 
-\begin{align*}
-C^{qs}_{lm} &=\myint_{S^2} C Y_{qs}\of{\omega_{v}} \diff{\omega_{v}}= 
-\myint_{R} \myint_{S^2} \myint_{S^2} 
-B_0\of{(v^\prime,\omega_{v}), \vect{\omega}} {v^\prime}^2 Y_{lm}\of{\omega_{v}} \times \\
-\Bigg(
-&\delta\of{v^{post}- {v}} Y_{qs}\of{\omega_{v^{post}}} - \delta\of{v^\prime - v} Y_{qs}\of{\omega_{v}}
-\Bigg)
-\diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v^\prime} 
+\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{0,0} \right) &=  \tilde{C}^{10}_{10} f_{1,0} = \tilde{C_1} f_{1,0}
 \end{align*}
-Let $f_{lm}$ be the lm modes used, 
+
+Based on the weak form of the $C^{10}_{10}$, 
 \begin{align*}
-\partial_tf_{qs}
--E A^{qs}_{lm} \partial_v f_{lm}  
--E B^{qs}_{lm} \frac{1}{v}f_{lm}  = 
-C^{qs}_{lm}f_{lm}
+C^{10}_{10} = -n_0 v_{th}^4 \myint_{R} x^3 \sigma\of{\varepsilon} S(x) T(x) dx \implies  \tilde{C}^{10}_{10} = -n_0 \varepsilon^{1/2} \gamma \sigma\of{\varepsilon} 
+\end{align*} Let $\mu = \cfrac{\dot{n}_e}{n_e}$ be the growth rate due to collisions. In the weak form, 
+\begin{align*}
+&n_e\of{t} =\myint_{\vect{V}} f(t,v) \diff{\vect{v}} \\
+&\partial_t f(t,v) = C f \implies \mu = \frac{\dot{n}_e\of{t}}{n_e\of{t}} = \myint_{\vect{V}} C f \diff{\vect{v}} = u^T C \hat{f} \text{ where } \hat{f} = f/n_e
 \end{align*}
-\textbf{Note}: Due to the orthogonality structure in the radial advection coordinate diagonals will always be zero, with a banded matrix with width of equal to 1. 
+
+For the normalized components of the distribution function, we can write, 
+\begin{align*}
+&\partial_t \hat{f_1} = \frac{1}{n_e} \partial_t f_1 - \frac{\dot{n_e}}{n_e} \hat{f_1} \\
+&\hat{f_1} = \frac{E}{\sqrt{3}} \frac{\partial_{v}\hat{f_0}}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}
+\end{align*}
+
+For the $f_0$ we can write in the steady state, 
+\begin{align*}
+&\partial_t \hat{f_0} = \frac{1}{n_e} \partial_t f_0 - \mu \hat{f_0} \implies 0 \\
+&\frac{1}{n_e} \of{\frac{E}{\sqrt{3}}(\partial_v +  \frac{2}{v})f_1 + \tilde C_0 f_0} = \mu \hat{f_0} \\
+&\frac{E^2}{3} \partial_{v} \of{\frac{\partial_v \hat f_0}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}} + \frac{2E^2}{3v} \frac{\partial_v \hat{f_0}}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} + \tilde C_0 \hat{f_0} = \mu \hat{f_0}\\
+&\frac{E^2}{3} \of{ A + B} + \tilde{C_0}\hat{f_0} = \mu \hat{f_0}
+\end{align*}
+
+In the weak form we can write projecting on to the radial test functions $T(\frac{v}{v_{th}}) = T(x)$, 
+\begin{align*}
+&\myint_{R} v^2 A T(x) dv = \myint_{R} v^2 \partial_{v} \of{\frac{\partial_v \hat f_0}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}} dv \text{ with integration by parts}\\
+&= \Big[v^2 T(x) \frac{\partial_v \hat f_0}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}\Big]_0^{v_{max}} - \myint_{R} \frac{\partial_v \hat f_0}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} \of{v^2 \partial_v T(x) + 2v T(x)} dv \\
+&\myint_{R} v^2 B T(x) dv = \myint_{R} 2v T(x)\frac{\partial_v \hat{f_0}}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} dv \\
+&\myint_{R} v^2 (A + B) T(x) dv = -\myint_{R} \frac{\partial_v \hat f_0}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} v^2 \partial_v T(x) dv
+\end{align*}
+In discretized $\hat{f_0}(v) = \sum_{k} \hat{f_0}_k S_k(x)$ form we can write, 
+\begin{align*}
+&W_{ij} = \Big[v^2 T(x) \frac{\partial_v \hat f_0}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}\Big]_0^{v_{max}}-\myint_{R} \frac{\partial_v S_j(x)}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} v^2 \partial_v T_i(x) dv \\
+&\myint_{R} v^2 \tilde{C}_0 dv = C_{0}  = n_0 v_{th}^3 \myint_{R} x^2 B(x v_{th}) S_k\of{x}  \of{T_p\of{x^\prime} - T_p\of{x}} \diff{x}  \\
+&M_{ij} = \myint_{R} v^2 T_i(x) S_j(x) dv\\
+\end{align*} Therefore we can write, the residual functional and its Jacobian for the steady state 
+\begin{align*}
+R(\hat{f_0}) &= C_0 \hat{f_0} + W^{\hat{f_0}}_{ij} (\hat{f_0}) - (u^T C_0 \hat{f_0}) M_{ij} \hat{f_0} \\
+J(\hat{f_0}) &= C_0 + W^{\hat{f_0}}_{ij}  - 2(u^T C_0 \hat{f_0}) M_{ij}
+\end{align*}
+
+
+
+
+
+
+%were $C^{qs}_{lm}$ denotes the projection of the collision operator to $Y_{qs}$, which can be written as, 
+%\begin{align*}
+%C^{qs}_{lm} &=\myint_{S^2} C Y_{qs}\of{\omega_{v}} \diff{\omega_{v}}= 
+%\myint_{R} \myint_{S^2} \myint_{S^2} 
+%B_0\of{(v^\prime,\omega_{v}), \vect{\omega}} {v^\prime}^2 Y_{lm}\of{\omega_{v}} \times \\
+%\Bigg(
+%&\delta\of{v^{post}- {v}} Y_{qs}\of{\omega_{v^{post}}} - \delta\of{v^\prime - v} Y_{qs}\of{\omega_{v}}
+%\Bigg)
+%\diff{\vect{\omega}} \diff{\vect{\omega_{v_e}}} \diff{v^\prime} 
+%\end{align*}
+%Let $f_{lm}$ be the lm modes used, 
+%\begin{align*}
+%\partial_tf_{qs}
+%-E A^{qs}_{lm} \partial_v f_{lm}  
+%-E B^{qs}_{lm} \frac{1}{v}f_{lm}  = 
+%C^{qs}_{lm}f_{lm}
+%\end{align*}
+%\textbf{Note}: Due to the orthogonality structure in the radial advection coordinate diagonals will always be zero, with a banded matrix with width of equal to 1. 
+
+
+
+
+
+
+
+
+\clearpage
 
 For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
 \begin{align*}

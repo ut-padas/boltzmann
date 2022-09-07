@@ -579,3 +579,35 @@ class SpectralExpansionSpherical:
         else:
             raise NotImplementedError
 
+    def diffusion_mat(self):
+        if self.get_radial_basis_type() == basis.BasisType.SPLINES:
+            gmx ,   gmw  = self._basis_p.Gauss_Pn(self._num_q_radial)
+            
+            k_vec        = self._basis_p._t
+            dg_idx       = self._basis_p._dg_idx
+            sp_order     = self._basis_p._sp_order
+            diffusion_op = self.create_mat()
+
+            num_sh       = len(self._sph_harm_lm)
+            
+            # idx_set     = np.logical_and(self._gmx>=xb, self._gmx <=xe)
+            # gx_e , gw_e = self._gmx[idx_set],self._gmw[idx_set]
+            gx_e , gw_e = gmx , gmw
+            
+            for e_id in range(0,len(dg_idx),2):
+                ib=dg_idx[e_id]
+                ie=dg_idx[e_id+1]
+
+                xb=k_vec[ib]
+                xe=k_vec[ie+sp_order+1]
+                for p in range(ib,ie+1):
+                    for k in range(ib,ie+1):
+                        tmp = (gx_e**2) * self.basis_derivative_eval_radial(gx_e,p,0,1) * self.basis_derivative_eval_radial(gx_e,k,0,1) + 2 *gx_e * self.basis_derivative_eval_radial(gx_e,k,0,1) * self.basis_eval_radial(gx_e,p,0)
+                        tmp = -np.dot(gw_e, tmp)
+
+                        for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
+                            diffusion_op[p * num_sh + qs_idx , k * num_sh + qs_idx] +=tmp
+        
+            return diffusion_op
+        else:
+            raise NotImplementedError

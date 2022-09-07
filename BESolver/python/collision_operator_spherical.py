@@ -272,11 +272,13 @@ class CollisionOpSP():
                 gain_fac = 1.0
                 c_mu     = 2 * collisions.MASS_R_EARGON 
                 v_scale  = np.sqrt(1- c_mu)
+                v_post   = gx_e * v_scale
             elif(g._type == collisions.CollisionType.EAR_G2):
                 gain_fac         = 2.0
                 check_1          = (gx_e * V_TH/c_gamma)**2 > g._reaction_threshold
                 v_scale          = np.zeros_like(gx_e)
                 v_scale[check_1] = c_gamma * np.sqrt(0.5*((gx_e[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+                v_post           = v_scale
             else:
                 raise NotImplementedError
             
@@ -284,7 +286,8 @@ class CollisionOpSP():
                 tmp = np.zeros((num_p,num_p,len(gx_e)))
                 if q==0:
                     for p in range(num_p):
-                        psi_p = ( gain_fac * spec_sp.basis_eval_radial(gx_e * v_scale ,p,q) - spec_sp.basis_eval_radial(gx_e,p,q))
+                        #-0.5 * c_mu * gx_e * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1)
+                        psi_p = (gain_fac * spec_sp.basis_eval_radial(v_post ,p,q) - spec_sp.basis_eval_radial(gx_e,p,q))
                         for k in range(num_p):
                             tmp[p,k] = V_TH * gx_e**3 * diff_cs * spec_sp.basis_eval_radial(gx_e, k, q) * psi_p
                 else:
@@ -393,9 +396,6 @@ class CollisionOpSP():
         return cc_collision
     
     def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3)):
-        #Lij = self._LOp_eulerian_radial_only(collision,maxwellian,vth)
-        Lij = self._LOp_eulerian(collision,maxwellian,vth)
+        Lij = self._LOp_eulerian_radial_only(collision,maxwellian,vth)
+        #Lij = self._LOp_eulerian(collision,maxwellian,vth)
         return Lij
-        
-        
-

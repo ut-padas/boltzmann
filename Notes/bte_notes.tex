@@ -1408,6 +1408,72 @@ Note that, if $\vect{u}^T \hat{\vect{h}} = 1$ at the initial time instant $t=0$,
 
 At the steady-state one should have $\frac{d \hat{\vect{h}}}{dt} = 0$ subject to $\vect{u}^T \hat{\vect{h}} = 1$ (by construction).
 
+\clearpage
+\section{Complexity analysis}
+This section summarizes the overall complexity analysis for solving the Boltzmann equation sequentially. Let $N_{r}, N_{lm}$ denotes the number of radial and spherical modes used in the representation. Let $Q_{r}, Q_{\theta}, Q_{\phi}$ be the quadrature grid in the velocity space, $Q_{\chi}, Q_{s}$ be the quadrature grid for scattering solid angle. 
+
+\begin{algorithm}
+	\caption{Compute collision operator (i.e., without any simplifications) \label{algo:full_cop}}
+	\begin{algorithmic}
+		\Require $N_r, N_lm, Q_r, Q_\theta, Q_\phi, Q_\chi, Q_s $
+		\Ensure $C^{pqs}_{klm} \in R^{N_rN_{lm} \times N_rN_{lm}}$ 
+		\State $\vect{v} \leftarrow \text{meshgrid}(Q_r.x, Q_\theta.x, Q_\phi.x, Q_\chi.x, Q_s.x)$
+		\State $\vect{v^\prime} \leftarrow \text{post\_velocity}(Q_r.x, Q_\theta.x, Q_\phi.x, Q_\chi.x, Q_s.x)$
+		\For{$qs\_idx, qs \in enumerate(N_{lm})$}
+		\For {$p \in 1:N_r$}
+			\State $W_p \leftarrow \sigma Q_r.x^3 \times (\psi_{pqs}(\vect{v^\prime})  - \psi_{pqs}(\vect{v}))$
+			\State $W_p\leftarrow dot(dot(W_p, Q_s.w), Q_\chi.w)$
+			\For {$p \in 1:N_r$}
+				\For {$q \in 1:N_r$}
+					\For{$lm\_idx, lm \in enumerate(N_{lm})$}
+					\State $X^{pqs}_{klm} \leftarrow W_p \times \phi_{klm} (\vect{v})$
+					\State $C^{pqs}_{klm} \leftarrow dot(dot(dot(X^{pqs}_{klm}, Q_\phi.w),Q_\theta.w),Q_r.w)$
+					\EndFor
+				\EndFor
+			\EndFor
+		\EndFor
+		\EndFor
+	\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+	\caption{Compute collision operator (i.e., radial approximation) \label{algo:approx_cop}}
+	\begin{algorithmic}
+		\Require $N_r, Q_r$
+		\Ensure $C^{pqs}_{klm} \in R^{N_rN_{lm} \times N_rN_{lm}}$ 
+		\State $v_r \leftarrow Q_r.x$
+		\State $v^\prime_r \leftarrow \text{energy\_loss}(Q_r.x)$
+		\For {$p \in 1:N_r$}
+		\For {$q \in 1:N_r$}
+			\State $X^{p00}_{k00} \leftarrow \sigma Q_r.x^3 \times (T_{p}({v^\prime_r})  - T_{p}({v_r}))$
+			\State $C^{p00}_{k00} \leftarrow dot(X^{p00}_{k00},Q_r.w)$
+		\EndFor
+		\EndFor
+		\For {$p \in 1:N_r$}
+		\For {$q \in 1:N_r$}
+			\State $X^{p00}_{k00} -\leftarrow \sigma Q_r.x^3 T_{p}({v_r})$
+			\State $C^{p00}_{k00} \leftarrow dot(X^{p00}_{k00},Q_r.w)$
+		\EndFor
+		\EndFor
+	\end{algorithmic}
+\end{algorithm}
+
+
+\begin{itemize}
+	\item Discretized operators in the radial direction $R^{N_r \times N_r}$ where full spherical discretization result in matrices of size $R^{N_r N_{lm} \times N_r N_{lm}}$
+	\item Assuming no symmetry matrix assembly in the radial integration has complexity of $\mathcal{O}(N_r ^2  Q_r)$
+	\item Collision operator, complexity 
+	\begin{itemize}
+		\item with out any approximations (5d integrals) : $\mathcal{O} (N_r^2 N_{lm}^2 Q_r Q_{\theta} Q_{\phi} Q_{\chi} Q_{s})$ (see Algorithm \ref{algo:full_cop})
+		\item with approximations integrating the spherical harmonics analytically (1d integral) : $\mathcal{O} (N_r^2 N_{lm} Q_r)$ (see Algorithm \ref{algo:approx_cop})
+	\end{itemize}
+	\item Assuming dense matrices, the computational cost for matvecs $\mathcal{O}(N_r^2 N_{lm}^2)$
+	\begin{itemize}
+		\item For explicit timestepping, steady state complexity with $k^{th}$ order time integrator $\mathcal{O}(N_T k N_r^2 N_{lm}^2)$, where $N_T$ denotes the number of timesteps required. 
+		\item With non-linear steady state solver (with Newton's method), we can write the complexity as $\mathcal{O}\of{N_T \of{N_r^2 N_{lm}^2 + \text{SVD}(N_rN_{lm})} }$ where $N_T$ denotes the number of iterations required for convergence. 
+	\end{itemize}
+\end{itemize}
+
 
 
 \bibliographystyle{plain}

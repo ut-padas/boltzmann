@@ -542,7 +542,7 @@ def solve_bte(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_tol, c
         raise NotImplementedError
    
     
-parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", nargs='+', type=int, default=16)
+parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", type=int, default=16)
 parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-4)
 parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-7)
 parser.add_argument("-o",  "--out_fname"                      , help="output file name", type=str, default='coll_op')
@@ -565,7 +565,7 @@ parser.add_argument("-nt", "--num_timesteps"                  , help="target num
 parser.add_argument("-steady", "--steady_state"               , help="Steady state or transient", type=bool, default=True)
 parser.add_argument("-run_bolsig_only", "--run_bolsig_only"   , help="run the bolsig code only", type=bool, default=False)
 parser.add_argument("-bolsig", "--bolsig_dir"                 , help="Bolsig directory", type=str, default="../../Bolsig/")
-parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", nargs='+', type=int, default=[24, 48, 96])
+parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", nargs='+', type=float, default=[24, 48, 96])
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
 
 args         = parser.parse_args()
@@ -602,7 +602,6 @@ for run_id in range(1):#range(len(e_values)):
     v_sph_coord = BEUtils.cartesian_to_spherical(vx, vy, vz)
 
     ev = bolsig_ev
-    print(len(ev))
 
     params.BEVelocitySpace.SPH_HARM_LM = [[i,0] for i in range(args.l_max+1)]
     num_sph_harm = len(params.BEVelocitySpace.SPH_HARM_LM)
@@ -651,7 +650,7 @@ for run_id in range(1):#range(len(e_values)):
             print("singularity pts : ", sig_pts, "v/vth and" , (sig_pts * VTH/c_gamma)**2,"eV")
 
         if args.sweep_param == "Nr":
-            args.NUM_P_RADIAL = value
+            args.NUM_P_RADIAL = int(value)
         # elif args.sweep_param == "l_max":
         #     args.l_max = value
         elif args.sweep_param == "ev":

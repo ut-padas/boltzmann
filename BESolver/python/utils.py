@@ -16,7 +16,7 @@ def choloskey_inv(M):
 
     T, Q = scipy.linalg.schur(M)
     Tinv = scipy.linalg.solve_triangular(T, np.identity(M.shape[0]),lower=False)
-    print("cholesky solver inverse : ", np.linalg.norm(np.matmul(T,Tinv)-np.eye(T.shape[0]))/np.linalg.norm(np.eye(T.shape[0])))
+    #print("cholesky solver inverse : ", np.linalg.norm(np.matmul(T,Tinv)-np.eye(T.shape[0]))/np.linalg.norm(np.eye(T.shape[0])))
     return np.matmul(np.linalg.inv(np.transpose(Q)), np.matmul(Tinv, np.linalg.inv(Q))) 
     #print(np.linalg.cond(Q), np.linalg.cond(T))
 
@@ -667,63 +667,6 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
         MP_klm = MP_klm.reshape((num_p*num_sph_harm,-1))
         return np.dot(np.transpose(MP_klm),cf) 
 
-def reaction_rate(spec_sp : spec_spherical.SpectralExpansionSpherical, g, cf, maxwellian, vth, scale=1):
-    """
-    Compute the reaction rates for specified collision data, 
-    """    
-    NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
-    NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-    
-    num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
-    num_sph_harm = len(sph_harm_lm)
-
-    gmx,gmw      = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-    
-    legendre     = basis.Legendre()
-    [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
-    VTheta_q     = np.arccos(glx)
-    VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
-
-    assert NUM_Q_VP>1
-    sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
-    WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
-
-    #trap. weights
-    WVPhi_q[0]  = 0.5 * WVPhi_q[0]
-    WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
-
-    quad_grid = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
-    P_kr = spec_sp.Vq_r(quad_grid[0]) 
-    Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
-
-    ev_qx    =  (0.5 * scipy.constants.electron_mass * (quad_grid[0]*vth)**2 )/scipy.constants.electron_volt
-    cs_total =  g.total_cross_section(ev_qx)
-
-    gama_electron    = 1 #np.sqrt(2*collisions.ELECTRON_CHARGE/collisions.MASS_ELECTRON)
-    mass_m0          = moment_n_f(spec_sp,cf,maxwellian,vth,0,NUM_Q_VR=NUM_Q_VR,NUM_Q_VT=None,NUM_Q_VP=None,scale=1)
-    
-    if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY:
-        MP_klm = np.array([ cs_total * P_kr[i] * Y_lm[j] for i in range(num_p) for j in range(num_sph_harm)])
-        MP_klm = np.dot(MP_klm,WVPhi_q)
-        MP_klm = np.dot(MP_klm,glw)
-        MP_klm = np.dot(MP_klm,gmw)
-
-        reaction_rate = (np.dot(np.transpose(MP_klm),cf)/mass_m0) * gama_electron * scale * (1/(4*np.pi))
-        return reaction_rate
-
-    elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-        MP_klm = np.array([((quad_grid[0]**2) * (vth**3)) * cs_total * P_kr[i] * Y_lm[j] for i in range(num_p) for j in range(num_sph_harm)])
-        MP_klm = np.dot(MP_klm,WVPhi_q)
-        MP_klm = np.dot(MP_klm,glw)
-        MP_klm = np.dot(MP_klm,gmw)
-        
-        reaction_rate = (np.dot(np.transpose(MP_klm),cf)/mass_m0) * gama_electron * scale
-        return reaction_rate
-    else:
-        raise NotImplementedError
-
 def sample_distriubtion(vx, vy, vz, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, maxwellian, vth,scale=1):
 
     # vx, vy, vz must have the same shape
@@ -789,6 +732,49 @@ def compute_radial_components(ev_pts, spec_sp : spec_spherical.SpectralExpansion
 
     return output
 
+def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g, mw, vth):
+    """
+    reaction rate op R for collision g
 
+    np.dot(R,f) * vth**3 / mass(f) 
 
+    """
+    NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+    NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
+    NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+    
+    num_p        = spec_sp._p +1
+    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    num_sph_harm = len(sph_harm_lm)
 
+    gmx,gmw      = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    
+    legendre     = basis.Legendre()
+    [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
+    VTheta_q     = np.arccos(glx)
+    VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
+
+    assert NUM_Q_VP>1
+    sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
+    WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
+
+    #trap. weights
+    WVPhi_q[0]  = 0.5 * WVPhi_q[0]
+    WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
+
+    quad_grid = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
+    P_kr = spec_sp.Vq_r(quad_grid[0], 0 , 1.0) 
+    Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
+
+    c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
+    ev_qx    =  (quad_grid[0] * vth / c_gamma)**2
+    cs_total =  g.total_cross_section(ev_qx)
+    
+    if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        MP_klm = np.array([((quad_grid[0]**3)) * cs_total * P_kr[i] * Y_lm[j] for i in range(num_p) for j in range(num_sph_harm)])
+        MP_klm = np.dot(MP_klm,WVPhi_q)
+        MP_klm = np.dot(MP_klm,glw)
+        MP_klm = np.dot(MP_klm,gmw) * (2 * vth**4 / (c_gamma**2))
+        return MP_klm
+    else:
+        raise NotImplementedError

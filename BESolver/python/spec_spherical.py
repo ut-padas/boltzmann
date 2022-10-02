@@ -155,13 +155,12 @@ class SpectralExpansionSpherical:
             l_max  = l_modes[-1]
             [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
             mm=np.zeros((num_p*num_sh, num_p*num_sh))
-            print(dg_idx)
             for e_id in range(0,len(dg_idx),2):
                 ib=dg_idx[e_id]
                 ie=dg_idx[e_id+1]
                 xb=k_vec[ib]
                 xe=k_vec[ie+sp_order+1]
-                print("domain :", (xb,xe))
+                print("velocity radial domain (v/vth) :", (xb,xe), "with basis idx: ", dg_idx)
                 idx_set     = np.logical_and(gx>=xb, gx <=xe)
                 gx_e , gw_e = gx[idx_set],gw[idx_set]
 

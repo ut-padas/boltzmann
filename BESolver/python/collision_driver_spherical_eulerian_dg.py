@@ -188,7 +188,7 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
     # Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
     Cmat = FOp #np.matmul(Minv, FOp)
-    Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat  #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
+    Emat = -(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat  #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
     Cmat1 = np.matmul(Minv, FOp)
 
@@ -738,8 +738,8 @@ for run_id in range(1):#range(len(e_values)):
         eavg_to_K = (2/(3*scipy.constants.Boltzmann))
         ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
 
-        #data                = solve_collop_dg(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
-        data                = solve_bte(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
+        data                = solve_collop_dg(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
+        #data                = solve_bte(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
         radial_base[i,:,:]  = BEUtils.compute_radial_components(ev, spec_sp, data[0,:], maxwellian, VTH, 1)
         scale               = 1./( np.trapz(radial_base[i,0,:]*np.sqrt(ev),x=ev) )
         radial_base[i,:,:] *= scale

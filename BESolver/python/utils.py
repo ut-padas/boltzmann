@@ -774,7 +774,7 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g, mw
         MP_klm = np.array([((quad_grid[0]**3)) * cs_total * P_kr[i] * Y_lm[j] for i in range(num_p) for j in range(num_sph_harm)])
         MP_klm = np.dot(MP_klm,WVPhi_q)
         MP_klm = np.dot(MP_klm,glw)
-        MP_klm = np.dot(MP_klm,gmw) * (2 * vth**4 / (c_gamma**2))
+        MP_klm = np.dot(MP_klm,gmw) * (2 * vth**4 / (c_gamma**3))
         return MP_klm
     else:
         raise NotImplementedError

@@ -57,6 +57,8 @@ parser.add_argument("-Lz", "--Lz" , help="1d length of the torch in (m)", type=f
 parser.add_argument("-num_z", "--num_z" , help="number of points in z-direction", type=int, default=50)
 parser.add_argument("-v0_z0", "--v0_z0" , help="voltage at z=0 (v)", type=float, default=100.0)
 parser.add_argument("-rf_freq", "--rf_freq" , help="voltage oscillation freq (Hz)", type=float, default=13.56e6)
+parser.add_argument("-ne", "--ne" , help="initial electron density 1/m^3", type=float, default=1e0)
+parser.add_argument("-n0", "--n0" , help="initial neutral density 1/m^3", type=float, default=3.22e22)
 
 @nb.njit(parallel=True)
 def grad1_p_11(u, dx):
@@ -633,6 +635,10 @@ class GlowSim_1D():
         self._boltzmann_solver = Boltzmann_1D(self._grid_z, self._grid_vt)
         self._e_field_solver   = EField_1D(self._grid_z)
         self._fluids_solver    = Fluids_1D(self._grid_z)
+
+        collisions.AR_NEUTRAL_N = args.n0
+        collisions.MAXWELLIAN_N = args.ne
+        
         
     def init(self, t0, t1, args):
         self._t_begin = t0
@@ -683,8 +689,8 @@ class GlowSim_1D():
 
         self._fluids_solver._nn   = np.ones_like(grid_z) * collisions.AR_NEUTRAL_N
         self._fluids_solver._ne   = self._ne
-        self._fluids_solver._mu = 4.65e21 / collisions.AR_NEUTRAL_N
-        self._fluids_solver._D  = 2.07e20 / collisions.AR_NEUTRAL_N
+        self._fluids_solver._mu   = 4.65e21 / collisions.AR_NEUTRAL_N
+        self._fluids_solver._D    = 2.07e20 / collisions.AR_NEUTRAL_N
 
         all_reaction_rates        = self._boltzmann_solver.compute_reaction_rates(self._boltzmann_solver._reaction_op, self._fx_kvt)
         if "g2" in all_reaction_rates:
@@ -881,10 +887,119 @@ class GlowSim_1D():
             fig.savefig("%s_f0f1.png"%(fprefix))
             plt.close()
         
+    def plot_cycle_avg(self, e_potential, e_field, ne, ni, fx_kvt, z_loc, fprefix):
+
+        num_z_plots = len(z_loc)
+        grid_z  = self._grid_z
+        grid_vt = self._grid_vt
+        z_idx = ((z_loc - grid_z[0])/(grid_z[1]-grid_z[0])).astype(int)
+
+
+        rows  = 2 
+        cols  = 3
+
+        fig = plt.figure(figsize=(12, 8), dpi=300)
+
+        plt.subplot(rows, cols, 1)
+        plt.plot(grid_z, ni[:])
+        plt.xlabel("z (m)")
+        plt.ylabel("# density (1/m^3)")
+        plt.grid()
+        plt.title("ni")
+        
+        plt.subplot(rows, cols, 2)
+        plt.plot(grid_z, ne[:])
+        plt.xlabel("z (m)")
+        plt.ylabel("# density (1/m^3)")
+        plt.grid()
+        plt.title("ne")
         
 
+        plt.subplot(rows, cols, 3)
+        plt.plot(grid_z, e_field[:])
+        plt.xlabel("z (m)")
+        plt.ylabel("V/m")
+        plt.grid()
+        plt.title("E")
+        
+        c_rates = self._boltzmann_solver.compute_reaction_rates(self._boltzmann_solver._reaction_op, fx_kvt[:])
+        plt.subplot(rows, cols, 4)
+        for key, rr in c_rates.items():
+            color = next(plt.gca()._get_lines.prop_cycler)['color']
+            plt.semilogy(grid_z, rr, label="%s"%(key), color=color)
 
+        plt.legend()
+        plt.xlabel("z (m)")
+        plt.ylabel("rate coefficient m^3/s")
+        plt.grid()
 
+        temp_list=self._boltzmann_solver.compute_avg_energy(fx_kvt[:])
+        plt.subplot(rows, cols, 5)
+        plt.plot(grid_z, temp_list[:])
+        plt.xlabel("z (m)")
+        plt.ylabel("mean energy (eV)")
+        plt.grid()
+
+        plt.subplot(rows, cols, 6)
+        plt.plot(grid_z, e_potential[:])
+        plt.xlabel("z (m)")
+        plt.ylabel("Voltage(V)")
+        plt.grid()
+
+        plt.tight_layout()
+        fig.savefig("%s_qoi.png"%(fprefix))
+        plt.close()
+        
+        
+        if (num_z_plots>0):
+
+            rows  = max(num_z_plots//2,0)
+            cols  = 4
+
+            fig = plt.figure(figsize=(5 * cols, 4 * rows), dpi=300)
+
+            spec_sp   = self._boltzmann_solver._spec_sp
+            k_domain  = self._boltzmann_solver._v_space_domain
+            c_gamma   = np.sqrt(2 * collisions.ELECTRON_CHARGE_MASS_RATIO)
+            mw        = self._boltzmann_solver._maxwellian
+            vth       = self._boltzmann_solver._vth
+            ev_domain = ((k_domain[0] * vth /c_gamma)**2 , (k_domain[1] * vth /c_gamma)**2)
+            ev_pts    = np.linspace(ev_domain[0], 0.9 * ev_domain[1], (spec_sp._p+1)*2)
+
+            num_p  = spec_sp._p +1
+            num_sh = len(spec_sp._sph_harm_lm)
+            num_z  = len(grid_z)
+            num_vt = len(grid_vt)
+
+            p_vt_to_lm = self._boltzmann_solver._vt_to_lm
+
+            plt_offset = 1
+            for w in range(num_z_plots//2):
+                for ii_idx, ii in enumerate([2*w, 2*w +1]):
+                    if (ii < num_z_plots):
+                        fx = fx_kvt.reshape((num_z, num_p , num_vt))
+                        fx = np.dot(fx, p_vt_to_lm).reshape((num_z, num_p * num_sh))
+                        radial_comp = BEUtils.compute_radial_components(ev_pts, spec_sp, fx[z_idx[ii],:], mw, vth, 1)
+                            
+                        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                            plt.subplot(rows, cols, plt_offset + ii_idx * num_sh + lm_idx)
+                            if lm_idx ==0:
+                                plt.semilogy(ev_pts, np.abs(radial_comp[lm_idx, :]),'b-')
+                            else:
+                                plt.semilogy(ev_pts, np.abs(radial_comp[lm_idx, :]),'r-')
+
+                            plt.xlabel("energy (eV)")
+                            plt.ylabel("f_%d"%(lm[0]))
+                            plt.grid()
+                            plt.title("z=%.2E"%(grid_z[z_idx[ii]]))               
+                
+                plt_offset +=4
+                        
+
+            plt.tight_layout()
+            fig.savefig("%s_f0f1.png"%(fprefix))
+            plt.close()
+        
 
 if __name__== "__main__":
     args         = parser.parse_args()
@@ -896,43 +1011,50 @@ if __name__== "__main__":
     nsteps_to_plot = 4
     ts_freq        = int(args.T_END / args.T_DT / nsteps_to_plot)
 
-    e_poten = list()
-    e_field = list()
-    ni      = list()
-    ne      = list()
-    fx_kvt  = list()
-    ts      = list()
+    # e_poten = list()
+    # e_field = list()
+    # ni      = list()
+    # ne      = list()
+    # fx_kvt  = list()
+    # ts      = list()
+    # if glow_sim_1d._step_id % ts_freq ==0:
+    #     ts.append(glow_sim_1d._t_curr)
+    #     e_poten.append(glow_sim_1d._e_potential)
+    #     e_field.append(glow_sim_1d._e_field)
+    #     ni.append(glow_sim_1d._ni)
+    #     ne.append(glow_sim_1d._ne)
+    #     fx_kvt.append(glow_sim_1d._fx_kvt)
+
+    e_poten   = np.zeros_like(glow_sim_1d._e_potential)
+    e_field   = np.zeros_like(glow_sim_1d._e_field)
+    ni        = np.zeros_like(glow_sim_1d._ni)
+    ne        = np.zeros_like(glow_sim_1d._ne)
+    fx_kvt    = np.zeros_like(glow_sim_1d._fx_kvt)
     
     while glow_sim_1d._t_curr < args.T_END:
         if glow_sim_1d._step_id % 100 ==0:
-            np.set_printoptions(precision=2)
             print("glow sim t = %.8E (s)" %(glow_sim_1d._t_curr))
-            print("\t ne (min, max)\t", np.min(glow_sim_1d._ne), np.max(glow_sim_1d._ne))
-            print("\t ni (min, max)\t", np.min(glow_sim_1d._ni), np.max(glow_sim_1d._ni))
-            print("\t E  (min, max)\t", np.min(glow_sim_1d._e_field), np.max(glow_sim_1d._e_field))
-            np.set_printoptions(precision=16)
-
-
-        if glow_sim_1d._step_id % ts_freq ==0:
-            
-            ts.append(glow_sim_1d._t_curr)
-            e_poten.append(glow_sim_1d._e_potential)
-            e_field.append(glow_sim_1d._e_field)
-            ni.append(glow_sim_1d._ni)
-            ne.append(glow_sim_1d._ne)
-            fx_kvt.append(glow_sim_1d._fx_kvt)
-
+            print("\t ne (min, max)\t = (%.8E, %.8E)" %(np.min(glow_sim_1d._ne), np.max(glow_sim_1d._ne)) )
+            print("\t ni (min, max)\t = (%.8E, %.8E)" %(np.min(glow_sim_1d._ni), np.max(glow_sim_1d._ni)) )
+            print("\t E  (min, max)\t = (%.8E, %.8E)" %(np.min(glow_sim_1d._e_field), np.max(glow_sim_1d._e_field)) )
+        
+        e_poten += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_potential
+        e_field += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_field
+        ne      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ne
+        ni      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ni
+        fx_kvt  += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._fx_kvt
+        
         glow_sim_1d.integrate(args.T_DT)
 
-    e_poten = np.array(e_poten)
-    e_field = np.array(e_field)
-    ni      = np.array(ni)
-    ne      = np.array(ne)
-    fx_kvt  = np.array(fx_kvt)
-    ts      = np.array(ts)
+        e_poten += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_potential
+        e_field += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_field
+        ne      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ne
+        ni      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ni
+        fx_kvt  += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._fx_kvt
+
     
     z_pts   = np.linspace(glow_sim_1d._grid_z[1], glow_sim_1d._grid_z[-2], 6)
 
     fprefix = "glow_discharge_1d3v_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_ev"+ "%2E"%(args.electron_volt) + "_bscale" + str(args.basis_scale) +"_dt"+"%.4E"%(args.T_DT) + "_T"+ "%.2E"%(args.T_END)
-    glow_sim_1d.plot(e_poten, e_field, ne, ni, fx_kvt, z_pts, ts, fprefix)
+    glow_sim_1d.plot_cycle_avg(e_poten, e_field, ne, ni, fx_kvt, z_pts, fprefix)
 

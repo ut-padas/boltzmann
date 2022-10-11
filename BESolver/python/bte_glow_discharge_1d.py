@@ -20,6 +20,9 @@ from time import perf_counter as time, sleep
 # set the threading layer before any parallel target compilation
 nb.config.THREADING_LAYER = 'threadsafe'
 
+import cupy as cp
+import cupyx.scipy.sparse as cp_sparse
+
 
 class CollissionMode(enum.Enum):
     ELASTIC_ONLY=0
@@ -76,6 +79,22 @@ def grad1_p_11(u, dx):
     Du[0]  = (u[1] - u[0]) * idx
     return Du
 
+@nb.njit(parallel=True)
+def grad1_m_11(u, dx):
+    """
+    1st order fd with upwinding 
+    for modes traveling right to left
+    """
+    idx = 1.0 / dx
+    Du=np.zeros_like(u)
+    
+    #Du[i] = (u[i+1]-u[i])/dx
+    Du[:-1] = (u[1:] - u[0:-1]) * idx
+    
+    #shifted only for the bdy
+    Du[-1]  = (u[-1] - u[-2]) * idx
+    return Du
+
 def grad1_p_11_mat(grid_z):
     n    = len(grid_z)
     dz   = grid_z[1]-grid_z[0]
@@ -99,22 +118,6 @@ def grad1_p_11_mat(grid_z):
     data = np.append(data, np.array([1,-1]) * idz)
 
     return scipy.sparse.csr_matrix((data, (rows, cols)), shape=(n,n))
-
-@nb.njit(parallel=True)
-def grad1_m_11(u, dx):
-    """
-    1st order fd with upwinding 
-    for modes traveling right to left
-    """
-    idx = 1.0 / dx
-    Du=np.zeros_like(u)
-    
-    #Du[i] = (u[i+1]-u[i])/dx
-    Du[:-1] = (u[1:] - u[0:-1]) * idx
-    
-    #shifted only for the bdy
-    Du[-1]  = (u[-1] - u[-2]) * idx
-    return Du
 
 def grad1_m_11_mat(grid_z):
 
@@ -187,6 +190,8 @@ class EField_1D():
         self._grid_z = grid_z
         self._epsilon_0 = 55.26349406e6 # e^2 ev^-1 m^-1
 
+        return
+
     def fd1_laplace_1d_mat(self):
         """
         Assembles the laplace operator with
@@ -237,10 +242,31 @@ class EField_1D():
         #print(Lmat.toarray() / idx2)
         return Lmat
 
+    def host_to_device(self):
+        self._inverse_laplacian = cp_sparse.csr_matrix(self._inverse_laplacian)
+        self._ws_v0 = cp.asarray(self._ws_v0)
+
+        self._xp_module  = cp
+
+        return
+
+    def device_to_host(self):
+        self._inverse_laplacian = self._inverse_laplacian.get() #scipy.sparse.csr_matrix()
+        self._ws_v0 = cp.asnumpy(self._ws_v0)
+
+        self._xp_module  = np
+
+        return
+
     def setup(self,args):
         self._inverse_laplacian = scipy.sparse.csr_matrix(BEUtils.choloskey_inv(-1.0 * self.fd1_laplace_1d_mat().toarray()))
+        self._ws_v0     = np.zeros(len(self._grid_z))
+        self._xp_module = np
+
+        return
         
     def poission_solve(self, ni, ne, freq_f, t_c, v0):
+        xp    = self._xp_module
         f_rhs = (ni-ne) * (1.0 /self._epsilon_0)
 
         grid_z = self._grid_z
@@ -248,7 +274,7 @@ class EField_1D():
         dx  = grid_z[1] - grid_z[0]
         idx2 = 1/dx**2
         
-        f_rhs[0]  = -idx2 * v0 * np.sin(2 * np.pi * freq_f * t_c)
+        f_rhs[0]  = -idx2 * v0 * xp.sin(2 * xp.pi * freq_f * t_c)
         f_rhs[-1] = 0.0
 
         u     = self._inverse_laplacian.dot(f_rhs)
@@ -265,7 +291,7 @@ class EField_1D():
         n      = len(grid_z)
         idz    = 1.0 / (grid_z[1]-grid_z[0])
 
-        ef = np.zeros(len(grid_z))
+        ef     = self._ws_v0
         
         ef[1:n-1] = 0.5 * (u[2:n] -u[0:n-2]) * idz
         ef[0]     = (u[1]-u[0])   * idz
@@ -280,23 +306,49 @@ class Fluids_1D():
         self._idz    = 1.0/(self._grid_z[1] - self._grid_z[0])
 
         num_z    = len(self._grid_z)
-        self._ne = np.zeros(num_z)
-        self._nn = np.zeros(num_z)
-
-        self._reaction_k = np.zeros(num_z)
         self._mu         = 0.0
         self._D          = 0.0
+
+        self._ne         = np.zeros(num_z)
+        self._nn         = np.zeros(num_z)
+        self._reaction_k = np.zeros(num_z)
         self._v_field    = np.zeros(num_z)
         self._rhs_v0     = np.zeros(num_z)
-
         self._rhs_v1     = np.zeros(num_z)
         self._rhs_v2     = np.zeros(num_z)
 
+        return
 
+    def host_to_device(self):
+        self._nn         = cp.asarray(self._nn)
+        self._ne         = cp.asarray(self._ne)
+        self._reaction_k = cp.asarray(self._reaction_k)
+        self._v_field    = cp.asarray(self._v_field)
+        self._rhs_v0     = cp.asarray(self._rhs_v0)
+        self._rhs_v1     = cp.asarray(self._rhs_v1)
+        self._rhs_v2     = cp.asarray(self._rhs_v2)
         
+        self._xp_module  = cp
+
+        return
+
+    def device_to_host(self):
+        self._nn         = cp.asnumpy(self._nn)
+        self._ne         = cp.asnumpy(self._ne)
+        self._reaction_k = cp.asnumpy(self._reaction_k)
+        self._v_field    = cp.asnumpy(self._v_field)
+        self._rhs_v0     = cp.asnumpy(self._rhs_v0)
+        self._rhs_v1     = cp.asnumpy(self._rhs_v1)
+        self._rhs_v2     = cp.asnumpy(self._rhs_v2)
+        
+        self._xp_module  = np
+        return
+
     def setup(self, args):
-        self._t_curr = 0.0
-        pass
+        self._t_curr     = 0.0
+        self._xp_module  = np
+
+        return
 
     def apply_bc(self, t, y):
         D      = self._D
@@ -337,8 +389,6 @@ class Fluids_1D():
 
         y_rhs[1:n-1] = -idz * (j_p[1:n-1]-j_m[1:n-1]) + r_rate[1:n-1] * ne[1:n-1] * nn[1:n-1]
         
-        # y_rhs[1:n-1] = -idz * ( 0.5 * idz * mu * (v[1:n-1] -v[2:n]) * (y[2:n] + y[1:n-1])  -  0.5 * idz * mu * (v[0:n-2] - v[1:n-1]) * (y[1:n-1] + y[0:n-2]) ) + D * idz**2 * (y[2:n] -2 * y[1:n-1] + y[0:n-2]) + r_rate[1:n-1] * ne[1:n-1] * nn[1:n-1]
-        
         return y_rhs
     
     def integrate(self, u, dt):
@@ -348,18 +398,20 @@ class Fluids_1D():
         return ut
         
 class Boltzmann_1D():
+
     def __init__(self,grid_z, grid_vt) -> None:
+
         self._grid_z  = grid_z
         self._grid_vt = grid_vt
         self._E_field = 0.0
+
+        return
 
     def setup(self, args):
         """
         assembles the velocity space operators
         i.e., v-space advection and v-space collision operator
         """
-        self._t_curr = 0.0
-
         vth                            = collisions.electron_thermal_velocity(args.electron_volt*args.basis_scale * collisions.TEMP_K_1EV)
         maxwellian                     = BEUtils.get_maxwellian_3d(vth,collisions.MAXWELLIAN_N)
         c_gamma                        = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
@@ -501,10 +553,71 @@ class Boltzmann_1D():
         self._idx_p_upwind =  np.array([m + np.array(range(num_p)) * len(self._grid_vt) for m in np.where(self._grid_vt <= 0.5 * np.pi)[0]]).reshape(-1) 
         self._idx_m_upwind =  np.array([m + np.array(range(num_p)) * len(self._grid_vt) for m in np.where(self._grid_vt >  0.5 * np.pi)[0]]).reshape(-1) 
 
-        self._cos_vt  = np.array([np.cos(self._grid_vt) for m in range(num_p)]).reshape(-1)
-        self._Dzy_kvt = np.zeros((len(self._grid_z), num_p * (len(self._grid_vt))))
+        self._cos_vt   = np.array([np.cos(self._grid_vt) for m in range(num_p)]).reshape(-1)
+        self._Dzy_kvt  = np.zeros((len(self._grid_z), num_p * (len(self._grid_vt))))
+
+        self._vt_bdy_p = np.where(self._grid_vt <= 0.5 * np.pi)[0]
+        self._vt_bdy_m = np.where(self._grid_vt >  0.5 * np.pi)[0]
+
+        self._t_curr        = 0.0
+        self._xp_module     = np
+
+        return
+
+    def host_to_device(self):
+        self._Cmat            = cp.asarray(self._Cmat)
+        self._Emat            = cp.asarray(self._Emat)
+        self._lm_to_vt        = cp.asarray(self._lm_to_vt)
+        self._vt_to_lm        = cp.asarray(self._vt_to_lm)
+        self._Dx_p            = cp_sparse.csr_matrix(self._Dx_p) #cp.asarray(self._Dx_p)
+        self._Dx_m            = cp_sparse.csr_matrix(self._Dx_m) #cp.asarray(self._Dx_m)
+        self._mmat            = cp.asarray(self._mmat)
+        self._inv_mmat        = cp.asarray(self._inv_mmat)
+        self._mmat_radial     = cp.asarray(self._mmat_radial)
+        self._inv_mmat_radial = cp.asarray(self._inv_mmat_radial)
+        self._Wpk_mat         = cp.asarray(self._Wpk_mat)
+        self._cos_vt          = cp.asarray(self._cos_vt)
+        self._Dzy_kvt         = cp.asarray(self._Dzy_kvt)
+        self._mass_op         = cp.asarray(self._mass_op)
+        self._temp_op         = cp.asarray(self._temp_op)
+        self._vt_bdy_p        = cp.asarray(self._vt_bdy_p)
+        self._vt_bdy_m        = cp.asarray(self._vt_bdy_m)
+
+        for r,rr_op in self._reaction_op.items():
+            self._reaction_op[r] = cp.asarray(rr_op)
+
+        self._xp_module       = cp
+
+        return
+
+    def device_to_host(self):
+        self._xp_module       = np
+
+        self._Cmat            = cp.asnumpy(self._Cmat)
+        self._Emat            = cp.asnumpy(self._Emat)
+        self._lm_to_vt        = cp.asnumpy(self._lm_to_vt)
+        self._vt_to_lm        = cp.asnumpy(self._vt_to_lm)
+        self._Dx_p            = self._Dx_p.get()
+        self._Dx_m            = self._Dx_m.get()
+        self._mmat            = cp.asnumpy(self._mmat)
+        self._inv_mmat        = cp.asnumpy(self._inv_mmat)
+        self._mmat_radial     = cp.asnumpy(self._mmat_radial)
+        self._inv_mmat_radial = cp.asnumpy(self._inv_mmat_radial)
+        self._Wpk_mat         = cp.asnumpy(self._Wpk_mat)
+        self._cos_vt          = cp.asnumpy(self._cos_vt)
+        self._Dzy_kvt         = cp.asnumpy(self._Dzy_kvt)
+        self._mass_op         = cp.asnumpy(self._mass_op)
+        self._temp_op         = cp.asnumpy(self._temp_op)
+        self._vt_bdy_p        = cp.asnumpy(self._vt_bdy_p)
+        self._vt_bdy_m        = cp.asnumpy(self._vt_bdy_m)
+
+        for r,rr_op in self._reaction_op.items():
+            self._reaction_op[r] = cp.asnumpy(rr_op)
         
+        return
+
     def rhs(self, t, y):
+        xp      = self._xp_module
         spec_sp = self._spec_sp
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
@@ -513,20 +626,15 @@ class Boltzmann_1D():
         num_z   = len(self._grid_z)
 
         yy   = y.reshape((num_z, num_p, num_vt))
-        yy  = np.dot(yy,self._vt_to_lm).reshape((num_z, num_p*num_sh))
+        yy   = xp.dot(yy,self._vt_to_lm).reshape((num_z, num_p*num_sh))
 
-        CpE_klm    = np.matmul(self._Cmat, np.transpose(yy))
-        CpE_klm   += np.matmul(self._Emat, np.transpose(yy)) * (self._E_field * collisions.ELECTRON_CHARGE_MASS_RATIO/self._vth)
-        CpE_klm    = np.transpose(CpE_klm)
+        CpE_klm    = xp.matmul(self._Cmat, xp.transpose(yy))
+        CpE_klm   += xp.matmul(self._Emat, xp.transpose(yy)) * (self._E_field * collisions.ELECTRON_CHARGE_MASS_RATIO/self._vth)
+        CpE_klm    = xp.transpose(CpE_klm)
 
-        # CpE_klm   = np.dot(y,self._vt_to_lm).reshape((num_z, num_p*num_sh))
-        # for z_id in range(num_z):
-        #     FOp              = self._Cmat + self._Emat * (self._E_field[z_id] * collisions.ELECTRON_CHARGE_MASS_RATIO/self._vth)
-        #     CpE_klm[z_id,:]  = np.matmul(FOp, CpE_klm[z_id , :])
-
-        CpE_kvt = np.dot(CpE_klm.reshape(num_z, num_p , num_sh), self._lm_to_vt).reshape((num_z, num_p * num_vt))
-        CpE_kvt = np.transpose(CpE_kvt).reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
-        CpE_kvt = np.matmul(self._inv_mmat_radial, CpE_kvt)
+        CpE_kvt = xp.dot(CpE_klm.reshape(num_z, num_p , num_sh), self._lm_to_vt).reshape((num_z, num_p * num_vt))
+        CpE_kvt = xp.transpose(CpE_kvt).reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
+        CpE_kvt = xp.matmul(self._inv_mmat_radial, CpE_kvt)
         CpE_kvt = CpE_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
 
         Dzy_kvt = self._Dzy_kvt
@@ -535,26 +643,15 @@ class Boltzmann_1D():
         Dzy_kvt[:,self._idx_p_upwind] = self._Dx_p.dot(yy[:,self._idx_p_upwind]) * self._cos_vt[self._idx_p_upwind]
         Dzy_kvt[:,self._idx_m_upwind] = self._Dx_m.dot(yy[:,self._idx_m_upwind]) * self._cos_vt[self._idx_m_upwind]
 
-        # Dzy_kvt = np.zeros((num_z, num_p, num_vt))
-        # yy      = y.reshape((num_z, num_p, num_vt))
-        # dz      = (self._grid_z[1]-self._grid_z[0])
-        # for vt_idx, vt in enumerate(self._grid_vt):
-        #     if vt <= np.pi/2:
-        #         for k in range(num_p):
-        #             Dzy_kvt[:, k, vt_idx] = grad1_p_11(yy[:,k,vt_idx],dz) * np.cos(vt)
-        #     else:
-        #         for k in range(num_p):
-        #             Dzy_kvt[:, k, vt_idx] = grad1_m_11(yy[:,k,vt_idx],dz) * np.cos(vt)
-        # Dzy_kvt = Dzy_kvt.reshape((num_z, num_p * num_vt))
-
         Dzy_kvt = Dzy_kvt.transpose().reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
-        Dzy_kvt = np.matmul(self._inv_mmat_radial,np.matmul(self._Wpk_mat, Dzy_kvt))
+        Dzy_kvt = xp.matmul(self._inv_mmat_radial,xp.matmul(self._Wpk_mat, Dzy_kvt))
         Dzy_kvt = Dzy_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
 
         y_rhs   = (CpE_kvt - Dzy_kvt).reshape(num_z * num_p * num_vt) 
         return y_rhs
 
     def apply_bc(self, t, y):
+        xp      = self._xp_module
         spec_sp = self._spec_sp
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
@@ -564,8 +661,8 @@ class Boltzmann_1D():
 
         y = y.reshape((num_z, num_p, num_vt))
 
-        y[0 , :, np.where(self._grid_vt<=np.pi/2)] = 0.0
-        y[-1, :, np.where(self._grid_vt>np.pi/2)]  = 0.0
+        y[0 , :, self._vt_bdy_p]  = 0.0
+        y[-1, :, self._vt_bdy_m]  = 0.0
 
         return y.reshape(num_z * num_p * num_vt)
 
@@ -576,18 +673,20 @@ class Boltzmann_1D():
         return u1
 
     def compute_ne(self, f_kvt):
+        xp      = self._xp_module
         spec_sp = self._spec_sp
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
 
         num_vt  = len(self._grid_vt)
         num_z   = len(self._grid_z)
-        yy      = np.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
-        ne      = np.dot(self._mass_op, yy.transpose()).reshape(num_z) * self._vth**3 * self._maxwellian(0)
+        yy      = xp.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
+        ne      = xp.dot(self._mass_op, yy.transpose()).reshape(num_z) * self._vth**3 * self._maxwellian(0)
 
         return ne
 
     def compute_avg_energy(self, f_kvt):
+        xp      = self._xp_module
         spec_sp = self._spec_sp
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
@@ -596,15 +695,13 @@ class Boltzmann_1D():
 
         num_vt  = len(self._grid_vt)
         num_z   = len(self._grid_z)
-        yy      = np.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
-        Te      = np.dot(self._temp_op, yy.transpose()).reshape(num_z) * self._vth**5 * self._maxwellian(0) * 0.5 * collisions.MASS_ELECTRON * (2/(3*scipy.constants.Boltzmann)) / self.compute_ne(f_kvt) / collisions.TEMP_K_1EV
+        yy      = xp.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
+        Te      = xp.dot(self._temp_op, yy.transpose()).reshape(num_z) * self._vth**5 * self._maxwellian(0) * 0.5 * collisions.MASS_ELECTRON * (2/(3*scipy.constants.Boltzmann)) / self.compute_ne(f_kvt) / collisions.TEMP_K_1EV
 
         return Te
-        
-
-
     
     def compute_reaction_rates(self, rates_op_dict, f_kvt):
+        xp      = self._xp_module
         spec_sp = self._spec_sp
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
@@ -612,8 +709,8 @@ class Boltzmann_1D():
         num_vt  = len(self._grid_vt)
         num_z   = len(self._grid_z)
         
-        yy      = np.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
-        m0      = np.dot(self._mass_op, yy.transpose()).reshape(num_z) * self._vth**3 * self._maxwellian(0)
+        yy      = xp.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
+        m0      = xp.dot(self._mass_op, yy.transpose()).reshape(num_z) * self._vth**3 * self._maxwellian(0)
 
         ki  =  dict()
         for (reaction, rates_op) in rates_op_dict.items():
@@ -638,7 +735,9 @@ class GlowSim_1D():
 
         collisions.AR_NEUTRAL_N = args.n0
         collisions.MAXWELLIAN_N = args.ne
-        
+
+        return
+
         
     def init(self, t0, t1, args):
         self._t_begin = t0
@@ -703,6 +802,18 @@ class GlowSim_1D():
         
         self._e_field     = np.ones_like(self._ni) * args.E_field
         self._e_potential = np.ones_like(self._ni) * args.E_field
+
+        if(USE_GPU):
+            self._e_field_solver.host_to_device()
+            self._fluids_solver.host_to_device()
+            self._boltzmann_solver.host_to_device()
+
+            self._ne          = cp.asarray(self._ne)
+            self._ni          = cp.asarray(self._ni)
+            self._fx_kvt      = cp.asarray(self._fx_kvt)
+            self._e_field     = cp.asarray(self._e_field)
+            self._e_potential = cp.asarray(self._e_potential)
+
 
         return
 
@@ -1005,6 +1116,20 @@ if __name__== "__main__":
     args         = parser.parse_args()
     print("solver arguments ",args)
 
+    USE_GPU=False
+    
+    try:
+        num_gpus = cp.cuda.runtime.getDeviceCount()
+    except Exception as e:
+        print(e)
+        num_gpus=0
+    
+    if num_gpus > 0:
+        USE_GPU=True
+
+    if(USE_GPU):
+        print("Cupy number of devices = %d" %(num_gpus))
+
     glow_sim_1d = GlowSim_1D(args)
     glow_sim_1d.init(0,args.T_END, args)
 
@@ -1025,18 +1150,19 @@ if __name__== "__main__":
     #     ne.append(glow_sim_1d._ne)
     #     fx_kvt.append(glow_sim_1d._fx_kvt)
 
-    e_poten   = np.zeros_like(glow_sim_1d._e_potential)
-    e_field   = np.zeros_like(glow_sim_1d._e_field)
-    ni        = np.zeros_like(glow_sim_1d._ni)
-    ne        = np.zeros_like(glow_sim_1d._ne)
-    fx_kvt    = np.zeros_like(glow_sim_1d._fx_kvt)
+    xp        = cp.get_array_module(glow_sim_1d._ni)
+    e_poten   = xp.zeros_like(glow_sim_1d._e_potential)
+    e_field   = xp.zeros_like(glow_sim_1d._e_field)
+    ni        = xp.zeros_like(glow_sim_1d._ni)
+    ne        = xp.zeros_like(glow_sim_1d._ne)
+    fx_kvt    = xp.zeros_like(glow_sim_1d._fx_kvt)
     
     while glow_sim_1d._t_curr < args.T_END:
-        if glow_sim_1d._step_id % 100 ==0:
+        if glow_sim_1d._step_id % 1000 ==0:
             print("glow sim t = %.8E (s)" %(glow_sim_1d._t_curr))
-            print("\t ne (min, max)\t = (%.8E, %.8E)" %(np.min(glow_sim_1d._ne), np.max(glow_sim_1d._ne)) )
-            print("\t ni (min, max)\t = (%.8E, %.8E)" %(np.min(glow_sim_1d._ni), np.max(glow_sim_1d._ni)) )
-            print("\t E  (min, max)\t = (%.8E, %.8E)" %(np.min(glow_sim_1d._e_field), np.max(glow_sim_1d._e_field)) )
+            print("\t ne (min, max)\t = (%.8E, %.8E)" %(xp.min(glow_sim_1d._ne), xp.max(glow_sim_1d._ne)) )
+            print("\t ni (min, max)\t = (%.8E, %.8E)" %(xp.min(glow_sim_1d._ni), xp.max(glow_sim_1d._ni)) )
+            print("\t E  (min, max)\t = (%.8E, %.8E)" %(xp.min(glow_sim_1d._e_field), xp.max(glow_sim_1d._e_field)) )
         
         e_poten += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_potential
         e_field += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_field
@@ -1052,9 +1178,18 @@ if __name__== "__main__":
         ni      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ni
         fx_kvt  += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._fx_kvt
 
-    
-    z_pts   = np.linspace(glow_sim_1d._grid_z[1], glow_sim_1d._grid_z[-2], 6)
+    if xp == cp:
+        e_poten = cp.asnumpy(e_poten)
+        e_field = cp.asnumpy(e_field)
+        ne      = cp.asnumpy(ne)
+        ni      = cp.asnumpy(ni)
+        fx_kvt  = cp.asnumpy(fx_kvt)
 
+        glow_sim_1d._e_field_solver.device_to_host()
+        glow_sim_1d._fluids_solver.device_to_host()
+        glow_sim_1d._boltzmann_solver.device_to_host()
+
+    z_pts   = np.linspace(glow_sim_1d._grid_z[1], glow_sim_1d._grid_z[-2], 6)
     fprefix = "glow_discharge_1d3v_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_ev"+ "%2E"%(args.electron_volt) + "_bscale" + str(args.basis_scale) +"_dt"+"%.4E"%(args.T_DT) + "_T"+ "%.2E"%(args.T_END)
     glow_sim_1d.plot_cycle_avg(e_poten, e_field, ne, ni, fx_kvt, z_pts, fprefix)
 

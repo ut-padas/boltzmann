@@ -530,8 +530,47 @@ J(\hat{f_0}) &= C_0 + W^{\hat{f_0}}_{ij}  - 2(u^T C_0 \hat{f_0}) M_{ij}
 \end{align*}
 
 
+\subsection{DG attempt in velocity space}
+For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
+\begin{align*}
+	&\partial_t M^{p}_{k} f_{kqs} -EA^{qs}_{lm}\of{[f_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})f_{klm}} -E B^{qs}_{lm} S^{p}_{k} f_{klm} = C^{pqs}_{klm} f_{klm}  \\
+	&\partial_t M^{p}_{k} f_{kqs} = -E \of{\of{2 A^{qs}_{lm} -B^{qs}_{lm}} S^p_{k} + A^{qs}_{lm} D^{p}_{k}}f_{klm} + C^{pqs}_{klm} f_{klm} + EA^{qs}_{lm}[f_{lm}^*(v) v^2 \boldsymbol{\psi}\of{v}]_{D_l}^{D^r}
+\end{align*} where, 
+\begin{align*}
+	M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+	D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+	S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
+	\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
+\end{align*} 
+The flux term (up-winding) determined by $A^{qs}_{lm}$ sign of the eigenvalues. 
 
+Diagonalize then discretize in the radial coordinate. 
+Let $A^{qs}_{lm}=Q\Lambda^{qs}_{lm} Q^T$, let $Q^T f_{km}= y_{lm}$
+\begin{align*}
+	\partial_t y_{qs}
+	-E\Lambda^{qs}_{lm} \partial_v y_{lm} 
+	-E Q^T B^{qs}_{lm} \frac{1}{v} Q y_{lm} = 
+	Q^T C^{qs}_{lm} Q y_{lm}
+\end{align*} 
+For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $y_{lm}(v)=\sum_{k} y_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ we can write, 
+\begin{align*}
+	&\partial_t M^{p}_{k} y_{kqs} -E\Lambda^{qs}_{lm}\of{[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})y_{klm}} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm}  \\
+	&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
+	&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
+\end{align*}
 
+\subsection{Using piecewise polynomials}
+$P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,1]$. For $\of{\frac{v}{v_{th}}} \in [a,b]$, we can write 
+\begin{align*}
+	x=\of{\frac{v}{v_{th}}} &= \of{\frac{b-a}{2}}t + \of{\frac{a+b}{2}} \\
+	\phi_k\of{\frac{v}{v_{th}}} &= \exp\of{-\of{\frac{v}{v_{th}}}^2} P_k(t) \\
+	\psi_k\of{\frac{v}{v_{th}}} &= P_k(t) \\
+	M^p_k = &\myint_{av_{th}}^{b v_{th}} v^2 \psi_p\of{\frac{v}{v_{th}}} \phi_k\of{\frac{v}{v_{th}}} dv = v_{th}^3  \myint_{a}^{b} x^2 \psi_p\of{x} \phi_k\of{x}dx\\
+	&=v_{th}^3 \myint_{-1}^{1} x^2 \exp\of{-x^2}  P_k(t) P_p(t) \of{\frac{b-a}{2}} dt
+\end{align*} Where full mass matrix (i.e., with spherical basis)
+\begin{align*}
+	M^{pqs}_{klm} = M^{p}_k \delta^{q}_{l} \delta^{s}_{m}
+\end{align*}
 
 
 %were $C^{qs}_{lm}$ denotes the projection of the collision operator to $Y_{qs}$, which can be written as, 
@@ -552,56 +591,75 @@ J(\hat{f_0}) &= C_0 + W^{\hat{f_0}}_{ij}  - 2(u^T C_0 \hat{f_0}) M_{ij}
 %C^{qs}_{lm}f_{lm}
 %\end{align*}
 %\textbf{Note}: Due to the orthogonality structure in the radial advection coordinate diagonals will always be zero, with a banded matrix with width of equal to 1. 
-
-
-
-
-
-
-
-
 \clearpage
+\section{1d-space Boltzmann equation}
+\label{sec:1d_bte}
 
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
+We can write the Boltzmann equation in full 7d case as below. 
 \begin{align*}
-&\partial_t M^{p}_{k} f_{kqs} -EA^{qs}_{lm}\of{[f_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})f_{klm}} -E B^{qs}_{lm} S^{p}_{k} f_{klm} = C^{pqs}_{klm} f_{klm}  \\
-&\partial_t M^{p}_{k} f_{kqs} = -E \of{\of{2 A^{qs}_{lm} -B^{qs}_{lm}} S^p_{k} + A^{qs}_{lm} D^{p}_{k}}f_{klm} + C^{pqs}_{klm} f_{klm} + EA^{qs}_{lm}[f_{lm}^*(v) v^2 \boldsymbol{\psi}\of{v}]_{D_l}^{D^r}
-\end{align*} where, 
+\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f -\frac{q}{m} \vect{E} \cdot \nabla_{\vect{v}} f = C[f]
+\end{align*}
+Based on the above we derive the governing equations for the 1d glow-discharge problem. We apply time varying voltage in the $\vect{\hat{z}}$ direction which result in a time varying electric filed. Let $\Omega_z=(0, L)$ , $\Omega_v= \mathcal{R}^3$ be the space and velocity domains. For $(z, v) \in \Omega_{z} \times \Omega_v$ where $f (v, z, t) : \Omega_{v} \times \Omega_{z} × [0,T] \rightarrow \mathcal{R}^{+}$ be the electron distribution function. The governing equations for the scalar potential V corresponding to the electric field can be written as,
 \begin{align*}
-M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
+	\Delta V = -\frac{e}{\epsilon_0} (n_i-n_e) \text{ where } n_e(z,t) = \myint_{\vect{v}} f(\vect{v}, z, t) \diff{\vect{v}} \\
+	V(0,t) = V_0 \sin(2\pi ft) \text{ , } V(L,t) = 0 \text{ and } \vect{E} = E \vect{\hat{z}} = -\of{\partial_z V} \vect{\hat{z}}
 \end{align*} 
-The flux term (up-winding) determined by $A^{qs}_{lm}$ sign of the eigenvalues. 
 
-Diagonalize then discretize in the radial coordinate. 
-Let $A^{qs}_{lm}=Q\Lambda^{qs}_{lm} Q^T$, let $Q^T f_{km}= y_{lm}$
+\par The ionized heavy densities are governed by the drift-diffusion equation below.
 \begin{align*}
-\partial_t y_{qs}
--E\Lambda^{qs}_{lm} \partial_v y_{lm} 
--E Q^T B^{qs}_{lm} \frac{1}{v} Q y_{lm} = 
-Q^T C^{qs}_{lm} Q y_{lm}
-\end{align*} 
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $y_{lm}(v)=\sum_{k} y_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ we can write, 
+	&\partial_t n_i + \partial_z J_i = k_i n_0 n_e \text{ where } J_i\of{z, t} = \mu_i n_i E\of{z,t} -D_i \partial_z n_i\\
+	&J_i(z,t)=\max\of{\mu_i n_i \vect{E}\cdot \vect{\hat{n}},0} \text{ for } z =0 \text{ and } z=L
+\end{align*} With finite volume discretization we can write, 
+\begin{align}
+	\partial_t n_i + \frac{1}{\Delta z_m} \of{J\of{z_{m+1/2},t} - J\of{z_{m-1/2},t}} = \frac{1}{\Delta z_m}  \myint_{z_{m-1/2}}^{z_{m+1/2}} k_i n_0 n_e dz
+\end{align} We currently use central linear flux reconstruction method where flux function at the boundary computed as below. 
 \begin{align*}
-&\partial_t M^{p}_{k} y_{kqs} -E\Lambda^{qs}_{lm}\of{[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})y_{klm}} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm}  \\
-&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
-&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
+&J\of{z_{m+1/2}} = \mu_i \frac{\of{n_{i,m+1} + n_{i,m}}}{2} \frac{\of{V_m-V_{m+1}}}{\Delta z_m} - D_i \frac{\of{n_{i, m+1} -n_{i, m}}}{\Delta z_m} \\
+&J\of{z_{m-1/2}} = \mu_i \frac{\of{n_{i,m} + n_{i,m-1}}}{2} \frac{\of{V_{m-1}-V_{m}}}{\Delta z_m} - D_i \frac{\of{n_{i, m} -n_{i, m-1}}}{\Delta z_m} \\
+&\frac{1}{\Delta z_m}  \myint_{z_{m-1/2}}^{z_{m+1/2}}  k_i n_0 n_e dz \approx k_{i,m} n_{0,m} n_{e,m} 
 \end{align*}
 
-\subsection{Using piecewise polynomials}
-$P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,1]$. For $\of{\frac{v}{v_{th}}} \in [a,b]$, we can write 
+The electron densities are governed by the Boltzmann equation below. 
 \begin{align*}
-x=\of{\frac{v}{v_{th}}} &= \of{\frac{b-a}{2}}t + \of{\frac{a+b}{2}} \\
-\phi_k\of{\frac{v}{v_{th}}} &= \exp\of{-\of{\frac{v}{v_{th}}}^2} P_k(t) \\
-\psi_k\of{\frac{v}{v_{th}}} &= P_k(t) \\
-M^p_k = &\myint_{av_{th}}^{b v_{th}} v^2 \psi_p\of{\frac{v}{v_{th}}} \phi_k\of{\frac{v}{v_{th}}} dv = v_{th}^3  \myint_{a}^{b} x^2 \psi_p\of{x} \phi_k\of{x}dx\\
-&=v_{th}^3 \myint_{-1}^{1} x^2 \exp\of{-x^2}  P_k(t) P_p(t) \of{\frac{b-a}{2}} dt
-\end{align*} Where full mass matrix (i.e., with spherical basis)
-\begin{align*}
-M^{pqs}_{klm} = M^{p}_k \delta^{q}_{l} \delta^{s}_{m}
+&	\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \text{ for } (z,\vect{v}) \in (0,L) \times[0,v_{max}]^3 \\
+& f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0
 \end{align*}
+We need to specify the boundary conditions depending on the sign of $v \cos\vtheta$.
+
+\subsection{Discretizing in polar angle ($\vtheta$)}
+In order to resolve the boundary conditions, we discretize f , radially with B-splines with basis $\{S_k\of{\frac{v}{\vth}}\}_{k=0}^{N_r}$ regular grid discretization with collocation method in $\vtheta$ and $z$ directions. 
+
+Let $\{\vtheta\}_{j=0}^{N_\vtheta}$ be the points in the $\vtheta$ direction, for each $\vtheta_j$ we use the B-spline expansion. 
+\begin{align*}
+	&f(v, \vtheta_j , z, t) = f_{\vtheta_j} (v, z, t) = \sum_k f_{\vtheta_j, k} \of{z,t} S_k\of{\frac{v}{\vth}} \\
+	& \partial_z f = \sum_{k} S_k\of{\frac{v}{\vth}} \partial_z f_{\vtheta_j, k} \\
+	& v\cos\of{\vtheta_j} \partial_z  = v\cos\of{\vtheta_j} \sum_{k} S_k\of{\frac{v}{\vth}} \partial_z f_{\vtheta_j, k}
+\end{align*} Projecting the above onto radial direction test basis functions $T_p\of{\frac{v}{\vth}}$, we can write, 
+\begin{align*}
+&\myint_v T_p \of{\frac{v}{\vth}} v^3 \cos\of{\vtheta_j} \partial_z f dv = \myint_v T_p \of{\frac{v}{\vth}} v\cos\of{\vtheta_j} \sum_{k} S_k\of{\frac{v}{\vth}} \partial_z f_{\vtheta_j, k} dv \\
+&=\cos\of{\vtheta_j} \sum_k \myint_v v^3 T_p\of{\frac{v}{\vth}} S_k\of{\frac{v}{\vth}} dv \partial_z f_{\vtheta_j,k} = \cos\of{\vtheta_j} W^{p}_{k} D_z f_{\vtheta_j,k}
+\end{align*} where $D_z$ is upwinded finite derivative stencil based on $\vtheta_j$. We write the discretize operators, 
+\begin{align*}
+W^{p}_{k} = \myint_v v^3 T_p\of{\frac{v}{\vth}} S_k\of{\frac{v}{\vth}} dv \text{ and }
+M^{p}_{k} = \myint_v v^2 T_p\of{\frac{v}{\vth}} S_k\of{\frac{v}{\vth}} dv
+\end{align*} 
+
+Currently we assume $l=0, 1$ and $m=0$ modes for the velocity space approximation. For each radial component, we can compute the projection on to the spherical basis, 
+\begin{align*}
+&	f_k\of{\vtheta,z,t} = \sum_l f_{lk}\of{z, t} Y_{l0}\of{\vtheta}\\
+&	f_{lk} = 2\pi \myint_{\vtheta} \sin\of{\vtheta} f_k\of{\vtheta, z, t} Y_{l0} d\vtheta \\
+&\sum_{\vtheta_j} w_{\vtheta_j} f_{\vtheta_j,k} Y_{l0}\of{\vtheta_j} = P^{\vtheta_j}_l f_{\vtheta_j,k}
+\end{align*} and we can write, 
+\begin{align*}
+	f_k\of{\vtheta_j, z, t} = f_{\vtheta_j,k} = \sum_l f_{lk}\of{z,t} Y_{l0}\of{\vtheta_j} = Y^{l}_{\vtheta_j} f_{lk}
+\end{align*}
+Let $E^{pq}_{kl}$ and $C^{pq}_{kl}$ be the Galerkin discretization of V-space advection and collision operators. Then we can write the full 1d Boltzmann equation discretized, 
+\begin{align*}
+\of{I_{N_\vtheta} \otimes M^{p}_{k}} \partial_t f_{\vtheta_j, k , z, t} + \of{I_{N_\vtheta} \otimes \of{\cos\of{\vtheta_j} W^{p}_k D_z}} f_{\vtheta_j, k , z, t} \\
+= Y_{\vtheta_j, q} (E^{pq}_{kl} + C^{pq}_{kl}) \of{P^{\vtheta_j}_{l} f_{\vtheta_j,k,z,t}}^{T}
+\end{align*}
+
+
 
 \subsection{Advection + Collision operator}
 This section attempt to understand collective effect on advection + collision operators. For simplicity of the analysis, we assume we use $l=0,1$ polar and $m=0$ in the azimuthal direction. We use $S_k\of{x}$, $T_p\of{x}$ to denote trial and test basis respectively. Important coordinate relations are listed below. 

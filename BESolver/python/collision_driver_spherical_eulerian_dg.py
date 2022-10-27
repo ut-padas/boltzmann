@@ -36,6 +36,15 @@ import bolsig
 import csv
 from datetime import datetime
 
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.size": 14,
+    #"font.family": "Helvetica",
+    #"lines.linewidth":2.0
+})
+
+col_names = {"g0":"elastic", "g2": "ionization"}
+
 
 def deriv_fd(x, y):
     mid = (y[1:len(x)]-y[0:len(x)-1])/(x[1:len(x)]-x[0:len(x)-1])
@@ -573,6 +582,13 @@ e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])
 #np.array([210.2110528, 363.5566248, 628.765318, 1087.439475, 1880.70903, 3252.655928, 5625.415959, 9729.066156]) #np.logspace(np.log10(0.148), np.log10(114471.000) , 4, base=10)
 str_datetime = datetime.now().strftime("%m_%d_%Y_%H:%M:%S")
 
+COLLISOIN_NAMES=dict()
+for  col in enumerate(args.collisions):
+    COLLISOIN_NAMES[col]=col
+
+COLLISOIN_NAMES["g0"] = "elastic"
+COLLISOIN_NAMES["g2"] = "ionization"
+
 SAVE_EEDF    = False
 SAVE_CSV     = False
 
@@ -855,6 +871,7 @@ for run_id in range(1):#range(len(e_values)):
                 plt.semilogy(ev,  abs(radial[i, l_idx]), '-', label=lbl, color=color)
                 plt.xlabel("Energy, eV")
                 plt.ylabel("Radial component")
+                plt.title("f%d"%(l_idx))
                 plt.grid(visible=True)
                 if l_idx == 0:
                     plt.legend()
@@ -870,7 +887,7 @@ for run_id in range(1):#range(len(e_values)):
         plt.subplot(2, num_subplots, num_sph_harm + 2)
         for col_idx, col in enumerate(args.collisions):
             if bolsig_rates[col_idx] != 0:
-                plt.semilogy(args.sweep_values, abs(rates[col_idx]/bolsig_rates[col_idx]-1), 'o-', label=col)
+                plt.semilogy(args.sweep_values, abs(rates[col_idx]/bolsig_rates[col_idx]-1), 'o-', label=COLLISOIN_NAMES[col])
                 # plt.axhline(y=0, label='bolsig '+col, color='k')
         plt.legend()
         plt.xlabel(args.sweep_param)

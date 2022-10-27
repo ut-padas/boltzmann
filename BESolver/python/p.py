@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 plt.rcParams.update({
     "text.usetex": True,
     "font.family": "Helvetica",
+    "font.size": 16,
     "lines.linewidth":1.2
 })
 
@@ -37,7 +38,7 @@ r=r_128
 fig = plt.figure(figsize=(21, 9), dpi=300)
 plt.subplot(rows, cols,   1)
 #plt.plot(e_field_pic, np.array(df_pic['PIC G0']), 'g*', label="PIC g0")
-plt.plot(e_field, np.array(r['bolsig_g0']), 'b*', label="bolsig")
+plt.plot(e_field, np.array(r['bolsig_g0']), 'b*', label="Bolsig+")
 plt.plot(e_field, np.array(r['g0']), 'rx', label="PDE")
 plt.xlabel(r"E/N (Td)")
 plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
@@ -49,7 +50,7 @@ plt.grid()
 
 plt.subplot(rows, cols,   2)
 #plt.plot(e_field_pic, np.array(df_pic['PIC G2']), 'g*', label="PIC g2")
-plt.plot(e_field, np.array(r['bolsig_g2']), 'b*', label="bolsig")
+plt.plot(e_field, np.array(r['bolsig_g2']), 'b*', label="Bolsig+")
 plt.plot(e_field, np.array(r['g2']), 'rx', label="PDE")
 plt.xlabel(r"E/N (Td)")
 plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
@@ -62,7 +63,7 @@ plt.grid()
 
 plt.subplot(rows, cols,   3)
 #plt.plot(e_field_pic, np.array(df_pic['PIC ENERGY']), 'g*', label="PIC")
-plt.plot(e_field, np.array(r['bolsig_energy']), 'b*', label="bolsig")
+plt.plot(e_field, np.array(r['bolsig_energy']), 'b*', label="Bolsig+")
 plt.plot(e_field, np.array(r['energy']), 'rx', label="PDE")
 plt.xlabel(r"E/N (Td)")
 plt.ylabel(r"energy (eV)")
@@ -81,7 +82,6 @@ plt.ylabel(r"relative error")
 plt.xscale('log')
 plt.yscale('log')
 plt.title(r"Elastic ($e + Ar \rightarrow e + Ar$)")
-plt.title("(d)")
 plt.grid()
 
 plt.subplot(rows, cols,   5)

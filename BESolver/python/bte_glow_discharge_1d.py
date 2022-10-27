@@ -2,6 +2,7 @@
 @brief : Boltzmann solver in 1d-space glow discharge problem
 """
 from cProfile import label
+import sys
 import numpy as np
 import numba as nb
 import spec_spherical as sp
@@ -16,13 +17,17 @@ import utils as BEUtils
 import argparse
 import enum
 import basis
-from time import perf_counter as time, sleep
+import dill as pickle
+import scipy.interpolate
+#import pickle
+import time
 # set the threading layer before any parallel target compilation
 nb.config.THREADING_LAYER = 'threadsafe'
-
 import cupy as cp
 import cupyx.scipy.sparse as cp_sparse
-
+import cupyx.profiler
+import matplotlib as mpl
+mpl.rcParams['lines.linewidth'] = 1.2
 
 class CollissionMode(enum.Enum):
     ELASTIC_ONLY=0
@@ -56,12 +61,18 @@ parser.add_argument("-radial_poly", "--radial_poly"           , help="radial bas
 parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=2)
 parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=4)
 
-parser.add_argument("-Lz", "--Lz" , help="1d length of the torch in (m)", type=float, default=0.0254)
-parser.add_argument("-num_z", "--num_z" , help="number of points in z-direction", type=int, default=50)
-parser.add_argument("-v0_z0", "--v0_z0" , help="voltage at z=0 (v)", type=float, default=100.0)
-parser.add_argument("-rf_freq", "--rf_freq" , help="voltage oscillation freq (Hz)", type=float, default=13.56e6)
-parser.add_argument("-ne", "--ne" , help="initial electron density 1/m^3", type=float, default=1e0)
-parser.add_argument("-n0", "--n0" , help="initial neutral density 1/m^3", type=float, default=3.22e22)
+parser.add_argument("-Lz", "--Lz"               , help="1d length of the torch in (m)", type=float, default=0.0254)
+parser.add_argument("-num_z", "--num_z"         , help="number of points in z-direction", type=int, default=50)
+parser.add_argument("-v0_z0", "--v0_z0"         , help="voltage at z=0 (v)", type=float, default=100.0)
+parser.add_argument("-rf_freq", "--rf_freq"     , help="voltage oscillation freq (Hz)", type=float, default=13.56e6)
+parser.add_argument("-ne", "--ne"               , help="initial electron density 1/m^3", type=float, default=1e0)
+parser.add_argument("-n0", "--n0"               , help="initial neutral density 1/m^3", type=float, default=3.22e22)
+parser.add_argument("-ne_fac", "--ne_fac"       , help="normalization factor for ne, ni 1/m^3", type=float, default=8e16)
+parser.add_argument("-rs", "--restore"          , help="restore solver", type=int, default=0)
+parser.add_argument("-gpu", "--gpu"             , help="enable gpu", type=int, default=0)
+parser.add_argument("-v_cfl", "--v_cfl"         , help="vspace cfl", type=float, default=0.2)
+parser.add_argument("-benchmark", "--benchmark" , help="benchmark run", type=int, default=0)
+parser.add_argument("-eta_z", "--eta_z"         , help="diffusion in z-space", type=float, default=0.0)
 
 @nb.njit(parallel=True)
 def grad1_p_11(u, dx):
@@ -96,6 +107,9 @@ def grad1_m_11(u, dx):
     return Du
 
 def grad1_p_11_mat(grid_z):
+    """
+    csr-format of the 1st order FD upwind direction left to right
+    """
     n    = len(grid_z)
     dz   = grid_z[1]-grid_z[0]
     idz  = 1.0 /dz
@@ -115,12 +129,46 @@ def grad1_p_11_mat(grid_z):
     #bc-left
     rows = np.append(rows, np.array([0,0]))
     cols = np.append(cols, np.array([0,1]))
-    data = np.append(data, np.array([1,-1]) * idz)
+    data = np.append(data, np.array([-1,1]) * idz)
+
+    return scipy.sparse.csr_matrix((data, (rows, cols)), shape=(n,n))
+
+def grad1_11_mat(grid_z):
+    """
+    csr-format of the 1st order FD central scheme
+    """
+    n    = len(grid_z)
+    dz   = grid_z[1]-grid_z[0]
+    idz  = 1.0/dz
+    
+    rows = np.array([],dtype=int)
+    cols = np.array([],dtype=int)
+    data = np.array([],dtype=float)
+
+    rows = np.append(rows, np.array(range(1,n-1)))
+    cols = np.append(cols, np.array(range(2,n)))
+    data = np.append(data, np.ones(n-2) * idz * 0.5)
+
+    rows = np.append(rows, np.array(range(1,n-1)))
+    cols = np.append(cols, np.array(range(0,n-2)))
+    data = np.append(data, -np.ones(n-2) * idz * 0.5)
+
+    #bc-left
+    rows = np.append(rows, np.array([0,0]))
+    cols = np.append(cols, np.array([0,1]))
+    data = np.append(data, np.array([-1,1]) * idz)
+
+    #bc-right
+    rows = np.append(rows, np.array([n-1,n-1]))
+    cols = np.append(cols, np.array([n-2,n-1]))
+    data = np.append(data, np.array([-1,1]) * idz)
 
     return scipy.sparse.csr_matrix((data, (rows, cols)), shape=(n,n))
 
 def grad1_m_11_mat(grid_z):
-
+    """
+    csr-format of the 1st order FD with upwind direction right to left. 
+    """
     n    = len(grid_z)
     dz   = grid_z[1]-grid_z[0]
     idz  = 1.0 /dz
@@ -143,6 +191,44 @@ def grad1_m_11_mat(grid_z):
     data = np.append(data, np.array([-1,1]) * idz)
 
     return scipy.sparse.csr_matrix((data, (rows, cols)), shape=(n,n))
+
+def laplace_op_fd_11(grid_z):
+    """
+    laplace operator with FD approximation 
+    """
+    n   = len(grid_z)
+    dx  = grid_z[1] - grid_z[0]
+    idx2 = 1/dx**2
+
+    # i,i-1    
+    rows = np.array(range(1,n-1))
+    cols = np.array(range(0,n-2))
+    data = np.ones(n-2) * idx2
+
+    #i, i
+    rows = np.append(rows, np.array(range(1,n-1)))
+    cols = np.append(cols, np.array(range(1,n-1)))
+    data = np.append(data, np.ones(n-2) * idx2 * (-2))
+
+    # i, i+1
+    rows = np.append(rows, np.array(range(1,n-1)))
+    cols = np.append(cols, np.array(range(2,n)))
+    data = np.append(data, np.ones(n-2) * idx2)
+
+    # # left boundary 
+    rows = np.append(rows, np.array([0]))
+    cols = np.append(cols, np.array([0]))
+    data = np.append(data, np.array([1.0]))
+
+    # # right boundary. 
+    rows = np.append(rows, np.array([n-1]))
+    cols = np.append(cols, np.array([n-1]))
+    data = np.append(data, np.array([1.0]))
+
+
+    Lmat = scipy.sparse.csr_array((data, (rows, cols)), shape=(n,n))
+    #print(Lmat.toarray() / idx2)
+    return Lmat
 
 def lm_modes_to_vt_pts_op(grid_z, spec_sp: sp.SpectralExpansionSpherical , vt_pts):
     """
@@ -186,10 +272,12 @@ def create_vec_vt(grid_z, spec_sp : sp.SpectralExpansionSpherical, grid_vt):
     return np.zeros((len(grid_z), num_p * len(grid_vt)))
 
 class EField_1D():
+    """
+    1d solver for the electric field, poisson solver
+    """
     def __init__(self, grid_z) -> None:
         self._grid_z = grid_z
-        self._epsilon_0 = 55.26349406e6 # e^2 ev^-1 m^-1
-
+        self._epsilon_0  = 55.26349406e6 # e^2 ev^-1 m^-1
         return
 
     def fd1_laplace_1d_mat(self):
@@ -198,109 +286,77 @@ class EField_1D():
         1st order finite difference approximation. 
         """
         grid_z = self._grid_z
+        return laplace_op_fd_11(grid_z)
+
+    def e_field_op(self):
+        grid_z = self._grid_z
         n   = len(grid_z)
-        dx  = grid_z[1] - grid_z[0]
-        idx2 = 1/dx**2
+        dz  = grid_z[1] - grid_z[0]
+        idz = 1/dz
 
         # i,i-1    
         rows = np.array(range(1,n-1))
         cols = np.array(range(0,n-2))
-        data = np.ones(n-2) * idx2
-
-        #i, i
-        rows = np.append(rows, np.array(range(1,n-1)))
-        cols = np.append(cols, np.array(range(1,n-1)))
-        data = np.append(data, np.ones(n-2) * idx2 * (-2))
+        data = -np.ones(n-2) * idz * 0.5
 
         # i, i+1
         rows = np.append(rows, np.array(range(1,n-1)))
         cols = np.append(cols, np.array(range(2,n)))
-        data = np.append(data, np.ones(n-2) * idx2)
+        data = np.append(data, np.ones(n-2) * idz * 0.5)
 
         # # left boundary 
-        # rows = np.append(rows, np.array([0,0]))
-        # cols = np.append(cols, np.array([0,1]))
-        # data = np.append(data, np.array([-2 *idx2, 1.0 * idx2]))
+        rows = np.append(rows, np.array([0,0]))
+        cols = np.append(cols, np.array([0,1]))
+        data = np.append(data, np.array([-1.0 * idz, 1.0 * idz]))
 
         # # right boundary. 
-        # rows = np.append(rows, np.array([n-1, n-1]))
-        # cols = np.append(cols, np.array([n-1, n-2]))
-        # data = np.append(data, np.array([-2*idx2, 1.0 * idx2]))
+        rows = np.append(rows, np.array([n-1,n-1]))
+        cols = np.append(cols, np.array([n-1,n-2]))
+        data = np.append(data, np.array([1.0 * idz, -1.0 * idz]))
 
-        # # left boundary 
-        rows = np.append(rows, np.array([0]))
-        cols = np.append(cols, np.array([0]))
-        data = np.append(data, np.array([1.0 * idx2]))
-
-        # # right boundary. 
-        rows = np.append(rows, np.array([n-1]))
-        cols = np.append(cols, np.array([n-1]))
-        data = np.append(data, np.array([1.0 * idx2]))
-
-
-        Lmat = scipy.sparse.csr_array((data, (rows, cols)), shape=(n,n))
-        #print(Lmat.toarray() / idx2)
-        return Lmat
+        op=scipy.sparse.csr_array((data, (rows, cols)), shape=(n,n))
+        #print(op.toarray()/idz)
+        return op
 
     def host_to_device(self):
         self._inverse_laplacian = cp_sparse.csr_matrix(self._inverse_laplacian)
-        self._ws_v0 = cp.asarray(self._ws_v0)
-
+        self._e_op              = cp_sparse.csr_matrix(self._e_op)
+        
         self._xp_module  = cp
 
         return
 
     def device_to_host(self):
-        self._inverse_laplacian = self._inverse_laplacian.get() #scipy.sparse.csr_matrix()
-        self._ws_v0 = cp.asnumpy(self._ws_v0)
-
+        self._inverse_laplacian = self._inverse_laplacian.get()
+        self._e_op              = self._e_op.get() 
+        
         self._xp_module  = np
 
         return
 
     def setup(self,args):
-        self._inverse_laplacian = scipy.sparse.csr_matrix(BEUtils.choloskey_inv(-1.0 * self.fd1_laplace_1d_mat().toarray()))
-        self._ws_v0     = np.zeros(len(self._grid_z))
+        self._ne_ni_nfac = args.ne_fac  # 1/m^3
+        self._inverse_laplacian = scipy.sparse.csr_matrix(BEUtils.choloskey_inv(-1.0 * self.fd1_laplace_1d_mat().toarray())) * (1.0 / self._epsilon_0)
+        self._e_op      = self.e_field_op()
         self._xp_module = np
 
         return
         
     def poission_solve(self, ni, ne, freq_f, t_c, v0):
-        xp    = self._xp_module
-        f_rhs = (ni-ne) * (1.0 /self._epsilon_0)
-
-        grid_z = self._grid_z
-        n   = len(grid_z)
-        dx  = grid_z[1] - grid_z[0]
-        idx2 = 1/dx**2
-        
-        f_rhs[0]  = -idx2 * v0 * xp.sin(2 * xp.pi * freq_f * t_c)
+        xp        = self._xp_module
+        f_rhs     = (ni-ne) * self._ne_ni_nfac
+        f_rhs[0]  = -v0 * xp.sin(2 * xp.pi * freq_f * t_c) * self._epsilon_0
         f_rhs[-1] = 0.0
-
-        u     = self._inverse_laplacian.dot(f_rhs)
-        
-        # print("ne", ne)
-        # print("ni", ni)
-        #print("rhs", f_rhs, v0 * np.sin(2 * np.pi * freq_f * t_c), u)
-        #print("u", u)
-
+        u         = self._inverse_laplacian.dot(f_rhs)
         return u
 
     def compute_electric_field(self, u):
-        grid_z = self._grid_z
-        n      = len(grid_z)
-        idz    = 1.0 / (grid_z[1]-grid_z[0])
-
-        ef     = self._ws_v0
+        return -self._e_op.dot(u)
         
-        ef[1:n-1] = 0.5 * (u[2:n] -u[0:n-2]) * idz
-        ef[0]     = (u[1]-u[0])   * idz
-        ef[-1]    = (u[-1]-u[-2]) * idz
-
-        return -ef
-        
-
 class Fluids_1D():
+    """
+    Fluid equation solver, for n_i
+    """
     def __init__(self, grid_z) -> None:
         self._grid_z = grid_z
         self._idz    = 1.0/(self._grid_z[1] - self._grid_z[0])
@@ -313,20 +369,20 @@ class Fluids_1D():
         self._nn         = np.zeros(num_z)
         self._reaction_k = np.zeros(num_z)
         self._v_field    = np.zeros(num_z)
-        self._rhs_v0     = np.zeros(num_z)
-        self._rhs_v1     = np.zeros(num_z)
-        self._rhs_v2     = np.zeros(num_z)
-
+        
         return
 
     def host_to_device(self):
-        self._nn         = cp.asarray(self._nn)
-        self._ne         = cp.asarray(self._ne)
-        self._reaction_k = cp.asarray(self._reaction_k)
-        self._v_field    = cp.asarray(self._v_field)
-        self._rhs_v0     = cp.asarray(self._rhs_v0)
-        self._rhs_v1     = cp.asarray(self._rhs_v1)
-        self._rhs_v2     = cp.asarray(self._rhs_v2)
+        self._nn          = cp.asarray(self._nn)
+        self._ne          = cp.asarray(self._ne)
+        self._reaction_k  = cp.asarray(self._reaction_k)
+        self._v_field     = cp.asarray(self._v_field)
+
+        self._flx_grad1_p = cp_sparse.csr_matrix(self._flx_grad1_p)
+        self._flx_grad1_m = cp_sparse.csr_matrix(self._flx_grad1_m)
+        self._flx_p       = cp_sparse.csr_matrix(self._flx_p)
+        self._flx_m       = cp_sparse.csr_matrix(self._flx_m)
+
         
         self._xp_module  = cp
 
@@ -337,9 +393,11 @@ class Fluids_1D():
         self._ne         = cp.asnumpy(self._ne)
         self._reaction_k = cp.asnumpy(self._reaction_k)
         self._v_field    = cp.asnumpy(self._v_field)
-        self._rhs_v0     = cp.asnumpy(self._rhs_v0)
-        self._rhs_v1     = cp.asnumpy(self._rhs_v1)
-        self._rhs_v2     = cp.asnumpy(self._rhs_v2)
+
+        self._flx_grad1_p = self._flx_grad1_p.get()
+        self._flx_grad1_m = self._flx_grad1_m.get()
+        self._flx_p       = self._flx_p.get()
+        self._flx_m       = self._flx_m.get()
         
         self._xp_module  = np
         return
@@ -348,6 +406,87 @@ class Fluids_1D():
         self._t_curr     = 0.0
         self._xp_module  = np
 
+        n    = len(self._grid_z)
+        idz  = 1.0 / (self._grid_z[1]-self._grid_z[0])
+
+        rows = np.array([],dtype=int);  cols = np.array([],dtype=int); data = np.array([],dtype=float)
+        # i, i+1
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(2,n  )))
+        data = np.append(data, np.ones(n-2) * idz)
+        #i, i
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(1,n-1)))
+        data = np.append(data, -np.ones(n-2) * idz)
+
+        self._flx_grad1_p = scipy.sparse.csr_array((data, (rows, cols)), shape=(n,n))
+
+        
+        rows = np.array([],dtype=int);  cols = np.array([],dtype=int); data = np.array([],dtype=float)
+        # i, i
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(1,n-1)))
+        data = np.append(data, np.ones(n-2) * idz)
+        #i, i-1
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(0,n-2)))
+        data = np.append(data, -np.ones(n-2) * idz)
+
+        self._flx_grad1_m = scipy.sparse.csr_array((data, (rows, cols)), shape=(n,n))
+        
+        rows = np.array([],dtype=int);  cols = np.array([],dtype=int); data = np.array([],dtype=float)
+        # i, i+1
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(2,n  )))
+        data = np.append(data, np.ones(n-2) * 0.5)
+        #i, i
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(1,n-1)))
+        data = np.append(data, np.ones(n-2) * 0.5)
+
+        self._flx_p = scipy.sparse.csr_array((data, (rows, cols)), shape=(n,n))
+
+        rows = np.array([],dtype=int);  cols = np.array([],dtype=int); data = np.array([],dtype=float)
+        # i, i
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(1,n-1)))
+        data = np.append(data, np.ones(n-2) * 0.5)
+        #i, i-1
+        rows = np.append(rows, np.array(range(1,n-1)))
+        cols = np.append(cols, np.array(range(0,n-2)))
+        data = np.append(data, np.ones(n-2) * 0.5)
+
+        self._flx_m = scipy.sparse.csr_array((data, (rows, cols)), shape=(n,n))
+
+        # print(self._flx_grad1_p.toarray()/idz)
+        # print(self._flx_grad1_m.toarray()/idz)
+
+        # print(self._flx_p.toarray())
+        # print(self._flx_m.toarray())
+
+        if USE_GPU:
+            @cp.fuse()
+            def rhs_a(j_p,j_m, r_rate, nn, ne):
+                return -(j_p - j_m)  + r_rate * nn * ne
+            
+            @cp.fuse()
+            def rhs_j(flx_y_mu_idz, flx_g_v, flx_g_y_D_idz):
+                return -flx_y_mu_idz * flx_g_v - flx_g_y_D_idz
+
+            self._rhs_a = rhs_a
+            self._rhs_j = rhs_j
+            
+        else:
+            
+            def rhs_j(flx_y_mu_idz, flx_g_v, flx_g_y_D_idz):
+                return -flx_y_mu_idz * flx_g_v - flx_g_y_D_idz
+            
+            def rhs_a(j_p,j_m, r_rate, nn, ne):
+                return -(j_p - j_m)  + r_rate * nn * ne
+
+            self._rhs_a = rhs_a
+            self._rhs_j = rhs_j
+        
         return
 
     def apply_bc(self, t, y):
@@ -360,12 +499,14 @@ class Fluids_1D():
         E_0 = max(  -(v[1]-v[0])  * idz, 0.0)
         
         # E_L dot e_k < 0 set incoming flux to be zero
-        E_L = max( (v[-1]-v[-2]) * idz, 0.0)
+        E_L = min( -(v[-1]-v[-2]) * idz, 0.0)
+
+        #print(E_0, E_L)
 
         y[0]  = y[1]  * (D * idz - mu * E_0 * 0.5 ) / (D * idz + mu * E_0 * 0.5)
         y[-1] = y[-2] * (D * idz - mu * E_L * 0.5)  / (D * idz + mu * E_L * 0.5)
         
-        y[y<0]=0.0
+        #y[y<0]=0.0
 
         return y
 
@@ -380,16 +521,19 @@ class Fluids_1D():
         ne     = self._ne
         nn     = self._nn
 
-        y_rhs  = self._rhs_v0
-        j_p    = self._rhs_v1
-        j_m    = self._rhs_v2
-        
-        j_p[1:n-1] = mu * (-( v[2:n] - v[1:n-1]) * idz) * (y[2:n] + y[1:n-1])   * 0.5 - D * idz * (y[2:n]-y[1:n-1])
-        j_m[1:n-1] = mu * (-(v[1:n-1]- v[0:n-2]) * idz) * (y[1:n-1] + y[0:n-2]) * 0.5 - D * idz * (y[1:n-1]-y[0:n-2])
+        y_mu_idz  = y * (mu * idz)
+        y_D_idz   = y * (D * idz)
 
-        y_rhs[1:n-1] = -idz * (j_p[1:n-1]-j_m[1:n-1]) + r_rate[1:n-1] * ne[1:n-1] * nn[1:n-1]
-        
-        return y_rhs
+        flx_p_y_mu_idz = self._flx_p.dot(y_mu_idz)
+        flx_m_y_mu_idz = self._flx_m.dot(y_mu_idz)
+        flx_gp_v       = self._flx_grad1_p.dot(v)
+        flx_gm_v       = self._flx_grad1_m.dot(v)
+        flx_gp_y_D_idz = self._flx_grad1_p.dot(y_D_idz)
+        flx_gm_y_D_idz = self._flx_grad1_m.dot(y_D_idz)
+
+        j_p   = self._rhs_j(flx_p_y_mu_idz, flx_gp_v, flx_gp_y_D_idz) #-self._flx_p.dot(y) * (mu * idz) * self._flx_grad1_p.dot(v) - (D*idz) * self._flx_grad1_p.dot(y)
+        j_m   = self._rhs_j(flx_m_y_mu_idz, flx_gm_v, flx_gm_y_D_idz) #-self._flx_m.dot(y) * (mu * idz) * self._flx_grad1_m.dot(v) - (D*idz) * self._flx_grad1_m.dot(y)
+        return self._rhs_a(j_p, j_m, r_rate, nn, ne)
     
     def integrate(self, u, dt):
         ut =  u + dt * self.rhs(self._t_curr, u)
@@ -398,12 +542,15 @@ class Fluids_1D():
         return ut
         
 class Boltzmann_1D():
+    """
+    1d boltzmann equation solver with collocation method in v_\theta and z direction. 
+    """
+    def __init__(self,grid_z, grid_vt, ev_range=(0,40)) -> None:
 
-    def __init__(self,grid_z, grid_vt) -> None:
-
-        self._grid_z  = grid_z
-        self._grid_vt = grid_vt
-        self._E_field = 0.0
+        self._grid_z   = grid_z
+        self._grid_vt  = grid_vt
+        self._E_field  = 0.0
+        self._ev_range = ev_range
 
         return
 
@@ -420,15 +567,18 @@ class Boltzmann_1D():
         else:
             sig_pts = None 
         
-        ev_range = ((0*vth/c_gamma)**2, (6*vth/c_gamma)**2)
+        ev_range = self._ev_range
         k_domain = (np.sqrt(ev_range[0]) * c_gamma / vth, np.sqrt(ev_range[1]) * c_gamma / vth)
 
+        self._c_gamma        = c_gamma
+        self._eavg_to_K      = (2/(3*scipy.constants.Boltzmann))
         self._v_space_domain = (np.sqrt(ev_range[0]) * c_gamma / vth, np.sqrt(ev_range[1]) * c_gamma / vth)
         
         print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
         if(sig_pts is not None):
             print("singularity pts : ", sig_pts, "v/vth and" , (sig_pts * vth/c_gamma)**2,"eV")
 
+        params.BEVelocitySpace.SPH_HARM_LM  = [[l,0] for l in range(args.l_max+1)]
         params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = args.NUM_P_RADIAL
         basis.BSPLINE_BASIS_ORDER=args.spline_order
         basis.XLBSPLINE_NUM_Q_PTS_PER_KNOT=args.spline_q_pts_per_knot
@@ -438,6 +588,10 @@ class Boltzmann_1D():
             params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = bb._num_p
             spec_sp               = sp.SpectralExpansionSpherical(params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER-1, bb,params.BEVelocitySpace.SPH_HARM_LM)
             spec_sp._num_q_radial = params.BEVelocitySpace.NUM_Q_VR
+            self._dv              = (spec_sp._basis_p._t[args.spline_order + 1] - spec_sp._basis_p._t[args.spline_order])
+            self._e_field_max     = args.v_cfl * self._dv * vth / args.T_DT / collisions.ELECTRON_CHARGE_MASS_RATIO
+            print("v_thermal = %8E \t dv = %8E dt=%8E E_max =%8E"%(vth, self._dv, args.T_DT, self._e_field_max))
+            
         else:
             raise NotImplementedError
 
@@ -515,7 +669,7 @@ class Boltzmann_1D():
             self._reaction_op["g2smoothstep"] = BEUtils.reaction_rates_op(spec_sp, g2, self._maxwellian, self._vth)
             
         Cmat       = FOp
-        Emat       = spec_sp.compute_advection_matix()
+        Emat       = spec_sp.compute_advection_matix() * (collisions.ELECTRON_CHARGE_MASS_RATIO/self._vth)
 
         self._spec_sp = spec_sp
         self._col_op  = collision_op
@@ -526,8 +680,9 @@ class Boltzmann_1D():
         self._lm_to_vt = lm_modes_to_vt_pts_op(self._grid_z, self._spec_sp, self._grid_vt)
         self._vt_to_lm = vt_pts_to_lm_modes_op(self._grid_z, self._spec_sp, self._grid_vt)
 
-        self._Dx_p     = grad1_p_11_mat(self._grid_z)
-        self._Dx_m     = grad1_m_11_mat(self._grid_z)
+        self._Dx_p     = grad1_p_11_mat(self._grid_z)#grad1_p_11_mat(self._grid_z)
+        self._Dx_m     = grad1_m_11_mat(self._grid_z)#grad1_m_11_mat(self._grid_z)
+        self._Dx_c     = grad1_11_mat(self._grid_z)
         
         num_p          = spec_sp._p+1
         num_sh         = len(spec_sp._sph_harm_lm)
@@ -544,23 +699,50 @@ class Boltzmann_1D():
         self._Wpk_mat = np.zeros((num_p, num_p))
         for i in range(num_p):
             for j in range(num_p):
-                self._Wpk_mat[i,j] = np.dot(gw, vqr[i,:] * vqr[j,:] * gx**3 * vth_curr)
+                self._Wpk_mat[i,j] = vth_curr * np.dot(gw, vqr[i,:] * vqr[j,:] * gx**3)
         
 
-        self._mass_op      = BEUtils.mass_op(spec_sp, None, 8, 2, 1.0)
-        self._temp_op      = BEUtils.temp_op(spec_sp, None, 8, 2, 1.0)
+        self._mass_op      = BEUtils.mass_op(spec_sp, None, 8, 2, 1.0) * (self._vth**3)
+        self._temp_op      = BEUtils.temp_op(spec_sp, None, 8, 2, 1.0) * (self._vth**5) * (0.5 * collisions.MASS_ELECTRON * self._eavg_to_K / collisions.TEMP_K_1EV)
         
         self._idx_p_upwind =  np.array([m + np.array(range(num_p)) * len(self._grid_vt) for m in np.where(self._grid_vt <= 0.5 * np.pi)[0]]).reshape(-1) 
         self._idx_m_upwind =  np.array([m + np.array(range(num_p)) * len(self._grid_vt) for m in np.where(self._grid_vt >  0.5 * np.pi)[0]]).reshape(-1) 
 
         self._cos_vt   = np.array([np.cos(self._grid_vt) for m in range(num_p)]).reshape(-1)
+        
+        self._cos_vt_p = self._cos_vt[self._idx_p_upwind]
+        self._cos_vt_m = self._cos_vt[self._idx_m_upwind]
+
         self._Dzy_kvt  = np.zeros((len(self._grid_z), num_p * (len(self._grid_vt))))
 
         self._vt_bdy_p = np.where(self._grid_vt <= 0.5 * np.pi)[0]
         self._vt_bdy_m = np.where(self._grid_vt >  0.5 * np.pi)[0]
+        print(self._vt_bdy_p)
+        print(self._vt_bdy_m)
 
         self._t_curr        = 0.0
         self._xp_module     = np
+
+        # zero out the sph integration for higher numerical accuracy , this is exactly zero due to the orthogonality of sph
+        self._mass_op[1::num_sh]=0.0
+        self._temp_op[1::num_sh]=0.0
+        
+        tmp_dict=dict()
+        for (reaction, rates_op) in self._reaction_op.items():
+            rates_op[1::num_sh]=0.0
+            tmp_dict[reaction]=rates_op
+        
+        self._reaction_op.clear()
+        self._reaction_op=tmp_dict
+
+        self._eta_x         = args.eta_z
+        self._lop_diffusion = (scipy.sparse.identity(len(self._grid_z), format='csr') - self._eta_x * args.T_DT * laplace_op_fd_11(grid_z=self._grid_z)).toarray()
+        self._lop_diffusion = scipy.sparse.csr_matrix(BEUtils.choloskey_inv(self._lop_diffusion))
+
+        # w, u = scipy.linalg.eig(self._lop_diffusion.toarray())
+        # print(w)
+        
+
 
         return
 
@@ -569,14 +751,23 @@ class Boltzmann_1D():
         self._Emat            = cp.asarray(self._Emat)
         self._lm_to_vt        = cp.asarray(self._lm_to_vt)
         self._vt_to_lm        = cp.asarray(self._vt_to_lm)
-        self._Dx_p            = cp_sparse.csr_matrix(self._Dx_p) #cp.asarray(self._Dx_p)
-        self._Dx_m            = cp_sparse.csr_matrix(self._Dx_m) #cp.asarray(self._Dx_m)
+
+        self._Dx_p            = cp_sparse.csr_matrix(self._Dx_p) 
+        self._Dx_m            = cp_sparse.csr_matrix(self._Dx_m)
+        self._Dx_c            = cp_sparse.csr_matrix(self._Dx_c)
+        
+        self._lop_diffusion   = cp_sparse.csr_matrix(self._lop_diffusion)
         self._mmat            = cp.asarray(self._mmat)
         self._inv_mmat        = cp.asarray(self._inv_mmat)
         self._mmat_radial     = cp.asarray(self._mmat_radial)
         self._inv_mmat_radial = cp.asarray(self._inv_mmat_radial)
         self._Wpk_mat         = cp.asarray(self._Wpk_mat)
+        
         self._cos_vt          = cp.asarray(self._cos_vt)
+        
+        self._cos_vt_p        = cp.asarray(self._cos_vt_p)
+        self._cos_vt_m        = cp.asarray(self._cos_vt_m)
+
         self._Dzy_kvt         = cp.asarray(self._Dzy_kvt)
         self._mass_op         = cp.asarray(self._mass_op)
         self._temp_op         = cp.asarray(self._temp_op)
@@ -597,14 +788,22 @@ class Boltzmann_1D():
         self._Emat            = cp.asnumpy(self._Emat)
         self._lm_to_vt        = cp.asnumpy(self._lm_to_vt)
         self._vt_to_lm        = cp.asnumpy(self._vt_to_lm)
+        
         self._Dx_p            = self._Dx_p.get()
         self._Dx_m            = self._Dx_m.get()
+        self._Dx_c            = self._Dx_c.get()
+
+        self._lop_diffusion   = self._lop_diffusion.get()
         self._mmat            = cp.asnumpy(self._mmat)
         self._inv_mmat        = cp.asnumpy(self._inv_mmat)
         self._mmat_radial     = cp.asnumpy(self._mmat_radial)
         self._inv_mmat_radial = cp.asnumpy(self._inv_mmat_radial)
         self._Wpk_mat         = cp.asnumpy(self._Wpk_mat)
+        
         self._cos_vt          = cp.asnumpy(self._cos_vt)
+        self._cos_vt_p        = cp.asnumpy(self._cos_vt_p)
+        self._cos_vt_m        = cp.asnumpy(self._cos_vt_m)
+
         self._Dzy_kvt         = cp.asnumpy(self._Dzy_kvt)
         self._mass_op         = cp.asnumpy(self._mass_op)
         self._temp_op         = cp.asnumpy(self._temp_op)
@@ -616,6 +815,54 @@ class Boltzmann_1D():
         
         return
 
+    def rhs_xspace(self, t, y):
+
+        xp      = self._xp_module
+        spec_sp = self._spec_sp
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+
+        num_vt  = len(self._grid_vt)
+        num_z   = len(self._grid_z)
+
+        Dzy_kvt    = self._Dzy_kvt
+        yy         = y.reshape((num_z, num_p *num_vt))
+
+        Dzy_kvt[:,self._idx_p_upwind] = self._Dx_p.dot(yy[:,self._idx_p_upwind]) * self._cos_vt_p
+        Dzy_kvt[:,self._idx_m_upwind] = self._Dx_m.dot(yy[:,self._idx_m_upwind]) * self._cos_vt_m
+
+        Dzy_kvt    = Dzy_kvt.transpose().reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
+        Dzy_kvt    = xp.matmul(self._inv_mmat_radial,xp.matmul(self._Wpk_mat, Dzy_kvt))
+        Dzy_kvt    = Dzy_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
+
+        Dzy_kvt    = -Dzy_kvt.reshape(num_z * num_p * num_vt)
+        return Dzy_kvt
+
+    def rhs_vspace(self, t, y):
+
+        xp      = self._xp_module
+        spec_sp = self._spec_sp
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+
+        num_vt  = len(self._grid_vt)
+        num_z   = len(self._grid_z)
+
+        yy         = y.reshape((num_z, num_p, num_vt))
+        yy         = xp.transpose(xp.dot(yy,self._vt_to_lm).reshape((num_z, num_p*num_sh)))
+
+        CpE_klm    = xp.matmul(self._Cmat, yy)
+        CpE_klm   += xp.matmul(self._Emat, yy) * (self._E_field)
+        CpE_klm    = xp.transpose(CpE_klm)
+
+        CpE_kvt    = xp.dot(CpE_klm.reshape(num_z, num_p , num_sh), self._lm_to_vt).reshape((num_z, num_p * num_vt))
+        CpE_kvt    = xp.transpose(CpE_kvt).reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
+        CpE_kvt    = xp.matmul(self._inv_mmat_radial, CpE_kvt)
+        CpE_kvt    = CpE_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
+        CpE_kvt    = CpE_kvt.reshape(num_z * num_p * num_vt) 
+
+        return CpE_kvt
+
     def rhs(self, t, y):
         xp      = self._xp_module
         spec_sp = self._spec_sp
@@ -625,29 +872,30 @@ class Boltzmann_1D():
         num_vt  = len(self._grid_vt)
         num_z   = len(self._grid_z)
 
-        yy   = y.reshape((num_z, num_p, num_vt))
-        yy   = xp.dot(yy,self._vt_to_lm).reshape((num_z, num_p*num_sh))
+        yy         = y.reshape((num_z, num_p, num_vt))
+        yy         = xp.transpose(xp.dot(yy,self._vt_to_lm).reshape((num_z, num_p*num_sh)))
 
-        CpE_klm    = xp.matmul(self._Cmat, xp.transpose(yy))
-        CpE_klm   += xp.matmul(self._Emat, xp.transpose(yy)) * (self._E_field * collisions.ELECTRON_CHARGE_MASS_RATIO/self._vth)
+        CpE_klm    = xp.matmul(self._Cmat, yy)
+        CpE_klm   += xp.matmul(self._Emat, yy) * (self._E_field)
         CpE_klm    = xp.transpose(CpE_klm)
 
-        CpE_kvt = xp.dot(CpE_klm.reshape(num_z, num_p , num_sh), self._lm_to_vt).reshape((num_z, num_p * num_vt))
-        CpE_kvt = xp.transpose(CpE_kvt).reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
-        CpE_kvt = xp.matmul(self._inv_mmat_radial, CpE_kvt)
-        CpE_kvt = CpE_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
+        CpE_kvt    = xp.dot(CpE_klm.reshape(num_z, num_p , num_sh), self._lm_to_vt).reshape((num_z, num_p * num_vt))
+        CpE_kvt    = xp.transpose(CpE_kvt).reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
+        CpE_kvt    = xp.matmul(self._inv_mmat_radial, CpE_kvt)
+        CpE_kvt    = CpE_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
 
-        Dzy_kvt = self._Dzy_kvt
-        yy      = y.reshape((num_z, num_p *num_vt))
+        Dzy_kvt    = self._Dzy_kvt
+        yy         = y.reshape((num_z, num_p *num_vt))
+        
+        #Dzy_kvt    = self._Dx_p.dot(yy) * self._cos_vt
+        Dzy_kvt[:,self._idx_p_upwind] = self._Dx_p.dot(yy[:,self._idx_p_upwind]) * self._cos_vt_p
+        Dzy_kvt[:,self._idx_m_upwind] = self._Dx_m.dot(yy[:,self._idx_m_upwind]) * self._cos_vt_m
 
-        Dzy_kvt[:,self._idx_p_upwind] = self._Dx_p.dot(yy[:,self._idx_p_upwind]) * self._cos_vt[self._idx_p_upwind]
-        Dzy_kvt[:,self._idx_m_upwind] = self._Dx_m.dot(yy[:,self._idx_m_upwind]) * self._cos_vt[self._idx_m_upwind]
+        Dzy_kvt    = Dzy_kvt.transpose().reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
+        Dzy_kvt    = xp.matmul(self._inv_mmat_radial,xp.matmul(self._Wpk_mat, Dzy_kvt))
+        Dzy_kvt    = Dzy_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
+        y_rhs      = (CpE_kvt - Dzy_kvt).reshape(num_z * num_p * num_vt) 
 
-        Dzy_kvt = Dzy_kvt.transpose().reshape((num_p, num_vt, num_z)).reshape((num_p, num_vt * num_z))
-        Dzy_kvt = xp.matmul(self._inv_mmat_radial,xp.matmul(self._Wpk_mat, Dzy_kvt))
-        Dzy_kvt = Dzy_kvt.reshape((num_p , num_vt, num_z)).reshape((num_p * num_vt, num_z)).transpose()
-
-        y_rhs   = (CpE_kvt - Dzy_kvt).reshape(num_z * num_p * num_vt) 
         return y_rhs
 
     def apply_bc(self, t, y):
@@ -664,13 +912,55 @@ class Boltzmann_1D():
         y[0 , :, self._vt_bdy_p]  = 0.0
         y[-1, :, self._vt_bdy_m]  = 0.0
 
+        # ww = self._cos_vt.reshape(num_vt, num_p).transpose()
+        # y[0  , :, :]   = 1e-28 #1e-24 - 1e-25 * ww   
+        # y[-1  , :, :]  = 1e-28 #1e-24 - 1e-25 * ww   
+        
+        
         return y.reshape(num_z * num_p * num_vt)
 
     def integrate(self, u, dt):
-        u1 = u + dt * self.rhs(self._t_curr, u)
-        u1 = self.apply_bc(self._t_curr, u1)
-        self._t_curr += dt
-        return u1
+        u = u + dt * self.rhs(self._t_curr, u)
+        self._t_curr += 1.0 * dt
+        u = self.apply_bc(self._t_curr, u)
+        
+        # #operator split method
+        # u = u + 0.5 * dt * self.rhs_xspace(self._t_curr, u)
+        # self._t_curr += 0.5 * dt
+        # u = self.apply_bc(self._t_curr, u)
+        # u = u + 0.5 * dt * self.rhs_vspace(self._t_curr, u)
+        # self._t_curr +=  0.5 * dt
+        # u = self.apply_bc(self._t_curr, u)
+        
+        # num_p  = self._spec_sp._p + 1
+        # num_vt = len(self._grid_vt) #len(self._spec_sp._sph_harm_lm)
+        # num_z  = len(self._grid_z)
+        # u       = u.reshape((num_z, num_p * num_vt))
+        # #print(u[-1,0])
+        # u[0,:]  = u[0,:]  * (1-dt * self._eta_x)
+        # u[-1,:] = u[-1,:] * (1-dt * self._eta_x)
+        # u     = self._lop_diffusion.dot(u)
+        # #print(u[-1,0])
+        # u     = u.reshape(num_z * num_p * num_vt)
+        return u
+
+        # # old full rhs. 
+        # u1 = u + dt * self.rhs(self._t_curr, u)
+        # self._t_curr += dt
+        # u1 = self.apply_bc(self._t_curr, u1)
+        # return u1
+        
+        # num_p  = self._spec_sp._p + 1
+        # num_vt = len(self._grid_vt) #len(self._spec_sp._sph_harm_lm)
+        # num_z  = len(self._grid_z)
+        # u1       = u1.reshape((num_z, num_p * num_vt))
+        # #print(u1[0,:])
+        # u1[0,:]  = u1[0,:] * (1-dt * self._eta_x)
+        # u1[-1,:] = u1[-1,:] * (1-dt * self._eta_x)
+        # u1     = self._lop_diffusion.dot(u1)
+        # #print(u1[0,:])
+        # u1     = u1.reshape(num_z * num_p * num_vt)
+        
 
     def compute_ne(self, f_kvt):
         xp      = self._xp_module
@@ -681,8 +971,7 @@ class Boltzmann_1D():
         num_vt  = len(self._grid_vt)
         num_z   = len(self._grid_z)
         yy      = xp.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
-        ne      = xp.dot(self._mass_op, yy.transpose()).reshape(num_z) * self._vth**3 * self._maxwellian(0)
-
+        ne      = xp.dot(self._mass_op, yy.transpose()).reshape(num_z)
         return ne
 
     def compute_avg_energy(self, f_kvt):
@@ -691,13 +980,11 @@ class Boltzmann_1D():
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
 
-        temp_op = self._temp_op
-
         num_vt  = len(self._grid_vt)
         num_z   = len(self._grid_z)
         yy      = xp.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
-        Te      = xp.dot(self._temp_op, yy.transpose()).reshape(num_z) * self._vth**5 * self._maxwellian(0) * 0.5 * collisions.MASS_ELECTRON * (2/(3*scipy.constants.Boltzmann)) / self.compute_ne(f_kvt) / collisions.TEMP_K_1EV
-
+        m0      = self.compute_ne(f_kvt)
+        Te      = xp.dot(self._temp_op, yy.transpose()).reshape(num_z)  / m0
         return Te
     
     def compute_reaction_rates(self, rates_op_dict, f_kvt):
@@ -710,15 +997,23 @@ class Boltzmann_1D():
         num_z   = len(self._grid_z)
         
         yy      = xp.dot(f_kvt.reshape((num_z, num_p , num_vt)),self._vt_to_lm).reshape((num_z, num_p*num_sh))
-        m0      = xp.dot(self._mass_op, yy.transpose()).reshape(num_z) * self._vth**3 * self._maxwellian(0)
+        yy      = yy.transpose()
+
+        # we need the normalization \int_{\varepsilon} \int_{\omega}\varepslison^{1/2} b_k(v/vth) Y_lm (\omega) d\omega d\varepsilon
+        m0      = xp.dot(self._mass_op, yy).reshape(num_z) * (2 / self._c_gamma**3)
 
         ki  =  dict()
         for (reaction, rates_op) in rates_op_dict.items():
-            ki[reaction] = np.dot(rates_op, yy.transpose()).reshape(num_z) #/ m0
+            rr = np.dot(rates_op, yy).reshape(num_z) / m0
+            ki[reaction] = rr
+            
             
         return ki
 
 class GlowSim_1D():
+    """
+    Main glow simulation driver for 1d. 
+    """
     def __init__(self, args) -> None:
         self._grid_z   = np.linspace(0, args.Lz, args.num_z)
         self._grid_vt  = np.arccos(basis.Legendre().Gauss_Pn(args.quad_theta)[0])
@@ -738,7 +1033,25 @@ class GlowSim_1D():
 
         return
 
+    def read_initial_data(self, fname, Np, L):
+        xp = -np.cos(np.pi*np.linspace(0,Np-1,Np)/(Np-1))
+        xr = (xp+1)*L * 0.5
         
+        D = np.load(fname)
+
+        ne = D[0:Np].reshape(len(xr)) 
+        ni = D[Np:2*Np].reshape(len(xr))
+        nb = D[2*Np:3*Np].reshape(len(xr))
+        
+        neE = D[3*Np:].reshape(len(xr))
+        Te = (2./3) * neE / ne
+
+        ne = scipy.interpolate.interp1d(xr, ne)
+        ni = scipy.interpolate.interp1d(xr, ni)
+        Te = scipy.interpolate.interp1d(xr, Te)
+
+        return ne, ni, Te
+
     def init(self, t0, t1, args):
         self._t_begin = t0
         self._t_end   = t1
@@ -759,16 +1072,27 @@ class GlowSim_1D():
         num_sh  = len(spec_sp._sph_harm_lm)
         num_vt  = len(grid_vt)
 
-        vratio    = np.sqrt(1.0/args.basis_scale)
-        hv        = lambda v,vt,vp : np.exp(-((v/vratio)**2)) / vratio**3
+        approx_ne, approx_ni, approx_te = self.read_initial_data(fname='newton_3spec_CN_Np100.npy', Np=100, L=args.Lz)
+        
+        self._ne_init = approx_ne(grid_z)
+        self._ni_init = approx_ni(grid_z)
+        self._Te_init = approx_te(grid_z)
 
-        h0      = BEUtils.function_to_basis(spec_sp, hv, self._boltzmann_solver._maxwellian, None, None, None, Minv=self._boltzmann_solver._inv_mmat)
-        mass_op = self._boltzmann_solver._mass_op
-        m0      = np.dot(mass_op, h0) * self._boltzmann_solver._vth**3 * self._boltzmann_solver._maxwellian(0)
+        
+        fname = 'newton_3spec_CN_Np100_pde_sp%d_Nr%d_lmax%d.npy'%(args.spline_order,args.NUM_P_RADIAL,args.l_max)
+        # self._fx_kvt = create_vec_lm(grid_z, spec_sp)
+        # m_fac        = 1.0 / ((np.pi**1.5) * self._boltzmann_solver._vth**3)
+        # mass_op      = self._boltzmann_solver._mass_op
 
-        self._fx_kvt = create_vec_lm(grid_z, spec_sp)
-        for i in range(len(grid_z)):
-            self._fx_kvt[i,:] = h0
+        # for i in range(len(grid_z)):
+        #     vth_i  = collisions.electron_thermal_velocity(self._Te_init[i] * collisions.TEMP_K_1EV) 
+        #     vratio = vth_i / self._boltzmann_solver._vth
+        #     hv     = lambda v,vt,vp : self._ne_init[i] * m_fac * (np.exp(-((v/vratio)**2)) / vratio**3)
+        #     self._fx_kvt[i,:] = BEUtils.function_to_basis(spec_sp, hv, self._boltzmann_solver._maxwellian, None, None, None, Minv=self._boltzmann_solver._inv_mmat)
+        # np.save(fname, self._fx_kvt)
+        
+        print("loading initial data from %s"%(fname))
+        self._fx_kvt = np.load(fname)
 
         # print(self._boltzmann_solver._lm_to_vt.shape)
         # print(self._boltzmann_solver._lm_to_vt)
@@ -778,20 +1102,25 @@ class GlowSim_1D():
         # print(np.sum(self._boltzmann_solver._vt_to_lm, axis=0))
 
         self._fx_kvt = np.dot(self._fx_kvt.reshape((num_z, num_p, num_sh)) , self._boltzmann_solver._lm_to_vt).reshape(num_z * num_p * num_vt)
-        #self._fx_kvt = self._boltzmann_solver.apply_bc(self._t_begin, self._fx_kvt)
-
+        print("applying bte bc on initial data")
+        self._fx_kvt = self._boltzmann_solver.apply_bc(self._t_begin, self._fx_kvt)
         self._ne     = self._boltzmann_solver.compute_ne(self._fx_kvt)
-        self._ni     = np.array(self._ne) 
+        self._ni     = self._ni_init
+        
+        # print(self._ne)
+        # print(self._ni)
+        # self._ni     = np.array(self._ne) 
         # test initial data
         # self._ni = np.max(self._ne) * np.exp(-(self._grid_z - 0.5 * args.Lz)**2/1e-6 ) #np.array(self._ne)
         # self._ni[self._grid_z < 0.5 * args.Lz]=0.0
 
-        self._fluids_solver._nn   = np.ones_like(grid_z) * collisions.AR_NEUTRAL_N
+        self._fluids_solver._nn   = np.ones_like(grid_z) * 1.0 / self._e_field_solver._ne_ni_nfac
         self._fluids_solver._ne   = self._ne
         self._fluids_solver._mu   = 4.65e21 / collisions.AR_NEUTRAL_N
         self._fluids_solver._D    = 2.07e20 / collisions.AR_NEUTRAL_N
 
         all_reaction_rates        = self._boltzmann_solver.compute_reaction_rates(self._boltzmann_solver._reaction_op, self._fx_kvt)
+        
         if "g2" in all_reaction_rates:
             self._fluids_solver._reaction_k   = all_reaction_rates["g2"] 
         else:
@@ -802,6 +1131,7 @@ class GlowSim_1D():
         
         self._e_field     = np.ones_like(self._ni) * args.E_field
         self._e_potential = np.ones_like(self._ni) * args.E_field
+        self._xp_module   = np
 
         if(USE_GPU):
             self._e_field_solver.host_to_device()
@@ -814,6 +1144,15 @@ class GlowSim_1D():
             self._e_field     = cp.asarray(self._e_field)
             self._e_potential = cp.asarray(self._e_potential)
 
+            self._xp_module   = cp 
+            
+
+        xp        = cp.get_array_module(self._ni)
+        self._cycle_avg_e_poten   = xp.zeros_like(glow_sim_1d._e_potential)
+        self._cycle_avg_e_field   = xp.zeros_like(glow_sim_1d._e_field)
+        self._cycle_avg_ni        = xp.zeros_like(glow_sim_1d._ni)
+        self._cycle_avg_ne        = xp.zeros_like(glow_sim_1d._ne)
+        self._cycle_avg_fx_kvt    = xp.zeros_like(glow_sim_1d._fx_kvt)
 
         return
 
@@ -822,20 +1161,22 @@ class GlowSim_1D():
         self._e_potential = self._e_field_solver.poission_solve(self._ni, self._ne, self._rf_freq, self._t_curr + dt, self._v0_z0)
         self._e_field     = self._e_field_solver.compute_electric_field(self._e_potential)
         
-        # # E field to Boltzmann solver
-        self._boltzmann_solver._E_field   = self._e_field
-        self._fx_kvt                      = self._boltzmann_solver.integrate(self._fx_kvt, dt) 
-        self._ne                          = self._boltzmann_solver.compute_ne(self._fx_kvt)
-        self._ne[self._ne < 0]            = 0.0
+        # # # E field to Boltzmann solver
+        # self._boltzmann_solver._E_field   = self._e_field
+        # self._fx_kvt                      = self._boltzmann_solver.integrate(self._fx_kvt, dt) 
+        # self._ne                          = self._boltzmann_solver.compute_ne(self._fx_kvt)
+        # #self._ne[self._ne < 0]            = 0.0#self._ne[self._ne < 0]
+
+        
         
 
-        # set info from Boltzmann to fluids, 
-        self._fluids_solver._ne           = self._ne
-        self._fluids_solver._v_field      = self._e_potential
+        # # set info from Boltzmann to fluids, 
+        # self._fluids_solver._ne           = self._ne
+        # self._fluids_solver._v_field      = self._e_potential
 
-        all_reaction_rates                = self._boltzmann_solver.compute_reaction_rates(self._boltzmann_solver._reaction_op, self._fx_kvt)
-        if "g2" in all_reaction_rates:
-            self._fluids_solver._reaction_k   = all_reaction_rates["g2"]
+        # all_reaction_rates                = self._boltzmann_solver.compute_reaction_rates(self._boltzmann_solver._reaction_op, self._fx_kvt)
+        # if "g2" in all_reaction_rates:
+        #     self._fluids_solver._reaction_k   = all_reaction_rates["g2"]
         
         
         self._ni                  = self._fluids_solver.integrate(self._ni, dt)
@@ -1012,14 +1353,18 @@ class GlowSim_1D():
         fig = plt.figure(figsize=(12, 8), dpi=300)
 
         plt.subplot(rows, cols, 1)
-        plt.plot(grid_z, ni[:])
+        plt.semilogy(grid_z, self._ni_init[:],'r--',label='initial')
+        plt.semilogy(grid_z, ni[:],label='pde')
         plt.xlabel("z (m)")
         plt.ylabel("# density (1/m^3)")
         plt.grid()
+        plt.legend()
         plt.title("ni")
         
         plt.subplot(rows, cols, 2)
-        plt.plot(grid_z, ne[:])
+        plt.semilogy(grid_z, self._ne_init[:],'r--',label='initial')
+        plt.semilogy(grid_z, ne[:], label='pde')
+        plt.legend()
         plt.xlabel("z (m)")
         plt.ylabel("# density (1/m^3)")
         plt.grid()
@@ -1046,9 +1391,11 @@ class GlowSim_1D():
 
         temp_list=self._boltzmann_solver.compute_avg_energy(fx_kvt[:])
         plt.subplot(rows, cols, 5)
-        plt.plot(grid_z, temp_list[:])
+        plt.plot(grid_z, self._Te_init[:], 'r--', label='initial')
+        plt.plot(grid_z, temp_list[:], label='pde')
+        plt.legend()
         plt.xlabel("z (m)")
-        plt.ylabel("mean energy (eV)")
+        plt.ylabel("temperature (eV)")
         plt.grid()
 
         plt.subplot(rows, cols, 6)
@@ -1060,15 +1407,36 @@ class GlowSim_1D():
         plt.tight_layout()
         fig.savefig("%s_qoi.png"%(fprefix))
         plt.close()
+
         
+        fig = plt.figure(figsize=(8, 8), dpi=300)
+        spec_sp = self._boltzmann_solver._spec_sp
+        gx, gw  = spec_sp._basis_p.Gauss_Pn(params.BEVelocitySpace.NUM_Q_VR)
+        mass_b  = np.dot(spec_sp.Vq_r(gx,0,1),gw) * self._boltzmann_solver._vth
+
+        num_p  = spec_sp._p +1
+        num_sh = len(spec_sp._sph_harm_lm)
+        num_z  = len(grid_z)
+        num_vt = len(grid_vt)
+
+        fx = np.transpose(fx_kvt.reshape((num_z, num_p * num_vt))).reshape(num_p, num_vt, num_z).reshape(num_p, num_vt*num_z)
+        fx = np.dot(mass_b, fx).reshape(num_vt, num_z)
+
+        for vt_idx in range(num_vt):
+            plt.semilogy(grid_z, fx[vt_idx], label="theta %.4f pi"%(grid_vt[vt_idx]/np.pi))
         
-        if (num_z_plots>0):
+        plt.legend()
+        plt.grid()
+        plt.xlabel("z (m)")
+        fig.savefig("%s_vt_z_plt.png"%(fprefix))
+        plt.close()
+        
 
-            rows  = max(num_z_plots//2,0)
-            cols  = 4
 
-            fig = plt.figure(figsize=(5 * cols, 4 * rows), dpi=300)
 
+
+        
+        if (num_z_plots>0 and False):
             spec_sp   = self._boltzmann_solver._spec_sp
             k_domain  = self._boltzmann_solver._v_space_domain
             c_gamma   = np.sqrt(2 * collisions.ELECTRON_CHARGE_MASS_RATIO)
@@ -1082,6 +1450,10 @@ class GlowSim_1D():
             num_z  = len(grid_z)
             num_vt = len(grid_vt)
 
+            rows  = max(num_z_plots//num_sh,0)
+            cols  = 4
+
+            fig = plt.figure(figsize=(5 * cols, 4 * rows), dpi=300)
             p_vt_to_lm = self._boltzmann_solver._vt_to_lm
 
             plt_offset = 1
@@ -1112,84 +1484,158 @@ class GlowSim_1D():
             plt.close()
         
 
+def benchmark_cpu(f, a, warmup, n_repeat):
+    
+    for i in range(warmup):
+        f(*a)
+
+    start_cpu = time.perf_counter()
+    for i in range(n_repeat):
+        f(*a)
+    end_cpu = time.perf_counter()
+
+    return (end_cpu-start_cpu)/n_repeat
+
+def benchmark_gpu(f, a, warmup, n_repeat):
+    
+    cp.cuda.Stream.null.synchronize()
+    for i in range(warmup):
+        f(*a)
+    cp.cuda.Stream.null.synchronize()
+    
+    
+    start_cpu = time.perf_counter()
+    for i in range(n_repeat):
+        f(*a)
+    cp.cuda.Stream.null.synchronize()
+    end_cpu = time.perf_counter()
+    
+    t_cpu = (end_cpu - start_cpu)/n_repeat
+    t_gpu = (end_cpu - start_cpu)/n_repeat
+    cp.cuda.Stream.null.synchronize()
+    return t_gpu, t_cpu
+
+
+    
 if __name__== "__main__":
     args         = parser.parse_args()
     print("solver arguments ",args)
 
-    USE_GPU=False
-    
-    try:
-        num_gpus = cp.cuda.runtime.getDeviceCount()
-    except Exception as e:
-        print(e)
-        num_gpus=0
-    
-    if num_gpus > 0:
-        USE_GPU=True
+    USE_GPU=bool(args.gpu)
 
-    if(USE_GPU):
-        print("Cupy number of devices = %d" %(num_gpus))
+    if USE_GPU:
+        try:
+            num_gpus = cp.cuda.runtime.getDeviceCount()
+        except Exception as e:
+            print(e)
+            num_gpus=0
+
+        print("Cupy number of devices = %d" %(num_gpus))        
+        if num_gpus == 0:
+            print("No GPU devices found. Reverting back to CPU only code")
+            USE_GPU=False
 
     glow_sim_1d = GlowSim_1D(args)
-    glow_sim_1d.init(0,args.T_END, args)
+
+    if (args.benchmark):
+        n_warm_up    = 5
+        n_iterations = 5 
+        glow_sim_1d.init(0,args.T_END, args)
+        
+        if USE_GPU:
+            t_all, t_all_cpu       = benchmark_gpu(glow_sim_1d.integrate, (args.T_DT,), n_warm_up, n_iterations)
+            t_psolve, t_psolve_cpu = benchmark_gpu(glow_sim_1d._e_field_solver.poission_solve, (glow_sim_1d._ne, glow_sim_1d._ni, args.rf_freq, args.T_DT, args.v0_z0), n_warm_up, n_iterations)
+            t_esolve, t_esolve_cpu = benchmark_gpu(glow_sim_1d._e_field_solver.compute_electric_field, (glow_sim_1d._e_potential,), n_warm_up, n_iterations)
+            t_bte, t_bte_cpu       = benchmark_gpu(glow_sim_1d._boltzmann_solver.integrate, (glow_sim_1d._fx_kvt, args.T_DT,), n_warm_up, n_iterations)
+            t_fluid, t_fluid_cpu   = benchmark_gpu(glow_sim_1d._fluids_solver.integrate, (glow_sim_1d._ni, args.T_DT,), n_warm_up, n_iterations)
+        else:
+            t_all    = benchmark_cpu(glow_sim_1d.integrate, (args.T_DT,), n_warm_up, n_iterations)
+            t_psolve = benchmark_cpu(glow_sim_1d._e_field_solver.poission_solve, (glow_sim_1d._ne, glow_sim_1d._ni, args.rf_freq, args.T_DT, args.v0_z0), n_warm_up, n_iterations)
+            t_esolve = benchmark_cpu(glow_sim_1d._e_field_solver.compute_electric_field, (glow_sim_1d._e_potential,), n_warm_up, n_iterations)
+            t_bte    = benchmark_cpu(glow_sim_1d._boltzmann_solver.integrate, (glow_sim_1d._fx_kvt, args.T_DT,), n_warm_up, n_iterations)
+            t_fluid  = benchmark_cpu(glow_sim_1d._fluids_solver.integrate, (glow_sim_1d._ni, args.T_DT,), n_warm_up, n_iterations)
+
+        print("Total glow_sim 1d timestep = %8E"%(t_all))
+        print("\t|---poisson solve        = %8E"%(t_psolve))
+        print("\t|---efield compute       = %8E"%(t_esolve))
+        print("\t|---boltzmann step       = %8E"%(t_bte))
+        print("\t|---fluid (ion) step     = %8E"%(t_fluid))
+
+        sys.exit(0)
+
+    if args.restore==0:
+        glow_sim_1d.init(0,args.T_END, args)
+    else:
+        with open('glow_sim.checkpoint', 'rb') as handle:
+            glow_sim_1d = pickle.load(handle)
 
     nsteps_to_plot = 4
     ts_freq        = int(args.T_END / args.T_DT / nsteps_to_plot)
 
-    # e_poten = list()
-    # e_field = list()
-    # ni      = list()
-    # ne      = list()
-    # fx_kvt  = list()
-    # ts      = list()
-    # if glow_sim_1d._step_id % ts_freq ==0:
-    #     ts.append(glow_sim_1d._t_curr)
-    #     e_poten.append(glow_sim_1d._e_potential)
-    #     e_field.append(glow_sim_1d._e_field)
-    #     ni.append(glow_sim_1d._ni)
-    #     ne.append(glow_sim_1d._ne)
-    #     fx_kvt.append(glow_sim_1d._fx_kvt)
-
-    xp        = cp.get_array_module(glow_sim_1d._ni)
-    e_poten   = xp.zeros_like(glow_sim_1d._e_potential)
-    e_field   = xp.zeros_like(glow_sim_1d._e_field)
-    ni        = xp.zeros_like(glow_sim_1d._ni)
-    ne        = xp.zeros_like(glow_sim_1d._ne)
-    fx_kvt    = xp.zeros_like(glow_sim_1d._fx_kvt)
-    
+  
+    is_valid=True
     while glow_sim_1d._t_curr < args.T_END:
         if glow_sim_1d._step_id % 1000 ==0:
             print("glow sim t = %.8E (s)" %(glow_sim_1d._t_curr))
-            print("\t ne (min, max)\t = (%.8E, %.8E)" %(xp.min(glow_sim_1d._ne), xp.max(glow_sim_1d._ne)) )
-            print("\t ni (min, max)\t = (%.8E, %.8E)" %(xp.min(glow_sim_1d._ni), xp.max(glow_sim_1d._ni)) )
-            print("\t E  (min, max)\t = (%.8E, %.8E)" %(xp.min(glow_sim_1d._e_field), xp.max(glow_sim_1d._e_field)) )
+            print("\t ne (min, max)\t = (%.8E, %.8E)" %(glow_sim_1d._xp_module.min(glow_sim_1d._ne), glow_sim_1d._xp_module.max(glow_sim_1d._ne)) )
+            print("\t ni (min, max)\t = (%.8E, %.8E)" %(glow_sim_1d._xp_module.min(glow_sim_1d._ni), glow_sim_1d._xp_module.max(glow_sim_1d._ni)) )
+            print("\t E  (min, max)\t = (%.8E, %.8E)" %(glow_sim_1d._xp_module.min(glow_sim_1d._e_field), glow_sim_1d._xp_module.max(glow_sim_1d._e_field)) )
+            print(glow_sim_1d._ne[0])
+            print(glow_sim_1d._ne[-1])
+            if len(cp.where(glow_sim_1d._ne<0)[0]):
+                print(cp.where(glow_sim_1d._ne<0))
+                #is_valid=False
+            cp.cuda.Stream.null.synchronize()
+
+        # if glow_sim_1d._step_id % 10000 ==0:
+        #     with open('glow_sim.checkpoint', 'wb') as handle:
+        #         pickle.dump(glow_sim_1d, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+            # print("\t ne (min, max)\t = (%.8E, %.8E)" %(xp.min(ne), xp.max(ne)) )
+            # print("\t ni (min, max)\t = (%.8E, %.8E)" %(xp.min(ni), xp.max(ni)) )
+            # print("\t E  (min, max)\t = (%.8E, %.8E)" %(xp.min(e_field), xp.max(e_field)) )
         
-        e_poten += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_potential
-        e_field += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_field
-        ne      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ne
-        ni      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ni
-        fx_kvt  += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._fx_kvt
+        glow_sim_1d._cycle_avg_e_poten += glow_sim_1d._e_potential
+        glow_sim_1d._cycle_avg_e_field += glow_sim_1d._e_field
+        glow_sim_1d._cycle_avg_ne      += glow_sim_1d._ne
+        glow_sim_1d._cycle_avg_ni      += glow_sim_1d._ni
+        glow_sim_1d._cycle_avg_fx_kvt  += glow_sim_1d._fx_kvt
         
         glow_sim_1d.integrate(args.T_DT)
 
-        e_poten += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_potential
-        e_field += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._e_field
-        ne      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ne
-        ni      += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._ni
-        fx_kvt  += (0.5 * args.T_DT/args.T_END) * glow_sim_1d._fx_kvt
+        glow_sim_1d._cycle_avg_e_poten += glow_sim_1d._e_potential
+        glow_sim_1d._cycle_avg_e_field += glow_sim_1d._e_field
+        glow_sim_1d._cycle_avg_ne      += glow_sim_1d._ne
+        glow_sim_1d._cycle_avg_ni      += glow_sim_1d._ni
+        glow_sim_1d._cycle_avg_fx_kvt  += glow_sim_1d._fx_kvt
+        
+        if (is_valid==False):
+            break
 
-    if xp == cp:
-        e_poten = cp.asnumpy(e_poten)
-        e_field = cp.asnumpy(e_field)
-        ne      = cp.asnumpy(ne)
-        ni      = cp.asnumpy(ni)
-        fx_kvt  = cp.asnumpy(fx_kvt)
 
+    if glow_sim_1d._xp_module == cp:
+        e_poten = (0.5 * args.T_DT/glow_sim_1d._t_curr) * cp.asnumpy(glow_sim_1d._cycle_avg_e_poten)
+        e_field = (0.5 * args.T_DT/glow_sim_1d._t_curr) * cp.asnumpy(glow_sim_1d._cycle_avg_e_field)
+        ne      = (0.5 * args.T_DT/glow_sim_1d._t_curr) * cp.asnumpy(glow_sim_1d._cycle_avg_ne)
+        ni      = (0.5 * args.T_DT/glow_sim_1d._t_curr) * cp.asnumpy(glow_sim_1d._cycle_avg_ni)
+        fx_kvt  = (0.5 * args.T_DT/glow_sim_1d._t_curr) * cp.asnumpy(glow_sim_1d._cycle_avg_fx_kvt)
+        
         glow_sim_1d._e_field_solver.device_to_host()
         glow_sim_1d._fluids_solver.device_to_host()
         glow_sim_1d._boltzmann_solver.device_to_host()
 
+        cp.cuda.Stream.null.synchronize()
+    else:
+        e_poten = (0.5 * args.T_DT/glow_sim_1d._t_curr) * glow_sim_1d._cycle_avg_e_poten
+        e_field = (0.5 * args.T_DT/glow_sim_1d._t_curr) * glow_sim_1d._cycle_avg_e_field
+        ne      = (0.5 * args.T_DT/glow_sim_1d._t_curr) * glow_sim_1d._cycle_avg_ne
+        ni      = (0.5 * args.T_DT/glow_sim_1d._t_curr) * glow_sim_1d._cycle_avg_ni
+        fx_kvt  = (0.5 * args.T_DT/glow_sim_1d._t_curr) * glow_sim_1d._cycle_avg_fx_kvt
+
+
     z_pts   = np.linspace(glow_sim_1d._grid_z[1], glow_sim_1d._grid_z[-2], 6)
-    fprefix = "glow_discharge_1d3v_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_ev"+ "%2E"%(args.electron_volt) + "_bscale" + str(args.basis_scale) +"_dt"+"%.4E"%(args.T_DT) + "_T"+ "%.2E"%(args.T_END)
+    fprefix = "glow_discharge_1d3v_" + "_".join(args.collisions) + "_v0_z0" + str(args.v0_z0) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+ "_lmax" + str(args.l_max) + "_qpn" + str(args.spline_q_pts_per_knot) + "_ev"+ "%2E"%(args.electron_volt) + "_bscale" + str(args.basis_scale) +"_dt"+"%.4E"%(args.T_DT) + "_T"+ "%.2E"%(args.T_END) 
     glow_sim_1d.plot_cycle_avg(e_poten, e_field, ne, ni, fx_kvt, z_pts, fprefix)
+
 

@@ -82,7 +82,7 @@
 %\newcommand{\vtheta}{\theta_{\vect{v}}}
 %\newcommand{\vphi}{\varphi_{\vect{v}}}
 %\newcommand{\vr}{v_{r}}
-\newcommand{\vtheta}{v_{\theta}}
+\newcommand{\vtheta}{{v_{\theta}}}
 \newcommand{\vphi}{v_{\varphi}}
 \newcommand{\vomega}{v_{\omega}}
 \newcommand{\vrunit}{\hat{\vect{v}}_{r}}
@@ -387,6 +387,62 @@ Solving the Boltzmann equation for electron kinetics using Petrov-Galerkin appro
 		\only<+>{\includegraphics[width=\textwidth]{c_appx_op2.png}}
 	\end{figure}
 \end{frame}
+
+
+\begin{frame}
+	\frametitle{1d glow discharge problem}
+	\begin{itemize}
+		\item The ionized heavy densities are governed by the drift-diffusion equation below.
+			\begin{align*}
+			&\partial_t n_i + \partial_z J_i = k_i n_0 n_e \text{ where } J_i\of{z, t} = \mu_i n_i E\of{z,t} -D_i \partial_z n_i\\
+			&J_i(z,t)=\max\of{\mu_i n_i \vect{E}\cdot \vect{\hat{n}},0} \text{ for } z =0 \text{ and } z=L
+			\end{align*}
+		\item E-field is computed with 
+			\begin{align*}
+			\nabla V = -\frac{e}{\epsilon_0} (n_i-n_e) \text{ where } n_e(z,t) = \myint_{\vect{v}} f(\vect{v}, z, t) \diff{\vect{v}} \\
+			V(0,t) = V_0 \sin(2\pi ft) \text{ , } V(L,t) = 0 \text{ and } \vect{E} = E \vect{\hat{z}} = -\of{\partial_z V} \vect{\hat{z}}
+			\end{align*}
+		\item 1d-space Boltzmann equation is given below. 
+		\begin{align*}
+			&	\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \text{ for } (z,\vect{v}) \in (0,L) \times[0,v_{max}]^3 \\
+			& f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0
+		\end{align*}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\begin{center}
+		\includegraphics[width=0.8\textwidth]{fig/glow_discharge_1d3v_g0_v0_z01.0_E0.0_poly_bspline_sp_2_nr128_qpn_4_ev2.000000E+00_bscale1.0_dt1.0000E-13_T1.00E-09_qoi.png}
+	\end{center}
+\end{frame}
+
+%\begin{frame}
+%	\frametitle{BTE boundary conditions}
+%	\begin{itemize}
+%		\item we use collocation method in $\vtheta$ and $z$ directions. 
+%		\item Use projection operators to compute $l$ modes 
+%	\end{itemize}
+%	\begin{align*}
+%		&f(v, \vtheta_j , z, t) = f_{\vtheta_j} (v, z, t) = \sum_k f_{\vtheta_j, k} \of{z,t} S_k\of{\frac{v}{\vth}} \\
+%	\end{align*}
+%
+%	\begin{align*}
+%		&	f_k\of{\vtheta,z,t} = \sum_l f_{lk}\of{z, t} Y_{l0}\of{\vtheta}\\
+%		&	f_{lk} = 2\pi \myint_{\vtheta} \sin\of{\vtheta} f_k\of{\vtheta, z, t} Y_{l0} d\vtheta \\
+%		&\sum_{\vtheta_j} w_{\vtheta_j} f_{\vtheta_j,k} Y_{l0}\of{\vtheta_j} = P^{\vtheta_j}_l f_{\vtheta_j,k}
+%	\end{align*}
+%	
+%	\begin{align*}
+%		\of{I_{N_\vtheta} \otimes M^{p}_{k}} \partial_t f_{\vtheta_j, k , z, t} + \of{I_{N_\vtheta} \otimes \of{\cos\of{\vtheta_j} W^{p}_k D_z}} f_{\vtheta_j, k , z, t} \\
+%		= Y_{\vtheta_j, q} (E^{pq}_{kl} + C^{pq}_{kl}) \of{P^{\vtheta_j}_{l} f_{\vtheta_j,k,z,t}}^{T}
+%	\end{align*}
+%\end{frame}
+
+
+
+
+
+
 
 
 \end{document}

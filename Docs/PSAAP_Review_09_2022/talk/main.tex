@@ -17,10 +17,10 @@
 \usepackage{mhchem}
 \usepackage{tikz}
 \usetikzlibrary{arrows}
-
-
 \usepackage[percent]{overpic}
 \usepackage[absolute,overlay]{textpos}
+\usepackage{tikz} % Required for flow chart
+\usepackage[caption=false]{subfig}
 
 \newcommand{\overbar}[1]{\mkern 1.5mu\overline{\mkern-1.5mu#1\mkern-1.5mu}\mkern 1.5mu}
 \newcommand{\pp}[2]{\frac{\partial #1}{\partial #2}}
@@ -82,7 +82,7 @@
 %\newcommand{\vtheta}{\theta_{\vect{v}}}
 %\newcommand{\vphi}{\varphi_{\vect{v}}}
 %\newcommand{\vr}{v_{r}}
-\newcommand{\vtheta}{v_{\theta}}
+\newcommand{\vtheta}{{v_{\theta}}}
 \newcommand{\vphi}{v_{\varphi}}
 \newcommand{\vomega}{v_{\omega}}
 \newcommand{\vrunit}{\hat{\vect{v}}_{r}}
@@ -121,7 +121,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 {\fontfamily{phv}\selectfont
   { \scriptsize
     % -- define presenter, authors here
-    Milinda Fernando, Daniil Bochkov, Todd Oliver, Raja Laxminarayan, Philip Varghese, Robert Moser, George Biros  \\
+    Milinda Fernando, Daniil Bochkov, Todd Oliver, Laxminarayan Raja, Philip Varghese, Robert Moser, George Biros  \\
     % --
   }
   {\color{burntorange} \tiny
@@ -167,337 +167,243 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 %	\end{itemize}
 %\end{frame}
 
+\begin{frame}[fragile]
+	\frametitle{Where do we fit ? }
+	% \begin{tikzpicture}
+	% 	\node[anchor=south west,inner sep=0] at (0,0) {\includegraphics[width=0.8\textwidth]{pecos_roadmap_tst_1.5.pdf}};
+	% 	\draw[orange, fill = yellow!30, fill opacity = 0.4 ,ultra thick,rounded corners] (4.15,3.6) rectangle +(4.2,1.6);
+	% \end{tikzpicture}
+	\begin{center}
+		\includegraphics[width=0.8\textwidth]{road_map.png}
+	\end{center}
+\end{frame}
+
 \begin{frame}
-	\frametitle{Boltzmann Equation}
+	\frametitle{Outline}
 	\begin{itemize}
-		\item Why ? Electron distribution function defines the transport and kinetic properties, and its evolution is described by the Boltzmann equation.
-		%The Boltzmann equation describes the evolution of the electron distribution function $f=f(\vect{x}, \vect{v}, t)$. %
-		\begin{align}
-			\partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f  - \frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f)
-		\end{align}
-		\item Challenges: 6+1 dimensions
-		\item First, we consider spatially homogeneous electron Boltzmann equation, focusing on the representation of $f(\vect{v},t)$
+		\item 0D3V - Homogeneous in space
 		\begin{itemize}
-			\item Use spherical harmonics for angular directions. 
-			\item Radial direction approximations, with global and local approximations
+			\item Formulation
+			\item Discretization
+			\item Results
+			\item Verification with Bolsig+
 		\end{itemize}
-		\item \textbf{Goal}: Accurate representation of $f$, with minimum dofs. 
+		\item 1D3V - Glow discharge problem
+		\begin{itemize}
+			\item Formulation
+			\item Discretization
+			\item Boundary conditions
+		\end{itemize}
+		\item Future work
+	\end{itemize}
+	% \begin{itemize}
+	% 	\item Current work on deterministic Boltzmann solver for 0D3V and 1D3V
+	% 	\begin{itemize}
+	% 		\item 0D3V solver
+	% 		\begin{itemize}
+	% 			\item Studied efficient discretization in speed
+	% 			\item Verified 0D3V code with Bolsig+ in different parameter regimes
+	% 		\end{itemize}
+	% 		\item 1D3V solver
+	% 		\begin{itemize}
+	% 			\item Implemented CPU/GPU Python implementation
+	% 			\item Currently, resolving issues with boundary conditions
+	% 		\end{itemize}
+	% 	\end{itemize}
+	% 	\item 0D3V formulation and results
+	% 	\item 1D3V formulation and preliminary results
+	% \end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{0D3V - Boltzmann equation}
+	\begin{itemize}
+		\item For a given electric field $\vect{E}$
+		\begin{align}
+			\partial_t f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f)
+		\end{align} 
+		\item Derived the steady state equation
+		\begin{align}
+			\textcolor{black!70}{\partial_t \hat{f} = -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} \text{ where } \hat{f}(\vect{v},t) = \frac{f(v,t)}{\myint_{R^3} f(\vect{v},t) \diff{\vect{v}}}}\\
+			\textcolor{black!70}{\partial_t (\hat{f}) = 0 \ \ \  \Rightarrow} \ \ \  -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} =0  \text{ with } u^T \hat{f}-1=0
+		\end{align}
 	\end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Galerkin approach}
+	\frametitle{0D3V - Challenges}
+	\begin{columns}
+		\begin{column}{0.45\textwidth}
+			\begin{itemize}
+				\item Non-smooth cross sections $\Rightarrow$ non-smooth solutions
+				\item Strong advection causes stabilization issues
+				\item To capture reaction rates needs accurate tail representations of $f$
+				\item Need compact representation of $f$ (for 3D3V case)
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.45\textwidth}
+			\begin{center}
+				\includegraphics[width=1.2\columnwidth]{g0_g2_cs.png}
+			\end{center}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}
+	\frametitle{0D3V - Discretization}
 	\small
 	\begin{itemize}
-		\item Weak formulation:
-		$
-		\displaystyle
-		\quad
-		\partial_t f - \frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}}f = C(f)
-		\quad \rightarrow \quad
-		\partial_t \myint_{R^3} f \phi\of{\vect{v}} \ud \vect{v} = 
-		\myint_{R^3} C(f) \phi\of{\vect{v}} \ud \vect{v} + \myint_{R^3} \of{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}} f} \phi(\vect{v}) \ud \vect{v}
-		$
-		\item $f$ is approximated as isotropic + anisotropic correction terms.
+		\item Representation of $f$
 		\begin{itemize}
-			\item Global polynomials \\
+			\item $\Phi_k\of{v}$ : Global polynomials
+			\item $\Phi_k\of{v}$ : Local B-splines
 			$
 			\displaystyle
 			\quad 
-			f(\vect{v},t) = M(v)\sum_{klm} f_{klm} \Phi_k\of{v} Y_{lm}\of{v_\theta, v_\phi}$ with $
-			\displaystyle
-			\quad 
-			\phi_{pqs}\of{\vect{v}} = \underbrace{\Phi_p\of{v}}_{\text{radial basis}} \underbrace{Y_{qs}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$
-			\item Local B-splines \\
-			$
-			\displaystyle
-			\quad 
-			f(\vect{v},t) = \sum_{klm} f_{klm} \Phi_k\of{v} Y_{lm}\of{v_\theta, v_\phi}$ with $
-			\displaystyle
-			\quad 
-			\phi_{pqs}\of{\vect{v}} = \underbrace{\Phi_p\of{v}}_{\text{radial basis}} \underbrace{Y_{qs}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$
+			f(\vect{v},t) = \sum_{klm} f_{klm} \underbrace{\Phi_k\of{v}}_{\text{radial basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$ 
+			%with $
+			% \displaystyle
+			% \quad 
+			% \phi_{pqs}\of{\vect{v}} = \underbrace{\Phi_p\of{v}}_{\text{radial basis}} \underbrace{Y_{qs}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$
 		\end{itemize}
-%		\item Resulting system of ODEs, 
-%		$ \displaystyle
-%		\quad 
-%		\sum_{k,l,m} M_{p,q,s}^{k,l,m} \partial_t h_{k,l,m}\of{t} = \sum_{k,l,m}  \of{\underbrace{C_{p,q,s}^{k,l,m}}_{\text{collision op.}}  - \underbrace{E_{p,q,s}^{k,l,m}}_{\text{advection op.}}} h_{k,l,m}\of{t}$
-%		\item \textbf{Discretized operators}: For $N_r, N_{lm}$ be number of basis functions used in radial and angular directions, then matrices are $(N_rN_{lm} \times N_rN_{lm})$.
-	\end{itemize}
-\end{frame}
-
-%\begin{frame}
-%	\frametitle{Investigation of different bases}
-%%	\begin{itemize}
-%%		\item Choice of basis functions in the radial direction
-%%		\begin{itemize}
-%%			\item Global approximations with global polynomials
-%%			\item Local approximations with B-Splines with local support 
-%%		\end{itemize}
-%%	\end{itemize}
-%	\small
-%	\begin{align*}
-%		\textrm{Assoc. Laguerre poly:}
-%		& \quad \Phi_n\of{v} = L_n\of{v^2}, &&
-%		\quad 
-%		\myint_{0}^{+\infty} v^2 e^{-v^2} L_n\of{v^2} L_{n^\prime}\of{v^2} \ud v \sim \delta_{nn^\prime}
-%		\\
-%		\textrm{Maxwell (speed) poly:}
-%		& \quad \Phi_n\of{v} = P_n\of{v}, &&
-%		\quad 
-%		\myint_{0}^{+\infty} v^2 e^{-v^2} P_n\of{v} P_{n^\prime}\of{v} \ud v \sim \delta_{nn^\prime}
-%		\\
-%		\textrm{B-Splines:}
-%		& \quad \Phi_n\of{v} = B_n\of{v}, && 
-%		%\quad 
-%		%N_n\of{v} = 1 - \frac{|x-x_n|}{\Delta x},\quad x_{n-1} < x < x_{n+1}
-%	\end{align*}	
-%\end{frame}
-
-\begin{frame}
-	\frametitle{Collision operator}
-	\begin{itemize}
-		\item Encapsulate the physics of underlying collisions. In weak form, 
-		$
-		\displaystyle
-		\quad 
-		\myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
-		=
-		\myint_{R^3} \myint_{R^3} \myint_{S^2} 
-		B\of{\vect{v}_e, \vect{v}_0, \vect{\omega}} 
-		f_e\of{\vect{v}_e} f_0\of{\vect{v}_0} 
-		\left(
-		\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{v}_0, \vect{\omega}}} 
-		- \phi\of{\vect{v}_e} 
-		\right)
-		\diff{\vect{v}_0} \diff{\vect{v}_e} \diff{\vect{\omega}}
-		$
-		\item Assuming $f_0\of{\vect{v}} = n_0 \delta\of{\vect{v}}$, we can simplify, 
-		$
-		\displaystyle
-		\quad 
-		\myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
-		=
-		n_0 \myint_{R^3} \myint_{S^2} 
-		B\of{\vect{v}_e, 0, \vect{\omega}} 
-		f_e\of{\vect{v}_e}
-		\left(
-		\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, 0, \vect{\omega}}} 
-		- \phi\of{\vect{v}_e} 
-		\right)
-		\diff{\vect{v}_e} \diff{\vect{\omega}}
-		$
-		\item Collision probability kernel $B\of{\vect{v}, \vect{\omega}}=\norm{\vect{v}} \underbrace{\sigma(\norm{\vect{v}}, \vect{\omega})}_{\text{LXCAT experimental data}}$
-		\item Currently we consider, 
-		\begin{itemize}
-			\item Elastic    : $e + Ar \rightarrow e + Ar$ 
-			\item Ionization : $e + Ar \rightarrow 2e + Ar^+$ 
-		\end{itemize}
-		\item Cross sections might not be continuous, especially for reactions with threshold energy.  
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{LXCAT cross section data}
-		\centering
-		\includegraphics[width=0.7\textwidth]{g0_g2_cs.png}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Steady-state solutions}
-	\begin{itemize}
-		\item We consider, spatially homogeneous case, with distribution function representation as described above.  
-		\item Electric field accelerate electrons (adds energy), while collision causes energy loss.
-		\item Therefore, normalized distribution function $\hat{f}\of{\vect{v},t}$ should reach a steady state.  
-		$
-		\displaystyle
-		\partial_t \hat{f} = -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} \text{ where } \hat{f}(\vect{v},t) = \frac{f(v,t)}{\myint_{R^3} f(\vect{v},t) \diff{\vect{v}}}
-		$
-		\item We can directly solve the above to compute the steady-state solution.
-		$
-		\displaystyle
-		\quad
-		\partial_t (\hat{f}) = 0 \ \ \  \Rightarrow \ \ \ -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} =0
-		$ with $u^T \hat{f}-1=0$
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Validation with Bolsig+}
-	\begin{itemize}
-		\item We use Bolsig code, as a baseline for validation. 
-		Hagelaar, G., BOLSIG+-Electron Boltzmann equation solver. 2013. URL: \url{https://www.bolsig.laplace.univ-tlse.fr}
-		\item The code uses, fixed two term approximation, 
-		\item Solves the electron Boltzmann equation in uniform electric fields with two term approximation, with finite volume discretization. \\
-		$
-		\displaystyle
-		\quad
-		f(\vect{v},t) = f_0(v, t) + f_1(v,t)\cos v_\theta
-		$ 
-		\item We deploy (0,0) and (1,0) lm modes to match the expansion used in the Bolsig+.
-		\item Both codes provided with the same experimental cross section data. 
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Radial basis: Maxwell polynomials (in speed)}
-	\centering
-	\begin{tabular}{ccc}
-	constant $\sigma$ & elastic & elastic + ionization \\
-	\includegraphics[width=0.3\textwidth]{maxwell_speed_g0Const.png} & 
-	\includegraphics[width=0.3\textwidth]{maxwell_speed_g0.png} & 
-	\includegraphics[width=0.3\textwidth]{maxwell_speed_g0_g2.png}
-	\end{tabular}
-	\begin{itemize}
-		\item Global polynomials are robust slow varying smooth data. 
-		\item Not ideal with discontinuous cross section data. 
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Radial basis: Maxwell polynomials (in energy)}
-	\centering
-	\begin{tabular}{cc}
-		elastic & elastic + ionization \\
-		\includegraphics[width=0.3\textwidth]{maxwell_energy_g0.png} & 
-		\includegraphics[width=0.3\textwidth]{maxwell_energy_g0_g2.png}
-	\end{tabular}
-	\begin{itemize}
-		\item Maxwell polynomials in energy seems to perform better, yet global polynomials are not ideal with cross section discontinuities. 
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Radial basis: linear B-Splines}
-	\centering
-	\begin{tabular}{cc}
-		elastic & elastic + ionization \\
-		\includegraphics[width=0.3\textwidth]{bspline_sp1_speed_g0.png} & 
-		\includegraphics[width=0.3\textwidth]{bspline_sp1_speed_g0_g2.png}
-	\end{tabular}
-	\begin{itemize}
-		\item Linear splines based discretized operators, are equivalent to central difference scheme, hence no upwinding. 
-		\item QoI (i.e., reaction rates) computed from B-splines were closer to Bolsig+ code, compare to the global polynomials. 
-	\end{itemize}
-	
-\end{frame}
-
-\begin{frame}
-	\frametitle{Simplifications for the collision operator}
-	\begin{itemize}
-		\item For the moment assume lm=(0,0), (1,0) modes, (i.e., two term expansion of distribution function)
-		\item $\vect{v}^{\prime} = (v_r^\prime, v_\theta^\prime, v_\phi^\prime) =\vect{v}^{post}\of{\vect{v},\vect{0},\vect{\omega}}$
-		\begin{align*}
-			\cos v_\theta^\prime = \cos v_\theta \cos\chi + \sin v_\theta \sin \chi \cos\of{v_\phi-\phi}
-		\end{align*}
-		\item Using the spherical harmonics addition theorem, we can write. 
-		\begin{align*}
-			P_l^{0} = P_l\of{\cos v_\theta^\prime} =  P_l\of{\cos v_\theta} P_l\of{\cos v_\phi} + 2\sum_{m=1}^{l} P_l^{m}\of{\cos v_\theta} P_l^{m}\of{\cos v_\phi} \cos \of{ m (v_\phi-\phi)}
-		\end{align*}
-		\item Analytically integrating out the angles, we can write,
-		\begin{align*}
-			C^{pq0}_{kl0}  = n_0 \myint_{v} v^3 \sigma\of{v} \phi_k\of{v} \delta_{ql} \of{\psi_p\of{v^{post}}\delta_{q0} - \psi_p\of{v}} \diff{v}  
-		\end{align*}
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{EEDF formulation}
-	\begin{itemize}
-		\item Projecting only for the spherical basis, we can write, 
-		\begin{center}
-		$
-		\displaystyle
-		\quad
-		\frac{d}{dt} f_{0,0} - E 
-		\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{1,0} 
-		+  \frac{2}{\sqrt{3}} \frac{1}{\vr} f_{1,0} \right) = \tilde{C}^{00}_{00} f_{0,0} = \tilde{C_0} f_{0,0}
-		$
-		$\frac{d}{dt} f_{1,0} - E 
-		\left( \frac{1}{\sqrt{3}} \frac{d}{d\vr} f_{0,0} \right) =  \tilde{C}^{10}_{10} f_{1,0} = \tilde{C_1} f_{1,0}
-		$
-		\end{center}
-		\item Based on the weak form of the $C^{10}_{10}$, 
-		\begin{center}
+		\item Weak formulation
 			$
 			\displaystyle
 			\quad
-			C^{10}_{10} = -n_0 \myint_{R} v^3 \sigma\of{\varepsilon} \phi(v) \psi(v) dv \implies  \tilde{C}^{10}_{10} = -n_0 \varepsilon^{1/2} \gamma \sigma\of{\varepsilon} $
-		\end{center} Let $\mu = \cfrac{\dot{n}_e}{n_e}$ be the growth rate due to collisions. In the weak form, 
-		\begin{center}
-			$\partial_t f(t,v) = (C + E)f \implies \mu = \frac{\dot{n}_e\of{t}}{n_e\of{t}} = \myint_{\vect{V}} C f \diff{\vect{v}} = u^T C \hat{f} \text{ where } \hat{f} = f/n_e$
-		\end{center}
+			\partial_t f - \frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}}f = C(f)
+			\quad $ \\
+			$
+			\displaystyle
+			\quad
+			\Rightarrow \quad
+			\partial_t \myint_{R^3} f \phi\of{\vect{v}} \ud \vect{v} = 
+			\myint_{R^3} C(f) \phi\of{\vect{v}} \ud \vect{v} + \myint_{R^3} \of{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}} f} \phi(\vect{v}) \ud \vect{v}\text{ , } 
+			\forall \phi(\vect{v})$
+		\item Weak form of the collision operator \\
+			$
+			\displaystyle
+			\quad 
+			\myint_{R^3} C \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+			=
+			N \myint_{R^3} \myint_{S^2} 
+			v\sigma(v,\vect{\omega})
+			f_e\of{\vect{v}_e}
+			\left(
+			\phi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{\omega}}} 
+			- \phi\of{\vect{v}_e} 
+			\right)
+			\diff{\vect{v}_e} \diff{\vect{\omega}}
+			$
 	\end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{EEDF formulation}
+	\frametitle{0D3V - R\&D activities}
+	% \begin{tabular}{l|c|c|l}
+	% 	\hline \\
+	% 	Activity & Conclusion \\
+	% 	\hline
+	% 	Local and global basis representations & Local representation perform better capturing non-smooth $f$ and discontinuous cross sections \\
+	% 	Non-uniform grids in radial direction  & Did not make much difference in the DOFs used. \\
+	% 	Discontinuous and continuous Galerkin approaches & Deriving the coupling terms for the collision operator is bit trickly for the DG formulation. \\
+	% 	Lagrange and Eulerian approaches for advection & Eulerian approach seems to work fine, we can capture $f$ with few $l$ (polar) modes. \\
+	% 	Simplifying collision operator  & Simplifications with EEDF formulations gave use better tail representations.	\\
+	% 	Validation with state-of-the-art Bolsig+ code	& We show good agreement with steady-state solutions computed with Bolsig+ code. \\
+	% 	\hline
+	% \end{tabular} 
 	\begin{itemize}
-		\item For steady state we can write, 
-		\begin{center}
-			$
-			\displaystyle
-			\quad
-			\partial_t \hat{f_1} = \frac{1}{n_e} \partial_t f_1 - \frac{\dot{n_e}}{n_e} \hat{f_1} =0 \implies $
-			$
-			\displaystyle
-			\quad
-			\hat{f_1} = \frac{E}{\sqrt{3}} \frac{\partial_{v}\hat{f_0}}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}$
-		\end{center}
-		\begin{center}
-			$
-			\displaystyle
-			\quad
-			\partial_t \hat{f_0} = \frac{1}{n_e} \partial_t f_0 - \mu \hat{f_0} = 0$ 
-			$
-			\displaystyle
-			\quad
-			\implies
-			\frac{E^2}{3} \partial_{v} \of{\frac{\partial_v \hat f_0}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}} + \frac{2E^2}{3v} \frac{\partial_v \hat{f_0}}{(n_0 \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} + \tilde C_0 \hat{f_0} = \mu \hat{f_0}$
-		\end{center}
-		\item Important to notice that we get a diffusion term in v-space. 
-		\item Only solve for $\hat{f}_0$ and compute $\hat{f_1}$ from derivative of $\hat{f}_0$.
-		\item The above is similar to the Bolsig+ derivation, with different models for electron growth rate $\mu$. 
+		\item Local and global basis representations for $\Phi_k\of{v}$
+		% \begin{itemize}
+		% 	\item Local representation perform better capturing non-smooth $f$ and discontinuous cross sections
+		% \end{itemize}
+		
+		\item Radially non-uniform discretization
+		% \begin{itemize}
+		% 	\item Not a significant difference in the DOFs required
+		% \end{itemize}
+
+		% \item Discontinuous and continuous Galerkin approaches
+		% \begin{itemize}
+		% 	\item Deriving the coupling terms for the collision operator is bit trickly for the DG formulation.
+		% \end{itemize}
+
+		\item Lagrange and Eulerian approaches for advection
+		% \begin{itemize}
+		% 	\item Eulerian approach seems to work fine, we can capture $f$ with few $l$ (polar) modes. The advection operator will trigger spherical asymmetry, while the collision operator kills it
+		% \end{itemize}
+
+		\item Verification with Bolsig+\footnote[frame]{Hagelaar, G.J.M. and Pitchford, L.C., 2005. Solving the Boltzmann equation to obtain electron transport coefficients and rate coefficients for fluid models. Plasma sources science and technology, 14(4), p.722.}, fixed two term approximation $f(\vect{v},t) = f_0(v, t) + f_1(v,t)\cos v_\theta$
+		% \begin{itemize}
+		% 	\item We show good agreement with steady-state solutions computed with Bolsig+ code.
+		% \end{itemize}
+
+		\item Implemented Bolsig code two term approximation, with simplified collision operator
+		% \begin{itemize}
+		% 	\item Simplifications with EEDF formulations gave use better tail representations.
+		% \end{itemize}
 	\end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
-	\frametitle{Previous results vs. EEDF formulation}
-	\centering
-
-		\only<+>
-		{
-			\begin{itemize}
-			\item Previous case \\
-			\centering
-			\begin{tabular}{cc}
-			elastic & elastic + ionization \\
-			\includegraphics[width=0.3\textwidth]{bspline_sp1_speed_g0.png} & 
-			\includegraphics[width=0.3\textwidth]{bspline_sp1_speed_g0_g2.png} 
-			\end{tabular}
-			\end{itemize}
+	\frametitle{Global vs. Local Galerkin approximations}\
+	\vspace{-0.5in}
+	\begin{figure}
+		\subfloat[\tiny{Maxwell polynomials, E=200 V/m, with elastic + ionization }]{%
+			\includegraphics[width=0.8\textwidth]{maxwell_E200_g0g2.png}
+		}\\
+		\subfloat[\tiny{B-Splines, E=200 V/m, with elastic + ionization }]{%
+			\includegraphics[width=0.8\textwidth]{bspline_sp2_E200_g0g2.png}
 		}
-		\only<+>
-		{
-			\begin{itemize}
-				\item EEDF formulation \\
-				\centering
-				\begin{tabular}{cc}
-					elastic & elastic + ionization \\
-					\includegraphics[width=0.3\textwidth]{bspline_sp2_speed_g0_eedf.png} & 
-					\includegraphics[width=0.3\textwidth]{bspline_sp2_speed_g0_g2_eedf.png} 
-				\end{tabular}
-			\end{itemize}
-		}
-		\begin{itemize}
-			\item The diffusion term is needed to capture the tails accurately. 
-		\end{itemize}
+	\end{figure}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Observations}
+	\frametitle{Bolsig+ collision operator}
+	\begin{columns}
+		\begin{column}{\textwidth}
+			\begin{itemize}
+				\item Bolsig only use 2 $\vtheta$ terms: $1, \cos\vtheta$ and constant in $\vphi$ direction. 
+				%We assume azimuthal symmetry for the time-being, $lm=\{(0,0), (1,0), (2,0), ...\}$
+				% \item $\vect{v}^{\prime} = (v_r^\prime, v_\theta^\prime, v_\phi^\prime) =\vect{v}^{post}\of{\vect{v},\vect{0},\vect{\omega}}$
+				% \begin{align*}
+				% 	\cos v_\theta^\prime = \cos v_\theta \cos\chi + \sin v_\theta \sin \chi \cos\of{v_\phi-\phi}
+				% \end{align*}
+				\item Simplified collision operator, $f(v,\vtheta,\vphi) = f_0(v) + f_1(v) \cos\vtheta$ with $\hat{f}_{0,1} = \cfrac{f_{0,1}}{n_e}$
+				%Using the spherical harmonics addition theorem and integrating out the angles analytically, 
+				% \begin{align*}
+				% 	P_l^{0} = P_l\of{\cos v_\theta^\prime} =  P_l\of{\cos v_\theta} P_l\of{\cos v_\phi} + 2\sum_{m=1}^{l} P_l^{m}\of{\cos v_\theta} P_l^{m}\of{\cos v_\phi} \cos \of{ m (v_\phi-\phi)}
+				% \end{align*}
+				% \item Analytically integrating out the angles, we can write,
+				\begin{align}
+					\myint_{v} C \psi\of{v} \diff{v}  = N \myint_{v} v^3 \sigma\of{v} f_l\of{v} \delta_{ql} \of{\psi\of{v^{post}}\delta_{q0} - \psi\of{v}} \diff{v}  
+				\end{align}
+				\item Steady state equations becomes (assuming $l=0,1$ and $m=0$ modes), 
+				\begin{align}
+					&\frac{E^2}{3} \partial_{v} \of{\frac{\partial_v \hat f_0}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}} + \frac{2E^2}{3v} \frac{\partial_v \hat{f_0}}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} + \tilde C_0 \hat{f_0} = \mu \hat{f_0} \\
+					&\hat{f_1} = \frac{E}{\sqrt{3}} \frac{\partial_{v}\hat{f_0}}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}
+				\end{align}
+				\item Only solve for $\hat{f}_0$ and $\hat{f}_1$ is derived from $\hat{f}_0$ as above
+			\end{itemize}
+		\end{column}
+		% \begin{column}{0.48\textwidth}
+			
+		% \end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}
+	\frametitle{B-Splines + EEDF formulation + simplified collision op + Galerkin approximation}
+	\begin{figure}
+		\subfloat[\tiny{B-Splines, E=200 V/m, with elastic + ionization with EEDF formulation}]{%
+			\includegraphics[width=0.99\textwidth]{bspline_sp2_E200_g0g2_eedf.png}
+		}
+	\end{figure}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Global vs. Local basis approximations}
 	\begin{itemize}
-		\item We need diffusion to stabilize tail oscillations.
-		\item Global polynomials (Maxwell, and others)
+		\item Global polynomials (Maxwell, Laguerre, Chebyshev)
 		\begin{itemize}
 			\item Pros
 			\begin{itemize}
@@ -506,73 +412,115 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 			\end{itemize}
 			\item Cons
 			\begin{itemize}
-				\item With LXCAT data tails are not well resolved. 
-				\item Struggle to capture sharp variations in $f$.
+				\item \textcolor{orange}{Computed operators are sensitive to chosen thermal velocity}
+				\item With LXCAT data tails are not well resolved 
+				\item Ionization and excitations cross sections are non-smooth%Struggle to capture sharp variations in $f$
 			\end{itemize}
 		\end{itemize}
 		\item Local approximations with B-Splines
 		\begin{itemize}
 			\item Pros
 			\begin{itemize}
-				\item Flexibility in quadrature, and knot placement. 
-				\item Tails are better resolved compared to the global approximations. 
+				\item Flexibility in quadrature, and knot placement
+				\item Tails are better resolved compared to the global approximations
 			\end{itemize}
 			\item Cons
 			\begin{itemize}
-				\item Linear or quadratic convergence
+				\item Lower-order convergence
 			\end{itemize}
+		\end{itemize}
+	\end{itemize}
+	\begin{itemize}
+		%\item Lower order splines, simplified collision operator with EEDF formulation seems to capture tails better compared to previous cases
+		\item Lower order splines seems to capture tails better 
+		\item For time-being we are planning to move forward with low-order B-Spline approximations 
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Comparison with Bolsig+ Nr=128}
+	\begin{center}
+		\only<+>{
+			\begin{itemize}
+				\item Elastic reaction rates
+			\end{itemize}
+			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g0.png}
+			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g0_rerror.png}
+			}
+		\only<+>{
+			\begin{itemize}
+				\item Ionization reaction rates
+			\end{itemize}
+			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g2.png}
+			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g2_error.png}
+			}
+		\only<+>{
+			\begin{itemize}
+				\item Steady-state energy
+			\end{itemize}
+			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_energy.png}
+			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_energy_rerror.png}
+			}
+	\end{center}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Glow Discharge with 1D3V Boltzmann}
+	\begin{align}
+		&\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \text{ for } (z,\vect{v}) \in (0,L) \times R^3 \\
+		&\textcolor{red!80}{f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0}\\
+		&\partial_t n_i + \partial_z \of{\mu_i n_i E\of{z,t} -D_i \partial_z n_i} = N \gamma \myint_{\varepsilon}\myint_{\vect{\omega}} \varepsilon^{1/2} \sigma_i f d\vect{\omega} d\varepsilon \\
+		& \vect{E} = \nabla \of{\Delta^{-1}\frac{e}{\epsilon_0} \of{n_i- n_e}} \text{ , } n_e = \myint_{\vect{v}} f\of{\vect{v}, z, t} \diff{\vect{v}}
+	\end{align}
+	
+	\begin{itemize}
+		\item 1D3V - Challenges
+		\begin{itemize}
+			\item The spatial boundary conditions are discontinuous in $\vtheta$ $\Rightarrow$ will increase the number of $l$ modes required
+			\item Periodic solution in time $\Rightarrow$ requires timestepping, no direct steady state solutions
 		\end{itemize}
 	\end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Validation with Bolsig+}
-	\begin{center}
-		\only<+>{\includegraphics[width=0.7\textwidth]{pde_vs_bolsig_collop_approx_eedf_g0.png}}
-		\only<+>{\includegraphics[width=0.7\textwidth]{pde_vs_bolsig_collop_approx_eedf_g2.png}}
-		\only<+>{\includegraphics[width=0.7\textwidth]{pde_vs_bolsig_collop_approx_eedf_energy.png}}
-	\end{center}
+	\frametitle{1D3V - Discretization}
+	\begin{itemize}
+		\item Use method of discrete ordinates in $\vtheta$, $f_{\vtheta_j} = f(v, \vtheta_j, z, t)$
+		\begin{align}
+			\partial_t f_{\vtheta_j} + v\cos\of{\vtheta_j} \partial_z f_{\vtheta_j} = P_{\vtheta_j} (C + E) \begin{bmatrix}
+				f_{\vtheta_0}\\
+				\vdots\\
+				f_{\vtheta_{N_\vtheta}}\\
+			\end{bmatrix} ; j=1,..., N_{\vtheta}
+		\end{align}
+		\item Use B-splines + spherical basis representation of $f$ in the velocity-space for collision and v-space advection
+		\item Use finite difference method in $z$ direction
+		\item Use method of lines + with explicit time integrator in time
+		\item First order explicit operator splitting for evolving $n_i$ and $\vect{E}$ field equations
+	\end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Future work : 1d glow discharge problem}
+	\frametitle{1D3V - Results}
+	\begin{center}
+		\includegraphics[width=0.6\textwidth]{glow_discharge_1d3v_g0_g2_v0_z01.0_E0.0_poly_bspline_sp_2_nr128_lmax3_qpn4_ev2.000000E+00_bscale1.0_dt1.0000E-13_T1.00E-10_qoi.png}
+	\end{center}
 	\begin{itemize}
-		\item 1d-space Boltzmann equation is given below. 
-		\begin{center}
-			$
-			\displaystyle
-			\quad
-			\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \text{ for } (z,\vect{v}) \in (0,L) \times[0,v_{max}]^3 $ \\
-			
-			$
-			\displaystyle
-			\quad
-			f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0$
-		\end{center}
-		\item The ionized heavy densities are governed by the drift-diffusion equation below.
-		\begin{center}
-			$
-			\displaystyle
-			\quad
-			\partial_t n_i + \partial_z J_i = k_i n_0 n_e \text{ where } J_i\of{z, t} = \mu_i n_i E\of{z,t} -D_i \partial_z n_i$
-%			$
-%			\displaystyle
-%			\quad
-%			J_i(z,t)=\max\of{\mu_i n_i \vect{E}\cdot \vect{\hat{n}},0} \text{ for } z =0 \text{ and } z=L$
-		\end{center}
-		\item E-field is computed with 
-		\begin{center}
-			$
-			\displaystyle
-			\quad
-			\Delta V = -\frac{e}{\epsilon_0} (n_i-n_e) \text{ where } n_e(z,t) = \myint_{\vect{v}} f(\vect{v}, z, t) \diff{\vect{v}}$ \\
-			$
-			\displaystyle
-			\quad
-			V(0,t) = V_0 \sin(2\pi ft) \text{ , } V(L,t) = 0 \text{ and } \vect{E} = E \vect{\hat{z}} = -\of{\partial_z V} \vect{\hat{z}}$
-		\end{center}
-	\item \textbf{Challenges} : Handling discontinuous boundary condition. 
-	\item Single GPU implementation with CuPy. 
+		\item Currently, instabilities on the boundary propagate inwards.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Future work}
+	\begin{itemize}
+		\item Add filtering in $\vtheta$ direction
+		\item Supports adaptive discrete ordinates in space
+		\item Integration with PyKokos and Parla
+		\item Revisit radial discretization
+		\begin{itemize}
+			\item DG or finite volume discretization
+		\end{itemize}
+		\item Artificial diffusion in speed, for stabilization ?
 	\end{itemize}
 \end{frame}
 

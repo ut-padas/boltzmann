@@ -659,8 +659,33 @@ Let $E^{pq}_{kl}$ and $C^{pq}_{kl}$ be the Galerkin discretization of V-space ad
 = Y_{\vtheta_j, q} (E^{pq}_{kl} + C^{pq}_{kl}) \of{P^{\vtheta_j}_{l} f_{\vtheta_j,k,z,t}}^{T}
 \end{align*}
 
+Let $f\equiv f\of{t, v, \vtheta, z}$, and we can write, 
+\begin{align*}
+	\vect{E} 
+	= E \hat{\vect{z}} 
+	= E \left( \cos\of{\vtheta} \vrunit - \sin\of{\vtheta} \vthetaunit \right)
+\end{align*}
+\begin{align*}
+	\vect{E}\cdot \nabla_{\vect{v}} f
+	= E 
+	\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
+	- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right)
+\end{align*}
+
+\begin{align*}
+&\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \\
+&\implies \partial_t f + v\cos\of{\vtheta} \partial_z f -\frac{Eq}{m} 
+\left( \cos\of{\vtheta} \frac{\partial f}{\partial \vr} 
+- \sin\of{\vtheta} \frac{1}{\vr} \frac{\partial f}{\partial \vtheta} \right) = C[f] 
+\end{align*}
 
 
+
+
+
+
+
+\clearpage
 \subsection{Advection + Collision operator}
 This section attempt to understand collective effect on advection + collision operators. For simplicity of the analysis, we assume we use $l=0,1$ polar and $m=0$ in the azimuthal direction. We use $S_k\of{x}$, $T_p\of{x}$ to denote trial and test basis respectively. Important coordinate relations are listed below. 
 \begin{align*}

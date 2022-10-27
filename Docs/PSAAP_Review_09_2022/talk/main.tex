@@ -243,7 +243,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 		\end{column}
 		\begin{column}{0.45\textwidth}
 			\begin{center}
-				\includegraphics[width=1.2\columnwidth]{g0_g2_cs.png}
+				\includegraphics[width=\columnwidth]{g0_g2_cs.png}
 			\end{center}
 		\end{column}
 	\end{columns}
@@ -362,21 +362,21 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\begin{columns}
 		\begin{column}{\textwidth}
 			\begin{itemize}
-				\item Bolsig only use 2 $\vtheta$ terms: $1, \cos\vtheta$ and constant in $\vphi$ direction. 
+				\item Bolsig only use 2 $\vtheta$ terms: $1, \cos\vtheta$ and constant in $\vphi$ direction, with $f(v,\vtheta,\vphi) = f_0(v) + f_1(v) \cos\vtheta$ with $\hat{f}_{0,1} = \cfrac{f_{0,1}}{n_e}$
 				%We assume azimuthal symmetry for the time-being, $lm=\{(0,0), (1,0), (2,0), ...\}$
 				% \item $\vect{v}^{\prime} = (v_r^\prime, v_\theta^\prime, v_\phi^\prime) =\vect{v}^{post}\of{\vect{v},\vect{0},\vect{\omega}}$
 				% \begin{align*}
 				% 	\cos v_\theta^\prime = \cos v_\theta \cos\chi + \sin v_\theta \sin \chi \cos\of{v_\phi-\phi}
 				% \end{align*}
-				\item Simplified collision operator, $f(v,\vtheta,\vphi) = f_0(v) + f_1(v) \cos\vtheta$ with $\hat{f}_{0,1} = \cfrac{f_{0,1}}{n_e}$
+				\item Simplified collision operator
 				%Using the spherical harmonics addition theorem and integrating out the angles analytically, 
 				% \begin{align*}
 				% 	P_l^{0} = P_l\of{\cos v_\theta^\prime} =  P_l\of{\cos v_\theta} P_l\of{\cos v_\phi} + 2\sum_{m=1}^{l} P_l^{m}\of{\cos v_\theta} P_l^{m}\of{\cos v_\phi} \cos \of{ m (v_\phi-\phi)}
 				% \end{align*}
 				% \item Analytically integrating out the angles, we can write,
-				\begin{align}
-					\myint_{v} C \psi\of{v} \diff{v}  = N \myint_{v} v^3 \sigma\of{v} f_l\of{v} \delta_{ql} \of{\psi\of{v^{post}}\delta_{q0} - \psi\of{v}} \diff{v}  
-				\end{align}
+%				\begin{align}
+%					\myint_{v} C \psi\of{v} \diff{v}  = N \myint_{v} v^3 \sigma\of{v} f_l\of{v} \delta_{ql} \of{\psi\of{v^{post}}\delta_{q0} - \psi\of{v}} \diff{v}  
+%				\end{align}
 				\item Steady state equations becomes (assuming $l=0,1$ and $m=0$ modes), 
 				\begin{align}
 					&\frac{E^2}{3} \partial_{v} \of{\frac{\partial_v \hat f_0}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}} + \frac{2E^2}{3v} \frac{\partial_v \hat{f_0}}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} + \tilde C_0 \hat{f_0} = \mu \hat{f_0} \\
@@ -439,39 +439,51 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 
 \begin{frame}
 	\frametitle{Comparison with Bolsig+ Nr=128}
-	\begin{center}
-		\only<+>{
-			\begin{itemize}
-				\item Elastic reaction rates
-			\end{itemize}
-			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g0.png}
-			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g0_rerror.png}
-			}
-		\only<+>{
-			\begin{itemize}
-				\item Ionization reaction rates
-			\end{itemize}
-			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g2.png}
-			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g2_error.png}
-			}
-		\only<+>{
-			\begin{itemize}
-				\item Steady-state energy
-			\end{itemize}
-			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_energy.png}
-			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_energy_rerror.png}
-			}
-	\end{center}
+	\centering
+	\includegraphics[width=0.99\textwidth]{pde_vs_bolsig_collop_approx_eedf.png}
+%	\begin{center}
+%		\only<+>{
+%			\begin{itemize}
+%				\item Elastic reaction rates
+%			\end{itemize}
+%			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g0.png}
+%			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g0_rerror.png}
+%			}
+%		\only<+>{
+%			\begin{itemize}
+%				\item Ionization reaction rates
+%			\end{itemize}
+%			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g2.png}
+%			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_g2_error.png}
+%			}
+%		\only<+>{
+%			\begin{itemize}
+%				\item Steady-state energy
+%			\end{itemize}
+%			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_energy.png}
+%			\includegraphics[width=0.48\textwidth]{pde_vs_bolsig_collop_approx_eedf_energy_rerror.png}
+%			}
+%	\end{center}
 \end{frame}
 
 \begin{frame}
 	\frametitle{Glow Discharge with 1D3V Boltzmann}
-	\begin{align}
-		&\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \text{ for } (z,\vect{v}) \in (0,L) \times R^3 \\
-		&\textcolor{red!80}{f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0}\\
-		&\partial_t n_i + \partial_z \of{\mu_i n_i E\of{z,t} -D_i \partial_z n_i} = N \gamma \myint_{\varepsilon}\myint_{\vect{\omega}} \varepsilon^{1/2} \sigma_i f d\vect{\omega} d\varepsilon \\
-		& \vect{E} = \nabla \of{\Delta^{-1}\frac{e}{\epsilon_0} \of{n_i- n_e}} \text{ , } n_e = \myint_{\vect{v}} f\of{\vect{v}, z, t} \diff{\vect{v}}
-	\end{align}
+	\begin{columns}
+		\begin{column}{0.6\textwidth}
+			\footnotesize{
+		\begin{align}
+			&\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \\
+			&\textcolor{red!80}{f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0}\\
+			&\partial_t n_i + \partial_z \of{\mu_i n_i E\of{z,t} -D_i \partial_z n_i} = N \gamma \myint_{\varepsilon}\myint_{\vect{\omega}} \varepsilon^{1/2} \sigma_i f d\vect{\omega} d\varepsilon \\
+			& \vect{E} = \nabla \of{\Delta^{-1}\frac{e}{\epsilon_0} \of{n_i- n_e}} \text{ , } n_e = \myint_{\vect{v}} f\of{\vect{v}, z, t} \diff{\vect{v}}
+		\end{align}}
+		\end{column}
+		\begin{column}{0.4\textwidth}
+			\includegraphics[width=\columnwidth]{eye-candy/glow/glow1.png}
+		\end{column}
+	\end{columns}
+
+
 	
 	\begin{itemize}
 		\item 1D3V - Challenges
@@ -520,7 +532,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 		\begin{itemize}
 			\item DG or finite volume discretization
 		\end{itemize}
-		\item Artificial diffusion in speed, for stabilization ?
+		%\item Artificial diffusion in speed, for stabilization ?
 	\end{itemize}
 \end{frame}
 

@@ -583,7 +583,7 @@ e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])
 str_datetime = datetime.now().strftime("%m_%d_%Y_%H:%M:%S")
 
 COLLISOIN_NAMES=dict()
-for  col in enumerate(args.collisions):
+for  col_idx, col in enumerate(args.collisions):
     COLLISOIN_NAMES[col]=col
 
 COLLISOIN_NAMES["g0"] = "elastic"

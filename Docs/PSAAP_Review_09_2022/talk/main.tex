@@ -90,6 +90,10 @@
 \newcommand{\vphiunit}{\hat{\vect{v}}_{\varphi}}
 \DeclareMathOperator{\variance}{Var}
 
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+
 \begin{document}
 % disable nav
 \setbeamertemplate{navigation symbols}{}
@@ -181,16 +185,16 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 \begin{frame}
 	\frametitle{Outline}
 	\begin{itemize}
-		\item 0D3V - Homogeneous in space
+		\item \large 0D3V - Homogeneous in space
 		\begin{itemize}
-			\item Formulation
+			\item \large Formulation
 			\item Discretization
 			\item Results
 			\item Verification with Bolsig+
 		\end{itemize}
 		\item 1D3V - Glow discharge problem
 		\begin{itemize}
-			\item Formulation
+			\item \large Formulation
 			\item Discretization
 			\item Boundary conditions
 		\end{itemize}
@@ -253,18 +257,10 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\frametitle{0D3V - Discretization}
 	\small
 	\begin{itemize}
-		\item Representation of $f$
+		\item Representation of $f\of{\vect{v},t} = \sum_{klm} f_{klm} \underbrace{\Phi_k\of{v}}_{\text{radial basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$
 		\begin{itemize}
 			\item $\Phi_k\of{v}$ : Global polynomials
 			\item $\Phi_k\of{v}$ : Local B-splines
-			$
-			\displaystyle
-			\quad 
-			f(\vect{v},t) = \sum_{klm} f_{klm} \underbrace{\Phi_k\of{v}}_{\text{radial basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$ 
-			%with $
-			% \displaystyle
-			% \quad 
-			% \phi_{pqs}\of{\vect{v}} = \underbrace{\Phi_p\of{v}}_{\text{radial basis}} \underbrace{Y_{qs}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$
 		\end{itemize}
 		\item Weak formulation
 			$
@@ -362,7 +358,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\begin{columns}
 		\begin{column}{\textwidth}
 			\begin{itemize}
-				\item Bolsig only use 2 $\vtheta$ terms: $1, \cos\vtheta$ and constant in $\vphi$ direction, with $f(v,\vtheta,\vphi) = f_0(v) + f_1(v) \cos\vtheta$ with $\hat{f}_{0,1} = \cfrac{f_{0,1}}{n_e}$
+				\item Bolsig+ only uses 2 $\vtheta$ terms: $1, \cos\vtheta$ and constant in $\vphi$ direction, with $f(v,\vtheta,\vphi) = f_0(v) + f_1(v) \cos\vtheta$ with $\hat{f}_{0,1} = \cfrac{f_{0,1}}{n_e}$
 				%We assume azimuthal symmetry for the time-being, $lm=\{(0,0), (1,0), (2,0), ...\}$
 				% \item $\vect{v}^{\prime} = (v_r^\prime, v_\theta^\prime, v_\phi^\prime) =\vect{v}^{post}\of{\vect{v},\vect{0},\vect{\omega}}$
 				% \begin{align*}
@@ -377,7 +373,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 %				\begin{align}
 %					\myint_{v} C \psi\of{v} \diff{v}  = N \myint_{v} v^3 \sigma\of{v} f_l\of{v} \delta_{ql} \of{\psi\of{v^{post}}\delta_{q0} - \psi\of{v}} \diff{v}  
 %				\end{align}
-				\item Steady state equations becomes (assuming $l=0,1$ and $m=0$ modes), 
+				\item Steady state equations become%s (assuming $l=0,1$ and $m=0$ modes), 
 				\begin{align}
 					&\frac{E^2}{3} \partial_{v} \of{\frac{\partial_v \hat f_0}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}} + \frac{2E^2}{3v} \frac{\partial_v \hat{f_0}}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)} + \tilde C_0 \hat{f_0} = \mu \hat{f_0} \\
 					&\hat{f_1} = \frac{E}{\sqrt{3}} \frac{\partial_{v}\hat{f_0}}{(N \varepsilon^{1/2}\gamma \sigma\of{\varepsilon} + \mu)}
@@ -392,7 +388,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 \end{frame}
 
 \begin{frame}
-	\frametitle{B-Splines + EEDF formulation + simplified collision op + Galerkin approximation}
+	\frametitle{Galerkin B-Splines + EEDF formulation}
 	\begin{figure}
 		\subfloat[\tiny{B-Splines, E=200 V/m, with elastic + ionization with EEDF formulation}]{%
 			\includegraphics[width=0.99\textwidth]{bspline_sp2_E200_g0g2_eedf.png}
@@ -407,14 +403,14 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 		\begin{itemize}
 			\item Pros
 			\begin{itemize}
-				\item Spectral convergence
-				\item Work well with highly smoothed cross-sections
+				\item Spectral convergence for smooth solutions
+				%\item Work well with highly smoothed cross-sections
 			\end{itemize}
 			\item Cons
 			\begin{itemize}
-				\item \textcolor{orange}{Computed operators are sensitive to chosen thermal velocity}
 				\item With LXCAT data tails are not well resolved 
 				\item Ionization and excitations cross sections are non-smooth%Struggle to capture sharp variations in $f$
+				\item Computed operators are sensitive to chosen thermal velocity
 			\end{itemize}
 		\end{itemize}
 		\item Local approximations with B-Splines
@@ -432,8 +428,8 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\end{itemize}
 	\begin{itemize}
 		%\item Lower order splines, simplified collision operator with EEDF formulation seems to capture tails better compared to previous cases
-		\item Lower order splines seems to capture tails better 
-		\item For time-being we are planning to move forward with low-order B-Spline approximations 
+		\item Lower-order splines seems to capture tails better 
+		\item Use lower-order B-Splines for glow discharge \& torch simulations. %For time-being we are planning to move forward with low-order B-Spline approximations 
 	\end{itemize}
 \end{frame}
 
@@ -474,7 +470,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 		\begin{align}
 			&\partial_t f + v\cos\of{\vtheta} \partial_z f -\vect{E}\cdot\nabla_v f = C[f] \\
 			&\textcolor{red!80}{f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0}\\
-			&\partial_t n_i + \partial_z \of{\mu_i n_i E\of{z,t} -D_i \partial_z n_i} = N \gamma \myint_{\varepsilon}\myint_{\vect{\omega}} \varepsilon^{1/2} \sigma_i f d\vect{\omega} d\varepsilon \\
+			&\partial_t n_i + \partial_z \of{\mu_i n_i E\of{z,t} -D_i \partial_z n_i} = N \myint_{\varepsilon}\myint_{\vect{\omega}} v \sigma_i f d\vect{\omega} d\varepsilon \\
 			& \vect{E} = \nabla \of{\Delta^{-1}\frac{e}{\epsilon_0} \of{n_i- n_e}} \text{ , } n_e = \myint_{\vect{v}} f\of{\vect{v}, z, t} \diff{\vect{v}}
 		\end{align}}
 		\end{column}
@@ -504,34 +500,74 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 				\vdots\\
 				f_{\vtheta_{N_\vtheta}}\\
 			\end{bmatrix} ; j=1,..., N_{\vtheta}
+			\label{eq:bte_discreate}
 		\end{align}
-		\item Use B-splines + spherical basis representation of $f$ in the velocity-space for collision and v-space advection
-		\item Use finite difference method in $z$ direction
-		\item Use method of lines + with explicit time integrator in time
-		\item First order explicit operator splitting for evolving $n_i$ and $\vect{E}$ field equations
+		\item B-splines + spherical basis representation of $f$ in the velocity-space for collision and v-space advection
+		\item Finite differences in $z$ direction
+		\item Explicit time integration for \eqref{eq:bte_discreate}
+		\item First order operator splitting for evolving $n_i$ and $\vect{E}$ field equations
 	\end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{1D3V - Results}
+	\frametitle{Glow Discharge with 1D3V Boltzmann}
+	\begin{columns}
+		\begin{column}{0.5\textwidth}
+			\begin{itemize}
+				\item Setup glow discharge parameters described in the Table\footnote[frame]{Liu, Q., Liu, Y., Samir, T. and Ma, Z., 2014. Numerical study of effect of secondary electron emission on discharge characteristics in low pressure capacitive RF argon discharge. Physics of Plasmas, 21(8), p.083511.}
+				\item Numerical discretization
+				\begin{itemize}
+					\item $N_r$ (Nr=128)
+					\item $\vtheta$ ($l=1,2,3,4,5$), with discrete ordinates $N_{\vtheta} = \ceil*{\frac{2l + 3}{2}}$ 
+					\item $\vphi$ 1, (i.e. , $m=0$)
+					\item $N_z=800$, $\Delta z$ = 3.1789e-03cm
+					\item $\Delta T$= 1e-12s, Time horizon $T$=3.6873e-07s, $\approx$ 5 cycles.
+				\end{itemize}
+			\end{itemize}
+			
+		\end{column}
+		\begin{column}{0.5\textwidth}
+			\includegraphics[width=0.8\columnwidth]{glow_discharge_parameters.png}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Glow Discharge with 1D3V Boltzmann}
+	\only<+>{
+	\vspace*{-0.2in}
 	\begin{center}
-		\includegraphics[width=0.6\textwidth]{glow_discharge_1d3v_g0_g2_v0_z01.0_E0.0_poly_bspline_sp_2_nr128_lmax3_qpn4_ev2.000000E+00_bscale1.0_dt1.0000E-13_T1.00E-10_qoi.png}
+		\includegraphics[width=0.73\textwidth]{glow_discharge_1d3v_g0_g2_v0_z01.00E+02_poly_bspline_sp_2_nz800_nr128_lmax4_qpn4_qvt6_ev2.00E+01_bscale1.0_ne_fac8.00E+16_vx_max_1.11E+01_dt1.00E-12_T3.69E-07_qoi.png}
 	\end{center}
-	\begin{itemize}
-		\item Currently, instabilities on the boundary propagate inwards.
-	\end{itemize}
+	}
+
+	\only<+>{
+	\vspace*{-0.2in}
+	\begin{center}
+		\includegraphics[width=0.96\textwidth]{glow_discharge_1d3v_g0_g2_v0_z01.00E+02_poly_bspline_sp_2_nz800_nr128_lmax4_qpn4_qvt6_ev2.00E+01_bscale1.0_ne_fac8.00E+16_vx_max_1.11E+01_dt1.00E-12_T3.69E-07_vt_z_plt.png}
+	\end{center}
+	}
+
+	% \begin{center}
+	% 	\includegraphics[width=0.6\textwidth]{glow_discharge_1d3v_g0_g2_v0_z01.0_E0.0_poly_bspline_sp_2_nr128_lmax3_qpn4_ev2.000000E+00_bscale1.0_dt1.0000E-13_T1.00E-10_qoi.png}
+	% \end{center}
+	% \begin{itemize}
+	% 	\item Currently, instabilities on the boundary propagate inwards.
+	% \end{itemize}
 \end{frame}
 
 \begin{frame}
 	\frametitle{Future work}
 	\begin{itemize}
-		\item Add filtering in $\vtheta$ direction
-		\item Supports adaptive discrete ordinates in space
-		\item Integration with PyKokos and Parla
+		%\item Add filtering in $\vtheta$ direction
+		\item Support adaptive discrete ordinates in space
 		\item Revisit radial discretization
 		\begin{itemize}
-			\item DG or finite volume discretization
+			\item DG or finite volumes
 		\end{itemize}
+		\item Integration with PyKokos and Parla
+		\item HPC implementation and MPI
+		\item Developments in 2D3V Boltzmann for the torch simulations.
 		%\item Artificial diffusion in speed, for stabilization ?
 	\end{itemize}
 \end{frame}

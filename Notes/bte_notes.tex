@@ -636,7 +636,7 @@ Let $\{\vtheta\}_{j=0}^{N_\vtheta}$ be the points in the $\vtheta$ direction, fo
 	& v\cos\of{\vtheta_j} \partial_z  = v\cos\of{\vtheta_j} \sum_{k} S_k\of{\frac{v}{\vth}} \partial_z f_{\vtheta_j, k}
 \end{align*} Projecting the above onto radial direction test basis functions $T_p\of{\frac{v}{\vth}}$, we can write, 
 \begin{align*}
-&\myint_v T_p \of{\frac{v}{\vth}} v^3 \cos\of{\vtheta_j} \partial_z f dv = \myint_v T_p \of{\frac{v}{\vth}} v\cos\of{\vtheta_j} \sum_{k} S_k\of{\frac{v}{\vth}} \partial_z f_{\vtheta_j, k} dv \\
+&\myint_v T_p \of{\frac{v}{\vth}} v^3 \cos\of{\vtheta_j} \partial_z f dv = \myint_v T_p \of{\frac{v}{\vth}} v^3\cos\of{\vtheta_j} \sum_{k} S_k\of{\frac{v}{\vth}} \partial_z f_{\vtheta_j, k} dv \\
 &=\cos\of{\vtheta_j} \sum_k \myint_v v^3 T_p\of{\frac{v}{\vth}} S_k\of{\frac{v}{\vth}} dv \partial_z f_{\vtheta_j,k} = \cos\of{\vtheta_j} W^{p}_{k} D_z f_{\vtheta_j,k}
 \end{align*} where $D_z$ is upwinded finite derivative stencil based on $\vtheta_j$. We write the discretize operators, 
 \begin{align*}

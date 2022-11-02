@@ -1306,30 +1306,57 @@ class GlowSim_1D():
             fig.savefig("%s_qoi.png"%(fprefix))
             plt.close()
 
-        fig = plt.figure(figsize=(8, 8), dpi=300)        
-        plt.title("T=%4E (s)"%(self._t_curr))
+        
         spec_sp = self._boltzmann_solver._spec_sp
         gx, gw  = spec_sp._basis_p.Gauss_Pn(params.BEVelocitySpace.NUM_Q_VR)
-        mass_b  = np.dot(spec_sp.Vq_r(gx,0,1),gw) * self._boltzmann_solver._vth
+        mass_b  = np.dot(gx**2 * spec_sp.Vq_r(gx,0,1),gw) * self._boltzmann_solver._vth**3
 
         num_p  = spec_sp._p +1
         num_sh = len(spec_sp._sph_harm_lm)
         num_z  = len(grid_z)
         num_vt = len(grid_vt)
 
-        fx = np.transpose(fx_kvt.reshape((num_z, num_p * num_vt))).reshape(num_p, num_vt, num_z).reshape(num_p, num_vt*num_z)
-        fx = np.dot(mass_b, fx).reshape(num_vt, num_z)
+        fx = np.dot(fx_kvt.reshape((num_z, num_p , num_vt)), self._boltzmann_solver._vt_to_lm)
+        fx = np.transpose(fx.reshape((num_z, num_p * num_sh))).reshape((num_p, num_sh, num_z)).reshape((num_p, num_sh * num_z))
+        fx = np.dot(mass_b, fx).reshape(-1).reshape((num_sh, num_z))
 
-        cols=3
-        for ci in range(cols):
-            plt.plot(grid_vt, fx[:,ci],'x--',label='z= %ddz'%(ci))
+        fig = plt.figure(figsize=(18, 8), dpi=300)        
+        plt.suptitle("T=%4E (s)"%(self._t_curr))
+
+        plt.subplot(1, 3, 1)
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            plt.semilogy(grid_z, np.abs(fx[lm_idx,:]),'--',label='lm=(%d,%d)'%(lm[0],lm[1]))
         
+        plt.legend()            
+        plt.xlabel("z(m)")
+        plt.ylabel("abs(f_{l,m})")
+        plt.grid()
+
+        vt_grid  = np.linspace(0, np.pi, 100)
+        vp_grid  = np.linspace(0, 2*np.pi, 1)
+        ang_grid = np.meshgrid(vt_grid, vp_grid, indexing='ij')
+
+        Vq_sph   = spec_sp.Vq_sph(ang_grid[0], ang_grid[1], 1.0).reshape((num_sh, len(vt_grid) * len(vp_grid)))
+        fx       = np.dot(np.transpose(fx), Vq_sph)
+        
+        cols=5
+        plt.subplot(1, 3, 2)
         for ci in range(cols):
-            plt.plot(grid_vt, fx[:, ci-cols],'x--',label='z= L - %ddz'%(abs(ci-cols)))
+            plt.plot(vt_grid, fx[ci,:],'--',label='z= %ddz'%(ci))
+        
+        plt.legend()            
+        plt.xlabel("polar angle")
+        plt.grid()
+        plt.title("z=0")
+
+        plt.subplot(1, 3, 3)
+        for ci in range(cols):
+            plt.plot(vt_grid, fx[ci-cols,:],'--',label='z= L - %ddz'%(abs(ci-cols)))
             
         plt.legend()            
-        plt.xlabel("theta")
+        plt.xlabel("polar angle")
         plt.grid()
+        plt.title("z=L")
         fig.savefig("%s_vt_z_plt.png"%(fprefix))
         plt.close()
         

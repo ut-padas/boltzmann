@@ -21,6 +21,13 @@ from scipy.integrate import ode
 import scipy.linalg
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.size": 10,
+    #"font.family": "Helvetica",
+    "lines.linewidth":1.0
+})
+
 class CollissionMode(enum.Enum):
     ELASTIC_ONLY=0
     ELASTIC_W_EXCITATION=1
@@ -66,6 +73,25 @@ def constant_r_eval(spec_sp : sp.SpectralExpansionSpherical, cf, r):
     return np.dot(cf, b_eval).reshape(50,100), theta, phi
     
 
+def enforce_C0(spec_sp: sp.SpectralExpansionSpherical, v):
+    if spec_sp.get_radial_basis_type() !=basis.BasisType.SPLINES:
+        return v
+    
+    k_vec    = spec_sp._basis_p._t
+    dg_idx   = spec_sp._basis_p._dg_idx
+    sp_order = spec_sp._basis_p._sp_order
+
+    num_sh    = len(spec_sp._sph_harm_lm)
+
+    for f_id in range(1, len(dg_idx)-2, 2):
+        f=(dg_idx[f_id], dg_idx[f_id+1])
+        fx = k_vec[f[0] + sp_order]
+        assert fx == k_vec[f[1] + sp_order], "flux assembly face coords does not match"
+        for lm_idx , lm in enumerate(spec_sp._sph_harm_lm):
+            v[f[0] * num_sh + lm_idx] = v[f[1] * num_sh + lm_idx]
+    
+    return v
+
 def solve_collop(collOp : colOpSp.CollisionOpSP, maxwellian, vth, E_field, t_end, dt, collisions_included):
     spec_sp = collOp._spec
     Mmat = spec_sp.compute_mass_matrix()
@@ -94,9 +120,9 @@ def solve_collop(collOp : colOpSp.CollisionOpSP, maxwellian, vth, E_field, t_end
     else:
         raise NotImplementedError
 
-    h_init    = BEUtils.function_to_basis(spec_sp,hv,maxwellian,None,None,None,Minv=Minv)
-    h_t       = np.array(h_init)
-    
+    h_init     = BEUtils.function_to_basis(spec_sp,hv,maxwellian,None,None,None,Minv=Minv)
+    h_t        = np.array(h_init)
+
     ne_t      = MNE
     mw_vth    = BEUtils.get_maxwellian_3d(vth,ne_t)
     m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
@@ -181,24 +207,11 @@ def solve_collop(collOp : colOpSp.CollisionOpSP, maxwellian, vth, E_field, t_end
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
 
-    def dg_collop_bdy(spec_sp,yy):
-        dg_idx  = spec_sp._basis_p._dg_idx
-        if (len(dg_idx)>2):
-            for qs_idx, qs in enumerate(spec_sp._sph_harm_lm):
-                yy[dg_idx[1]*num_sh + qs_idx] = 0.5 * (yy[dg_idx[1]*num_sh + qs_idx] + yy[dg_idx[2]*num_sh + qs_idx])
-                yy[dg_idx[2]*num_sh + qs_idx] = 0.5 * (yy[dg_idx[1]*num_sh + qs_idx] + yy[dg_idx[2]*num_sh + qs_idx])
-
     def f_rhs(t,y):
-        
-        dg_collop_bdy(spec_sp,y)
-        x=np.matmul(FOp,y)
-        dg_collop_bdy(spec_sp,x)
+        x = np.matmul(FOp,y)
         return x
 
     sol = scipy.integrate.solve_ivp(f_rhs, (0,t_end), h_init, max_step=dt, method='RK45',atol=1e-40, rtol=2.220446049250313e-14, t_eval=np.linspace(0,t_end,10))
-    
-    for i in range(0,sol.y.shape[1]):
-        dg_collop_bdy(spec_sp, sol.y[:,i])
     
     for i in range(0,sol.y.shape[1]):
         current_mass     = np.dot(sol.y[:,i],mass_op) * vth**3 * maxwellian(0)
@@ -233,16 +246,16 @@ parser.add_argument("-steady", "--steady_state"               , help="Steady sta
 parser.add_argument("-bolsig", "--bolsig_dir"                 , help="Bolsig directory", type=str, default="../../Bolsig/")
 parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", nargs='+', type=int, default=[24, 48, 96])
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
+parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
 
 args = parser.parse_args()
 print(args)
 
 run_data=list()
-ev           = np.linspace(args.electron_volt/50.,100.*args.electron_volt,1000)
-
 params.BEVelocitySpace.SPH_HARM_LM = [[i,0] for i in range(args.l_max+1)]
 num_sph_harm = len(params.BEVelocitySpace.SPH_HARM_LM)
 
+ev           = np.linspace(args.electron_volt/50.,50.*args.electron_volt,100) + 0.1
 eedf         = np.zeros((len(args.sweep_values),len(ev)))
 eedf_initial = np.zeros((len(args.sweep_values),len(ev)))
 temperature  = list()
@@ -250,7 +263,6 @@ radial       = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 radial_base  = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 radial_cg    = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
 radial_projection = np.zeros((len(args.sweep_values), num_sph_harm, len(ev)))
-
 
 SPLINE_ORDER = args.spline_order
 basis.BSPLINE_BASIS_ORDER=SPLINE_ORDER
@@ -270,7 +282,7 @@ for i, value in enumerate(args.sweep_values):
     if "g2Smooth" in args.collisions or "g2" in args.collisions or "g2step" in args.collisions or "g2Regular" in args.collisions:
         sig_pts = np.array([np.sqrt(15.76) * c_gamma/VTH])
     else:
-        sig_pts = np.array([0.5 * (k_domain[0] + k_domain[1])]) #None
+        sig_pts = None #np.array([np.sqrt(0.5 * (ev[0] + ev[-1])) * c_gamma/VTH]) #None
     
     print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
     if(sig_pts is not None):
@@ -324,8 +336,8 @@ for i, value in enumerate(args.sweep_values):
             
             return maxwellian(x)
 
-        tt_vec                          = basis.BSpline.adaptive_fit(refine_func, k_domain, sp_order=SPLINE_ORDER, min_lev=4, max_lev=max_lev, sig_pts=sig_pts, atol=1e-40, rtol=1e-12)
-        bb                              = basis.BSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts=sig_pts, knots_vec=tt_vec)
+        tt_vec                          = None #basis.BSpline.adaptive_fit(refine_func, k_domain, sp_order=SPLINE_ORDER, min_lev=4, max_lev=max_lev, sig_pts=sig_pts, atol=1e-40, rtol=1e-12)
+        bb                              = basis.BSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts=sig_pts, knots_vec=tt_vec, dg_splines=args.use_dg)
         params.BEVelocitySpace.NUM_Q_VR = bb._num_knot_intervals * args.spline_q_pts_per_knot
         params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = bb._num_p
         if args.sweep_param == "Nr":
@@ -338,7 +350,7 @@ for i, value in enumerate(args.sweep_values):
     params.BEVelocitySpace.NUM_Q_CHI = args.quad_s_theta
     params.BEVelocitySpace.NUM_Q_PHI = args.quad_s_phi
     params.BEVelocitySpace.VELOCITY_SPACE_DT = args.T_DT
-    
+
     print("""===========================Parameters ======================""")
     print("\tMAXWELLIAN_N        : ", collisions.MAXWELLIAN_N)
     print("\tELECTRON_THEMAL_VEL : ", VTH," ms^-1")

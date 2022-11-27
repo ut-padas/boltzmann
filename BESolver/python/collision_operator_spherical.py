@@ -255,7 +255,7 @@ class CollisionOpSP():
         if self._r_basis_type == basis.BasisType.CHEBYSHEV_POLY:
             raise NotImplementedError
         elif self._r_basis_type == basis.BasisType.SPLINES:
-            self._gmx,self._gmw  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+            self._gmx,self._gmw  = spec_sp._basis_p.Gauss_Pn_gl(self._NUM_Q_VR)
             k_vec                = spec_sp._basis_p._t
             dg_idx               = spec_sp._basis_p._dg_idx
             sp_order             = spec_sp._basis_p._sp_order
@@ -282,19 +282,29 @@ class CollisionOpSP():
             else:
                 raise NotImplementedError
             
+            k_vec    = spec_sp._basis_p._t
+            dg_idx   = spec_sp._basis_p._dg_idx
+            sp_order = spec_sp._basis_p._sp_order
+            
             for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
                 tmp = np.zeros((num_p,num_p,len(gx_e)))
                 if q==0:
-                    for p in range(num_p):
-                        #-0.5 * c_mu * gx_e * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1)
-                        psi_p = (gain_fac * spec_sp.basis_eval_radial(v_post ,p,q) - spec_sp.basis_eval_radial(gx_e,p,q))
-                        for k in range(num_p):
-                            tmp[p,k] = V_TH * gx_e**3 * diff_cs * spec_sp.basis_eval_radial(gx_e, k, q) * psi_p
+                    for e_id in range(0,len(dg_idx),2):
+                        ib=dg_idx[e_id]
+                        ie=dg_idx[e_id+1] 
+                        for p in range(ib,ie+1):
+                            #-0.5 * c_mu * gx_e * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1)
+                            psi_p = (gain_fac * spec_sp.basis_eval_radial(v_post ,p,q) - spec_sp.basis_eval_radial(gx_e,p,q))
+                            for k in range(num_p):
+                                tmp[p,k] = V_TH * gx_e**3 * diff_cs * spec_sp.basis_eval_radial(gx_e, k, q) * psi_p
                 else:
-                    for p in range(num_p):
-                        psi_p = spec_sp.basis_eval_radial(gx_e,p,q)
-                        for k in range(num_p):
-                            tmp[p,k] = -V_TH * diff_cs * gx_e**3 * spec_sp.basis_eval_radial(gx_e, k, q) * psi_p
+                    for e_id in range(0,len(dg_idx),2):
+                        ib=dg_idx[e_id]
+                        ie=dg_idx[e_id+1] 
+                        for p in range(ib,ie+1):
+                            psi_p = spec_sp.basis_eval_radial(gx_e,p,q)
+                            for k in range(num_p):
+                                tmp[p,k] = -V_TH * diff_cs * gx_e**3 * spec_sp.basis_eval_radial(gx_e, k, q) * psi_p
                 
                 tmp=tmp.reshape((num_p,num_p,-1))
                 tmp=np.dot(tmp, gw_e)

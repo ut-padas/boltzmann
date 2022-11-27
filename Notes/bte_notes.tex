@@ -529,35 +529,51 @@ R(\hat{f_0}) &= C_0 \hat{f_0} + W^{\hat{f_0}}_{ij} (\hat{f_0}) - (u^T C_0 \hat{f
 J(\hat{f_0}) &= C_0 + W^{\hat{f_0}}_{ij}  - 2(u^T C_0 \hat{f_0}) M_{ij}
 \end{align*}
 
+\subsection{DG in velocity space}
 
-\subsection{DG attempt in velocity space}
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
+Let's summarize the Boltzmann equation projected on to the spherical basis. 
 \begin{align*}
-	&\partial_t M^{p}_{k} f_{kqs} -EA^{qs}_{lm}\of{[f_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})f_{klm}} -E B^{qs}_{lm} S^{p}_{k} f_{klm} = C^{pqs}_{klm} f_{klm}  \\
-	&\partial_t M^{p}_{k} f_{kqs} = -E \of{\of{2 A^{qs}_{lm} -B^{qs}_{lm}} S^p_{k} + A^{qs}_{lm} D^{p}_{k}}f_{klm} + C^{pqs}_{klm} f_{klm} + EA^{qs}_{lm}[f_{lm}^*(v) v^2 \boldsymbol{\psi}\of{v}]_{D_l}^{D^r}
+	\partial_t f_{qs}  - E A^{qs}_{lm} \partial_{v} f_{lm} - E B^{qs}_{lm} \frac{1}{v} f_{lm} = C^{qs}_{lm} f_{lm}
+\end{align*} Let $\Omega_v$ be the domain for the radial coordinate, let $x=v/v_{th}$ denotes the normalizes coordinate for the radial component of the velocity. Following the same notation let $S_{k}\of{x}$ and $T_{p}\of{x}$ be the trial and test basis for the radial direction.  
+\begin{align*}
+	f_{lm}\of{v} = \sum_{k} f_{klm} S_k \of{x} = \sum_{k} f_{klm} S_k \of{\frac{v}{v_{th}}}
+\end{align*} Let $A^{qs}_{lm} = Q \Lambda Q^T$ and $\of{Q^T}^{qs}_{lm} f_{lm}= y_{qs}$. Then we can write the diagonalized system as, 
+\begin{align*}
+	\partial_t y_{qs} -E\Lambda \partial_v y_{qs}  -E Q^T B^{qs}_{lm} \frac{1}{v} Q y_{lm} = 
+	Q^T C^{qs}_{lm} Q y_{lm}
+\end{align*} For the diagonalize system we can write the weak form with integration by parts as follows. 
+\begin{align*}
+&\partial_t M^{p}_{k} y_{kqs} 
+	-E\of{
+		  [\Lambda y_{lm}^*(v) v^2 T_{p}\of{x}]_{\Gamma}		
+		 -(\Lambda D^{p}_k + 2 \Lambda S^{p}_{k}) y_{klm} 
+		 + \of{Q^T B^{qs}_{lm} Q} S^{p}_{k} y_{klm}
+	 }   
+ 	 =
+ 	 Q^T C^{pqs}_{klm}Q y_{klm}
 \end{align*} where, 
 \begin{align*}
-	M_{pk} &= v_{th}^3\myint_{D} x^2 \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	D_{pk} &= v_{th}^2\myint_{D} x^2 \partial_v \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	S_{pk} &= v_{th}^2\myint_{D} x \psi_{p}\of{x} \phi_{k}\of{x} dx \\
-	\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
+	&M_{pk} = v_{th}^3\myint_{D} x^2 T_{p}\of{x} S_{k}\of{x} dx \text{  and }
+	D_{pk} = v_{th}^2\myint_{D} x^2 \partial_x T_{p}\of{x} S_{k}\of{x} dx \\
+	&S_{pk} = v_{th}^2\myint_{D} x T_{p}\of{x} S_{k}\of{x} dx 
+	%\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
 \end{align*} 
-The flux term (up-winding) determined by $A^{qs}_{lm}$ sign of the eigenvalues. 
+ 
 
-Diagonalize then discretize in the radial coordinate. 
-Let $A^{qs}_{lm}=Q\Lambda^{qs}_{lm} Q^T$, let $Q^T f_{km}= y_{lm}$
-\begin{align*}
-	\partial_t y_{qs}
-	-E\Lambda^{qs}_{lm} \partial_v y_{lm} 
-	-E Q^T B^{qs}_{lm} \frac{1}{v} Q y_{lm} = 
-	Q^T C^{qs}_{lm} Q y_{lm}
-\end{align*} 
-For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $y_{lm}(v)=\sum_{k} y_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ we can write, 
-\begin{align*}
-	&\partial_t M^{p}_{k} y_{kqs} -E\Lambda^{qs}_{lm}\of{[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})y_{klm}} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm}  \\
-	&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
-	&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
-\end{align*}
+
+
+%For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $f_{lm}(v)=\sum_{k} f_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ and using integration by parts we can write,
+%\begin{align*}
+%	&\partial_t M^{p}_{k} f_{kqs} -EA^{qs}_{lm}\of{[f_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})f_{klm}} -E B^{qs}_{lm} S^{p}_{k} f_{klm} = C^{pqs}_{klm} f_{klm}  \\
+%	&\partial_t M^{p}_{k} f_{kqs} = -E \of{\of{2 A^{qs}_{lm} -B^{qs}_{lm}} S^p_{k} + A^{qs}_{lm} D^{p}_{k}}f_{klm} + C^{pqs}_{klm} f_{klm} + EA^{qs}_{lm}[f_{lm}^*(v) v^2 \boldsymbol{\psi}\of{v}]_{D_l}^{D^r}
+%\end{align*} where, 
+%The flux term (up-winding) determined by $A^{qs}_{lm}$ sign of the eigenvalues. 
+%For the domain $D=[D_l,D_r]$ let $\phi_{k}\of{\frac{v}{v_{th}}}$ be the trial functions for expansion and $\psi_{p}\of{\frac{v}{v_{th}}}$ be the corresponding test functions. Let $y_{lm}(v)=\sum_{k} y_{klm} \phi_k(v)$, then projecting the above to $\psi_p(v)$ we can write, 
+%\begin{align*}
+%	&\partial_t M^{p}_{k} y_{kqs} -E\Lambda^{qs}_{lm}\of{[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} -(D^{p}_k + 2S^{p}_{k})y_{klm}} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm}  \\
+%	&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
+%	&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
+%\end{align*}
 
 \subsection{Using piecewise polynomials}
 $P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,1]$. For $\of{\frac{v}{v_{th}}} \in [a,b]$, we can write 

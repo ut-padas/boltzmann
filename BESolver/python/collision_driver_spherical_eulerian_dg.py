@@ -183,12 +183,16 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     
-    # advmat, eA, qA = spec_sp.compute_advection_matix_dg()
-    # eA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
-    # qA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
+    advmat, eA, qA = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
+    #eA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
+    qA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
     
-    advmat = spec_sp.compute_advection_matix()
-    qA     = np.eye(advmat.shape[0])
+    # advmat = spec_sp.compute_advection_matix()
+    # qA     = np.eye(advmat.shape[0])
+
+    # np.set_printoptions(precision=1)
+    # print(FOp[0::num_sh, 0::num_sh])
+    # print(FOp[1::num_sh, 1::num_sh])
     
     FOp    = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
     h_init = np.dot(np.transpose(qA),h_init)
@@ -197,7 +201,7 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
     # Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
     Cmat = FOp #np.matmul(Minv, FOp)
-    Emat = -(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat  #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
+    Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat  #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
     Cmat1 = np.matmul(Minv, FOp)
 
@@ -221,15 +225,12 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
         iteration_steps = 0
 
         def residual_func(x):
-            y  = np.matmul(Cmat-Emat, x)
-            #y  = -np.dot(u, y) * x  + y
+            y  = np.matmul(Cmat+Emat, x)
             y  = -np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,x)) * x)   + y
             return np.append(y, np.dot(u, x)-1 )
 
         def jacobian_func(x):
-            #Ji = -2 * np.eye(nn) * np.dot(u, np.matmul(Cmat,x)) + (Cmat-Emat)
-            #Ji = -2 * np.eye(nn) * np.dot(gr_op, x) + (Cmat-Emat)
-            Ji = -2 * Mmat * np.dot(u, np.matmul(Cmat1,x)) + (Cmat-Emat)
+            Ji = -2 * Mmat * np.dot(u, np.matmul(Cmat1,x)) + (Cmat+Emat)
             Ji = np.vstack((Ji,u))
             return Ji
 
@@ -266,7 +267,7 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
 
     else:
         def f_rhs(t,y):
-            return np.matmul(Cmat-Emat, y)
+            return np.matmul(Cmat+Emat, y)
 
         rel_error=1
         t_curr=0
@@ -576,6 +577,7 @@ parser.add_argument("-run_bolsig_only", "--run_bolsig_only"   , help="run the bo
 parser.add_argument("-bolsig", "--bolsig_dir"                 , help="Bolsig directory", type=str, default="../../Bolsig/")
 parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", nargs='+', type=float, default=[24, 48, 96])
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
+parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
 
 args         = parser.parse_args()
 e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])
@@ -724,7 +726,7 @@ for run_id in range(1):#range(len(e_values)):
             # tt_vec = np.sqrt(tt_vec_ev) * c_gamma / VTH
             # print(tt_vec)
             # tt_vec = basis.BSpline.adaptive_fit(refine_func, k_domain, sp_order=SPLINE_ORDER, min_lev=4, max_lev=max_lev, sig_pts=sig_pts, atol=1e-100, rtol=1e-10)
-            bb     = basis.BSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts=sig_pts, knots_vec=None)
+            bb     = basis.BSpline(k_domain, SPLINE_ORDER, params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER+1, sig_pts=sig_pts, knots_vec=None, dg_splines=args.use_dg)
             params.BEVelocitySpace.NUM_Q_VR = bb._num_knot_intervals * args.spline_q_pts_per_knot
             params.BEVelocitySpace.VELOCITY_SPACE_POLY_ORDER = bb._num_p
             # if args.sweep_param == "Nr":

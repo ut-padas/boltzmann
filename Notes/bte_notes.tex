@@ -529,6 +529,57 @@ R(\hat{f_0}) &= C_0 \hat{f_0} + W^{\hat{f_0}}_{ij} (\hat{f_0}) - (u^T C_0 \hat{f
 J(\hat{f_0}) &= C_0 + W^{\hat{f_0}}_{ij}  - 2(u^T C_0 \hat{f_0}) M_{ij}
 \end{align*}
 
+\newpage
+\subsection{Coulomb collisions}
+We use Fokker-Plank equation to derive collision operator for columbic collisions. We consider binary species `a' and `b' and $f_a, f_b$ be the corresponding species distribution functions. 
+F for species a is can be written as
+\begin{align}
+	\ppartial{f_a}{t} = -\ppartial{(f_a {\langle\Delta v^{i}\rangle}_a)}{v^i} + \frac{1}{2} \frac{\partial^2}{\partial v^i \partial v^j} (f_a{\langle \Delta v^i \Delta v^j\rangle}_a) \label{eq:fokker_plank}
+\end{align}where, 
+\begin{align*}
+	{\langle \Delta v^{i}\rangle}_a = \int d\vect{v^\prime} f_b\of{v^i} \int d\Omega \sigma \of {u, \Omega} u \Delta v^i \\
+	{\langle \Delta v^i \Delta v^j\rangle}_a = \int d\vect{v^\prime} f_b\of{v^i} \int d\Omega \sigma \of {u, \Omega} u \Delta v^i \Delta v^j  \\
+	\sigma\of{u, \Omega} = \frac{e^4}{4m_{ab}^2 u^4} (\sin\of{\chi/2})^{-4} \text{ where } m_{ab} = \frac{m_a m_b}{m_a + m_b}
+\end{align*} and $\chi$ be the scattering angle. Based on the work by Rosenbluth\cite{rosenbluth1957fokker}, we write the potential as, 
+\begin{align*}
+	{\langle \Delta v^{i}\rangle}_a &= \Gamma_a \frac{\partial h_a}{\partial v^i} \\
+	{\langle \Delta v^i \Delta v^j\rangle}_a &= \Gamma_a \frac{\partial^2 g}{\partial v^i \partial v^j}  \\
+	h_a\of{\vect{v}} &= \frac{m_a + m_b}{m_b} \int \diff{\vect{v^\prime}} f_b \of{\vect{v^\prime}} \norm{\vect{v}- \vect{v^\prime}}^{-1}\\
+	g\of{\vect{v}} &= \int \diff{\vect{v^\prime}} f_b \of{\vect{v^\prime}} \norm{\vect{v}- \vect{v^\prime}}
+\end{align*}. Then substituting the above for \eqref{eq:fokker_plank}, we can write
+\begin{align}
+	\frac{1}{\Gamma_a} \frac{\partial f_a}{\partial_t} = -\ppartial{\of{f_a \frac{\partial h_a}{\partial v^i}}}{v^i} + \frac{1}{2} \frac{\partial^2}{\partial v^i \partial^j} \of{f_a \frac{\partial^2 g}{\partial v^i \partial v^j}}
+\end{align}. In the generalized coordinates, we can write, the equation in the covariant form as follows. 
+\begin{align*}
+	\Gamma_a ^{-1} \partial_t f_a = -D_\mu (f {T_a}^{\mu}_{\nu} ) + \frac{1}{2} D_{\mu\nu}\of{f {S_a}^{\mu\nu}} 
+\end{align*} where $D_{\mu}$ denotes the covarient derivative with respect to metric $a_{\mu\nu}$ , ${T_a}^{\mu}_{\nu} = a^{\mu\nu} D_\nu h_a$ and $S^{\mu\nu} = a^{\mu\omega} a^{\nu \tau} D_{\omega \tau} g$. For basis, $q_1 = v, q_2 = \cos\vtheta, q_3 = \vphi$ we can simplify the above as follows where $\mu=\cos\vtheta$. 
+\begin{align*}
+\Gamma_a \partial_t f_a = 
+&-v^{-2} \partial_{v} \of{f_a v^2 \partial_{v} h_a}
+-v^{-2} \partial_{\mu}  \of { f_a (1-\mu^2) \partial_{\mu} h_a}\\
+& +(2 v^2)^{-1} \partial^2_{vv} \of { f_a v^2 \partial^2_{vv} g }\\
+&+ (2 v^2)^{-1} \partial^2_{\mu\mu} \of {f_a \of{v^{-2} (1-\mu^2)^2 \partial^2_{\mu\mu} g + v^{-1}(1-\mu^2) \partial_{v} g - v^{-2} \mu (1-\mu^2) \partial_{\mu} g }}\\
+&+ v^{-2} \partial^2_{\mu v} \of{ f_a (1-\mu^2) \of{\partial^{2}_{\mu v} g - v^{-1} \partial_{\mu} g } } \\
+&+ (2v^2)^{-1} \partial_{v} \of {f_a \of{-v^{-1} (1-\mu^2) \partial^2_{\mu\mu} g -2 \partial_v g + 2\mu v^{-1} \partial_{\mu} g }}\\
+&+ (2v^2)^{-1} \partial_{\mu} \of{ f_a \of{v^{-2} \mu (1-\mu^2) \partial^{2}_{\mu\mu} g + 2\mu v^{-1} \partial_{v} g + 2v^{-1} (1-\mu^2 )\partial^{2}_{\mu v}g -2v^{-2} \partial_{\mu} g } }
+\end{align*} 
+
+Assuming azimuthal symmetry for the problem, we can write the usual expansion for distribution function, 
+\begin{align*}
+	f_a\of{\vect{v}} = \sum_{l} f^{a}_l\of{v} Y_{l0}\of{\vtheta, \vphi}
+\end{align*}. Then we can derive \cite{rosenbluth1957fokker}, 
+\begin{align*}
+	h_a\of{\vect{v}} &= \sum_{l} \frac{m_a + m_b}{m_b} f^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where } \\
+	f^{b}_l\of{v} &= \frac{4\pi}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
+	g\of{\vect{v}} & = \sum_{l} B^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where }\\
+	B^{b}_{l}\of{v} & = -\frac{4\pi}{(4l^2-1)} \of
+	{
+		\int_{0}^{v} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v^\prime}^{l+2}}{v^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v^\prime}^2 }{v^2}}} } + \\
+	&-\frac{4\pi}{(4l^2-1)} \of{
+		\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
+	}
+\end{align*}
+
 \subsection{DG in velocity space}
 
 Let's summarize the Boltzmann equation projected on to the spherical basis. 
@@ -3694,8 +3745,6 @@ e^{-x^2} x^{q} \left( \lp{q}{k} - \lp{q}{k-1} \right)
 - \nfun{q}{p} \delta_{p,k-1}
 + (q-1) \sum_{j=0}^{p} \nfun{q-1}{j} \delta_{j,k}
 \end{multline*}
-
-
 
 
 \end{document}

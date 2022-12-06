@@ -174,11 +174,11 @@ error_l2_2d   = np.zeros(len(num_dofs_all))
 
 DT       = args.T_DT
 T_END    = args.T_END
-V_DOMAIN = (0,10)
+V_DOMAIN = (0,8)
 SP_ORDER = args.spline_order
 
-x = np.linspace(0, 0.8 * V_DOMAIN[1], 50)
-z = np.linspace(0, 0.8 * V_DOMAIN[1], 50)
+x = np.linspace(0, 0.9999 * V_DOMAIN[1], 50)
+z = np.linspace(0, 0.9999 * V_DOMAIN[1], 50)
 quad_grid = np.meshgrid(x,z,indexing='ij')
 y = np.zeros_like(quad_grid[0])
 
@@ -243,7 +243,11 @@ for num_dofs_idx, num_dofs in enumerate(num_dofs_all):
 
 
 fig = plt.figure(figsize=(14, 5), dpi=300)
-fig.suptitle('sp_order= %d T=%.4E lmax=%d'%(args.spline_order, T_END, args.l_max)) # or plt.suptitle('Main title')
+if len(spec_xlbspline._basis_p._dg_idx)==2:
+    fig.suptitle('CG sp_order= %d T=%.4E lmax=%d'%(args.spline_order, T_END, args.l_max)) 
+else:
+    fig.suptitle('DG sp_order= %d T=%.4E lmax=%d'%(args.spline_order, T_END, args.l_max)) 
+
 plt.subplot(1,3,1)
 plt.semilogy(x, np.abs(f_initial[-1,:]), label="initial")
 plt.plot(x, np.abs(f_exact[-1,:]), label="exact")
@@ -257,9 +261,9 @@ plt.xlabel('$v_z$')
 
 
 plt.subplot(1,3,2)
-plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[-1,:,:], linestyles='solid', colors='grey', linewidths=1,levels=4)
-plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[-1,:,:], linestyles='dashed', colors='red', linewidths=1)
-ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotted', colors='blue', linewidths=1)
+plt.contour(quad_grid[0], quad_grid[1], f_initial_2d[-1,:,:], linestyles='solid', colors='grey', linewidths=1,levels=np.logspace(-25, 1, 15, base=10))
+plt.contour(quad_grid[0], quad_grid[1], f_exact_2d[-1,:,:], linestyles='dashed', colors='red', linewidths=1, levels=np.logspace(-25, 1, 15, base=10))
+ax = plt.contour(quad_grid[0], quad_grid[1], f_num_2d[-1,:,:], linestyles='dotted', colors='blue', linewidths=1, levels=np.logspace(-25, 1, 15, base=10))
 plt.gca().set_aspect('equal')
 
 

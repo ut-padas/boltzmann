@@ -39,6 +39,7 @@ from datetime import datetime
 plt.rcParams.update({
     "text.usetex": False,
     "font.size": 14,
+    "ytick.major.size": 3
     #"font.family": "Helvetica",
     #"lines.linewidth":2.0
 })
@@ -60,12 +61,6 @@ class CollissionMode(enum.Enum):
     ELASTIC_W_EXCITATION=1
     ELASTIC_W_IONIZATION=2
     ELASTIC_W_EXCITATION_W_IONIZATION=3
-
-collisions.AR_NEUTRAL_N=3.22e22
-collisions.MAXWELLIAN_N=1
-collisions.AR_IONIZED_N=collisions.AR_NEUTRAL_N #collisions.MAXWELLIAN_N
-parser = argparse.ArgumentParser()
-
 
 def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
 
@@ -551,7 +546,9 @@ def solve_bte(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_tol, c
     else:
         raise NotImplementedError
    
-    
+
+parser = argparse.ArgumentParser()
+
 parser.add_argument("-Nr", "--NUM_P_RADIAL"                   , help="Number of polynomials in radial direction", type=int, default=16)
 parser.add_argument("-T", "--T_END"                           , help="Simulation time", type=float, default=1e-4)
 parser.add_argument("-dt", "--T_DT"                           , help="Simulation time step size ", type=float, default=1e-7)
@@ -578,11 +575,17 @@ parser.add_argument("-bolsig", "--bolsig_dir"                 , help="Bolsig dir
 parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for parameter sweep", nargs='+', type=float, default=[24, 48, 96])
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
 parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
+parser.add_argument("-Tg", "--Tg"                             , help="Gass temperature (K)" , type=float, default=1e-12)
 
 args         = parser.parse_args()
 e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])
 #np.array([210.2110528, 363.5566248, 628.765318, 1087.439475, 1880.70903, 3252.655928, 5625.415959, 9729.066156]) #np.logspace(np.log10(0.148), np.log10(114471.000) , 4, base=10)
 str_datetime = datetime.now().strftime("%m_%d_%Y_%H:%M:%S")
+
+collisions.AR_NEUTRAL_N = 3.22e22
+collisions.MAXWELLIAN_N = 1
+collisions.AR_IONIZED_N = collisions.AR_NEUTRAL_N 
+collisions.AR_TEMP_K    = args.Tg 
 
 COLLISOIN_NAMES=dict()
 for  col_idx, col in enumerate(args.collisions):
@@ -918,9 +921,9 @@ for run_id in range(1):#range(len(e_values)):
             fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + "q_per_knot="+str(args.spline_q_pts_per_knot))
             # plt.show()
             if len(spec_sp._basis_p._dg_idx)==2:
-                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
+                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +".png")
             else:
-                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + ".png")
+                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +".png")
         else:
             fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")")
             # plt.show()

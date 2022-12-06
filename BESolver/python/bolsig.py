@@ -160,7 +160,8 @@ def run_bolsig(args, run_convergence=False):
 
     replace_line(args.bolsig_dir+"run.sh", 2, "cd " + args.bolsig_dir + "\n")
     replace_line(args.bolsig_dir+"minimal-argon.dat", 8, "\""+bolsig_cs_file+"\"   / File\n")
-    replace_line(args.bolsig_dir+"minimal-argon.dat", 13, str(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+" / Electric field / N (Td)\n")
+    replace_line(args.bolsig_dir+"minimal-argon.dat", 13, "%.8E"%(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+"\t\t/ Electric field / N (Td)\n")
+    replace_line(args.bolsig_dir+"minimal-argon.dat", 16, "%.8E"%(args.Tg) +"\t\t/ Gas temperature (K)\n")
 
     if (run_convergence):
         bolsig_rundata=list()

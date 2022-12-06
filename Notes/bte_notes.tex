@@ -569,8 +569,8 @@ Assuming azimuthal symmetry for the problem, we can write the usual expansion fo
 	f_a\of{\vect{v}} = \sum_{l} f^{a}_l\of{v} Y_{l0}\of{\vtheta, \vphi}
 \end{align*}. Then we can derive \cite{rosenbluth1957fokker}, 
 \begin{align*}
-	h_a\of{\vect{v}} &= \sum_{l} \frac{m_a + m_b}{m_b} f^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where } \\
-	f^{b}_l\of{v} &= \frac{4\pi}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
+	h_a\of{\vect{v}} &= \sum_{l} \frac{m_a + m_b}{m_b} A^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where } \\
+	A^{b}_l\of{v} &= \frac{4\pi}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
 	g\of{\vect{v}} & = \sum_{l} B^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where }\\
 	B^{b}_{l}\of{v} & = -\frac{4\pi}{(4l^2-1)} \of
 	{
@@ -579,6 +579,48 @@ Assuming azimuthal symmetry for the problem, we can write the usual expansion fo
 		\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
 	}
 \end{align*}
+Using the two term expansion and neglecting all  the quadratic terms in $f_1$, we can derive, 
+\begin{align*}
+&v^2	\Gamma_a ^{-1}  \partial_t f_0  = \partial_v \of {\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0}\\
+&v^2	\Gamma_a ^{-1}  \partial_t f_1  = -\frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 f_0} + \\
+&\frac{1}{v}\partial_v \Bigg(\alpha v P^2_0 f_1 + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{f_1/v} \\
+&+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}f_0 + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v f_0 \Bigg)
+\end{align*} where $\alpha = m_a/m_b$ mass ratio of the particles. 
+we can write the week form of the the above, as, 
+\begin{align*}
+	&\int T(v) v^2 \partial_t f_0 dv = - \Gamma_a \int \of{\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0} \partial_v T(v) dv\\
+	&\int T(v) v^2 \partial_t f_1 dv = - \Gamma_a \int \frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 f_0} T(v) dv + \\
+	&-\Gamma_a \int \partial_v \of{T(v)/v} \Bigg(\alpha v P^2_0 f_1 + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{f_1/v}\\
+	&+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}f_0 + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v f_0 \Bigg) dv
+\end{align*}. We can write the discretized operators, 
+\begin{align*}
+	&C^{0q}_{pk} = - \delta^{0q}\Gamma_a \int \of{\alpha P^2_0 S_k + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v S_k} \partial_v\of{T_p\of{v}} dv\\
+	&C^{10}_{pk} = \Gamma_a \int (1+\alpha) \of{v Q^0_1 S_k(v)} T_p(v) dv -\\
+	&\Gamma_a \int \of{\frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}S_k + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v S_k } \partial_v \of{T(v)/v} dv \\
+	&C^{11}_{pk} = -\Gamma_a \int  \frac{1+\alpha}{v} P^2_0 S_k(v) T_p(v) dv - \Gamma_a \int \Bigg(\alpha v P^2_0 S_k + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{S_k/v}\Big) \partial_v\of{T_p(v)/v}
+\end{align*} where, 
+\begin{align*}
+	P^{m}_{0,1} = 4\pi \int_{0}^{v} {v^\prime}^m f^b_{0,1}(v^\prime) dv^\prime\\
+	Q^{m}_{0,1} = 4\pi \int_{v}^{\infty} {v^\prime}^m f^b_{0,1}(v^\prime) dv^\prime \\
+	\Gamma_a    = \frac{e^4 \ln \Lambda}{4\pi (\epsilon_0 m_e)^2} \text{ and } \Lambda = \frac{12 \pi (\epsilon_0 k T_e)^{3/2}}{e^3 n_e^{1/2}}
+\end{align*}
+
+
+
+
+
+% Assuming, anisotropic components are small, and neglecting all the second order correction terms $l \geq 1$ we can write, 
+% \begin{align*}
+% 	\Gamma_a \partial_t f_a = &-v^{-2} \partial_{v} \of{f_a v^2 \partial_{v} h_a}
+% 	-v^{-2} \partial_{\mu}  \of { f_a (1-\mu^2) \partial_{\mu} h_a}\\
+% \end{align*}
+
+% Recall, $-\sin\vtheta \partial_{\vtheta} Y_{lm} = A_D(l,m) Y_{(l-1)m} + B_D(l,m) Y_{(l+1)m}$ Therefore, we can write, 
+% \begin{align*}
+% 	(1-\mu^2) \partial_{\mu} h_a = -\sin\of{\vtheta} \partial_\vtheta h_a = \sum_l (m_a + m_b)m_b^{-1} f^{b}_{l} \of{v} \of{-\sin\of{\vtheta} \partial_\vtheta Y_{l0}}\\
+% 	= \sum_{l} (m_a + m_b)m_b^{-1} f^{b}_{l} \of{v} \of{A_D(l,0) Y_{(l-1)0} + B_D(l,0) Y_{(l+1)0}}
+% \end{align*}
+
 
 \subsection{DG in velocity space}
 

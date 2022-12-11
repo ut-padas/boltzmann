@@ -579,34 +579,52 @@ Assuming azimuthal symmetry for the problem, we can write the usual expansion fo
 		\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
 	}
 \end{align*}
-Using the two term expansion and neglecting all  the quadratic terms in $f_1$, we can derive, 
+Now we restrict the derivation for electron (i.e., selecting species ``a'' to be electrons) collision with background species ``b''. Using the two term expansion for $f_a$ and neglecting all  the quadratic terms in $f_1 \cdot f_1$, we can derive, 
 \begin{align*}
 &v^2	\Gamma_a ^{-1}  \partial_t f_0  = \partial_v \of {\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0}\\
 &v^2	\Gamma_a ^{-1}  \partial_t f_1  = -\frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 f_0} + \\
 &\frac{1}{v}\partial_v \Bigg(\alpha v P^2_0 f_1 + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{f_1/v} \\
 &+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}f_0 + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v f_0 \Bigg)
-\end{align*} where $\alpha = m_a/m_b$ mass ratio of the particles. 
-we can write the week form of the the above, as, 
+\end{align*} where $\alpha = m_e/m_b$ mass ratio of the particles and we can write $P^{m}_l$, $Q^{m}_l$ as follows. 
+\begin{align*}
+	P^{m}_l\of{v} = 4\pi \int_{0}^{v} {v^\prime}^m f^b_l(v^\prime) dv^\prime\\
+	Q^{m}_l\of{v} = 4\pi \int_{v}^{\infty} {v^\prime}^m f^b_l(v^\prime) dv^\prime \\
+	\Gamma_a    = \frac{e^4 \ln \Lambda}{4\pi (\epsilon_0 m_e)^2} \text{ and } \Lambda = \frac{12 \pi (\epsilon_0 k T_e)^{3/2}}{e^3 n_e^{1/2}}
+\end{align*}
+The weak form of the the above using integration by parts as follows.  
 \begin{align*}
 	&\int T(v) v^2 \partial_t f_0 dv = - \Gamma_a \int \of{\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0} \partial_v T(v) dv\\
 	&\int T(v) v^2 \partial_t f_1 dv = - \Gamma_a \int \frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 f_0} T(v) dv + \\
 	&-\Gamma_a \int \partial_v \of{T(v)/v} \Bigg(\alpha v P^2_0 f_1 + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{f_1/v}\\
 	&+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}f_0 + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v f_0 \Bigg) dv
-\end{align*}. We can write the discretized operators, 
+\end{align*} We can write the discretized operators, 
 \begin{align*}
-	&C^{0q}_{pk} = - \delta^{0q}\Gamma_a \int \of{\alpha P^2_0 S_k + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v S_k} \partial_v\of{T_p\of{v}} dv\\
-	&C^{10}_{pk} = \Gamma_a \int (1+\alpha) \of{v Q^0_1 S_k(v)} T_p(v) dv -\\
-	&\Gamma_a \int \of{\frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}S_k + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v S_k } \partial_v \of{T(v)/v} dv \\
-	&C^{11}_{pk} = -\Gamma_a \int  \frac{1+\alpha}{v} P^2_0 S_k(v) T_p(v) dv - \Gamma_a \int \Bigg(\alpha v P^2_0 S_k + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{S_k/v}\Big) \partial_v\of{T_p(v)/v}
-\end{align*} where, 
+	&C^{00}_{pk} = - \Gamma_a \int \of{\alpha P^2_0\of{v} S_k\of{x} + \frac{1}{3v}\of{P^4_0\of{v} + v^3 Q^1_0\of{v}} \partial_v S_k\of{x}} \partial_v T_p\of{x}  dv\\
+	&C^{01}_{pk} = 0\\
+	% &C^{0q}_{pk} = - \delta^{0q}\Gamma_a \int \of{\alpha P^2_0\of{x} S_k\of{x} + \frac{1}{3x}\of{P^4_0\of{x} + (xv_{th})^3 Q^1_0\of{x}} \partial_x S_k\of{x}} \partial_x T_p\of{x}  dx\\
+	&C^{10}_{pk} = \Gamma_a \int (1+\alpha) \of{v Q^0_1\of{v} S_k\of{x}} T_p\of{x} dv\\
+	&-\Gamma_a \int \Big(\frac{1}{3}\of{(2\alpha -1 ) P^3_1\of{v} - (1 + \alpha) v^3 Q^0_1\of{v}}S_k\of{x} + \frac{1}{5v}\of{P^5_1\of{v} + v^5 Q^0_1\of{v}}\partial_v S_k\of{x} \Big) \partial_v \of{T_p\of{x}/v} dv \\
+	&C^{11}_{pk} = -\Gamma_a \int  \frac{1+\alpha}{v} P^2_0 S_k\of{v} T_p\of{x} dv \\
+	&-\Gamma_a \int \Bigg(\alpha v P^2_0 S_k\of{x} + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{S_k\of{x}/v}\Big) \partial_v\of{T_p\of{x}/v} dv
+\end{align*} where $x=\frac{v}{v_{th}}$. Since, $f^b_l(v) = \sum_k f^b_{kl} S_k (v/v_th)$, we can write, 
 \begin{align*}
-	P^{m}_{0,1} = 4\pi \int_{0}^{v} {v^\prime}^m f^b_{0,1}(v^\prime) dv^\prime\\
-	Q^{m}_{0,1} = 4\pi \int_{v}^{\infty} {v^\prime}^m f^b_{0,1}(v^\prime) dv^\prime \\
-	\Gamma_a    = \frac{e^4 \ln \Lambda}{4\pi (\epsilon_0 m_e)^2} \text{ and } \Lambda = \frac{12 \pi (\epsilon_0 k T_e)^{3/2}}{e^3 n_e^{1/2}}
+	P^{m}_l\of{v} = P_{mk} f^{b}_{kl} \text{ where } P_{mk} = 4\pi (v_{th})^{m+1}\int_{0}^{x} {x^\prime}^m S_k(x^\prime) dx^\prime \\
+	Q^{m}_l\of{v} = Q_{mk} f^{b}_{kl} \text{ where } Q_{mk} = 4\pi (v_{th})^{m+1}\int_{x}^{\infty} {x^\prime}^m S_k(x^\prime) dx^\prime \\
+\end{align*}. For electron-electron interaction the derived collision operator is quadratic in $f$ (i.e., $C_{ee} : (f, f) \rightarrow [C_{ee}\of{f}] f$). For the steady state solve, we would need the Jacobian of $C_ee$ w.r.t. $f$. We can write the Jacobian as, 
+\begin{align*}
+	&\Big[\frac{d }{df} C_{ee}(f,f)\Big]_{ij} = \frac{d }{d f_j} [C_{ee}(f,f)]_i \\
+	&\ = \frac{d }{d f_j} \of{[C_{ee}\of{f}]_{ir} f_r} =  [C_{ee}\of{f}]_{ir} \delta_{rj} + f_r \frac{d}{d f_j} [C_{ee}\of{f}]_{ir}
+\end{align*}. We can further simplify, 
+\begin{align*}
+	&\frac{d}{d f_{j0}} [C^{00}_{ir}] = - \Gamma_a \int \of{\alpha P_{2j} S_r\of{x} + \frac{1}{3v}\of{P_{4j} + v^3 Q_{1j}\of{v}} \partial_v S_r\of{x}} \partial_v T_i\of{x} dv \\
+	&\frac{d}{d f_{j1}} [C^{00}_{ir}] = 0 \text{ , }
+	\frac{d}{d f_{jl}} [C^{01}_{ir}] = 0 \text{ , } \frac{d}{d f_{j0}} [C^{10}_{ir}] =0 \\
+	&\frac{d}{d f_{j1}} [C^{10}_{ir}] = \Gamma_a \int (1+\alpha) \of{v Q_{0j} S_r\of{x}} T_i\of{x} dv\\
+	&-\Gamma_a \int \Big(\frac{1}{3}\of{(2\alpha -1 ) P_{3j} - (1 + \alpha) v^3 Q_{0j} }S_r\of{x} + \frac{1}{5v}\of{P_{5j} + v^5 Q_{0j}}\partial_v S_r\of{x} \Big) \partial_v \of{T_i\of{x}/v} dv\\
+	&\frac{d}{d f_{j0}} [C^{11}_{ir}] = -\Gamma_a \int  \frac{1+\alpha}{v} P_{2j} S_r\of{v} T_i\of{x} dv \\
+	&-\Gamma_a \int \Bigg(\alpha v P_{2j} S_r\of{x} + \frac{1}{3} v\of{P_{4j} + v^3 Q_{1j}} \partial_v \of{S_r\of{x}/v}\Big) \partial_v\of{T_i\of{x}/v} dv \\
+	&\frac{d}{d f_{j1}} [C^{11}_{ir}] = 0
 \end{align*}
-
-
-
 
 
 % Assuming, anisotropic components are small, and neglecting all the second order correction terms $l \geq 1$ we can write, 
@@ -627,7 +645,7 @@ we can write the week form of the the above, as,
 Let's summarize the Boltzmann equation projected on to the spherical basis. 
 \begin{align*}
 	\partial_t f_{qs}  - E A^{qs}_{lm} \partial_{v} f_{lm} - E B^{qs}_{lm} \frac{1}{v} f_{lm} = C^{qs}_{lm} f_{lm}
-\end{align*} Let $\Omega_v$ be the domain for the radial coordinate, let $x=v/v_{th}$ denotes the normalizes coordinate for the radial component of the velocity. Following the same notation let $S_{k}\of{x}$ and $T_{p}\of{x}$ be the trial and test basis for the radial direction.  
+\end{align*} Let $\Omega_v$ be the domain for the radial coordinate, let $x=\frac{v}{v_{th}}$ denotes the normalizes coordinate for the radial component of the velocity. Following the same notation let $S_{k}\of{x}$ and $T_{p}\of{x}$ be the trial and test basis for the radial direction.  
 \begin{align*}
 	f_{lm}\of{v} = \sum_{k} f_{klm} S_k \of{x} = \sum_{k} f_{klm} S_k \of{\frac{v}{v_{th}}}
 \end{align*} Let $A^{qs}_{lm} = Q \Lambda Q^T$ and $\of{Q^T}^{qs}_{lm} f_{lm}= y_{qs}$. Then we can write the diagonalized system as, 

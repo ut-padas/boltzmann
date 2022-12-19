@@ -2,13 +2,13 @@
 @package Boltzmann collision operator solver. 
 """
 
-from ast import While
-from cProfile import run
-from cmath import sqrt
-from dataclasses import replace
+# from ast import While
+# from cProfile import run
+# from cmath import sqrt
+# from dataclasses import replace
+# from math import ceil
+# import string
 import enum
-from math import ceil
-import string
 import scipy
 import scipy.optimize
 import scipy.interpolate
@@ -62,7 +62,7 @@ class CollissionMode(enum.Enum):
     ELASTIC_W_IONIZATION=2
     ELASTIC_W_EXCITATION_W_IONIZATION=3
 
-def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
+def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
 
     spec_sp = collOp._spec
 
@@ -94,12 +94,11 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
     
     ne_t      = MNE
     mw_vth    = BEUtils.get_maxwellian_3d(vth,ne_t)
-    m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
-    temp_t0   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t0,1)
-    
+    m0_t0     = np.dot(mass_op, h_t) * vth**3 * mw_vth(0) #BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
+    temp_t0   = np.dot(temp_op, h_t) * vth**5 * mw_vth(0) * 0.5 * scipy.constants.electron_mass * (2./ (3 * collisions.BOLTZMANN_CONST)) / m0_t0 #BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t0,1)
     vth_curr  = vth 
-    print("Initial Ev : "   , temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
-    print("Initial mass : " , m0_t0 )
+    print("Initial temp (eV) = %.12E "   %(temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT))
+    print("Initial mass (1/m^3) = %.12E" %(m0_t0))
 
 
     f0_cf = interp1d(ev, bolsig_f0, kind='cubic', bounds_error=False, fill_value=(bolsig_f0[0],bolsig_f0[-1]))
@@ -178,12 +177,12 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
     MNE   = maxwellian(0) * (np.sqrt(np.pi)**3) * (vth**3)
     MTEMP = collisions.electron_temperature(MVTH)
     
-    advmat, eA, qA = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
-    #eA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
-    qA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
+    # advmat, eA, qA = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
+    # #eA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), eA))
+    # qA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
     
-    # advmat = spec_sp.compute_advection_matix()
-    # qA     = np.eye(advmat.shape[0])
+    advmat = spec_sp.compute_advection_matix()
+    qA     = np.eye(advmat.shape[0])
 
     # np.set_printoptions(precision=1)
     # print(FOp[0::num_sh, 0::num_sh])
@@ -195,11 +194,11 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
     # Cmat = np.matmul(Minv, FOp)
     # Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
-    Cmat = FOp #np.matmul(Minv, FOp)
-    Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat  #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
-
-    Cmat1 = np.matmul(Minv, FOp)
-
+    Cmat  = FOp / collisions.AR_NEUTRAL_N 
+    Emat  = (E_field / collisions.AR_NEUTRAL_N / MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat   
+    #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
+    Cmat1 = np.matmul(Minv, Cmat)
+    collOp.setup_coulombic_collisions()
 
     if steady_state:
         iteration_error = 1
@@ -209,8 +208,8 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
         u        = mass_op / (np.sqrt(np.pi)**3) 
         u        = np.matmul(np.transpose(u), qA)
         h_prev   = np.copy(h_init)
-        print("initial mass : %.12E"%(np.dot(u, h_prev)))
         h_prev   = h_prev / np.dot(u, h_prev)
+        h_curr   = np.copy(h_prev)
         
         nn       = Cmat.shape[0]
         Ji       = np.zeros((nn+1,nn))
@@ -219,30 +218,35 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
         iteration_error = 1
         iteration_steps = 0
 
-        def residual_func(x):
-            y  = np.matmul(Cmat+Emat, x)
-            y  = -np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,x)) * x)   + y
-            return np.append(y, np.dot(u, x)-1 )
+        ionization_degree = args.ion_deg
+        
+        def residual_func(x, cc_ee, eval_jacobian = True):
+            y                = np.matmul(Cmat + Emat + cc_ee, x)
+            y                = -np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,x)) * x)   + y
+            res              = np.append(y, (np.dot(u, x)-1) / collisions.AR_NEUTRAL_N )
 
-        def jacobian_func(x):
-            Ji = -2 * Mmat * np.dot(u, np.matmul(Cmat1,x)) + (Cmat+Emat)
-            Ji = np.vstack((Ji,u))
-            return Ji
+            if eval_jacobian:
+                Ji = -2 * Mmat * np.dot(u, np.matmul(Cmat1,x)) + (Cmat + Emat + cc_ee)
+                Ji = np.vstack((Ji , u / collisions.AR_NEUTRAL_N ))
+                return res, Ji
+            else:
+                return res
 
-        while (iteration_error > 1e-14 and iteration_steps < 1000):
-            Rf = residual_func(h_prev) 
-            if(iteration_steps%100==0):
+        while (iteration_error > 0 and iteration_steps < 100):
+            CC_ee            = ionization_degree * collOp.coulomb_collision_mat(1.0, ionization_degree, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth) 
+            Rf , Ji          = residual_func(h_curr, CC_ee) 
+            
+            if(iteration_steps%10==0):
                 print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
+
+            p     = np.matmul(np.linalg.pinv(Ji, rcond=1e-14), -Rf)
+            alpha = 1.0e0
+            nRf   = np.linalg.norm(Rf)
             
-            Ji = jacobian_func(h_prev)
-            p  = np.matmul(np.linalg.pinv(Ji,rcond=1e-14), -Rf)
-            
-            alpha=1e-1
-            nRf=np.linalg.norm(Rf)
             is_diverged = False
-            while (np.linalg.norm(residual_func(h_prev + alpha *p)) >= nRf):
+            while (np.linalg.norm(residual_func(h_prev + alpha *p, CC_ee,  eval_jacobian=False)) >= nRf):
                 alpha*=0.5
-                if alpha < 1e-40:
+                if alpha < 1e-16:
                     is_diverged = True
                     break
             
@@ -251,13 +255,14 @@ def solve_collop_dg(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_
                 print("line search step size becomes too small")
                 break
 
-            iteration_error = np.linalg.norm(residual_func(h_prev + alpha *p))
-            h_prev += p*alpha
+            iteration_error = np.linalg.norm(residual_func(h_prev + alpha *p, CC_ee,  eval_jacobian=False))
+            h_curr          = h_prev + p*alpha
+            h_prev          = h_curr
             iteration_steps = iteration_steps + 1
 
         solution_vector = np.zeros((2,h_init.shape[0]))
         solution_vector[0,:] = np.matmul(qA, h_init)
-        solution_vector[1,:] = np.matmul(qA, h_prev)
+        solution_vector[1,:] = np.matmul(qA, h_curr)
         return solution_vector
 
     else:
@@ -319,12 +324,12 @@ def solve_bte(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_tol, c
     
     ne_t      = MNE
     mw_vth    = BEUtils.get_maxwellian_3d(vth,ne_t)
-    m0_t0     = BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
-    temp_t0   = BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t0,1)
-    
+    m0_t0     = np.dot(mass_op, h_t) * vth**3 * mw_vth(0) #BEUtils.moment_n_f(spec_sp,h_t,mw_vth,vth,0,None,None,None,1)
+    temp_t0   = np.dot(temp_op, h_t) * vth**5 * mw_vth(0) * 0.5 * scipy.constants.electron_mass * (2./ (3 * collisions.BOLTZMANN_CONST)) / m0_t0 #BEUtils.compute_avg_temp(collisions.MASS_ELECTRON,spec_sp,h_t,mw_vth,vth,None,None,None,m0_t0,1)
     vth_curr  = vth 
-    print("Initial Ev : "   , temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
-    print("Initial mass : " , m0_t0 )
+    print("Initial temp (eV) = %.12E "   %(temp_t0 * collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT))
+    print("Initial mass (1/m^3) = %.12E" %(m0_t0))
+
 
     gx, gw   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
     c_gamma  = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
@@ -576,6 +581,7 @@ parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
 parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
 parser.add_argument("-Tg", "--Tg"                             , help="Gass temperature (K)" , type=float, default=1e-12)
+parser.add_argument("-ion_deg", "--ion_deg"                   , help="Ionization degreee"   , type=float, default=0)
 
 args         = parser.parse_args()
 e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])

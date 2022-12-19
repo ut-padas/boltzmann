@@ -173,7 +173,7 @@ M(v) = \frac{n}{(\sqrt{\pi}v_{th})^d} \exp{\left(-\left(\frac{v}{v_{th}}\right)^
 \begin{equation}
     v_{th} = \sqrt{\frac{2kT}{m}}
 \end{equation}
-
+We define the average energy as $E_{avg} = \frac{1}{2} m_e \int \norm{\vect{v}}^2 f(\vect{v}) d\vect{v}$ and the temperature is related to $T = \frac{2}{3k_B} E_{avg}$. 
 
 
 %\section{Splitting the Boltzmann}
@@ -610,7 +610,10 @@ The weak form of the the above using integration by parts as follows.
 \begin{align*}
 	P^{m}_l\of{v} = P_{mk} f^{b}_{kl} \text{ where } P_{mk} = 4\pi (v_{th})^{m+1}\int_{0}^{x} {x^\prime}^m S_k(x^\prime) dx^\prime \\
 	Q^{m}_l\of{v} = Q_{mk} f^{b}_{kl} \text{ where } Q_{mk} = 4\pi (v_{th})^{m+1}\int_{x}^{\infty} {x^\prime}^m S_k(x^\prime) dx^\prime \\
-\end{align*}. For electron-electron interaction the derived collision operator is quadratic in $f$ (i.e., $C_{ee} : (f, f) \rightarrow [C_{ee}\of{f}] f$). For the steady state solve, we would need the Jacobian of $C_ee$ w.r.t. $f$. We can write the Jacobian as, 
+	\partial_v \of{ T_p\of{x}/v} dv = \partial_x \of{ T_p\of{x}/v} dx = \of{\frac{x\partial_x T_p\of{x} - T_p\of{x}}{x^2 v_{th}}} dx
+\end{align*}. 
+
+For electron-electron interaction the derived collision operator is quadratic in $f$ (i.e., $C_{ee} : (f, f) \rightarrow [C_{ee}\of{f}] f$). For the steady state solve, we would need the Jacobian of $C_{ee}$ w.r.t. $f$. We can write the Jacobian as, 
 \begin{align*}
 	&\Big[\frac{d }{df} C_{ee}(f,f)\Big]_{ij} = \frac{d }{d f_j} [C_{ee}(f,f)]_i \\
 	&\ = \frac{d }{d f_j} \of{[C_{ee}\of{f}]_{ir} f_r} =  [C_{ee}\of{f}]_{ir} \delta_{rj} + f_r \frac{d}{d f_j} [C_{ee}\of{f}]_{ir}

@@ -1,7 +1,6 @@
 """
 @package : Spectral based, Petrov-Galerkin discretization of the collission integral
 """
-
 import abc
 import basis
 import spec_spherical as sp
@@ -563,13 +562,13 @@ class CollisionOpSP():
 
         gmx , gmw  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
         
-        p20        = np.dot(fb[0::num_sh], self._p2)
-        p40        = np.dot(fb[0::num_sh], self._p4)
-        q10        = np.dot(fb[0::num_sh], self._q1)
+        p20        = np.dot(fb[0::num_sh], self._p2) 
+        p40        = np.dot(fb[0::num_sh], self._p4) 
+        q10        = np.dot(fb[0::num_sh], self._q1) 
 
-        p31        = np.dot(fb[1::num_sh], self._p3)
-        p51        = np.dot(fb[1::num_sh], self._p5)
-        q01        = np.dot(fb[1::num_sh], self._q0)
+        p31        = np.dot(fb[1::num_sh], self._p3) 
+        p51        = np.dot(fb[1::num_sh], self._p5) 
+        q01        = np.dot(fb[1::num_sh], self._q0) 
 
         
         B          = spec_sp.basis_eval_radial
@@ -579,24 +578,37 @@ class CollisionOpSP():
         m0         = np.dot(fb,self._mass_op) * vth**3 * mw(0)
         kT         = (np.dot(fb, self._temp_op) * vth**5 * mw(0) * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0) 
         #kT        = (vth**2) * scipy.constants.electron_mass/2
-        c_lambda   = 12 * np.pi * ((scipy.constants.epsilon_0 * kT)**(1.5)) / ((scipy.constants.elementary_charge**3) * np.sqrt(n0 * ionization_degree))
-        gamma_a    = np.log(c_lambda) * scipy.constants.elementary_charge**4 / (scipy.constants.epsilon_0 * scipy.constants.electron_mass)**2 /  4 * np.pi 
+        #https://www.nrl.navy.mil/Portals/38/PDF%20Files/NRL_Plasma_Formulary_2019.pdf?ver=lSvX72q0HmFwRWJWBzaI6A%3d%3d&timestamp=1612555310291
+        eps_0      = scipy.constants.epsilon_0
+        me         = scipy.constants.electron_mass
+        qe         = scipy.constants.e
+
+        ne          = n0 * ionization_degree
+        T_ev        = kT / qe
+
+        #c_lambda   = np.exp(23.5 - np.log(np.sqrt(ne) * T_ev**(-5./2) - np.sqrt((1e-5 + (np.log(T_ev)-2)**2)/16)))
+        c_lambda    = 12 * np.pi * ((eps_0 * kT)**(1.5)) / ((qe**3) * np.sqrt(ne))
+        gamma_a     = (np.log(c_lambda) * 4 * (qe**4)) / (2 * np.pi * (eps_0**2) * (np.sqrt(me)) * (3**1.5) * (kT**1.5)) 
+        #gamma_a     = (np.log(c_lambda) * 4 * (qe**4)) / (2 * np.pi * (eps_0**2) * (np.sqrt(me)) * vth**3) 
+
+
+        sph_l0      = lambda l : np.sqrt((2 * l +1) / (4 * np.pi) )
         
-        # print("Coulomb logarithm %.8E \t gamma_a %.8E" %(np.log(c_lambda), gamma_a))
+        print("Coulomb logarithm %.8E \t gamma_a %.8E %.8E" %(np.log(c_lambda), gamma_a, n0 * ionization_degree * gamma_a))
 
         for p in range(num_p):
             for k in range(max(0, p - 2 * (sp_order+2) ), min(num_p, p + 2 * (sp_order+2))):
                 tmp = -(alpha * p20 * B(gmx,k,0) + (1/(3*gmx)) * (p40 + gmx**3 * q10) * DB(gmx, k, 0, 1)) * DB(gmx, p, 0, 1)
-                cc_collision[p * num_sh + 0 , k * num_sh + 0] = np.dot(tmp, gmw)
+                cc_collision[p * num_sh + 0 , k * num_sh + 0] = np.dot(tmp, gmw) * (sph_l0(0))
 
-                tmp  = (1 + alpha) * gmx * q01 * B(gmx, k, 0) * B(gmx, p, 0)
-                tmp -= ((1./3) * B(gmx, k, 0) * ((2 * alpha -1) * p31 - (1+alpha) * gmx**3 * q01) + (DB(gmx, k, 0, 1) / (5*gmx)) * (p51 + gmx**5 * q01 )) * (gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / gmx**2
+                # tmp  = (1 + alpha) * gmx * q01 * B(gmx, k, 0) * B(gmx, p, 0)
+                # tmp -= ((1./3) * B(gmx, k, 0) * ((2 * alpha -1) * p31 - (1+alpha) * gmx**3 * q01) + (DB(gmx, k, 0, 1) / (5*gmx)) * (p51 + gmx**5 * q01 )) * (gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / gmx**2
 
-                cc_collision[p * num_sh + 1 , k * num_sh + 0] = np.dot(tmp, gmw)
+                # cc_collision[p * num_sh + 1 , k * num_sh + 0] = np.dot(tmp, gmw) * (sph_l0(0)**2 / sph_l0(1))
 
-                tmp  =  -((1 + alpha)/gmx) * p20 * B(gmx, k , 0) * B(gmx, p, 0) + (alpha * gmx * p20 * B(gmx, k, 0) + (1./3) * gmx * (p40 + gmx**3 * q10) * ((gmx * DB(gmx, k , 0, 1) - B(gmx, k, 0))/gmx**2) ) * (((gmx * DB(gmx, p , 0, 1) - B(gmx, p, 0))/gmx**2))
+                # tmp  =  -((1 + alpha)/gmx) * p20 * B(gmx, k , 0) * B(gmx, p, 0) + (alpha * gmx * p20 * B(gmx, k, 0) + (1./3) * gmx * (p40 + gmx**3 * q10) * ((gmx * DB(gmx, k , 0, 1) - B(gmx, k, 0))/gmx**2) ) * (((gmx * DB(gmx, p , 0, 1) - B(gmx, p, 0))/gmx**2))
 
-                cc_collision[p * num_sh + 1 , k * num_sh + 1] = np.dot(tmp, gmw)
+                # cc_collision[p * num_sh + 1 , k * num_sh + 1] = np.dot(tmp, gmw) * (sph_l0(1))
 
         
         return cc_collision * gamma_a

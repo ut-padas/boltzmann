@@ -8,6 +8,8 @@
 # from dataclasses import replace
 # from math import ceil
 # import string
+import os
+os.environ["OMP_NUM_THREADS"] = "8"
 import enum
 import scipy
 import scipy.optimize
@@ -194,8 +196,8 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
     # Cmat = np.matmul(Minv, FOp)
     # Emat = (E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
 
-    Cmat  = FOp / collisions.AR_NEUTRAL_N 
-    Emat  = (E_field / collisions.AR_NEUTRAL_N / MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat   
+    Cmat  = FOp 
+    Emat  = (E_field/ MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat   
     #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
     Cmat1 = np.matmul(Minv, Cmat)
     collOp.setup_coulombic_collisions()
@@ -223,28 +225,28 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
         def residual_func(x, cc_ee, eval_jacobian = True):
             y                = np.matmul(Cmat + Emat + cc_ee, x)
             y                = -np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,x)) * x)   + y
-            res              = np.append(y, (np.dot(u, x)-1) / collisions.AR_NEUTRAL_N )
+            res              = np.append(y, (np.dot(u, x)-1))
 
             if eval_jacobian:
                 Ji = -2 * Mmat * np.dot(u, np.matmul(Cmat1,x)) + (Cmat + Emat + cc_ee)
-                Ji = np.vstack((Ji , u / collisions.AR_NEUTRAL_N ))
+                Ji = np.vstack((Ji , u))
                 return res, Ji
             else:
                 return res
 
-        while (iteration_error > 0 and iteration_steps < 100):
-            CC_ee            = ionization_degree * collOp.coulomb_collision_mat(1.0, ionization_degree, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth) 
+        while (iteration_error > 1e-16 and iteration_steps < 300):
+            CC_ee            = collisions.AR_NEUTRAL_N * ionization_degree * collOp.coulomb_collision_mat(1.0, ionization_degree, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth)
             Rf , Ji          = residual_func(h_curr, CC_ee) 
             
             if(iteration_steps%10==0):
                 print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
 
             p     = np.matmul(np.linalg.pinv(Ji, rcond=1e-14), -Rf)
-            alpha = 1.0e0
+            alpha = 1.0e-1
             nRf   = np.linalg.norm(Rf)
             
             is_diverged = False
-            while (np.linalg.norm(residual_func(h_prev + alpha *p, CC_ee,  eval_jacobian=False)) >= nRf):
+            while (np.linalg.norm(residual_func(h_prev + alpha * p, CC_ee,  eval_jacobian=False)) >= nRf):
                 alpha*=0.5
                 if alpha < 1e-16:
                     is_diverged = True
@@ -588,7 +590,7 @@ e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])
 #np.array([210.2110528, 363.5566248, 628.765318, 1087.439475, 1880.70903, 3252.655928, 5625.415959, 9729.066156]) #np.logspace(np.log10(0.148), np.log10(114471.000) , 4, base=10)
 str_datetime = datetime.now().strftime("%m_%d_%Y_%H:%M:%S")
 
-collisions.AR_NEUTRAL_N = 3.22e22
+collisions.AR_NEUTRAL_N = 1e22
 collisions.MAXWELLIAN_N = 1
 collisions.AR_IONIZED_N = collisions.AR_NEUTRAL_N 
 collisions.AR_TEMP_K    = args.Tg 

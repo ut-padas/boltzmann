@@ -12,7 +12,7 @@ import lagpoly
 import scipy.interpolate
 import scipy
 import scipy.special
-import quadpy
+#import quadpy
 import math
 import matplotlib.pyplot as plt
 
@@ -314,14 +314,16 @@ class BSpline(Basis):
         
     def Gauss_Pn(self,deg):
         q_per_knot    = deg // self._num_knot_intervals
-        self._q_pts   = quadpy.c1.gauss_legendre(q_per_knot)
+        self._q_pts   = np.polynomial.legendre.leggauss(q_per_knot) #quadpy.c1.gauss_legendre(q_per_knot)
+        self._q_pts_points = self._q_pts[0]
+        self._q_pts_weights = self._q_pts[1]
 
         qx=np.array([])
         qw=np.array([])
         for i in range(len(self._t)-1):
             if self._t[i] != self._t[i+1]:
-                qx = np.append(qx, 0.5 * (self._t[i+1] - self._t[i]) * self._q_pts.points + 0.5 * (self._t[i+1] + self._t[i]))
-                qw = np.append(qw, 0.5 * (self._t[i+1]-self._t[i]) * self._q_pts.weights)
+                qx = np.append(qx, 0.5 * (self._t[i+1] - self._t[i]) * self._q_pts_points + 0.5 * (self._t[i+1] + self._t[i]))
+                qw = np.append(qw, 0.5 * (self._t[i+1]-self._t[i])   * self._q_pts_weights)
 
         #assert deg == len(qx), "qx len %d is not the requested %d"%(len(qx), deg)
         assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "weights computed for splines does not match the knots domain"
@@ -332,14 +334,18 @@ class BSpline(Basis):
         Quadrature points with gauss lobatto points. 
         """
         q_per_knot    = deg // self._num_knot_intervals
-        self._q_pts   = quadpy.c1.gauss_lobatto(q_per_knot)
+        self._q_pts   = np.polynomial.legendre.leggauss(q_per_knot) #quadpy.c1.gauss_legendre(q_per_knot)
+        #self._q_pts   = quadpy.c1.gauss_lobatto(q_per_knot)
+        assert False, "not supported"
+        self._q_pts_points = self._q_pts[0]
+        self._q_pts_weights = self._q_pts[1]
 
         qx=np.array([])
         qw=np.array([])
         for i in range(len(self._t)-1):
             if self._t[i] != self._t[i+1]:
-                qx = np.append(qx, 0.5 * (self._t[i+1] - self._t[i]) * self._q_pts.points + 0.5 * (self._t[i+1] + self._t[i]))
-                qw = np.append(qw, 0.5 * (self._t[i+1]-self._t[i]) * self._q_pts.weights)
+                qx = np.append(qx, 0.5 * (self._t[i+1] - self._t[i]) * self._q_pts_points + 0.5 * (self._t[i+1] + self._t[i]))
+                qw = np.append(qw, 0.5 * (self._t[i+1]-self._t[i]) * self._q_pts_weights)
 
         #assert deg == len(qx), "qx len %d is not the requested %d"%(len(qx), deg)
         assert np.allclose(np.sum(qw),(self._t[-1]-self._t[0]), rtol=1e-14, atol=1e-14), "weights computed for splines does not match the knots domain"

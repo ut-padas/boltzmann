@@ -234,7 +234,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             else:
                 return res
 
-        while (iteration_error > 1e-16 and iteration_steps < 300):
+        while (iteration_error > 1e-16 and iteration_steps < 1000):
             CC_ee            = collisions.AR_NEUTRAL_N * ionization_degree * collOp.coulomb_collision_mat(1.0, ionization_degree, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth)
             Rf , Ji          = residual_func(h_curr, CC_ee) 
             
@@ -590,7 +590,7 @@ e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])
 #np.array([210.2110528, 363.5566248, 628.765318, 1087.439475, 1880.70903, 3252.655928, 5625.415959, 9729.066156]) #np.logspace(np.log10(0.148), np.log10(114471.000) , 4, base=10)
 str_datetime = datetime.now().strftime("%m_%d_%Y_%H:%M:%S")
 
-collisions.AR_NEUTRAL_N = 1e22
+collisions.AR_NEUTRAL_N = 3.22e22
 collisions.MAXWELLIAN_N = 1
 collisions.AR_IONIZED_N = collisions.AR_NEUTRAL_N 
 collisions.AR_TEMP_K    = args.Tg 

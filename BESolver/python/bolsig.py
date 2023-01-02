@@ -162,7 +162,7 @@ def run_bolsig(args, run_convergence=False):
     replace_line(args.bolsig_dir+"minimal-argon.dat", 8, "\""+bolsig_cs_file+"\"   / File\n")
     replace_line(args.bolsig_dir+"minimal-argon.dat", 13, "%.8E"%(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+"\t\t/ Electric field / N (Td)\n")
     replace_line(args.bolsig_dir+"minimal-argon.dat", 16, "%.8E"%(args.Tg) +"\t\t/ Gas temperature (K)\n")
-    #replace_line(args.bolsig_dir+"minimal-argon.dat", 19, "%.8E"%(args.ion_deg) +"\t\t/ Ionization degree\n")
+    replace_line(args.bolsig_dir+"minimal-argon.dat", 19, "%.8E"%(args.ion_deg) +"\t\t/ Ionization degree\n")
 
     if (run_convergence):
         bolsig_rundata=list()

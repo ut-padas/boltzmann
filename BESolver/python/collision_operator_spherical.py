@@ -92,6 +92,7 @@ class CollisionOpSP():
         # compute the moment vectors
         def Pm(m):
             q_order       = ((sp_order + m + 1)//2) + 1
+            q_order       *= 64
             qq_re         = np.polynomial.legendre.leggauss(q_order) #quadpy.c1.gauss_legendre(q_order)
             qq_re_points  = qq_re[0]
             qq_re_weights = qq_re[1]
@@ -104,17 +105,27 @@ class CollisionOpSP():
                 for j in idx:
                     xb      = k_vec[i]
                     xe      = gmx[j]
-                    qx      = 0.5 * ( (xe - xb) * qq_re_points +  (xe + xb))
+                    qx      = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
                     qw      = 0.5 * (xe - xb) * qq_re_weights
-                    pm[i,j] =  np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+                    pm[i,j] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
 
-                if idx[-1] < (len(gmx) -1):
-                    assert gmx[ idx[-1] + 1 ] > k_vec[i + sp_order + 1] , "moment computation fail Pm"
-                    xb  = k_vec[i]
-                    xe  = k_vec[i + sp_order + 1]
-                    qx  = 0.5 * ( (xe - xb) * qq_re_points +  (xe + xb))
-                    qw  = 0.5 * (xe - xb) * qq_re_weights
-                    pm[i, idx[-1] + 1:] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+                # if idx[-1] < (len(gmx) -1):
+                #     assert gmx[ idx[-1] + 1 ] > k_vec[i + sp_order + 1] , "moment computation fail Pm"
+                #     xb  = k_vec[i]
+                #     xe  = k_vec[i + sp_order + 1]
+                #     qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                #     qw  = 0.5 * (xe - xb) * qq_re_weights
+                #     pm[i, idx[-1] + 1:] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+
+                a_idx = np.where(k_vec[i + sp_order + 1] < gmx)[0]
+                xb  = k_vec[i]
+                xe  = k_vec[i + sp_order + 1]
+                qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                qw  = 0.5 * (xe - xb) * qq_re_weights
+                pm[i, a_idx] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+
+
+
 
                     # scipy_int = scipy.integrate.quadrature(lambda qx : (qx**m) * spec_sp.basis_eval_radial(qx, i , 0), xb, xe, maxiter=100, tol=1e-16, rtol=1e-16)
                     # print("pm spline_id", i, 'm', m , 2*q_order-1,  "xe", xe, "quad : ", pm[i,j], "scipy int", scipy_int, 'rtol : ', abs(pm[i,j]-scipy_int[0])/scipy_int[0])
@@ -123,6 +134,7 @@ class CollisionOpSP():
         
         def Qm(m):
             q_order       = ((sp_order + m + 1)//2) + 1
+            q_order       *= 64
             qq_re         = np.polynomial.legendre.leggauss(q_order) #quadpy.c1.gauss_legendre(q_order)
             qq_re_points  = qq_re[0]
             qq_re_weights = qq_re[1]
@@ -135,30 +147,37 @@ class CollisionOpSP():
                 for j in idx:
                     xb  = gmx[j]
                     xe  = k_vec[i + sp_order+1]
-                    qx  = 0.5 * ( (xe - xb) * qq_re_points +  (xe + xb))
+                    qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
                     qw  = 0.5 * (xe - xb) * qq_re_weights
                     qm[i,j] =  np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
 
-                if idx[0] > 0:
-                    assert gmx[idx[0] - 1 ] < k_vec[i] , "moment computation fail Qm"
-                    xb  = k_vec[i]
-                    xe  = k_vec[i + sp_order+1]
-                    qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
-                    qw  = 0.5 * (xe - xb) * qq_re_weights
-                    qm[i,0:idx[0]] =  np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+                # if idx[0] > 0:
+                #     assert gmx[idx[0] - 1 ] < k_vec[i] , "moment computation fail Qm"
+                #     xb  = k_vec[i]
+                #     xe  = k_vec[i + sp_order+1]
+                #     qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                #     qw  = 0.5 * (xe - xb) * qq_re_weights
+                #     qm[i,0:idx[0]] =  np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+
+                a_idx = np.where(gmx < k_vec[i])[0]
+                xb  = k_vec[i]
+                xe  = k_vec[i + sp_order + 1]
+                qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                qw  = 0.5 * (xe - xb) * qq_re_weights
+                qm[i, a_idx] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
 
                     # scipy_int = scipy.integrate.quadrature(lambda qx : (qx**m) * spec_sp.basis_eval_radial(qx, i , 0), xb, xe, maxiter=100, tol=1e-16, rtol=1e-16)
                     # print("qm spline_id", i, 'm', m , "xe", xe, "quad : ", qm[i,j], "scipy int", scipy_int, 'rtol : ', abs(qm[i,j]-scipy_int[0])/scipy_int[0])
             
             return qm
 
-        self._p2 = 4 * np.pi * Pm(2)
-        self._p4 = 4 * np.pi * Pm(4)
-        self._q1 = 4 * np.pi * Qm(1)
+        self._p2 = Pm(2)
+        self._p4 = Pm(4)
+        self._q1 = Qm(1)
 
-        self._q0 = 4 * np.pi * Qm(0)
-        self._p3 = 4 * np.pi * Pm(3)
-        self._p5 = 4 * np.pi * Pm(5)
+        self._q0 = Qm(0)
+        self._p3 = Pm(3)
+        self._p5 = Pm(5)
 
         self._mass_op = BEUtils.mass_op(spec_sp, None, 64, 2, 1)
         self._temp_op = BEUtils.temp_op(spec_sp, None, 64, 2, 1)
@@ -532,7 +551,7 @@ class CollisionOpSP():
         #Lij = self._LOp_eulerian(collision,maxwellian,vth)
         return Lij
 
-    def coulomb_collision_mat(self, alpha, ionization_degree, n0, fb, mw, vth):
+    def coulomb_collision_mat(self, alpha, ionization_degree, n0, fb, mw, vth, full_assembly=True):
         """
         compute the weak form of the coulomb collision operator based on fokker-plank equation
         with Rosenbluth's potentials
@@ -563,17 +582,10 @@ class CollisionOpSP():
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
 
-        gmx , gmw  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+        gmx_a , gmw_a  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
         
-        p20        = np.dot(fb[0::num_sh], self._p2) 
-        p40        = np.dot(fb[0::num_sh], self._p4) 
-        q10        = np.dot(fb[0::num_sh], self._q1) 
+        sph_l0     = lambda l : np.sqrt((2 * l +1) / (4 * np.pi) )
 
-        p31        = np.dot(fb[1::num_sh], self._p3) 
-        p51        = np.dot(fb[1::num_sh], self._p5) 
-        q01        = np.dot(fb[1::num_sh], self._q0) 
-
-        
         B          = spec_sp.basis_eval_radial
         DB         = spec_sp.basis_derivative_eval_radial
 
@@ -584,30 +596,100 @@ class CollisionOpSP():
         me         = scipy.constants.electron_mass
         qe         = scipy.constants.e
 
-        ne          = n0 * ionization_degree
-        T_ev        = kT / qe
+        ne         = n0 * ionization_degree
+        # b_min       = max(qe**2 / (2 * np.pi * eps_0 * 3 * kT), scipy.constants.Planck / (np.sqrt(me * 3 * kT)))
+        # b_max       = np.sqrt((eps_0 * kT) / (ne * qe**2))
+        # c_lambda1    = b_max/b_min 
 
-        b_min       = max(qe**2 / (2 * np.pi * eps_0 * 3 * kT), scipy.constants.Planck / (np.sqrt(me * 3 * kT)))
-        b_max       = np.sqrt((eps_0 * kT) / (ne * qe**2))
-        c_lambda    = b_max/b_min 
-        gamma_a     = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / vth**3
-        
-        sph_l0      = lambda l : np.sqrt((2 * l +1) / (4 * np.pi) )
-        print("Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  kT %.8E" %(np.log(c_lambda), gamma_a, n0 * ionization_degree * gamma_a, kT))
+        c_lambda    = (12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne))
+        gamma_a     = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
+
+        # print( p40[-1] * vth**5 * mw(0) * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0)
+        print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ionization_degree * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
+
+        p20_a        = sph_l0(0) * np.dot(fb[0::num_sh], self._p2) 
+        p40_a        = sph_l0(0) * np.dot(fb[0::num_sh], self._p4) 
+        q10_a        = sph_l0(0) * np.dot(fb[0::num_sh], self._q1) 
+
+        p31_a        = sph_l0(1) * np.dot(fb[1::num_sh], self._p3) 
+        p51_a        = sph_l0(1) * np.dot(fb[1::num_sh], self._p5) 
+        q01_a        = sph_l0(1) * np.dot(fb[1::num_sh], self._q0) 
+
+        # p20[p20<0] = 0.0
+        # p40[p40<0] = 0.0
+        # q10[q10<0] = 0.0
+
+        # p31[p31<0] = 0.0
+        # p51[p51<0] = 0.0
+        # q01[q01<0] = 0.0
+
+        # import matplotlib.pyplot as plt
+        # plt.semilogy(gmx, p20, label="p20")
+        # plt.semilogy(gmx, p40, label="p40")
+        # plt.semilogy(gmx, q10, label="q10")
+        # plt.semilogy(gmx, p31, label="p31")
+        # plt.semilogy(gmx, p51, label="p51")
+        # plt.semilogy(gmx, q01, label="q01")
+
+        # plt.legend()
+        # plt.grid()
+        # plt.show()
+        # plt.close()
+
+
 
         for p in range(num_p):
-            for k in range(max(0, p - 2 * (sp_order+2) ), min(num_p, p + 2 * (sp_order+2))):
+            for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                
+                k_min = min(k_vec[p], k_vec[k])
+                k_max = max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1])
+
+                qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
+                gmx    = gmx_a[qx_idx]
+                gmw    = gmw_a[qx_idx]
+
+                p20        = p20_a[qx_idx] #sph_l0(0) * np.dot(fb[0::num_sh], self._p2) 
+                p40        = p40_a[qx_idx] #sph_l0(0) * np.dot(fb[0::num_sh], self._p4) 
+                q10        = q10_a[qx_idx] #sph_l0(0) * np.dot(fb[0::num_sh], self._q1) 
+
+                p31        = p31_a[qx_idx] #sph_l0(1) * np.dot(fb[1::num_sh], self._p3) 
+                p51        = p51_a[qx_idx] #sph_l0(1) * np.dot(fb[1::num_sh], self._p5) 
+                q01        = q01_a[qx_idx] #sph_l0(1) * np.dot(fb[1::num_sh], self._q0) 
+                
                 tmp = -(alpha * p20 * B(gmx,k,0) + (1/(3*gmx)) * (p40 + gmx**3 * q10) * DB(gmx, k, 0, 1)) * DB(gmx, p, 0, 1)
-                cc_collision[p * num_sh + 0 , k * num_sh + 0] = np.dot(tmp, gmw) * (sph_l0(0))
+                cc_collision[p * num_sh + 0 , k * num_sh + 0] = np.dot(tmp, gmw) 
+                if full_assembly:
+                    tmp  = (1 + alpha) * gmx * q01 * B(gmx, k, 0) * B(gmx, p, 0) - (
+                        (1/3) * B(gmx, k, 0) * ((2 * alpha -1) * p31 - (1+alpha) * gmx**3 * q01) 
+                        + (DB(gmx, k, 0, 1) / (5 * gmx)) * (p51 + gmx**5 * q01)
+                        ) * (gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / gmx**2
+                    cc_collision[p * num_sh + 1 , k * num_sh + 0] = (sph_l0(0)/ sph_l0(1)) * np.dot(tmp, gmw) 
 
-                # tmp  = (1 + alpha) * gmx * q01 * B(gmx, k, 0) * B(gmx, p, 0)
-                # tmp -= ((1./3) * B(gmx, k, 0) * ((2 * alpha -1) * p31 - (1+alpha) * gmx**3 * q01) + (DB(gmx, k, 0, 1) / (5*gmx)) * (p51 + gmx**5 * q01 )) * (gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / gmx**2
+                    tmp  =  -((1 + alpha)/gmx) * p20 * B(gmx, k , 0) * B(gmx, p, 0) - \
+                    ( alpha * gmx * p20 * B(gmx, k, 0) 
+                    + (1./3) * gmx * (p40 + gmx**3 * q10) * ((gmx * DB(gmx, k , 0, 1) - B(gmx, k, 0))/gmx**2) ) * (((gmx * DB(gmx, p , 0, 1) - B(gmx, p, 0))/gmx**2))
 
-                # cc_collision[p * num_sh + 1 , k * num_sh + 0] = np.dot(tmp, gmw) * (sph_l0(0)**2 / sph_l0(1))
+                    cc_collision[p * num_sh + 1 , k * num_sh + 1] = np.dot(tmp, gmw)
 
-                # tmp  =  -((1 + alpha)/gmx) * p20 * B(gmx, k , 0) * B(gmx, p, 0) + (alpha * gmx * p20 * B(gmx, k, 0) + (1./3) * gmx * (p40 + gmx**3 * q10) * ((gmx * DB(gmx, k , 0, 1) - B(gmx, k, 0))/gmx**2) ) * (((gmx * DB(gmx, p , 0, 1) - B(gmx, p, 0))/gmx**2))
+        
+        # if full_assembly:
+        #     for p in range(num_p):
+        #         w1 = (1 + alpha) * p20 * q01 * (gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / (gmx**2) / sph_l0(1)
+        #         for k in range(max(0, p - 2 * (sp_order+2) ), min(num_p, p + 2 * (sp_order+2))):
+        #             tmp = (sph_l0(0) / sph_l0(1) ) * ((gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / (gmx**2)) * ( (B(gmx, k, 0) / 3) * ((2*alpha -1) * p31 - (1+alpha) * gmx**3 * q01) + (DB(gmx, k, 0, 1) / (5 * gmx)) * (p51 + gmx**5 * q01) ) #+ w1
 
-                # cc_collision[p * num_sh + 1 , k * num_sh + 1] = np.dot(tmp, gmw) * (sph_l0(1))
+        #             cc_collision[p * num_sh + 1 , k * num_sh + 0] = -3 * np.dot(tmp, gmw)
+
+        #             tmp = ((gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / (gmx**2)) * (alpha * gmx * p20 * B(gmx, k, 0) + (gmx/3) * (p40 + gmx**3 * q10) * ((gmx * DB(gmx, k, 0, 1) - B(gmx, k, 0)) / (gmx**2)) ) #+ w1
+
+        #             cc_collision[p * num_sh + 1 , k * num_sh + 1] = -3 * np.dot(tmp, gmw)
+
+
+
+
+
+
+
 
         
         return cc_collision * gamma_a

@@ -107,14 +107,26 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
     fa_cf = interp1d(ev, bolsig_a, kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
     ftestt = lambda v,vt,vp : f0_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*(1. + fa_cf(.5*(v*VTH)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
     
-    htest      = BEUtils.function_to_basis(spec_sp,ftestt,maxwellian,None,None,None,Minv=Minv)
-    radial_projection[i, :, :] = BEUtils.compute_radial_components(ev, spec_sp, htest, maxwellian, VTH, 1)
-    scale = 1./( np.trapz(radial_projection[i, 0, :]*np.sqrt(ev),x=ev) )
-    radial_projection[i, :, :] *= scale
+    htest                        =  BEUtils.function_to_basis(spec_sp,ftestt,maxwellian,None,None,None,Minv=Minv)
+    radial_projection[-1, :, :]  =  BEUtils.compute_radial_components(ev, spec_sp, htest, maxwellian, VTH, 1)
+    scale                        =  1./( np.trapz(radial_projection[-1, 0, :]*np.sqrt(ev),x=ev) )
+    htest                        =  htest*scale
+    radial_projection[-1, :, :]  *= scale
     coeffs_projection.append(htest)
+
+    # plt.subplot(1,2,1)
+    # plt.semilogy(ev, radial_projection[-1, 0 , :])
+    # plt.grid()
+    # plt.title("f0")
+
+    # plt.subplot(1,2,2)
+    # plt.semilogy(ev, radial_projection[-1, 1 , :])
+    # plt.title("f1")
+    # plt.grid()
+    # plt.show()
+
     # solution_vector = np.zeros((2,h_init.shape[0]))
     # return solution_vector
-
     
     FOp = 0
     t1=time()
@@ -199,33 +211,22 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
     Cmat  = FOp 
     Emat  = (E_field/ MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat   
     #(E_field/MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO * np.matmul(Minv, advmat)
-    Cmat1 = np.matmul(Minv, Cmat)
+    Cmat1 = np.matmul(Minv, Cmat + Emat)
     collOp.setup_coulombic_collisions()
 
     if steady_state:
-        iteration_error = 1
-        iteration_steps = 0 
-
+        
         
         u        = mass_op / (np.sqrt(np.pi)**3) 
         u        = np.matmul(np.transpose(u), qA)
         h_prev   = np.copy(h_init)
         h_prev   = h_prev / np.dot(u, h_prev)
-        h_curr   = np.copy(h_prev)
-        
-        nn       = Cmat.shape[0]
-        Ji       = np.zeros((nn+1,nn))
-        Rf       = np.zeros(nn+1)
-        
-        iteration_error = 1
-        iteration_steps = 0
 
-        ionization_degree = args.ion_deg
-        
         def residual_func(x, cc_ee, eval_jacobian = True):
-            y                = np.matmul(Cmat + Emat + cc_ee, x)
-            y                = -np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,x)) * x)   + y
-            res              = np.append(y, (np.dot(u, x)-1))
+            Cmat1                         = np.matmul(Minv, Cmat + Emat + cc_ee)
+            y                             = np.matmul(Cmat + Emat + cc_ee, x)
+            y                             = -np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,x)) * x)   + y
+            res                           = np.append(y, (np.dot(u, x)-1))
 
             if eval_jacobian:
                 Ji = -2 * Mmat * np.dot(u, np.matmul(Cmat1,x)) + (Cmat + Emat + cc_ee)
@@ -233,39 +234,179 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 return res, Ji
             else:
                 return res
+        
+        
+        def solver_0(h_prev, atol=1e-5, max_iter=1000):
+            h_curr          = np.copy(h_prev)
+            iteration_error = 1
+            iteration_steps = 0
 
-        while (iteration_error > 1e-16 and iteration_steps < 1000):
-            CC_ee            = collisions.AR_NEUTRAL_N * ionization_degree * collOp.coulomb_collision_mat(1.0, ionization_degree, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth)
-            Rf , Ji          = residual_func(h_curr, CC_ee) 
-            
-            if(iteration_steps%10==0):
-                print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
+            def low_rank_approx(A=None, r=1):
+                """
+                Computes an r-rank approximation of a matrix
+                given the component u, s, and v of it's SVD
+                Requires: numpy
+                """
+                u, s, v = np.linalg.svd(A, full_matrices=True)
 
-            p     = np.matmul(np.linalg.pinv(Ji, rcond=1e-14), -Rf)
-            alpha = 1.0e-1
-            nRf   = np.linalg.norm(Rf)
-            
-            is_diverged = False
-            while (np.linalg.norm(residual_func(h_prev + alpha * p, CC_ee,  eval_jacobian=False)) >= nRf):
-                alpha*=0.5
-                if alpha < 1e-16:
-                    is_diverged = True
+                # Ar = np.zeros((len(u), len(v)))
+                # for i in range(r):
+                #     Ar += s[i] * np.outer(u.T[i], v[i])
+                
+                Ar = np.dot(u[:,0:r] * s[0:r], v[0:r,:])
+                return Ar
+
+            nn            = Cmat.shape[0]
+            Ji            = np.zeros((nn+1,nn))
+            Rf            = np.zeros(nn+1)
+            ion_deg       = args.ion_deg
+            rcond_cuttoff = 1e-40
+
+            # CC_ee            = collisions.AR_NEUTRAL_N * ion_deg * collOp.coulomb_collision_mat(1.0, ion_deg, collisions.AR_NEUTRAL_N, htest, maxwellian, vth)
+            # print("bolsig solution residual = %.8E"%np.linalg.norm(residual_func(htest, CC_ee, eval_jacobian=False)))
+            # print(htest)
+
+            while (iteration_error > atol and iteration_steps < max_iter):
+                CC_ee       =  collisions.AR_NEUTRAL_N * ion_deg * collOp.coulomb_collision_mat(1.0, ion_deg, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth)
+                Rf , Ji     =  residual_func(h_curr, CC_ee)
+                
+                if(iteration_steps%10==0):
+                    print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
+
+                p     = np.matmul(np.linalg.pinv(Ji, rcond=rcond_cuttoff) , -Rf)
+                nRf   = np.linalg.norm(Rf)
+                alpha = 1e2
+                
+                is_diverged = False
+                while (np.linalg.norm(residual_func(h_prev + alpha * p , CC_ee,  eval_jacobian=False)) >= nRf):
+                    alpha*=0.5
+                    if alpha < 1e-16:
+                        is_diverged = True
+                        break
+                
+                if(is_diverged):
+                    print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
+                    print("line search step size becomes too small")
                     break
+
+                iteration_error = np.linalg.norm(residual_func(h_prev + alpha *p, CC_ee,  eval_jacobian=False))
+                h_curr          = h_prev + p*alpha
+                h_prev          = h_curr
+                iteration_steps = iteration_steps + 1
             
-            if(is_diverged):
-                print("Iteration ", iteration_steps, ": Residual =", np.linalg.norm(Rf))
-                print("line search step size becomes too small")
-                break
+            return h_curr
 
-            iteration_error = np.linalg.norm(residual_func(h_prev + alpha *p, CC_ee,  eval_jacobian=False))
-            h_curr          = h_prev + p*alpha
-            h_prev          = h_curr
-            iteration_steps = iteration_steps + 1
+        def solver_1(h_prev, atol=1e-5, max_iter=1000):
+            h_curr          = np.copy(h_prev)
+            
+            iteration_error = 1
+            iteration_steps = 0
 
+            nn       = Cmat.shape[0]
+            Ji       = np.zeros((nn+1,nn))
+            Rf       = np.zeros(nn+1)
+            ion_deg  = args.ion_deg
+
+            # for ii in range(10):
+            #     if ii==9:
+            #         atol=1e-6
+            #     else:
+            #         atol=0.1
+
+            #     iteration_steps=0
+            #     iteration_error=1
+            #     ion_deg  = args.ion_deg / 2**(10-ii)
+            Cmat_p_Emat =  Cmat + Emat
+            
+            full_coulomb = True
+            while (iteration_error > atol and iteration_steps < max_iter):
+                CC_ee           = collisions.AR_NEUTRAL_N * ion_deg * collOp.coulomb_collision_mat(1.0, ion_deg, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth, full_assembly=full_coulomb)
+
+                if iteration_steps % 10 == 0:
+                    iteration_error = np.linalg.norm(residual_func(h_prev, CC_ee, eval_jacobian=False))
+                    print("Iteration ", iteration_steps, ": Residual =", iteration_error)
+                
+                Lmat      = Cmat_p_Emat + CC_ee
+                Lmat_inv  = np.linalg.pinv(Lmat, rcond=0.9/np.linalg.cond(Lmat))
+
+                #Cmat1       = np.matmul(Minv, Cmat + Emat + CC_ee)
+                #h_curr     = np.matmul(Lmat_inv, -np.dot(CC_ee, h_prev) + np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = np.matmul(Lmat_inv, np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = h_curr / np.dot(u, h_curr)
+                h_prev      = h_curr
+
+                iteration_steps+=1
+
+            return h_curr
+
+        def solver_2(h_prev, atol=1e-5, max_iter=1000):
+            
+            h_curr          = np.copy(h_prev)
+            iteration_error = 1
+            iteration_steps = 0
+
+            nn       = Cmat.shape[0]
+            Ji       = np.zeros((nn+1,nn))
+            Rf       = np.zeros(nn+1)
+            ion_deg  = args.ion_deg
+
+            # for ii in range(10):
+            #     if ii==9:
+            #         atol=1e-6
+            #     else:
+            #         atol=0.1
+
+            #     iteration_steps=0
+            #     iteration_error=1
+            #     ion_deg  = args.ion_deg / 2**(10-ii)
+            Cmat_p_Emat =  Cmat + Emat
+            
+            full_coulomb = False
+            while (iteration_error > 0.1 and iteration_steps < max_iter):
+                CC_ee           = collisions.AR_NEUTRAL_N * ion_deg * collOp.coulomb_collision_mat(1.0, ion_deg, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth, full_assembly=full_coulomb)
+                
+                if iteration_steps % 10 == 0:
+                    iteration_error = np.linalg.norm(residual_func(h_prev, CC_ee, eval_jacobian=False))
+                    print("Iteration ", iteration_steps, ": Residual =", iteration_error)
+
+                Lmat      = Cmat_p_Emat + CC_ee
+                Lmat_inv  = np.linalg.pinv(Lmat, rcond=0.9/np.linalg.cond(Lmat))
+
+                #Cmat1       = np.matmul(Minv, Cmat + Emat + CC_ee)
+                #h_curr     = np.matmul(Lmat_inv, -np.dot(CC_ee, h_prev) + np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = np.matmul(Lmat_inv, np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = h_curr / np.dot(u, h_curr)
+                h_prev      = h_curr
+
+                iteration_steps+=1
+
+            full_coulomb = True
+            while (iteration_error > atol and iteration_steps < max_iter):
+                CC_ee           = collisions.AR_NEUTRAL_N * ion_deg * collOp.coulomb_collision_mat(1.0, ion_deg, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth, full_assembly=full_coulomb)
+
+                if iteration_steps % 10 ==0:
+                    iteration_error = np.linalg.norm(residual_func(h_prev, CC_ee, eval_jacobian=False))
+                    print("Iteration ", iteration_steps, ": Residual =", iteration_error)
+
+                Lmat      = Cmat_p_Emat + CC_ee
+                Lmat_inv  = np.linalg.pinv(Lmat, rcond=0.9/np.linalg.cond(Lmat))
+
+                #Cmat1       = np.matmul(Minv, Cmat + Emat + CC_ee)
+                #h_curr     = np.matmul(Lmat_inv, -np.dot(CC_ee, h_prev) + np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = np.matmul(Lmat_inv, np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = h_curr / np.dot(u, h_curr)
+                h_prev      = h_curr
+
+                iteration_steps+=1
+
+
+            return h_curr
+
+        h_curr = solver_2(h_prev)
         solution_vector = np.zeros((2,h_init.shape[0]))
         solution_vector[0,:] = np.matmul(qA, h_init)
         solution_vector[1,:] = np.matmul(qA, h_curr)
-        return solution_vector
+        return solution_vector,htest
 
     else:
         def f_rhs(t,y):
@@ -585,8 +726,13 @@ parser.add_argument("-dg", "--use_dg"                         , help="enable dg 
 parser.add_argument("-Tg", "--Tg"                             , help="Gass temperature (K)" , type=float, default=1e-12)
 parser.add_argument("-ion_deg", "--ion_deg"                   , help="Ionization degreee"   , type=float, default=0)
 
-args         = parser.parse_args()
-e_values     = np.array([args.E_field, 1e0, 1e1, 1e2, 5e2, 1e3, 5e3, 1e4, 1e5])
+args                = parser.parse_args()
+# e_values            = np.array([1e0, 1e1, 1e2, 1e3, 5e3, 1e4, 1e5])
+# ion_deg_values      = np.array([1e-10, 1e-8, 1e-6, 1e-4])
+e_values            = np.array([args.E_field])
+ion_deg_values      = np.array([args.ion_deg])
+run_params          = [(e_values[i], ion_deg_values[j]) for i in range(len(e_values)) for j in range(len(ion_deg_values))]
+
 #np.array([210.2110528, 363.5566248, 628.765318, 1087.439475, 1880.70903, 3252.655928, 5625.415959, 9729.066156]) #np.logspace(np.log10(0.148), np.log10(114471.000) , 4, base=10)
 str_datetime = datetime.now().strftime("%m_%d_%Y_%H:%M:%S")
 
@@ -609,8 +755,11 @@ if SAVE_EEDF:
     with open('eedf_%s.npy'%(str_datetime), 'ab') as f:
         np.save(f, e_values)
     
-for run_id in range(1):#range(len(e_values)):
-    args.E_field = e_values[run_id]
+for run_id in range(len(run_params)):
+    
+    args.E_field = run_params[run_id][0] #e_values[run_id]
+    args.ion_deg = run_params[run_id][1] #e_values[run_id]
+    
     print(args)
     bolsig.run_bolsig(args)
 
@@ -618,7 +767,7 @@ for run_id in range(1):#range(len(e_values)):
         sys.exit(0)
 
     [bolsig_ev, bolsig_f0, bolsig_a, bolsig_E, bolsig_mu, bolsig_M, bolsig_D, bolsig_rates] = bolsig.parse_bolsig(args.bolsig_dir+"argon.out",len(args.collisions))
-    
+
     # setting electron volts from bolsig results for now
     print("blolsig temp : %.8E"%((bolsig_mu /1.5)))
     args.electron_volt = (bolsig_mu/1.5) 
@@ -767,16 +916,19 @@ for run_id in range(1):#range(len(e_values)):
         eavg_to_K = (2/(3*scipy.constants.Boltzmann))
         ev_fac    = (collisions.BOLTZMANN_CONST/collisions.ELECTRON_VOLT)
 
-        data                = solve_collop_dg(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
-        #data                = solve_bte(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
+        data  ,  htest      = solve_collop_dg(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
+        #data               = solve_bte(args.steady_state, cf, maxwellian, VTH, args.E_field, args.T_END, args.T_DT, args.ts_tol, collisions_included=args.collisions)
         radial_base[i,:,:]  = BEUtils.compute_radial_components(ev, spec_sp, data[0,:], maxwellian, VTH, 1)
         scale               = 1./( np.trapz(radial_base[i,0,:]*np.sqrt(ev),x=ev) )
         radial_base[i,:,:] *= scale
 
-        radial[i, :, :]    = BEUtils.compute_radial_components(ev, spec_sp, data[-1,:], maxwellian, VTH, 1)
-        scale              = 1./( np.trapz(radial[i,0,:]*np.sqrt(ev),x=ev) )
-        radial[i, :, :]   *= scale
-        
+        radial[i, :, :]     = BEUtils.compute_radial_components(ev, spec_sp, data[-1,:], maxwellian, VTH, 1)
+        scale               = 1./( np.trapz(radial[i,0,:]*np.sqrt(ev),x=ev) )
+        radial[i, :, :]    *= scale
+
+        # print(data[-1,:]*scale)
+        # print(htest)
+        #print((data[-1,:]*scale - htest) / htest)
         run_data.append(data)
 
 
@@ -926,12 +1078,12 @@ for run_id in range(1):#range(len(e_values)):
         fig.subplots_adjust(wspace=0.4)
 
         if (args.radial_poly == "bspline"):
-            fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + "q_per_knot="+str(args.spline_q_pts_per_knot))
+            fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + "q_per_knot="+str(args.spline_q_pts_per_knot) + "ionization degree=%.2E"%(args.ion_deg))
             # plt.show()
             if len(spec_sp._basis_p._dg_idx)==2:
-                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +".png")
+                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) +".png")
             else:
-                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +".png")
+                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max)+"_ion_deg_%.2E"%(args.ion_deg) +".png")
         else:
             fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field) + ", polys = " + str(args.radial_poly) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")")
             # plt.show()

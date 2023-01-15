@@ -566,50 +566,50 @@ F for species a is can be written as
 
 Assuming azimuthal symmetry for the problem, we can write the usual expansion for distribution function, 
 \begin{align*}
-	f_a\of{\vect{v}} = \sum_{l} f^{a}_l\of{v} Y_{l0}\of{\vtheta, \vphi}
+	f_a\of{\vect{v}} = \sum_{l} f^{a}_l\of{v} Y_{l0}\of{\vtheta, \vphi} = \sum_{l} f^{a}_l\of{v} U_{l0} P_{l0}\of{\vtheta}
 \end{align*}. Then we can derive \cite{rosenbluth1957fokker}, 
 \begin{align*}
 	h_a\of{\vect{v}} &= \sum_{l} \frac{m_a + m_b}{m_b} A^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where } \\
-	A^{b}_l\of{v} &= \frac{4\pi}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
+	A^{b}_l\of{v} &= \frac{4\pi U_{l0}}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
 	g\of{\vect{v}} & = \sum_{l} B^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where }\\
-	B^{b}_{l}\of{v} & = -\frac{4\pi}{(4l^2-1)} \of
+	B^{b}_{l}\of{v} & = -\frac{4\pi U_{l0}}{(4l^2-1)} \of
 	{
 		\int_{0}^{v} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v^\prime}^{l+2}}{v^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v^\prime}^2 }{v^2}}} } + \\
-	&-\frac{4\pi}{(4l^2-1)} \of{
+	&-\frac{4\pi U_{l0}}{(4l^2-1)} \of{
 		\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
 	}
 \end{align*}
 Now we restrict the derivation for electron (i.e., selecting species ``a'' to be electrons) collision with background species ``b''. Using the two term expansion for $f_a$ and neglecting all  the quadratic terms in $f_1 \cdot f_1$, we can derive, 
 \begin{align*}
-&v^2	\Gamma_a ^{-1}  \partial_t f_0  = \partial_v \of {\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0}\\
-&v^2	\Gamma_a ^{-1}  \partial_t f_1  = -\frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 f_0} + \\
+&v^2	\Gamma_a ^{-1} \partial_t f_0  = \partial_v \of {\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0}\\
+&v^2	\Gamma_a ^{-1} \partial_t f_1  = -\frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 f_0 \frac{U_{00}}{U_{10}}} + \\
 &\frac{1}{v}\partial_v \Bigg(\alpha v P^2_0 f_1 + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{f_1/v} \\
-&+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}f_0 + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v f_0 \Bigg)
+&+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}f_0 \frac{U_{00}}{U_{10}} + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v f_0 \frac{U_{00}}{U_{10}}\Bigg)
 \end{align*} where $\alpha = m_e/m_b$ mass ratio of the particles and we can write $P^{m}_l$, $Q^{m}_l$ as follows. 
 \begin{align*}
-	P^{m}_l\of{v} = 4\pi \int_{0}^{v} {v^\prime}^m f^b_l(v^\prime) dv^\prime\\
-	Q^{m}_l\of{v} = 4\pi \int_{v}^{\infty} {v^\prime}^m f^b_l(v^\prime) dv^\prime \\
+	P^{m}_l\of{v} = 4\pi U_{l0} \int_{0}^{v} {v^\prime}^m f^b_l(v^\prime) dv^\prime\\
+	Q^{m}_l\of{v} = 4\pi U_{l0} \int_{v}^{\infty} {v^\prime}^m f^b_l(v^\prime) dv^\prime \\
 	\Gamma_a    = \frac{e^4 \ln \Lambda}{4\pi (\epsilon_0 m_e)^2} \text{ and } \Lambda = \frac{12 \pi (\epsilon_0 k T_e)^{3/2}}{e^3 n_e^{1/2}}
 \end{align*}
 The weak form of the the above using integration by parts as follows.  
 \begin{align*}
 	&\int T(v) v^2 \partial_t f_0 dv = - \Gamma_a \int \of{\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0} \partial_v T(v) dv\\
-	&\int T(v) v^2 \partial_t f_1 dv = - \Gamma_a \int \frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 f_0} T(v) dv + \\
+	&\int T(v) v^2 \partial_t f_1 dv = - \Gamma_a \int \frac{1+\alpha}{v} \of{P^2_0 f_1 -v^2 Q^0_1 \frac{f_0}{\sqrt{3}}} T(v) dv + \\
 	&-\Gamma_a \int \partial_v \of{T(v)/v} \Bigg(\alpha v P^2_0 f_1 + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{f_1/v}\\
-	&+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1}f_0 + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v f_0 \Bigg) dv
+	&+ \frac{1}{3}\of{(2\alpha -1 ) P^3_1 - (1 + \alpha) v^3 Q^0_1} \frac{f_0}{\sqrt{3}} + \frac{1}{5v}\of{P^5_1 + v^5 Q^0_1} \partial_v \frac{f_0}{\sqrt{3}} \Bigg) dv
 \end{align*} We can write the discretized operators, 
 \begin{align*}
 	&C^{00}_{pk} = - \Gamma_a \int \of{\alpha P^2_0\of{v} S_k\of{x} + \frac{1}{3v}\of{P^4_0\of{v} + v^3 Q^1_0\of{v}} \partial_v S_k\of{x}} \partial_v T_p\of{x}  dv\\
 	&C^{01}_{pk} = 0\\
 	% &C^{0q}_{pk} = - \delta^{0q}\Gamma_a \int \of{\alpha P^2_0\of{x} S_k\of{x} + \frac{1}{3x}\of{P^4_0\of{x} + (xv_{th})^3 Q^1_0\of{x}} \partial_x S_k\of{x}} \partial_x T_p\of{x}  dx\\
-	&C^{10}_{pk} = \Gamma_a \int (1+\alpha) \of{v Q^0_1\of{v} S_k\of{x}} T_p\of{x} dv\\
-	&-\Gamma_a \int \Big(\frac{1}{3}\of{(2\alpha -1 ) P^3_1\of{v} - (1 + \alpha) v^3 Q^0_1\of{v}}S_k\of{x} + \frac{1}{5v}\of{P^5_1\of{v} + v^5 Q^0_1\of{v}}\partial_v S_k\of{x} \Big) \partial_v \of{T_p\of{x}/v} dv \\
+	&C^{10}_{pk} = \Gamma_a \int \frac{(1+\alpha)}{\sqrt{3}} v Q^0_1\of{v} S_k\of{x} T_p\of{x} dv\\
+	&-\Gamma_a \int \Big(\frac{1}{3\sqrt{3}}\of{(2\alpha -1 ) P^3_1\of{v} - (1 + \alpha) v^3 Q^0_1\of{v}}S_k\of{x} + \frac{1}{5\sqrt{3}v}\of{P^5_1\of{v} + v^5 Q^0_1\of{v}}\partial_v S_k\of{x} \Big) \partial_v \of{T_p\of{x}/v} dv \\
 	&C^{11}_{pk} = -\Gamma_a \int  \frac{1+\alpha}{v} P^2_0 S_k\of{v} T_p\of{x} dv \\
 	&-\Gamma_a \int \Bigg(\alpha v P^2_0 S_k\of{x} + \frac{1}{3} v\of{P^4_0 + v^3 Q^1_0} \partial_v \of{S_k\of{x}/v}\Big) \partial_v\of{T_p\of{x}/v} dv
 \end{align*} where $x=\frac{v}{v_{th}}$. Since, $f^b_l(v) = \sum_k f^b_{kl} S_k (v/v_th)$, we can write, 
 \begin{align*}
-	P^{m}_l\of{v} = P_{mk} f^{b}_{kl} \text{ where } P_{mk} = 4\pi (v_{th})^{m+1}\int_{0}^{x} {x^\prime}^m S_k(x^\prime) dx^\prime \\
-	Q^{m}_l\of{v} = Q_{mk} f^{b}_{kl} \text{ where } Q_{mk} = 4\pi (v_{th})^{m+1}\int_{x}^{\infty} {x^\prime}^m S_k(x^\prime) dx^\prime \\
+	P^{m}_l\of{v} = U_{l0}P_{mk} f^{b}_{kl} \text{ where } P_{mk} = 4\pi (v_{th})^{m+1}\int_{0}^{x} {x^\prime}^m S_k(x^\prime) dx^\prime \\
+	Q^{m}_l\of{v} = U_{l0}Q_{mk} f^{b}_{kl} \text{ where } Q_{mk} = 4\pi (v_{th})^{m+1}\int_{x}^{\infty} {x^\prime}^m S_k(x^\prime) dx^\prime \\
 	\partial_v \of{ T_p\of{x}/v} dv = \partial_x \of{ T_p\of{x}/v} dx = \of{\frac{x\partial_x T_p\of{x} - T_p\of{x}}{x^2 v_{th}}} dx
 \end{align*}. 
 
@@ -629,6 +629,50 @@ For electron-electron interaction the derived collision operator is quadratic in
 	&\frac{d}{d f_{j1}} [C^{11}_{ir}] = 0
 \end{align*}
 
+\subsection{Steady state solve}
+Let $\hat{f}$ be the normalized distribution function. \\
+\textbf{Algorithm 1:} We use the newton step with linearized $C_{ee}$ term. 
+\begin{align*}
+	&R(\hat{f}^{n}) =
+	 \begin{bmatrix}
+		(C + E)\hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + C_{ee}(\hat{f}^{n-1}) \hat{f}^{n}\\
+		u^T \hat{f} -1
+	\end{bmatrix} =0 \\
+	&J(\hat{f}^{n}) =
+	\begin{bmatrix}
+		(C + E) - 2(u^T W)\hat{f}^{n} + C_{ee}(\hat{f}^{n-1})\\
+		u^T -1
+	\end{bmatrix} =0 \\
+	& \hat{f}^{n+1} = \hat{f}^{n} - \alpha J^{-1}(\hat{f}^n) (R(\hat{f}^n))
+\end{align*}
+\textbf{Algorithm 2:} Explicit on the coulomb collision operator. \\
+\begin{align*}
+	& \partial_t \hat{f} = (C + E) \hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + C_{ee} (\hat{f}^{n}, \hat{f}^{n}) =0 \\
+	& \hat{f}^{n+1} = (C+E)^{-1} \of{-C_{ee} (\hat{f}^{n}, \hat{f}^{n}) +  (u^T W(\hat{f}^{n})) \hat{f}^{n} }
+\end{align*}
+
+\textbf{Algorithm 3:} Semi-implicit on the coulomb collision operator. \\
+\begin{align*}
+	& \partial_t \hat{f} = (C + E) \hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + C_{ee} (\hat{f}^{n}, \hat{f}^{n}) =0 \\
+	& \hat{f}^{n+1} = (C+E + C_{ee}(\hat{f}^{n}))^{-1} \of{ (u^T W(\hat{f}^{n})) \hat{f}^{n} }
+\end{align*}
+
+%\textbf{Algorithm 3:} Semi-explicit scheme on the collision operator \\
+%\begin{align*}
+%	C^{00} \hf_0 + E^{00} \hf_0 + E^{01} \hf_1 - (u^T W (\hf)) \hf_0 + C_{ee}^{00}(\hf_0) \hf_0 = 0 \\
+%    C^{11} \hf_1 + E^{10} \hf_0 + E^{11} \hf_1 - (u^T W (\hf)) \hf_1 + C_{ee}^{10}(\hf_1) \hf_0 + C_{ee}^{11}(\hf_0) \hf_1= 0 \\
+%\end{align*} then we can write the scheme,
+%\begin{align*}
+%&\hf_1^{n+1}  = (C^{11} + C_{ee}^{11}(\hf_0^{n}))^{-1}\of{-C_{ee}^{10}(\hf_1^{n}) \hf_0^{n} - E^{10}\hf_0^{n} - E^{11}\hf_1^{n} + (u^T W (\hf^{n})) \hf_1^{n}} \\
+%&\hf_0^{n+1}  = (C^{00} + C_{ee}^{00}(\hf_0^{n}))^{-1} \of{-E^{00} \hf_0^{n} - E^{01} \hf_1^{n}  + (u^T W (\hf^{n})) \hf_0^{n}}
+%\end{align*} 
+
+
+
+%\begin{align*}
+%	& \partial_t \hat{f} = M^{-1}(C + E) \hat{f} - (\frac{\dot{n}}{n}) \hat{f} + M^{-1} C_{ee} (\hat{f}, \hat{f}) =0 \\
+%	& \hat{f}^{n+1} = (C+E)^{-1} \of{-C_{ee}(f^{n}, f^{n}) + M\of{u^T M^{-1}RHS(\hat{f}^{n})}\hat{f}^{n}}
+%\end{align*}
 
 % Assuming, anisotropic components are small, and neglecting all the second order correction terms $l \geq 1$ we can write, 
 % \begin{align*}

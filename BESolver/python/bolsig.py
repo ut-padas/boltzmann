@@ -17,6 +17,7 @@ def parse_bolsig(file, num_collisions):
     mobillist = []
     difflist = []
     ratelist = []
+    clogarithmlist = []
 
     rate = np.zeros(2)
 
@@ -48,6 +49,11 @@ def parse_bolsig(file, num_collisions):
                     diff = float(line.split(")",2)[1]) 
                     print("Found diffusion = ", diff)
                     difflist.append(diff)
+            
+            if "Coulomb logarithm" in line:
+                cl = float(line.strip().split(" ")[-1]) 
+                print("Found coulomb logarithm = ", cl)
+                clogarithmlist.append(cl)
 
             for i in range(num_collisions):
                 if (len(line)>=8):
@@ -80,7 +86,7 @@ def parse_bolsig(file, num_collisions):
         dveclist.append(np.array(dlist))
         aveclist.append(np.array(alist))
 
-    return [eveclist[0], dveclist[0], aveclist[0], Elist[0], mulist[0], mobillist[0], difflist[0], ratelist[0]]
+    return [eveclist[0], dveclist[0], aveclist[0], Elist[0], mulist[0], mobillist[0], difflist[0], ratelist[0], clogarithmlist[0]]
 
 def replace_line(file_name, line_num, text):
     lines = open(file_name, 'r').readlines()

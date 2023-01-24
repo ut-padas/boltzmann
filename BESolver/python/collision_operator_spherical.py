@@ -171,8 +171,10 @@ class CollisionOpSP():
             
             return qm
 
-        self._p2 = Pm(2)
-        self._p4 = Pm(4)
+        # the factor 2 comes form 4pi/ 2pi from spherical harmonics projection.
+
+        self._p2 = Pm(2)      
+        self._p4 = Pm(4)      
         self._q1 = Qm(1)
 
         self._q0 = Qm(0)
@@ -551,7 +553,7 @@ class CollisionOpSP():
         #Lij = self._LOp_eulerian(collision,maxwellian,vth)
         return Lij
 
-    def coulomb_collision_mat(self, alpha, ionization_degree, n0, fb, mw, vth, full_assembly=True):
+    def coulomb_collision_mat(self, alpha, ionization_degree, n0, fb, mw, vth, sigma_m, full_assembly=True):
         """
         compute the weak form of the coulomb collision operator based on fokker-plank equation
         with Rosenbluth's potentials
@@ -560,9 +562,6 @@ class CollisionOpSP():
             - Currently for l=0, l=1 modes only, others assumed to be zero
             - assumes azimuthal symmetry
         """
-
-        if ionization_degree == 0:
-            return 0.0, 0.0
 
         V_TH          = vth
         ELE_VOLT      = collisions.ELECTRON_VOLT
@@ -589,80 +588,42 @@ class CollisionOpSP():
         B          = spec_sp.basis_eval_radial
         DB         = spec_sp.basis_derivative_eval_radial
 
-        # ne_fac   = ionization_degree * n0 
-        m0         = np.dot(fb,self._mass_op) * vth**3 * mw(0)
-        kT         = (np.dot(fb, self._temp_op) * vth**5 * mw(0) * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0) 
-        eps_0      = scipy.constants.epsilon_0
-        me         = scipy.constants.electron_mass
-        qe         = scipy.constants.e
 
-        ne         = n0 * ionization_degree
-        # b_min       = max(qe**2 / (2 * np.pi * eps_0 * 3 * kT), scipy.constants.Planck / (np.sqrt(me * 3 * kT)))
-        # b_max       = np.sqrt((eps_0 * kT) / (ne * qe**2))
-        # c_lambda1    = b_max/b_min 
+        p20_a      = 2 * sph_l0(0) * np.dot(fb[0::num_sh], self._p2)
+        p40_a      = 2 * sph_l0(0) * np.dot(fb[0::num_sh], self._p4) 
+        q10_a      = 2 * sph_l0(0) * np.dot(fb[0::num_sh], self._q1) 
 
-        c_lambda    = (12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne))
-        gamma_a     = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
-
-        # print( p40[-1] * vth**5 * mw(0) * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0)
-        print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ionization_degree * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
-
-        p20_a        = sph_l0(0) * np.dot(fb[0::num_sh], self._p2) 
-        p40_a        = sph_l0(0) * np.dot(fb[0::num_sh], self._p4) 
-        q10_a        = sph_l0(0) * np.dot(fb[0::num_sh], self._q1) 
-
-        p31_a        = sph_l0(1) * np.dot(fb[1::num_sh], self._p3) 
-        p51_a        = sph_l0(1) * np.dot(fb[1::num_sh], self._p5) 
-        q01_a        = sph_l0(1) * np.dot(fb[1::num_sh], self._q0) 
-
-        # p20[p20<0] = 0.0
-        # p40[p40<0] = 0.0
-        # q10[q10<0] = 0.0
-
-        # p31[p31<0] = 0.0
-        # p51[p51<0] = 0.0
-        # q01[q01<0] = 0.0
-
-        # import matplotlib.pyplot as plt
-        # plt.semilogy(gmx, p20, label="p20")
-        # plt.semilogy(gmx, p40, label="p40")
-        # plt.semilogy(gmx, q10, label="q10")
-        # plt.semilogy(gmx, p31, label="p31")
-        # plt.semilogy(gmx, p51, label="p51")
-        # plt.semilogy(gmx, q01, label="q01")
-
-        # plt.legend()
-        # plt.grid()
-        # plt.show()
-        # plt.close()
-
-
+        p31_a      = 2 * sph_l0(1) * np.dot(fb[1::num_sh], self._p3)
+        p51_a      = 2 * sph_l0(1) * np.dot(fb[1::num_sh], self._p5)
+        q01_a      = 2 * sph_l0(1) * np.dot(fb[1::num_sh], self._q0)
 
         for p in range(num_p):
             for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
                 
-                k_min = min(k_vec[p], k_vec[k])
-                k_max = max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1])
+                k_min  = min(k_vec[p], k_vec[k])
+                k_max  = max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1])
 
                 qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
                 gmx    = gmx_a[qx_idx]
                 gmw    = gmw_a[qx_idx]
 
-                p20        = p20_a[qx_idx] #sph_l0(0) * np.dot(fb[0::num_sh], self._p2) 
-                p40        = p40_a[qx_idx] #sph_l0(0) * np.dot(fb[0::num_sh], self._p4) 
-                q10        = q10_a[qx_idx] #sph_l0(0) * np.dot(fb[0::num_sh], self._q1) 
+                p20    = p20_a[qx_idx] 
+                p40    = p40_a[qx_idx] 
+                q10    = q10_a[qx_idx] 
 
-                p31        = p31_a[qx_idx] #sph_l0(1) * np.dot(fb[1::num_sh], self._p3) 
-                p51        = p51_a[qx_idx] #sph_l0(1) * np.dot(fb[1::num_sh], self._p5) 
-                q01        = q01_a[qx_idx] #sph_l0(1) * np.dot(fb[1::num_sh], self._q0) 
+                p31    = p31_a[qx_idx] 
+                p51    = p51_a[qx_idx] 
+                q01    = q01_a[qx_idx] 
                 
                 tmp = -(alpha * p20 * B(gmx,k,0) + (1/(3*gmx)) * (p40 + gmx**3 * q10) * DB(gmx, k, 0, 1)) * DB(gmx, p, 0, 1)
                 cc_collision[p * num_sh + 0 , k * num_sh + 0] = np.dot(tmp, gmw) 
+                
                 if full_assembly:
                     tmp  = (1 + alpha) * gmx * q01 * B(gmx, k, 0) * B(gmx, p, 0) - (
                         (1/3) * B(gmx, k, 0) * ((2 * alpha -1) * p31 - (1+alpha) * gmx**3 * q01) 
                         + (DB(gmx, k, 0, 1) / (5 * gmx)) * (p51 + gmx**5 * q01)
                         ) * (gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / gmx**2
+                    
                     cc_collision[p * num_sh + 1 , k * num_sh + 0] = (sph_l0(0)/ sph_l0(1)) * np.dot(tmp, gmw) 
 
                     tmp  =  -((1 + alpha)/gmx) * p20 * B(gmx, k , 0) * B(gmx, p, 0) - \
@@ -671,25 +632,48 @@ class CollisionOpSP():
 
                     cc_collision[p * num_sh + 1 , k * num_sh + 1] = np.dot(tmp, gmw)
 
+
+        ne           = n0 * ionization_degree
+        eps_0        = scipy.constants.epsilon_0
+        me           = scipy.constants.electron_mass
+        qe           = scipy.constants.e
+        m0           = mw(0) * np.dot(fb,self._mass_op) * vth**3 
+        kT           = mw(0) * (np.dot(fb, self._temp_op) * vth**5 * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0) 
         
-        # if full_assembly:
-        #     for p in range(num_p):
-        #         w1 = (1 + alpha) * p20 * q01 * (gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / (gmx**2) / sph_l0(1)
-        #         for k in range(max(0, p - 2 * (sp_order+2) ), min(num_p, p + 2 * (sp_order+2))):
-        #             tmp = (sph_l0(0) / sph_l0(1) ) * ((gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / (gmx**2)) * ( (B(gmx, k, 0) / 3) * ((2*alpha -1) * p31 - (1+alpha) * gmx**3 * q01) + (DB(gmx, k, 0, 1) / (5 * gmx)) * (p51 + gmx**5 * q01) ) #+ w1
+        # kp_op      = vth**5 * mw(0) * np.sqrt(4*np.pi) * (2/(3*(2 / me))) * np.array([np.dot(gmw_a, gmx_a**4 * B(gmx_a,k,0)) for k in range(num_p)])
+        # kT         = np.dot(kp_op, fb[0::num_sh])        
+        # print(kT)
 
-        #             cc_collision[p * num_sh + 1 , k * num_sh + 0] = -3 * np.dot(tmp, gmw)
+        #kT         = ((vth**5 * p40_a[-1] * qe) / (3 * (2/me))) #/ (2 * sph_l0(0))
 
-        #             tmp = ((gmx * DB(gmx, p, 0, 1) - B(gmx, p, 0)) / (gmx**2)) * (alpha * gmx * p20 * B(gmx, k, 0) + (gmx/3) * (p40 + gmx**3 * q10) * ((gmx * DB(gmx, k, 0, 1) - B(gmx, k, 0)) / (gmx**2)) ) #+ w1
+        #Tev        = kT/ scipy.constants.electron_volt
+        #kT         = 2 * np.pi * ((2 * vth**5 * p40_a[-1] * qe) / (3 * (2/me))) / m0 
+        #c_lambda   = 2 * np.pi * (2 * vth**5 * p40_a[-1] / (3 * (2/me))) #np.exp(23.5 - np.log(np.sqrt(ne* 1e-6) * Tev **(5/4) - np.sqrt(1e-5 + ((np.log(Tev)-2)**2 )/16)))
+        #c_lambda   = np.exp(23 - np.log(np.sqrt(ne * 1e-6) * (kT /scipy.constants.electron_volt)**(-1.5)))
 
-        #             cc_collision[p * num_sh + 1 , k * num_sh + 1] = -3 * np.dot(tmp, gmw)
+        # b_min       = max(qe**2 / (4 * np.pi * eps_0 * 3 * kT/(0.5 * me)), scipy.constants.Planck / (np.sqrt(me * 3 * kT)))
+        # b_max       = np.sqrt((eps_0 * kT) / (ne * qe**2))
+        # c_lambda    = b_max/b_min
 
+        # cc_freq_op    = vth**4 * np.sqrt(4*np.pi) * n0 * np.array([np.dot(gmw_a, gmx_a**3 * sigma_m * B(gmx_a,k,0)) for k in range(num_p)])
+        # cc_freq       = scipy.constants.electron_volt * np.dot(cc_freq_op, fb[0::num_sh])
+        # print(cc_freq)
+        # M             = (np.sqrt(6) * cc_freq ) / (2 * np.sqrt((qe**2 * ne) / (eps_0 * me)))
+        # c_lambda      = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne)))
+        # c_lambda      = (c_lambda + M) / (1 + M)
+        #c_lambda      = np.exp(6.314)
 
+        # Tev        = kT/ scipy.constants.electron_volt
+        # c_lambda     = np.exp(23.5 - np.log(np.sqrt(ne* 1e-6) * Tev **(5/4) - np.sqrt(1e-5 + ((np.log(Tev)-2)**2 )/16)))
+        c_lambda      = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne)))
+        gamma_a       = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
 
+        
 
+        # print( p40[-1] * vth**5 * mw(0) * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0)
+        print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ionization_degree * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
 
-
-
+        
 
         
         return cc_collision * gamma_a

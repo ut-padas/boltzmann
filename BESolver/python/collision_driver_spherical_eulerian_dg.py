@@ -313,10 +313,11 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             
             return h_curr
 
-        def solver_1(h_prev, atol=1e-5, max_iter=1000):
+        def solver_1(h_prev, rtol = 1e-5 , atol=1e-5, max_iter=1000):
             h_curr          = np.copy(h_prev)
             
-            iteration_error = 1
+            abs_error       = 1.0
+            rel_error       = 1.0 
             iteration_steps = 0
 
             nn       = Cmat.shape[0]
@@ -324,26 +325,12 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             Rf       = np.zeros(nn+1)
             ion_deg  = args.ion_deg
 
-            # for ii in range(10):
-            #     if ii==9:
-            #         atol=1e-6
-            #     else:
-            #         atol=0.1
-
-            #     iteration_steps=0
-            #     iteration_error=1
-            #     ion_deg  = args.ion_deg / 2**(10-ii)
             Cmat_p_Emat =  Cmat + Emat
             
             full_coulomb = True
-            while (iteration_error > atol and iteration_steps < max_iter):
+            while (rel_error > rtol and iteration_steps < max_iter):
                 CC_ee           = collisions.AR_NEUTRAL_N * ion_deg * collOp.coulomb_collision_mat(1.0, ion_deg, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth, sigma_m, full_assembly=full_coulomb)
 
-                if iteration_steps % 10 == 0:
-                    iteration_error = np.linalg.norm(residual_func(h_prev, CC_ee, eval_jacobian=False))
-                    print("Iteration ", iteration_steps, ": Residual =", iteration_error)
-                    #print(h_curr)
-                
                 Lmat      = Cmat_p_Emat + CC_ee
                 Lmat_inv  = np.linalg.pinv(Lmat, rcond=0.9/np.linalg.cond(Lmat))
 
@@ -351,8 +338,14 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 #h_curr     = np.matmul(Lmat_inv, -np.dot(CC_ee, h_prev) + np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
                 h_curr      = np.matmul(Lmat_inv, np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
                 h_curr      = h_curr / (np.dot(u, h_curr))
-                h_prev      = h_curr
 
+                if iteration_steps % 10 == 0:
+                    abs_error = np.linalg.norm(residual_func(h_prev, CC_ee, eval_jacobian=False))
+                    rel_error = np.linalg.norm(h_prev-h_curr)/np.linalg.norm(h_curr)
+                    print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E"%(abs_error, rel_error))
+                
+
+                h_prev      = h_curr
                 iteration_steps+=1
 
             return h_curr
@@ -420,7 +413,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
 
             return h_curr
 
-        h_curr = solver_1(h_prev, atol=1e-3)
+        h_curr = solver_1(h_prev, atol=1e-6, max_iter=300)
         solution_vector = np.zeros((2,h_init.shape[0]))
         solution_vector[0,:] = np.matmul(qA, h_init)
         solution_vector[1,:] = np.matmul(qA, h_curr)
@@ -742,7 +735,8 @@ parser.add_argument("-sweep_values", "--sweep_values"         , help="Values for
 parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
 parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
 parser.add_argument("-Tg", "--Tg"                             , help="Gass temperature (K)" , type=float, default=1e-12)
-parser.add_argument("-ion_deg", "--ion_deg"                   , help="Ionization degreee"   , type=float, default=0)
+parser.add_argument("-ion_deg", "--ion_deg"                   , help="Ionization degreee"   , type=float, default=1)
+parser.add_argument("-ee_collisions", "--ee_collisions"       , help="Enable electron-electron collisions", type=float, default=1)
 
 args                = parser.parse_args()
 # e_values            = np.array([1e0, 1e1, 1e2, 1e3, 5e3, 1e4, 1e5])
@@ -1014,7 +1008,7 @@ for run_id in range(len(run_params)):
             temp_evolution[k] = current_temp/collisions.TEMP_K_1EV
 
         mu.append(1.5*temp_evolution[-1])
-        print(1.5*temp_evolution[-1])
+        print("PDE code found temp (ev) = %.8E mean energy (ev) = .%8E"%(temp_evolution[-1] , 1.5*temp_evolution[-1]))
 
         total_cs = 0
 
@@ -1023,11 +1017,33 @@ for run_id in range(len(run_params)):
             total_cs += cs
             rates[col_idx].append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)*np.trapz(radial[i,0,:]*ev*cs,x=ev) )
 
-            if col == "g2" or col == "g2Const" or col == "g2Smooth" or col=="g2step":
-                total_cs += rates[col_idx][-1]/np.sqrt(ev)/np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)
+            # if col == "g2" or col == "g2Const" or col == "g2Smooth" or col=="g2step":
+            #     total_cs += rates[col_idx][-1]/np.sqrt(ev)/np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)
+        
+        c_gamma = np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)
 
-        D.append( np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(radial[i,0,:]*ev/total_cs,x=ev) )
-        M.append( -np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(deriv_fd(ev,radial[i,0,:])*ev/total_cs,x=ev) )
+        #### diffusion coefficient 
+        D.append((c_gamma / 3.) * np.trapz(radial[i,0,:] * ev / total_cs,x=ev))
+
+        #### mobility is computed from f1
+        # f1 = deriv_fd(ev, radial[i,0,:]) * (args.E_field / (collisions.AR_NEUTRAL_N * total_cs))
+        # f1 = radial[i,1,:]
+        # M.append( -(c_gamma / (3 * (args.E_field/collisions.AR_NEUTRAL_N))) * np.trapz(f1 * ev, x=ev)) 
+        # M.append( -(c_gamma / 3.) * np.trapz(deriv_fd(ev,radial[i,0,:])*ev/total_cs,x=ev) )
+        # f1 = deriv_fd(ev,radial[i,0,:])  * (args.E_field/total_cs/collisions.AR_NEUTRAL_N)/np.sqrt(3)
+        # g1 = radial[i,1,:]
+        
+        # plt.semilogy(ev, np.abs(f1), label="f1")
+        # plt.semilogy(ev, np.abs(g1), label="g1")
+        # plt.grid()
+        # plt.legend()
+        # plt.show()
+        # plt.close()
+        f1 = radial[i,1,:] * np.sqrt(3)
+        M.append( -(c_gamma / (3 * (args.E_field / collisions.AR_NEUTRAL_N))) * np.trapz(f1 * ev ,x=ev))
+
+        print("D computed from bolsig %.8E vs. reported %.8E from PDE code %.8E"%(np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(bolsig_f0*ev/total_cs,x=ev), bolsig_D, D[-1]))
+        print("M computed from bolsig %.8E vs. reported %.8E from PDE code %.8E"%(-np.sqrt(2.*collisions.ELECTRON_CHARGE_MASS_RATIO)/3.*np.trapz(deriv_fd(ev, bolsig_f0)*ev/total_cs,x=ev), bolsig_M, M[-1]))
 
         run_temp.append(temp_evolution)
 

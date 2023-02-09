@@ -639,6 +639,8 @@ class CollisionOpSP():
         qe           = scipy.constants.e
         m0           = mw(0) * np.dot(fb,self._mass_op) * vth**3 
         kT           = mw(0) * (np.dot(fb, self._temp_op) * vth**5 * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0) 
+
+        kT           = np.abs(kT) 
         
         # kp_op      = vth**5 * mw(0) * np.sqrt(4*np.pi) * (2/(3*(2 / me))) * np.array([np.dot(gmw_a, gmx_a**4 * B(gmx_a,k,0)) for k in range(num_p)])
         # kT         = np.dot(kp_op, fb[0::num_sh])        
@@ -657,7 +659,7 @@ class CollisionOpSP():
 
         # cc_freq_op    = vth**4 * np.sqrt(4*np.pi) * n0 * np.array([np.dot(gmw_a, gmx_a**3 * sigma_m * B(gmx_a,k,0)) for k in range(num_p)])
         # cc_freq       = scipy.constants.electron_volt * np.dot(cc_freq_op, fb[0::num_sh])
-        # print(cc_freq)
+        # # print(cc_freq)
         # M             = (np.sqrt(6) * cc_freq ) / (2 * np.sqrt((qe**2 * ne) / (eps_0 * me)))
         # c_lambda      = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne)))
         # c_lambda      = (c_lambda + M) / (1 + M)

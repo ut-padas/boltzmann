@@ -549,25 +549,98 @@ F for species a is can be written as
 \end{align*}. Then substituting the above for \eqref{eq:fokker_plank}, we can write
 \begin{align}
 	\frac{1}{\Gamma_a} \frac{\partial f_a}{\partial_t} = -\ppartial{\of{f_a \frac{\partial h_a}{\partial v^i}}}{v^i} + \frac{1}{2} \frac{\partial^2}{\partial v^i \partial^j} \of{f_a \frac{\partial^2 g}{\partial v^i \partial v^j}}
-\end{align}. In the generalized coordinates, we can write, the equation in the covariant form as follows. 
+\end{align}. 
+
+\newpage
+\subsection*{Generalized variational of the Fokker-Plank}
+In the generalized coordinates, we can write, the equation for given species distribution function $f$ in the covariant form as follows.
 \begin{align*}
-	\Gamma_a ^{-1} \partial_t f_a = -D_\mu (f {T_a}^{\mu}_{\nu} ) + \frac{1}{2} D_{\mu\nu}\of{f {S_a}^{\mu\nu}} 
-\end{align*} where $D_{\mu}$ denotes the covarient derivative with respect to metric $a_{\mu\nu}$ , ${T_a}^{\mu}_{\nu} = a^{\mu\nu} D_\nu h_a$ and $S^{\mu\nu} = a^{\mu\omega} a^{\nu \tau} D_{\omega \tau} g$. For basis, $q_1 = v, q_2 = \cos\vtheta, q_3 = \vphi$ we can simplify the above as follows where $\mu=\cos\vtheta$. 
+	\Gamma_a ^{-1} (\partial_t f)_{cc} = -D_i (f {T}^{i} ) + \frac{1}{2} D_{i}D_{j}\of{f {S}^{ij}} 
+\end{align*} where $D_{i}$ denotes the covariant derivative with respect to metric $a_{ij}$ in direction $i$, ${T}^{i} = a^{ij} D_j h$ and $S^{ij} = a^{ip} a^{j q} D_{p}D_{q}g$. 
+For basis, $q_1 = v, q_2 = \mu, q_3 = \vphi$ where $\mu=\cos\theta$ and "i,j" indices run for $v, \mu, \vphi$. We can write the line element, 
 \begin{align*}
-\Gamma_a \partial_t f_a = 
-&-v^{-2} \partial_{v} \of{f_a v^2 \partial_{v} h_a}
--v^{-2} \partial_{\mu}  \of { f_a (1-\mu^2) \partial_{\mu} h_a}\\
-& +(2 v^2)^{-1} \partial^2_{vv} \of { f_a v^2 \partial^2_{vv} g }\\
-&+ (2 v^2)^{-1} \partial^2_{\mu\mu} \of {f_a \of{v^{-2} (1-\mu^2)^2 \partial^2_{\mu\mu} g + v^{-1}(1-\mu^2) \partial_{v} g - v^{-2} \mu (1-\mu^2) \partial_{\mu} g }}\\
-&+ v^{-2} \partial^2_{\mu v} \of{ f_a (1-\mu^2) \of{\partial^{2}_{\mu v} g - v^{-1} \partial_{\mu} g } } \\
-&+ (2v^2)^{-1} \partial_{v} \of {f_a \of{-v^{-1} (1-\mu^2) \partial^2_{\mu\mu} g -2 \partial_v g + 2\mu v^{-1} \partial_{\mu} g }}\\
-&+ (2v^2)^{-1} \partial_{\mu} \of{ f_a \of{v^{-2} \mu (1-\mu^2) \partial^{2}_{\mu\mu} g + 2\mu v^{-1} \partial_{v} g + 2v^{-1} (1-\mu^2 )\partial^{2}_{\mu v}g -2v^{-2} \partial_{\mu} g } }
+	&ds^2   = dv^2 + v^2(1-\mu^2)^{-1} d\mu^2 + v^2(1-\mu^2) d\phi^2 \\
+	&a_{ij}=\begin{bmatrix}
+		1 & 0 & 0\\
+		0 & v^2(1-\mu^2)^{-1} & 0\\
+		0 & 0 & v^2(1-\mu^2)\\			
+	\end{bmatrix} \text{ , } a^{ij} = \begin{bmatrix}
+		1 & 0 & 0\\
+		0 & v^{-2}(1-\mu^2) & 0\\
+		0 & 0 & v^{-2}(1-\mu^2)^{-1}\\			
+	\end{bmatrix}\\
+	&|a_{ij}| = v^4
+\end{align*} We can write, covariant derivate on a scalar, and two covariant derivatives acting on a scalar as follows.
+Some useful identities are summarized below. 
+\begin{align*}
+	D_p h 	&  = \partial_p h \\
+	D_i(f T^i) &= \frac{1}{\sqrt{a}} \partial_i \of{\sqrt{a} f T^i}\\
+	D_p D_q g &= \partial^2_{pq} g - \Gamma^r_{pq} \partial_r g\\
+	S^{ij}    &= a^{ip} a^{jp} D_p D_q g = a^{ip} a^{jp} \of{\partial^2_{pq} g - \Gamma^r_{pq} \partial_r g}\\
+	D_i D_j \of{f S^{ij}} &= \frac{1}{\sqrt{a}} \of {\partial^2_{ij} \of{\sqrt{a} f S^{ij}} + \partial_k \of{\sqrt{a} f \Gamma^{k}_{pq} S^{pq} }}
+\end{align*} where $\Gamma^r_{pq}$ is the Christoffel symbols of the second kind (Note: $\Gamma_a$ denotes the constant related to Coulomb logarithm). Let $\psi\of{\vect{v}} = b\of{v_r} Y\of{\vtheta, \vphi}$ be the test function for the variational form. We can further write, 
+\begin{align*}
+	&D_i \of {T^i \psi} = \psi D_i T^i + T^i D_i \psi \\
+	&\int_{\vect{v}} D_i \of {T^i \psi} \sqrt{a} \diff{\vect{v}} = \int_{\vect{v}} \psi D_i T^i \sqrt{a} \diff{\vect{v}} + \int_{\vect{v}} T^i D_i \psi \sqrt{a} \diff{\vect{v}}\\
+	&\text{ Using generalized Stoke's theorem on the left hand side, and $T^i_{|\partial\vect{v}} = 0$} \\
+	&\int_{\partial \vect{v}} T^i \psi n_i \diff{\vect{s}}  = \int_{\vect{v}} D_i T^i \psi  \sqrt{a} \diff{\vect{v}} + \int_{\vect{v}} T^i D_i \psi \sqrt{a} \diff{\vect{v}} = 0 \\
+	&\int_{\vect{v}} D_i T^i \psi  \sqrt{a} \diff{\vect{v}} = - \int_{\vect{v}} T^i D_i \psi \sqrt{a} \diff{\vect{v}}
+\end{align*}
+
+\begin{align*}
+	I_A &= -\int_{\vect{v}} D_i\of{f\of{\vect{v}} T^i \of{\vect{v}}} \psi\of{\vect{v}} \sqrt{a} \diff{\vect{v}}\\
+		&= -\int_{\vect{v}} \frac{1}{\sqrt{a}} \partial_i\of{\sqrt{a} f\of{\vect{v}} a^{ij} \partial_j h \of{\vect{v}} } \psi\of{\vect{v}} \sqrt{a} \diff{\vect{v}}\\
+	I_A &= -\int_{\vect{v}} \partial_i\of{\sqrt{a} f\of{\vect{v}} a^{ij} \partial_j h\of{\vect{v}} } \psi\of{\vect{v}} \diff{\vect{v}}\\
+	I_A &= \int_{\vect{v}} \of{\sqrt{a} f\of{\vect{v}} a^{ij} \partial_j h\of{\vect{v}} } \partial_i \psi\of{\vect{v}} \diff{\vect{v}} 
 \end{align*} 
+For the above chosen coordinate system and with azimuthal symmetry we can further simplify, 
+\begin{align*}
+	I_A&= \int_{\vect{v}} v^2 f\of{\vect{v}}\partial_vh\of{\vect{v}}\partial_v \psi\of{\vect{v}}\diff{\vect{v}}  + \int_{\vect{v}} f\of{\vect{v}} (1-\mu^2) \partial_\mu h\of{\vect{v}}\partial_\mu \psi\of{\vect{v}}  \diff{\vect{v}} 
+\end{align*}
+For the variational form for the second term in the Fokker-Plank operator we can write, 
+\begin{align*}
+	I_B &= \frac{1}{2} \int_{\vect{v}} \of{D_i D_j \of{f\of{\vect{v}} S^{ij}\of{\vect{v}}}} \psi\of{\vect{v}} \sqrt{a} \diff{\vect{v}} \\
+	&= \frac{1}{2} \int_{\vect{v}} 
+		\of {\partial^2_{ij} \of{\sqrt{a} f\of{\vect{v}} S^{ij}\of{\vect{v}}} + \partial_k \of{\sqrt{a} f\of{\vect{v}} \Gamma^{k}_{pq} S^{pq}\of{\vect{v}} }} \psi\of{\vect{v}} \diff{v}
+\end{align*}
+The covariant divergence for a rank 2 symmetric tensor can be written as, 
+\begin{align*}
+	D_j\of{fS^{ij}} = \frac{1}{\sqrt{a}} \partial_j \of{\sqrt{a} f S^{ij} } + \Gamma^{i}_{ij} f S^{ij}
+\end{align*}
+As a second approach we can write the second term of the Fokker-Plank
+\begin{align*}
+	&I_B = \frac{1}{2} \int_{\vect{v}} \of{D_i D_j \of{f\of{\vect{v}} S^{ij}\of{\vect{v}}}} \psi\of{\vect{v}} \sqrt{a} \diff{\vect{v}} \\
+	&\text{ Using generalized Stoke's theorem with zero boundary terms, we can write}\\
+	&I_B = -\frac{1}{2} \int_{\vect{v}} D_j\of{f S^{ij}} D_i \psi\of{\vect{v}} \sqrt{a} \diff{\vect{v}} \\
+	& = -\frac{1}{2} \int_{\vect{v}} \left( \frac{1}{\sqrt{a}} \partial_j \of{\sqrt{a} f S^{ij} } + \Gamma^{i}_{ij} f S^{ij} \right) D_i \psi\of{\vect{v}} \sqrt{a} \diff{\vect{v}}\\
+	& = -\frac{1}{2} \int_{\vect{v}} \partial_j \of{\sqrt{a} f S^{ij}} D_i \psi\of{\vect{v}} \diff{\vect{v}} -\frac{1}{2} \int_{\vect{v}} \Gamma^{i}_{ij} f S^{ij}  D_i \psi\of{\vect{v}} \sqrt{a} \diff{\vect{v}}
+\end{align*}
+For the chosen coordinate conditions, with azimuthal symmetry, we can write, 
+\begin{align*}
+	&S^{vv}     = \partial^2_{vv} g \\
+	&S^{\mu\mu} = v^{-4}(1-\mu^2)\of{ \partial^2_{\mu\mu} g + v(1-\mu^2)^{-1} \partial_v g -\mu(1-\mu^2)^{-1} \partial_{\mu} g} \\
+	&S^{v\phi} = S^{\mu\phi} =0 \\
+	&S^{v\mu}  = v^{-2}(1-\mu^2)\of{\partial^2_{v\mu} g - v^{-1} \partial_{\mu} g} \\
+	&S^{v\mu}  = v^{-2}(1-\mu^2)\of{\partial^2_{v\mu} g - v^{-1} \partial_{\mu} g} \\
+	&S^{\phi\phi} = v^{-4}(1-\mu^2)^{-1} \of{v\partial_v g - \mu \partial_{\mu} g}
+\end{align*}
+
+
+% \begin{align*}
+% \Gamma_a \partial_t f_a = 
+% &-v^{-2} \partial_{v} \of{f_a v^2 \partial_{v} h_a}
+% -v^{-2} \partial_{\mu}  \of { f_a (1-\mu^2) \partial_{\mu} h_a}\\
+% & +(2 v^2)^{-1} \partial^2_{vv} \of { f_a v^2 \partial^2_{vv} g }\\
+% &+ (2 v^2)^{-1} \partial^2_{\mu\mu} \of {f_a \of{v^{-2} (1-\mu^2)^2 \partial^2_{\mu\mu} g + v^{-1}(1-\mu^2) \partial_{v} g - v^{-2} \mu (1-\mu^2) \partial_{\mu} g }}\\
+% &+ v^{-2} \partial^2_{\mu v} \of{ f_a (1-\mu^2) \of{\partial^{2}_{\mu v} g - v^{-1} \partial_{\mu} g } } \\
+% &+ (2v^2)^{-1} \partial_{v} \of {f_a \of{-v^{-1} (1-\mu^2) \partial^2_{\mu\mu} g -2 \partial_v g + 2\mu v^{-1} \partial_{\mu} g }}\\
+% &+ (2v^2)^{-1} \partial_{\mu} \of{ f_a \of{v^{-2} \mu (1-\mu^2) \partial^{2}_{\mu\mu} g + 2\mu v^{-1} \partial_{v} g + 2v^{-1} (1-\mu^2 )\partial^{2}_{\mu v}g -2v^{-2} \partial_{\mu} g } }
+% \end{align*} 
 
 Assuming azimuthal symmetry for the problem, we can write the usual expansion for distribution function, 
 \begin{align*}
 	f_a\of{\vect{v}} = \sum_{l} f^{a}_l\of{v} Y_{l0}\of{\vtheta, \vphi} = \sum_{l} f^{a}_l\of{v} U_{l0} P_{l0}\of{\vtheta}
-\end{align*}. Then we can derive \cite{rosenbluth1957fokker}, 
+\end{align*}. Then we can derive \cite{rosenbluth1957fokker} the Rosenbluth potentials, 
 \begin{align*}
 	h_a\of{\vect{v}} &= \sum_{l} \frac{m_a + m_b}{m_b} A^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where } \\
 	A^{b}_l\of{v} &= \frac{4\pi U_{l0}}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
@@ -579,6 +652,7 @@ Assuming azimuthal symmetry for the problem, we can write the usual expansion fo
 		\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
 	}
 \end{align*}
+\newpage
 Now we restrict the derivation for electron (i.e., selecting species ``a'' to be electrons) collision with background species ``b''. Using the two term expansion for $f_a$ and neglecting all  the quadratic terms in $f_1 \cdot f_1$, we can derive, 
 \begin{align*}
 &v^2	\Gamma_a ^{-1} \partial_t f_0  = \partial_v \of {\alpha P^2_0 f_0 + \frac{1}{3v}\of{P^4_0 + v^3 Q^1_0} \partial_v f_0}\\

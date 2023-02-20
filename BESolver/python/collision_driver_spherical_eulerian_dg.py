@@ -231,6 +231,10 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
 
     if steady_state:
         u        = mass_op * mw_vth(0) * vth**3 
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            if lm[0] > 0:
+                u[lm_idx::num_sh] = 0.0 
+        
         u        = np.matmul(np.transpose(u), qA)
         h_prev   = np.copy(h_init)
         h_prev   = h_prev / (np.dot(u, h_prev))
@@ -275,7 +279,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             Ji            = np.zeros((nn+1,nn))
             Rf            = np.zeros(nn+1)
             ion_deg       = args.ion_deg
-            rcond_cuttoff = 1e-16
+            rcond_cuttoff = 1e-12
 
             
 
@@ -302,8 +306,8 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
 
                 while (np.linalg.norm(residual_func(h_prev + alpha * p , CC_ee,  eval_jacobian=False))  >  np.linalg.norm(Rf)):
                     alpha*=0.5
-                    if alpha < 1e-3:
-                        #is_diverged = True
+                    if alpha < 1e-10:
+                        is_diverged = True
                         break
 
                 
@@ -338,14 +342,18 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             Cmat_p_Emat     = Cmat + Emat
             Cmat1           = np.matmul(Minv, Cmat_p_Emat)
             full_coulomb = True
+
+            Lmat      = Cmat_p_Emat 
+            Lmat_inv  = np.linalg.pinv(Lmat, rcond=1e-30)
+
             while (rel_error> rtol and abs_error > atol and iteration_steps < max_iter):
                 if args.ee_collisions:
                     CC_ee           = collisions.AR_NEUTRAL_N * ion_deg * collOp.coulomb_collision_mat(1.0, ion_deg, collisions.AR_NEUTRAL_N, h_prev, maxwellian, vth, sigma_m, full_assembly=full_coulomb)
+
+                    Lmat      = Cmat_p_Emat + CC_ee
+                    Lmat_inv  = np.linalg.pinv(Lmat, rcond=1e-14/np.linalg.cond(Lmat))
                 else:
                     CC_ee           = 0
-
-                Lmat      = Cmat_p_Emat + CC_ee
-                Lmat_inv  = np.linalg.pinv(Lmat, rcond=1e-14/np.linalg.cond(Lmat))
 
                 abs_error = np.linalg.norm(residual_func(h_prev, CC_ee, eval_jacobian=False))
 
@@ -781,6 +789,8 @@ parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter t
 parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
 parser.add_argument("-Tg", "--Tg"                             , help="Gass temperature (K)" , type=float, default=1e-12)
 parser.add_argument("-ion_deg", "--ion_deg"                   , help="Ionization degreee"   , type=float, default=1)
+parser.add_argument("-stroe_eedf", "--store_eedf"             , help="store eedf"   , type=int, default=0)
+parser.add_argument("-stroe_csv", "--store_csv"               , help="store csv format of QoI comparisons", type=int, default=0)
 parser.add_argument("-ee_collisions", "--ee_collisions"       , help="Enable electron-electron collisions", type=float, default=1)
 
 args                = parser.parse_args()
@@ -790,8 +800,8 @@ args                = parser.parse_args()
 e_values            = np.array([args.E_field])
 ion_deg_values      = np.array([args.ion_deg])
 
-SAVE_EEDF    = False
-SAVE_CSV     = False
+SAVE_EEDF    = args.store_eedf
+SAVE_CSV     = args.store_csv
 
 if not args.ee_collisions:
     ion_deg_values *= 0.0
@@ -1139,8 +1149,9 @@ for run_id in range(len(run_params)):
     if SAVE_EEDF:
         with open('eedf_%s.npy'%(str_datetime), 'ab') as f:
             np.save(f, ev)
-            np.save(f, radial[-1,0,:])
-            np.save(f, radial[-1,1,:])
+            for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                np.save(f, radial[-1,lm_idx,:])
+                
             np.save(f, bolsig_f0)
             np.save(f, bolsig_f1)
 

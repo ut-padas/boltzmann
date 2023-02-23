@@ -14,6 +14,8 @@ import time
 import utils as BEUtils
 import scipy.integrate
 import scipy.sparse
+import sym_cc
+import sympy
 
 class CollissionOp(abc.ABC):
 
@@ -178,6 +180,7 @@ class CollisionOpSP():
         self._q1 = Qm(1)
 
         self._q0 = Qm(0)
+        self._q3 = Qm(3)
         self._p3 = Pm(3)
         self._p5 = Pm(5)
 
@@ -614,7 +617,7 @@ class CollisionOpSP():
                 p31    = p31_a[qx_idx] 
                 p51    = p51_a[qx_idx] 
                 q01    = q01_a[qx_idx] 
-                
+
                 tmp = -(alpha * p20 * B(gmx,k,0) + (1/(3*gmx)) * (p40 + gmx**3 * q10) * DB(gmx, k, 0, 1)) * DB(gmx, p, 0, 1)
                 cc_collision[p * num_sh + 0 , k * num_sh + 0] = np.dot(tmp, gmw) 
                 
@@ -680,3 +683,266 @@ class CollisionOpSP():
         
         return cc_collision * gamma_a
 
+    def compute_rosenbluth_potentials_op(self, mw, vth, m_ab):
+        V_TH          = vth
+        ELE_VOLT      = collisions.ELECTRON_VOLT
+        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
+        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
+        
+        spec_sp  :sp.SpectralExpansionSpherical     = self._spec
+        num_p         = spec_sp._p+1
+        sph_lm        = spec_sp._sph_harm_lm
+        num_sh        = len(spec_sp._sph_harm_lm)
+
+        if self._r_basis_type != basis.BasisType.SPLINES:
+            raise NotImplementedError
+
+        gmx, gmw = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+
+        k_vec    = spec_sp._basis_p._t
+        dg_idx   = spec_sp._basis_p._dg_idx
+        sp_order = spec_sp._basis_p._sp_order
+
+
+        # compute the moment vectors
+        def Pm(m):
+            q_order       = ((sp_order + m + 1)//2) + 1
+            q_order      *= 64
+            qq_re         = np.polynomial.legendre.leggauss(q_order) 
+            qq_re_points  = qq_re[0]
+            qq_re_weights = qq_re[1]
+            
+            pm       = np.zeros((num_p, len(gmx)))
+            for i in range(num_p):
+                a_idx = np.where(k_vec[i] <= gmx)[0]
+                b_idx = np.where(gmx <= k_vec[i + sp_order + 1])[0]
+                idx   = np.sort(np.intersect1d(a_idx, b_idx))
+                for j in idx:
+                    xb      = k_vec[i]
+                    xe      = gmx[j]
+                    qx      = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                    qw      = 0.5 * (xe - xb) * qq_re_weights
+                    pm[i,j] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+
+                
+                a_idx = np.where(k_vec[i + sp_order + 1] < gmx)[0]
+                xb  = k_vec[i]
+                xe  = k_vec[i + sp_order + 1]
+                qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                qw  = 0.5 * (xe - xb) * qq_re_weights
+                pm[i, a_idx] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
+
+            return pm
+        
+        def Qm(m):
+            q_order       = ((sp_order + m + 1)//2) + 1
+            q_order       *= 64
+            qq_re         = np.polynomial.legendre.leggauss(q_order) #quadpy.c1.gauss_legendre(q_order)
+            qq_re_points  = qq_re[0]
+            qq_re_weights = qq_re[1]
+            
+            qm       = np.zeros((num_p, len(gmx)))
+            for i in range(num_p):
+                a_idx = np.where(k_vec[i] <= gmx)[0]
+                b_idx = np.where(gmx <= k_vec[i + sp_order + 1])[0]
+                idx   = np.sort(np.intersect1d(a_idx, b_idx))
+                for j in idx:
+                    xb  = gmx[j]
+                    xe  = k_vec[i + sp_order+1]
+                    qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                    qw  = 0.5 * (xe - xb) * qq_re_weights
+                    qm[i,j] =  np.dot(qw, (qx**(-m)) * spec_sp.basis_eval_radial(qx, i , 0))
+
+                a_idx = np.where(gmx < k_vec[i])[0]
+                xb  = k_vec[i]
+                xe  = k_vec[i + sp_order + 1]
+                qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
+                qw  = 0.5 * (xe - xb) * qq_re_weights
+                qm[i, a_idx] = np.dot(qw, (qx**(-m)) * spec_sp.basis_eval_radial(qx, i , 0))
+
+            return qm
+
+
+        hl_v = np.zeros((num_sh, len(gmx), num_p))
+        gl_v = np.zeros((num_sh, len(gmx), num_p))
+        
+        for lm_idx, lm in enumerate(sph_lm):
+            ll = lm[0]
+            f1 = (ll-0.5) / (ll + 1.5)
+
+            m1 = (4*np.pi/(2*ll+1)) * (1 + m_ab) * (Pm(ll + 2) / (gmx**(ll+1)) + Qm(ll-1) * gmx** (ll))
+            m2 = -(4*np.pi/(4* ll**2 - 1)) * ((Pm(ll + 2) / gmx**(ll-1) - f1 * Pm(ll+4)/gmx**(ll+1)) + (Qm(ll - 3) * gmx**(ll)   - f1 * Qm(ll-1) * gmx**(ll+2)))
+
+            # to convert to standard spherical harmonics
+            m1 *= np.sqrt(4 * np.pi / (2 * ll + 1))
+            m2 *= np.sqrt(4 * np.pi / (2 * ll + 1))
+
+            # import matplotlib.pyplot as plt
+            # for i in range(0,num_p,10):
+            #     plt.plot(gmx, m1[i,:], label="m1 l=%d k=%d"%(lm_idx, i))
+            
+            # plt.legend()
+            # plt.show()
+            # plt.close()
+
+
+            hl_v[lm_idx, : , :] = np.transpose(m1) 
+            gl_v[lm_idx, : , :] = np.transpose(m2)
+
+
+        return hl_v, gl_v
+
+    def gamma_a(self, fb, mw, vth, n0, ion_deg):
+        ne           = n0 * ion_deg 
+        eps_0        = scipy.constants.epsilon_0
+        me           = scipy.constants.electron_mass
+        qe           = scipy.constants.e
+        m0           = mw(0) * np.dot(fb,self._mass_op) * vth**3 
+        kT           = mw(0) * (np.dot(fb, self._temp_op) * vth**5 * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0) 
+        kT           = np.abs(kT)
+        
+        c_lambda      = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne)))
+        gamma_a       = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
+        
+        print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ion_deg * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
+
+        return gamma_a
+
+    def rosenbluth_potentials(self, hl_v, gl_v, Minv, fb, mw, vth):
+        
+        ELE_VOLT      = collisions.ELECTRON_VOLT
+        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
+        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
+        
+        spec_sp  :sp.SpectralExpansionSpherical     = self._spec
+        num_p         = spec_sp._p+1
+        sph_lm        = spec_sp._sph_harm_lm
+        num_sh        = len(spec_sp._sph_harm_lm)
+
+        gmx, gmw = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+        hl = np.zeros(num_p * num_sh)
+        gl = np.zeros(num_p * num_sh)
+
+        for lm_idx, lm in enumerate(sph_lm):
+            tmp_hl = np.dot(hl_v[lm_idx] ,fb[lm_idx::num_sh]) 
+            tmp_gl = np.dot(gl_v[lm_idx] ,fb[lm_idx::num_sh]) 
+            
+            for k in range(num_p):
+                bk                       = spec_sp.basis_eval_radial(gmx, k, 0)
+                hl[k * num_sh + lm_idx ] = np.dot(gmx**2 * bk *  tmp_hl, gmw) 
+                gl[k * num_sh + lm_idx ] = np.dot(gmx**2 * bk *  tmp_gl, gmw) 
+
+
+        hl=np.dot(Minv, hl)
+        gl=np.dot(Minv, gl)
+
+
+        # p20_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p2)
+        # p40_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p4) 
+        # q10_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._q1) 
+        # q30_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._q3)
+
+        # p31_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p3)
+        # p51_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p5)
+        # q01_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._q0)
+
+
+
+        # Vqr = spec_sp.Vq_r(gmx, 0, 1)
+
+        # import matplotlib.pyplot as plt
+        # # hl_0 = np.dot(np.transpose(Vqr),hl[0::num_sh])
+        # # plt.plot(gmx, hl_0/(4*np.pi), label="new h0")
+        # # plt.plot(gmx, (2) * (p20_a/gmx + q10_a), label="old h0")
+
+        # # hl_1 = np.dot(np.transpose(Vqr),hl[1::num_sh])
+        # # plt.plot(gmx, hl_1/(4*np.pi), label="new h1")
+        # # plt.plot(gmx, (2) * (p31_a/gmx**2/3 + q01_a * gmx/3), label="old h1")
+
+        # gl_0 = np.dot(np.transpose(Vqr),gl[0::num_sh])
+        # plt.plot(gmx, gl_0, label="new g0")
+        # plt.plot(gmx, gmx * p20_a + q30_a + (1/gmx/3) * p40_a + gmx**2 * q10_a/3, label="olg g0")
+
+
+
+        # plt.legend()
+        # plt.show()
+        # plt.close()
+
+        return hl, gl
+        
+    def coulomb_collision_op_assembly(self, mw, vth, gen_code=False):
+        V_TH          = vth
+        ELE_VOLT      = collisions.ELECTRON_VOLT
+        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
+        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
+        
+        spec_sp  :sp.SpectralExpansionSpherical     = self._spec
+        num_p         = spec_sp._p+1
+        sph_lm        = spec_sp._sph_harm_lm
+        num_sh        = len(spec_sp._sph_harm_lm)
+        
+        if self._r_basis_type != basis.BasisType.SPLINES:
+            raise NotImplementedError
+
+        v      = sympy.Symbol('vr')
+        mu     = sympy.Symbol('mu')
+        phi    = sympy.Symbol('phi')
+
+        if gen_code:
+            # generate integrals for evaluation
+            metric = sympy.Matrix([[1,0,0], [0, v**2/(1-mu**2), 0], [0, 0, v**2 * (1-mu**2)]])
+            coords = [v, mu, phi]
+            Ia, Ib = sym_cc.assemble_symbolic_cc_op(metric, coords, sph_lm[-1][0])
+
+        
+        k_vec     = spec_sp._basis_p._t
+        dg_idx    = spec_sp._basis_p._dg_idx
+        sp_order  = spec_sp._basis_p._sp_order
+
+        B   = lambda vr, a : spec_sp.basis_eval_radial(vr, a, 0)
+        DB  = lambda vr, a, d : spec_sp.basis_derivative_eval_radial(vr, a, 0, d) 
+
+        gmx_a , gmw_a  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+
+
+        cc_mat_a = np.zeros((num_p * num_sh, num_p * num_sh, num_p *num_sh))
+        cc_mat_b = np.zeros((num_p * num_sh, num_p * num_sh, num_p *num_sh))
+
+        import cc_terms
+        for idx in cc_terms.Ia_nz:
+            print("a", idx)
+            for p in range(num_p):
+                for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                    for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+
+                        k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
+                        k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
+                        qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
+                        gmx    = gmx_a[qx_idx] 
+                        gmw    = gmw_a[qx_idx] 
+
+                        cc_mat_a[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ia(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2])) 
+                        
+        for idx in cc_terms.Ib_nz:
+            print("b", idx)
+            for p in range(num_p):
+                for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                    for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+
+                        k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
+                        k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
+                        qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
+                        gmx    = gmx_a[qx_idx] 
+                        gmw    = gmw_a[qx_idx] 
+
+                        cc_mat_b[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ib(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2])) 
+        
+
+        return cc_mat_a, cc_mat_b
+
+
+
+        
+
+        

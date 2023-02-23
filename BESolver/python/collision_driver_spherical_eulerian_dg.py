@@ -464,7 +464,65 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))
             return h_curr, abs_error, rel_error
 
-        #h_curr , atol, rtol  = solver_1(h_prev, rtol = 1e-8, atol=1e-6, max_iter=1000)
+        def solver_3(h_prev, rtol = 1e-5 , atol=1e-5, max_iter=1000):
+            """
+            We use generalized Fokker-Plank to compute the cc terms. 
+            """
+            h_curr          = np.copy(h_prev)
+            
+            abs_error       = 1.0
+            rel_error       = 1.0 
+            iteration_steps = 0
+
+            ion_deg         = args.ion_deg
+            Cmat_p_Emat     = Cmat + Emat
+            Cmat1           = np.matmul(Minv, Cmat_p_Emat)
+            full_coulomb = True
+
+            Lmat      = Cmat_p_Emat 
+            Lmat_inv  = np.linalg.pinv(Lmat, rcond=1e-30)
+
+            hl_op, gl_op     =  collOp.compute_rosenbluth_potentials_op(maxwellian, vth, 1)
+            #hl, gl          =  collOp.rosenbluth_potentials(hl_op, gl_op, Minv, h_init)
+            cc_op_a, cc_op_b =  collOp.coulomb_collision_op_assembly(maxwellian, vth)
+
+            #print(cc_op_a)
+            #print(cc_op_b)
+            hl, gl      = collOp.rosenbluth_potentials(hl_op, gl_op, Minv, h_prev, maxwellian, vth)
+            print(np.dot(cc_op_a, hl))
+            print(np.dot(cc_op_b, gl))
+    
+
+            while (rel_error> rtol and abs_error > atol and iteration_steps < max_iter):
+                if args.ee_collisions:
+                    hl, gl      = collOp.rosenbluth_potentials(hl_op, gl_op, Minv, h_prev, maxwellian, vth)
+                    gamma_a     = collOp.gamma_a(h_prev, maxwellian, vth, collisions.AR_NEUTRAL_N, ion_deg)
+                    CC_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * (np.dot(cc_op_a, hl) + np.dot(cc_op_b, gl))
+                    
+                    Lmat        = Cmat_p_Emat + CC_ee
+                    Lmat_inv    = np.linalg.pinv(Lmat, rcond=1e-14/np.linalg.cond(Lmat))
+                else:
+                    CC_ee       = 0
+
+                abs_error = np.linalg.norm(residual_func(h_prev, CC_ee, eval_jacobian=False))
+
+                #Cmat1       = np.matmul(Minv, Cmat + Emat + CC_ee)
+                #h_curr     = np.matmul(Lmat_inv, -np.dot(CC_ee, h_prev) + np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = np.matmul(Lmat_inv, np.matmul(Mmat, np.dot(u, np.matmul(Cmat1,h_prev)) * h_prev))
+                h_curr      = h_curr / (np.dot(u, h_curr))
+
+                if iteration_steps % 10 == 0:
+                    rel_error = np.linalg.norm(h_prev-h_curr)/np.linalg.norm(h_curr)
+                    print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E"%(abs_error, rel_error))
+                
+
+                h_prev      = h_curr
+                iteration_steps+=1
+
+            print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))
+            return h_curr, abs_error, rel_error
+
+
         h_curr  , atol, rtol  = solver_1(h_prev, rtol = 1e-8, atol=1e-8, max_iter=200)
         
         solution_vector      = np.zeros((2,h_init.shape[0]))
@@ -789,8 +847,8 @@ parser.add_argument("-sweep_param", "--sweep_param"           , help="Paramter t
 parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
 parser.add_argument("-Tg", "--Tg"                             , help="Gass temperature (K)" , type=float, default=1e-12)
 parser.add_argument("-ion_deg", "--ion_deg"                   , help="Ionization degreee"   , type=float, default=1)
-parser.add_argument("-stroe_eedf", "--store_eedf"             , help="store eedf"   , type=int, default=0)
-parser.add_argument("-stroe_csv", "--store_csv"               , help="store csv format of QoI comparisons", type=int, default=0)
+parser.add_argument("-store_eedf", "--store_eedf"             , help="store eedf"   , type=int, default=0)
+parser.add_argument("-store_csv", "--store_csv"               , help="store csv format of QoI comparisons", type=int, default=0)
 parser.add_argument("-ee_collisions", "--ee_collisions"       , help="Enable electron-electron collisions", type=float, default=1)
 
 args                = parser.parse_args()

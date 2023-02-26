@@ -770,13 +770,10 @@ class CollisionOpSP():
             ll = lm[0]
             f1 = (ll-0.5) / (ll + 1.5)
 
-            m1 = (4*np.pi/(2*ll+1)) * (1 + m_ab) * (Pm(ll + 2) / (gmx**(ll+1)) + Qm(ll-1) * gmx** (ll))
-            m2 = -(4*np.pi/(4* ll**2 - 1)) * ((Pm(ll + 2) / gmx**(ll-1) - f1 * Pm(ll+4)/gmx**(ll+1)) + (Qm(ll - 3) * gmx**(ll)   - f1 * Qm(ll-1) * gmx**(ll+2)))
+            m1 = (2 / (2*ll+1) ) * (1 + m_ab) * (Pm(ll + 2) / (gmx**(ll+1)) + Qm(ll-1) * gmx** (ll))
+            m2 = -( 2 / (4* ll**2 - 1)) * ((Pm(ll + 2) / gmx**(ll-1) - f1 * Pm(ll+4)/gmx**(ll+1)) + (Qm(ll - 3) * gmx**(ll)   - f1 * Qm(ll-1) * gmx**(ll+2)))
 
-            # to convert to standard spherical harmonics
-            m1 *= np.sqrt(4 * np.pi / (2 * ll + 1))
-            m2 *= np.sqrt(4 * np.pi / (2 * ll + 1))
-
+            
             # import matplotlib.pyplot as plt
             # for i in range(0,num_p,10):
             #     plt.plot(gmx, m1[i,:], label="m1 l=%d k=%d"%(lm_idx, i))
@@ -900,18 +897,20 @@ class CollisionOpSP():
         dg_idx    = spec_sp._basis_p._dg_idx
         sp_order  = spec_sp._basis_p._sp_order
 
-        B   = lambda vr, a : spec_sp.basis_eval_radial(vr, a, 0)
-        DB  = lambda vr, a, d : spec_sp.basis_derivative_eval_radial(vr, a, 0, d) 
+        B         = lambda vr, a : spec_sp.basis_eval_radial(vr, a, 0)
+        DB        = lambda vr, a, d : spec_sp.basis_derivative_eval_radial(vr, a, 0, d) 
 
         gmx_a , gmw_a  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-
-
-        cc_mat_a = np.zeros((num_p * num_sh, num_p * num_sh, num_p *num_sh))
-        cc_mat_b = np.zeros((num_p * num_sh, num_p * num_sh, num_p *num_sh))
+        cc_mat_a       = np.zeros((num_p * num_sh, num_p * num_sh, num_p *num_sh))
+        cc_mat_b       = np.zeros((num_p * num_sh, num_p * num_sh, num_p *num_sh))
+        lmax           = sph_lm[-1][0]
 
         import cc_terms
         for idx in cc_terms.Ia_nz:
-            print("a", idx)
+            
+            if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+                continue
+            
             for p in range(num_p):
                 for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
                     for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
@@ -925,7 +924,10 @@ class CollisionOpSP():
                         cc_mat_a[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ia(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2])) 
                         
         for idx in cc_terms.Ib_nz:
-            print("b", idx)
+            
+            if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+                continue
+            
             for p in range(num_p):
                 for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
                     for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):

@@ -1,25 +1,39 @@
 # Attempt to generalize the Columbic collision term, 
 # based on Fokker-Plank and Rosenbluth potentials. 
 import sympy
+
+def ChristoffelSymbols2ndKind(metric, coords):
+    """
+    Computing the Christoffel symbols 2nd kind
+    for a given metric tensor
+    C^k_{ij}
+    """
+    nn         = len(coords)
+    e_idx      = range(len(coords))
+
+    inv_metric = sympy.simplify(sympy.Inverse(metric)) 
+
+    C_kij      = sympy.Array([sympy.simplify(sympy.Rational(1,2) * sum([inv_metric[k,m] * (sympy.diff(metric[m,i], coords[j]) + sympy.diff(metric[m,j], coords[i]) - sympy.diff(metric[i,j], coords[m]))  for m in e_idx]))   for k in e_idx for j in e_idx for i in e_idx]).reshape(nn, nn, nn)
+    # sympy.pprint(C_kij)
+
+    # print("Gamma^0_ij \n", C_kij[0,:,:])
+    # print("Gamma^1_ij \n", C_kij[1,:,:])
+    # print("Gamma^2_ij \n", C_kij[2,:,:])
+
+    return C_kij
+
 def assemble_symbolic_cc_op(metric, coords, lmax):
     inv_metric = sympy.simplify(sympy.Inverse(metric)) 
     nn         = len(coords)
     e_idx      = range(len(coords))
 
-    v  = coords[0]
-    mu = coords[1]
+    v          = coords[0]
+    mu         = coords[1]
     
-    # computing the Christoffel symbols 2nd kind
-    C_kij      = sympy.Array([sympy.simplify(sympy.Rational(1,2) * sum([inv_metric[k,m] * (sympy.diff(metric[m,i], coords[j]) + sympy.diff(metric[m,j], coords[i]) - sympy.diff(metric[i,j], coords[m]))  for m in e_idx]))   for k in e_idx for j in e_idx for i in e_idx]).reshape(nn, nn, nn)
-    sympy.pprint(C_kij)
-
-    print("Gamma^0_ij \n", C_kij[0,:,:])
-    print("Gamma^1_ij \n", C_kij[1,:,:])
-    print("Gamma^2_ij \n", C_kij[2,:,:])
-    
-    L  = sympy.functions.special.polynomials.legendre
-    B  = sympy.Function("RadialPoly")
-    DB = sympy.Function("RadialPolyDeriv")
+    C_kij      = ChristoffelSymbols2ndKind(metric, coords)
+    L          = sympy.functions.special.polynomials.legendre
+    B          = sympy.Function("RadialPoly")
+    DB         = sympy.Function("RadialPolyDeriv")
 
     p, q, k, l, r, s = sympy.symbols('p,q,k,l,r,s')
 
@@ -32,25 +46,19 @@ def assemble_symbolic_cc_op(metric, coords, lmax):
     Di         = lambda g : [sympy.simplify(sympy.diff(g, coords[i])) for i in e_idx]
 
     
-    raise_ij    = lambda qij : sympy.Matrix([sympy.simplify(sum([inv_metric[i,a] * inv_metric[j,b] * qij[a,b] for a in e_idx for b in e_idx])) for i in e_idx for j in e_idx]).reshape(nn,nn) 
-    raise_i     = lambda qi  : [sympy.simplify(sum([inv_metric[i,a] * qi[a] for a in e_idx])) for i in e_idx]
+    raise_ij   = lambda qij : sympy.Matrix([sympy.simplify(sum([inv_metric[i,a] * inv_metric[j,b] * qij[a,b] for a in e_idx for b in e_idx])) for i in e_idx for j in e_idx]).reshape(nn,nn) 
+    raise_i    = lambda qi  : [sympy.simplify(sum([inv_metric[i,a] * qi[a] for a in e_idx])) for i in e_idx]
 
-    Dij_g      = Dij(ff * gg)
+    Dij_g      = Dij(gg)
     DIJ_g      = raise_ij(Dij_g)
     Dij_psi    = Dij(psi)
     
-    Di_h       = Di(ff * hh)
+    Di_h       = Di(hh)
     DI_h       = raise_i(Di_h)
     Di_psi     = Di(psi)
 
-    Ia = sympy.simplify( 2 * sympy.pi *  v**2 * sum([Di_psi[i] * DI_h[i] for i in e_idx]))
-    Ib = sympy.simplify( sympy.pi *  v**2  * sum([Dij_psi[i,j] * DIJ_g[i,j] for i in e_idx for j in e_idx]))
-
-    # print("Ia", Ia)
-    # print("Ib", Ib)
-
-    #sympy.pprint(Ia)
-    #sympy.pprint(Ib)
+    Ia = sympy.simplify(2 * sympy.pi * v**2 * sum([Di_psi[i] * DI_h[i] * ff for i in e_idx]))
+    Ib = sympy.simplify(sympy.pi * v**2  * sum([Dij_psi[i,j] * DIJ_g[i,j] * ff for i in e_idx for j in e_idx]))
 
     Ia_nz = dict()
     Ib_nz = dict()
@@ -78,7 +86,9 @@ def assemble_symbolic_cc_op(metric, coords, lmax):
                     tmp_r = tmp_r.subs([(sympy.diff(B(v,p),v,2), DB(v, p, 2)), (sympy.diff(B(v,r),v,2), DB(v, r, 2)), (sympy.diff(B(v,k),v,2), DB(v, k, 2)), (sympy.diff(B(v,p),v), DB(v, p, 1)), (sympy.diff(B(v,r),v), DB(v, r, 1)), (sympy.diff(B(v,k),v), DB(v, k, 1))])
                     Ib_nz[(qq,ll,ss)] = tmp_r
                 
-
+    """
+    Generate and writ to the cc_terms.py for Columbic collision assembly
+    """
     filename = "cc_terms.py"
     with open(filename, 'w') as out:
         out.write("## generated code with sympy" + '\n')
@@ -115,8 +125,8 @@ def assemble_symbolic_cc_op(metric, coords, lmax):
         out.write("\treturn %d\n"%(0))
                 
     return Ia_nz, Ib_nz
-    
 
+    
 if __name__ == "__main__":
     v      = sympy.Symbol('vr')
     mu     = sympy.Symbol('mu')
@@ -128,7 +138,7 @@ if __name__ == "__main__":
     # metric = sympy.Matrix([[1,0,0], [0, v**2, 0], [0, 0, v**2 * sympy.sin(mu)**2]])
     # coords = [v, mu, phi]
 
-    Ia, Ib = assemble_symbolic_cc_op(metric,coords,1)
+    Ia, Ib = assemble_symbolic_cc_op(metric,coords,4)
 
 
 

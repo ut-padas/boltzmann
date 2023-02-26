@@ -552,10 +552,95 @@ F for species a is can be written as
 \end{align}. 
 
 \newpage
-\subsection*{Generalized variational of the Fokker-Plank}
+\subsection*{Generalized variational of the Fokker-Plank - I}
 In the generalized coordinates, we can write, the equation for given species distribution function $f$ in the covariant form as follows.
 \begin{align*}
-	\Gamma_a ^{-1} (\partial_t f)_{cc} = -D_i (f {T}^{i} ) + \frac{1}{2} D_{i}D_{j}\of{f {S}^{ij}} 
+	\Gamma_a ^{-1} (\partial_t f)_{c} = -\nabla \cdot (f \nabla h ) + \frac{1}{2} H : \of{f H g} 
+\end{align*} where, H denotes the Hessian operator in chosen coordinates, $:$ denotes the tensor contraction.  
+\begin{align*}
+	I_A &= -\int_{\vect{v}}\nabla \cdot (f \nabla h ) \psi\of{\vect{v}} \diff{\vect{v}} \text{, using integration by parts }\\
+	& = \int_{\vect{v}} \nabla \psi\of{\vect{v}} \cdot (f \nabla h ) \diff{\vect{v}} 
+\end{align*}
+For the second term using integration by part twice, we can write, 
+\begin{align*}
+	I_B &= \frac{1}{2} \int_{\vect{v}} (H : \of{f H g}) \psi\of{\vect{v}} \diff{\vect{v}} \\
+	& = \frac{1}{2} \int_{\vect{v}} H\psi\of{\vect{v}} : \of{f H g} \diff{\vect{v}} 
+\end{align*}
+In the abstract notation the weak form of the Fokker-Plank becomes, 
+\begin{align*}
+	\int_{\vect{v}} (\partial_t f)_c \psi\of{\vect{v}} \diff{\vect{v}} = \Gamma_a (I_A + I_B)
+\end{align*}
+For basis, $q_1 = v, q_2 = \mu, q_3 = \vphi$ where $\mu=\cos\theta$ and "i,j" indices run for $v, \mu, \vphi$. We can write the metic, 
+\begin{align*}
+	&a_{ij}=\begin{bmatrix}
+		1 & 0 & 0\\
+		0 & v^2(1-\mu^2)^{-1} & 0\\
+		0 & 0 & v^2(1-\mu^2)\\			
+	\end{bmatrix} 
+	% \text{ , } a^{ij} = \begin{bmatrix}
+	% 	1 & 0 & 0\\
+	% 	0 & v^{-2}(1-\mu^2) & 0\\
+	% 	0 & 0 & v^{-2}(1-\mu^2)^{-1}\\			
+	% \end{bmatrix}\\
+	&|a_{ij}| = v^4 \\
+	&ds^2   = dv^2 + v^2(1-\mu^2)^{-1} d\mu^2 + v^2(1-\mu^2) d\phi^2 
+\end{align*}
+Assuming azimuthal symmetry, we can further write,
+\begin{align*}
+	f\of{\vect{v}}   &= \sum_{kl} S_k(v) P_{l}(\mu) \text{ , }
+	h\of{\vect{v}}   = \sum_{rs} S_r(v)  P_{s}(\mu)\\
+	g\of{\vect{v}}   &= \sum_{rs} S_r(v) P_{s}(\mu) \text{ , }
+	\psi\of{\vect{v}} = \sum_{pq} S_p(v) P_{q}(\mu)
+\end{align*} The tensorized version of the weak form can be simplified as below for specified coordinates. 
+
+%\begin{multline*}
+%	[I_A]_{pq, rs, kl} = 2\pi \int_{v}\int_{\vtheta} T_k(v) P_l(\mu) \left(v^2 P_q(\mu) P_s(\mu) T_p'(v) T_r'(v)\right)\\
+%	- T_k(v) P_l(\mu) \left( \frac{(q+1) (s+1) T_p(v)T_r(v) (\mu P_q(\mu)-P_{q+1}(\mu)) (\mu P_s(\mu)-P_{s+1}(\mu))}{\mu^2-1} \right) \sin(\vtheta) d\vtheta\\
+%\end{multline*}
+%\begin{multline*}
+%	\scriptstyle
+%	[I_B]_{pq, rs, kl} = 2\pi \int_{v}\int_{\vtheta} \frac{T_k(v) P_l(\mu)}{v^2} \left(\frac{2 (q+1) (s+1) (\mu P_q(\mu)-P_{q+1}(\mu)) (\mu P_s(\mu)-P_{s+1}(\mu)) \left(T_p(v)-v T_p'(v)\right) \left(v T_r'(v)-T_r[v]\right)}{\mu^2-1}\right)\\
+%	\scriptstyle
+% +\frac{T_k(v) P_l(\mu)}{v^2} \left(\frac{\left(\left(\mu^2-1\right) v P_q(\mu) T_p'(v)+\mu (q+1) T_p(v) (\mu P_q(\mu)-P_{q+1}(\mu))\right) \left(\mu (s+1) (\mu P_s(\mu)-P_{s+1}(\mu)) T_r[v]+\left(\mu^2-1\right) v P_s(\mu) T_r'(v)\right)}{\left(\mu^2-1\right)^2}\right)\\
+% \scriptscriptstyle
+% -\frac{T_k(v) P_l(\mu)}{v^2} \left(\frac{\left((q+1) T_p(v) \left(\left(\mu^2 (q+1)+1\right) P_q(\mu)+(q+2) (P_{q+2}(\mu)-2 \mu P_{q+1}(\mu))\right)-\left(\mu^2-1\right) v P_q(\mu) T_p'(v)\right) \left(\left(\mu^2-1\right) v P_s(\mu) T_r'(v)-(s+1) \left(\left(\mu^2 (s+1)+1\right) P_s(\mu)+(s+2) (P_{s+2}(\mu)-2 \mu P_{s+1}(\mu))\right) T_r[v]\right)}{\left(\mu^2-1\right)^2}+v^4 P_q(\mu) P_s(\mu) T_p''(v) T_r''(v)\right) \sin(\vtheta) d\vtheta\\
+%\end{multline*}
+
+Assuming azimuthal symmetry for the problem, we can write the usual expansion for distribution function, 
+\begin{align*}
+	f_a\of{\vect{v}} = \sum_{l} f^{a}_l\of{v} Y_{l0}\of{\vtheta, \vphi} = \sum_{l} f^{a}_l\of{v} U_{l0} P_{l0}\of{\vtheta}
+\end{align*}. Then we can derive \cite{rosenbluth1957fokker} the Rosenbluth potentials, 
+\begin{align*}
+	h_a\of{\vect{v}} &= \sum_{l} A^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where } \\
+	A^{b}_l\of{v} &= \frac{m_a + m_b}{m_b} \frac{4\pi}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
+	  &= \frac{m_a + m_b}{m_b} v_{th}^2 \frac{4\pi}{(2l+1)}\of{\int_{0}^{x} dx^\prime \frac{{x^\prime}^{l+2}}{x^{l+1}} f^{b}_l\of{x^\prime v_{th}} +  \int_{x}^{\infty} dx^\prime \frac{{x}^{l}}{{x^\prime}^{l-1}} f^{b}_l\of{x^\prime v_{th}}}\\	
+	g\of{\vect{v}} & = \sum_{l} B^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi} \text{ where }\\
+	B^{b}_{l}\of{v} & = -\frac{4\pi}{(4l^2-1)} \of
+	{
+		\int_{0}^{v} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v^\prime}^{l+2}}{v^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v^\prime}^2 }{v^2}}} } + \\
+	&-\frac{4\pi U_{l0}}{(4l^2-1)} \of{
+		\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
+	}\\
+	B^{b}_{l}\of{v}  & = -v_{th}^4\frac{4\pi}{(4l^2-1)} \of
+	{
+		\int_{0}^{x} \diff{x^\prime} f^{b}_l\of{x^\prime v_{th}} \frac{{x^\prime}^{l+2}}{x^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{x^\prime}^2 }{x^2}}} } + \\
+	&-v_{th}^4 \frac{4\pi}{(4l^2-1)} \of{
+		\int_{x}^{\infty} \diff{x^\prime} f^{b}_l\of{x^\prime v_{th}} \frac{{x}^{l}}{{x^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{x}^2 }{{x^\prime}^2}}}
+	}
+\end{align*}
+
+
+
+
+
+
+
+
+
+\subsection*{Generalized variational of the Fokker-Plank - II}
+In the generalized coordinates, we can write, the equation for given species distribution function $f$ in the covariant form as follows.
+\begin{align*}
+	\Gamma_a ^{-1} (\partial_t f)_{c} = -D_i (f {T}^{i} ) + \frac{1}{2} D_{i}D_{j}\of{f {S}^{ij}} 
 \end{align*} where $D_{i}$ denotes the covariant derivative with respect to metric $a_{ij}$ in direction $i$, ${T}^{i} = a^{ij} D_j h$ and $S^{ij} = a^{ip} a^{j q} D_{p}D_{q}g$. 
 For basis, $q_1 = v, q_2 = \mu, q_3 = \vphi$ where $\mu=\cos\theta$ and "i,j" indices run for $v, \mu, \vphi$. We can write the line element, 
 \begin{align*}

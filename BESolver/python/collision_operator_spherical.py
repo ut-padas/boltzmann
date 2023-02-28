@@ -906,39 +906,65 @@ class CollisionOpSP():
         lmax           = sph_lm[-1][0]
 
         import cc_terms
-        for idx in cc_terms.Ia_nz:
+        
+        for p in range(num_p):
+            for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                    
+                    k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
+                    k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
             
-            if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
-                continue
+                    qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
+                    gmx    = gmx_a[qx_idx] 
+                    gmw    = gmw_a[qx_idx] 
+
+                    B_p_vr       =  B(gmx, p)
+                    DB_p_dvr     = DB(gmx, p, 1)
+                    DB_p_dvr_dvr = DB(gmx, p, 2)
+
+                    B_k_vr       =  B(gmx, k)
+                    DB_k_dvr     = DB(gmx, k, 1)
+                    DB_k_dvr_dvr = DB(gmx, k, 2)
+
+                    B_r_vr       =  B(gmx, r)
+                    DB_r_dvr     = DB(gmx, r, 1)
+                    DB_r_dvr_dvr = DB(gmx, r, 2)
             
-            for p in range(num_p):
-                for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
-                    for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                    for idx in cc_terms.Ia_nz:
+                        if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+                            continue
+            
+                        cc_mat_a[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ia(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr)) 
 
-                        k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
-                        k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
-                        qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
-                        gmx    = gmx_a[qx_idx] 
-                        gmw    = gmw_a[qx_idx] 
+        for p in range(num_p):
+            for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
 
-                        cc_mat_a[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ia(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2])) 
+                    k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
+                    k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
+            
+                    qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
+                    gmx    = gmx_a[qx_idx] 
+                    gmw    = gmw_a[qx_idx] 
+
+                    B_p_vr       =  B(gmx, p)
+                    DB_p_dvr     = DB(gmx, p, 1)
+                    DB_p_dvr_dvr = DB(gmx, p, 2)
+
+                    B_k_vr       =  B(gmx, k)
+                    DB_k_dvr     = DB(gmx, k, 1)
+                    DB_k_dvr_dvr = DB(gmx, k, 2)
+
+                    B_r_vr       =  B(gmx, r)
+                    DB_r_dvr     = DB(gmx, r, 1)
+                    DB_r_dvr_dvr = DB(gmx, r, 2)
+
+                    for idx in cc_terms.Ib_nz:
                         
-        for idx in cc_terms.Ib_nz:
-            
-            if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
-                continue
-            
-            for p in range(num_p):
-                for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
-                    for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
-
-                        k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
-                        k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
-                        qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
-                        gmx    = gmx_a[qx_idx] 
-                        gmw    = gmw_a[qx_idx] 
-
-                        cc_mat_b[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ib(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2])) 
+                        if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+                            continue
+                    
+                        cc_mat_b[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ib(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr)) 
         
 
         return cc_mat_a, cc_mat_b

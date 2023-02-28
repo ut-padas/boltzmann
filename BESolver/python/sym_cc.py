@@ -70,7 +70,20 @@ def assemble_symbolic_cc_op(metric, coords, lmax):
                 tmp_r = sympy.simplify(sympy.integrate(tmp.subs({q:qq, l:ll, s:ss}), (mu,-1,1)))
 
                 if tmp_r !=0:
-                    tmp_r = tmp_r.subs([(sympy.diff(B(v,p),v,2), DB(v, p, 2)), (sympy.diff(B(v,r),v,2), DB(v, r, 2)), (sympy.diff(B(v,k),v,2), DB(v, k, 2)), (sympy.diff(B(v,p),v), DB(v, p, 1)), (sympy.diff(B(v,r),v), DB(v, r, 1)), (sympy.diff(B(v,k),v), DB(v, k, 1))])
+                    #tmp_r = tmp_r.subs([(sympy.diff(B(v,p),v,2), DB(v, p, 2)), (sympy.diff(B(v,r),v,2), DB(v, r, 2)), (sympy.diff(B(v,k),v,2), DB(v, k, 2)), (sympy.diff(B(v,p),v), DB(v, p, 1)), (sympy.diff(B(v,r),v), DB(v, r, 1)), (sympy.diff(B(v,k),v), DB(v, k, 1))])
+
+                    tmp_r = tmp_r.subs([(sympy.diff(B(v,p),v,2) , sympy.Symbol("DB_p_dvr_dvr")),
+                                        (sympy.diff(B(v,r),v,2) , sympy.Symbol("DB_r_dvr_dvr")),
+                                        (sympy.diff(B(v,k),v,2) , sympy.Symbol("DB_k_dvr_dvr")),
+                                        
+                                        (sympy.diff(B(v,p),v)   , sympy.Symbol("DB_p_dvr")),
+                                        (sympy.diff(B(v,r),v)   , sympy.Symbol("DB_r_dvr")),
+                                        (sympy.diff(B(v,k),v)   , sympy.Symbol("DB_k_dvr")),
+
+                                        (B(v,p)   , sympy.Symbol("B_p_vr")),
+                                        (B(v,r)   , sympy.Symbol("B_r_vr")),
+                                        (B(v,k)   , sympy.Symbol("B_k_vr"))
+                                        ])
                     Ia_nz[(qq,ll,ss)] = tmp_r
                     
                 
@@ -83,7 +96,20 @@ def assemble_symbolic_cc_op(metric, coords, lmax):
                 tmp_r = sympy.simplify(sympy.integrate(tmp.subs({q:qq, l:ll, s:ss}), (mu,-1,1)))
 
                 if tmp_r !=0:
-                    tmp_r = tmp_r.subs([(sympy.diff(B(v,p),v,2), DB(v, p, 2)), (sympy.diff(B(v,r),v,2), DB(v, r, 2)), (sympy.diff(B(v,k),v,2), DB(v, k, 2)), (sympy.diff(B(v,p),v), DB(v, p, 1)), (sympy.diff(B(v,r),v), DB(v, r, 1)), (sympy.diff(B(v,k),v), DB(v, k, 1))])
+                    #tmp_r = tmp_r.subs([(sympy.diff(B(v,p),v,2), DB(v, p, 2)), (sympy.diff(B(v,r),v,2), DB(v, r, 2)), (sympy.diff(B(v,k),v,2), DB(v, k, 2)), (sympy.diff(B(v,p),v), DB(v, p, 1)), (sympy.diff(B(v,r),v), DB(v, r, 1)), (sympy.diff(B(v,k),v), DB(v, k, 1))])
+                    tmp_r = tmp_r.subs([(sympy.diff(B(v,p),v,2) , sympy.Symbol("DB_p_dvr_dvr")),
+                                        (sympy.diff(B(v,r),v,2) , sympy.Symbol("DB_r_dvr_dvr")),
+                                        (sympy.diff(B(v,k),v,2) , sympy.Symbol("DB_k_dvr_dvr")),
+                                        
+                                        (sympy.diff(B(v,p),v)   , sympy.Symbol("DB_p_dvr")),
+                                        (sympy.diff(B(v,r),v)   , sympy.Symbol("DB_r_dvr")),
+                                        (sympy.diff(B(v,k),v)   , sympy.Symbol("DB_k_dvr")),
+
+                                        (B(v,p)   , sympy.Symbol("B_p_vr")),
+                                        (B(v,r)   , sympy.Symbol("B_r_vr")),
+                                        (B(v,k)   , sympy.Symbol("B_k_vr"))
+                                        ])
+                    
                     Ib_nz[(qq,ll,ss)] = tmp_r
                 
     """
@@ -106,7 +132,7 @@ def assemble_symbolic_cc_op(metric, coords, lmax):
             tp_list.append(idx)
         out.write("Ib_nz=%s\n"%(tp_list))
 
-        out.write("def Ia(RadialPoly, RadialPolyDeriv, vr, p, k, r, q, l, s):\n")
+        out.write("def Ia(RadialPoly, RadialPolyDeriv, vr, p, k, r, q, l, s, B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr):\n")
 
         for idx, expr in Ia_nz.items():
             out.write("\tif (q,l,s) == (%d,%d,%d):\n"%(idx[0], idx[1], idx[2]))
@@ -115,7 +141,7 @@ def assemble_symbolic_cc_op(metric, coords, lmax):
                     
         out.write("\treturn %d\n"%(0))
         out.write("\n\n")
-        out.write("def Ib(RadialPoly, RadialPolyDeriv, vr, p, k, r, q, l, s):\n")
+        out.write("def Ib(RadialPoly, RadialPolyDeriv, vr, p, k, r, q, l, s, B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr):\n")
 
         for idx, expr in Ib_nz.items():
             out.write("\tif (q,l,s) == (%d,%d,%d):\n"%(idx[0], idx[1], idx[2]))
@@ -138,7 +164,7 @@ if __name__ == "__main__":
     # metric = sympy.Matrix([[1,0,0], [0, v**2, 0], [0, 0, v**2 * sympy.sin(mu)**2]])
     # coords = [v, mu, phi]
 
-    Ia, Ib = assemble_symbolic_cc_op(metric,coords,4)
+    Ia, Ib = assemble_symbolic_cc_op(metric,coords,6)
 
 
 

@@ -847,9 +847,10 @@ parser.add_argument("-store_csv", "--store_csv"               , help="store csv 
 parser.add_argument("-ee_collisions", "--ee_collisions"       , help="Enable electron-electron collisions", type=float, default=1)
 
 args                = parser.parse_args()
-#e_values            = np.logspace(np.log10(0.148), np.log10(1e5), 100, base=10) #np.array([1e0, 1e1, 1e2])
-#ion_deg_values      = np.array([1e-1, 1e-2, 1e-3])
-#ion_deg_values      = np.array([1e-1, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8, 1e-10, 1e-16])
+# EbyN_Td             = np.array([1,5,20,100])
+# ##e_values          = np.logspace(np.log10(0.148), np.log10(1e5), 100, base=10) #np.array([1e0, 1e1, 1e2])
+# e_values            = EbyN_Td * collisions.AR_NEUTRAL_N * 1e-21
+# ion_deg_values      = np.array([1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6])
 e_values            = np.array([args.E_field])
 ion_deg_values      = np.array([args.ion_deg])
 
@@ -877,9 +878,9 @@ for  col_idx, col in enumerate(args.collisions):
 COLLISOIN_NAMES["g0"] = "elastic"
 COLLISOIN_NAMES["g2"] = "ionization"
 
-if SAVE_EEDF:
-    with open('eedf_%s.npy'%(str_datetime), 'ab') as f:
-        np.save(f, e_values)
+# if SAVE_EEDF:
+#     with open('eedf_%s.npy'%(str_datetime), 'ab') as f:
+#         np.save(f, e_values)
     
 for run_id in range(len(run_params)):
     
@@ -1201,7 +1202,13 @@ for run_id in range(len(run_params)):
 
     if SAVE_EEDF:
         with open('eedf_%s.npy'%(str_datetime), 'ab') as f:
+            np.save(f, spec_sp._p + 1)
+            np.save(f, spec_sp._sph_harm_lm[-1][0])
+            np.save(f, args.E_field)
+            np.save(f, args.ion_deg)
+            np.save(f, args.Tg)
             np.save(f, ev)
+
             for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
                 np.save(f, radial[-1,lm_idx,:])
                 

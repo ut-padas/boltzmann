@@ -7,8 +7,8 @@ import collisions
 plt.rcParams.update({
     "text.usetex": True,
     "font.family": "Helvetica",
-    "font.size": 8,
-    "lines.linewidth":0.6
+    "font.size": 12,
+    "lines.linewidth":1.2
 })
 
 
@@ -81,9 +81,13 @@ sph_lm = [(i, 0) for i in range(lmax+1)]
 print(lmax, total_plots)
 
 for ebn_idx, ebn in enumerate(EbN):
-    fig = plt.figure(figsize=(22, 6), dpi=150)
+    fig = plt.figure(figsize=(22, 6), dpi=300)
     
     for ion_deg_idx, ion_deg in enumerate(ion_deg_values):
+
+        if ion_deg <=1e-4:
+            continue
+
         row_id = ebn_idx * len(ion_deg_values) + ion_deg_idx
         r1     = run1.iloc[row_id]
         r2     = run2.iloc[row_id]

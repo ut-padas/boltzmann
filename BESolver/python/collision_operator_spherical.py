@@ -683,7 +683,7 @@ class CollisionOpSP():
         
         return cc_collision * gamma_a
 
-    def compute_rosenbluth_potentials_op(self, mw, vth, m_ab):
+    def compute_rosenbluth_potentials_op(self, mw, vth, m_ab, Minv):
         V_TH          = vth
         ELE_VOLT      = collisions.ELECTRON_VOLT
         MAXWELLIAN_N  = collisions.MAXWELLIAN_N
@@ -787,7 +787,22 @@ class CollisionOpSP():
             gl_v[lm_idx, : , :] = np.transpose(m2)
 
 
-        return hl_v, gl_v
+        # hl_op = hl_v
+        # gl_op = gl_v
+        hl_op = np.zeros((num_p * num_sh, num_p * num_sh))
+        gl_op = np.zeros((num_p * num_sh, num_p * num_sh))
+
+        for lm_idx, lm in enumerate(sph_lm):
+            for p in range(num_p):
+                bp  = spec_sp.basis_eval_radial(gmx, p, 0)
+                for k in range(num_p):
+                    hl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = np.dot(gmx**2 * bp * hl_v[lm_idx, : , k], gmw)
+                    gl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = np.dot(gmx**2 * bp * gl_v[lm_idx, : , k], gmw)
+                
+        hl_op = np.dot(Minv, hl_op)
+        gl_op = np.dot(Minv, gl_op)
+            
+        return hl_op, gl_op
 
     def gamma_a(self, fb, mw, vth, n0, ion_deg):
         ne           = n0 * ion_deg 
@@ -805,7 +820,7 @@ class CollisionOpSP():
 
         return gamma_a
 
-    def rosenbluth_potentials(self, hl_v, gl_v, Minv, fb, mw, vth):
+    def rosenbluth_potentials(self, hl_op, gl_op, fb, mw, vth):
         
         ELE_VOLT      = collisions.ELECTRON_VOLT
         MAXWELLIAN_N  = collisions.MAXWELLIAN_N
@@ -815,24 +830,18 @@ class CollisionOpSP():
         num_p         = spec_sp._p+1
         sph_lm        = spec_sp._sph_harm_lm
         num_sh        = len(spec_sp._sph_harm_lm)
+        sp_order      = spec_sp._basis_p._sp_order
 
         gmx, gmw = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
         hl = np.zeros(num_p * num_sh)
         gl = np.zeros(num_p * num_sh)
 
-        for lm_idx, lm in enumerate(sph_lm):
-            tmp_hl = np.dot(hl_v[lm_idx] ,fb[lm_idx::num_sh]) 
-            tmp_gl = np.dot(gl_v[lm_idx] ,fb[lm_idx::num_sh]) 
-            
-            for k in range(num_p):
-                bk                       = spec_sp.basis_eval_radial(gmx, k, 0)
-                hl[k * num_sh + lm_idx ] = np.dot(gmx**2 * bk *  tmp_hl, gmw) 
-                gl[k * num_sh + lm_idx ] = np.dot(gmx**2 * bk *  tmp_gl, gmw) 
+        hl = np.dot(hl_op, fb)
+        gl = np.dot(gl_op, fb)
 
-
-        hl=np.dot(Minv, hl)
-        gl=np.dot(Minv, gl)
-
+        # for lm_idx, lm in enumerate(sph_lm):
+        #     hl[lm_idx::num_sh] = np.dot(hl_op[lm_idx] ,fb[lm_idx::num_sh]) 
+        #     gl[lm_idx::num_sh] = np.dot(gl_op[lm_idx] ,fb[lm_idx::num_sh]) 
 
         # p20_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p2)
         # p40_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p4) 
@@ -842,8 +851,6 @@ class CollisionOpSP():
         # p31_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p3)
         # p51_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p5)
         # q01_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._q0)
-
-
 
         # Vqr = spec_sp.Vq_r(gmx, 0, 1)
 
@@ -860,13 +867,12 @@ class CollisionOpSP():
         # plt.plot(gmx, gl_0, label="new g0")
         # plt.plot(gmx, gmx * p20_a + q30_a + (1/gmx/3) * p40_a + gmx**2 * q10_a/3, label="olg g0")
 
-
-
         # plt.legend()
         # plt.show()
         # plt.close()
 
         return hl, gl
+    
         
     def coulomb_collision_op_assembly(self, mw, vth, gen_code=False):
         V_TH          = vth

@@ -483,17 +483,41 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             Lmat_inv  = np.linalg.pinv(Lmat, rcond=1e-30)
 
             t1 = time()
-            hl_op, gl_op     =  collOp.compute_rosenbluth_potentials_op(maxwellian, vth, 1)
+            hl_op, gl_op     =  collOp.compute_rosenbluth_potentials_op(maxwellian, vth, 1, Minv)
             cc_op_a, cc_op_b =  collOp.coulomb_collision_op_assembly(maxwellian, vth)
+            cc_op            =  np.dot(cc_op_a, hl_op) + np.dot(cc_op_b, gl_op)
             t2 = time()
             print("Coulomb collision Op. assembly %.8E"%(t2-t1))
-            #hl, gl           = collOp.rosenbluth_potentials(hl_op, gl_op, Minv, h_prev, maxwellian, vth)
+            
+            # cc_1 = np.matmul(Minv, np.dot(cc_op, h_prev))
+            # cc_2 = np.matmul(Minv, np.dot(np.swapaxes(cc_op,1,2), h_prev))
+
+            # U1, S1, V1 = np.linalg.svd(cc_1)
+            # U2, S2, V2 = np.linalg.svd(cc_2)
+            # plt.semilogy(S1, label='fixed on h,g')
+            # plt.semilogy(S2, label='fixed on f')
+            # plt.grid()
+            # plt.legend()
+            # plt.show()
+
+            #cc_op = np.swapaxes(cc_op,1,2)
+            
+
+            # print("cc_a cond %.8E"%(np.linalg.cond(cc_a)))
+            # print("cc_b cond %.8E"%(np.linalg.cond(cc_b)))
+
+            # cc_a = np.matmul(Minv, np.dot(np.swapaxes(cc_op_a,1,2),h_prev))
+            # cc_b = np.matmul(Minv, np.dot(np.swapaxes(cc_op_b,1,2),h_prev))
+
+            # print("cc_a cond %.8E"%(np.linalg.cond(cc_a)))
+            # print("cc_b cond %.8E"%(np.linalg.cond(cc_b)))
+
+
             
             while (rel_error> rtol and abs_error > atol and iteration_steps < max_iter):
                 if args.ee_collisions:
-                    hl, gl      = collOp.rosenbluth_potentials(hl_op, gl_op, Minv, h_prev, maxwellian, vth)
                     gamma_a     = collOp.gamma_a(h_prev, maxwellian, vth, collisions.AR_NEUTRAL_N, ion_deg)
-                    CC_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * (np.dot(cc_op_a, hl) + np.dot(cc_op_b, gl))
+                    CC_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * np.dot(cc_op, h_prev)
                     
                     Lmat        = Cmat_p_Emat + CC_ee
                     Lmat_inv    = np.linalg.pinv(Lmat, rcond=1e-14/np.linalg.cond(Lmat))
@@ -526,24 +550,32 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
         return {'sol':solution_vector, 'htest': htest, 'atol': atol, 'rtol':rtol, 'tgrid':None}
 
     else:
+        u        = mass_op * mw_vth(0) * vth**3 
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            if lm[0] > 0:
+                u[lm_idx::num_sh] = 0.0 
+        
+        u        = np.matmul(np.transpose(u), qA)
+        
         ion_deg         = args.ion_deg
         Cmat_p_Emat     = Cmat + Emat
         Cmat_p_Emat     = np.matmul(Minv, Cmat_p_Emat)
+        Wmat            = Cmat_p_Emat
+        Imat            = np.eye(Wmat.shape[0])
+        Impp            = (Imat - np.matmul(u.reshape((u.shape[0],1)) , np.transpose(u.reshape((u.shape[0],1)))))
 
         atol   = 1.0
         rtol   = 1.0
 
-        Lmat      = Cmat_p_Emat
-        Imat      = np.eye(Lmat.shape[0])
-
         if args.ee_collisions:
             t1 = time()
-            hl_op, gl_op     =  collOp.compute_rosenbluth_potentials_op(maxwellian, vth, 1)
+            hl_op, gl_op     =  collOp.compute_rosenbluth_potentials_op(maxwellian, vth, 1, Minv)
             cc_op_a, cc_op_b =  collOp.coulomb_collision_op_assembly(maxwellian, vth)
+            cc_op            =  np.dot(cc_op_a, hl_op) + np.dot(cc_op_b, gl_op)
             t2 = time()
             print("Coulomb collision Op. assembly %.8E"%(t2-t1))
         else:
-            Pmat      = Imat - dt * Lmat
+            Pmat      = Imat - dt * np.matmul(Impp , (Cmat_p_Emat))
             Pmat_inv  = np.linalg.pinv(Pmat, rcond=1e-14/np.linalg.cond(Pmat))
 
         
@@ -552,10 +584,13 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
         tgrid_idx        = np.int64(np.floor(tgrid / dt))
         #print(tgrid_idx, tgrid)
 
-        h_prev = h_init
+        h_prev   = np.copy(h_init)
         for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
             if lm[0]>0:
                 h_prev[lm_idx::num_sh] = h_prev[0::num_sh]
+
+        h_prev   = h_prev / (np.dot(u, h_prev))
+        
         rtol_desired = 1e-8
         atol_desired = 1e-4
         t_curr       = 0.0
@@ -567,59 +602,74 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
 
         solution_vector[0,:] = h_prev
 
-        while t_curr < t_end:
-            if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
-                solution_vector[sample_idx,:] = h_prev
-                sample_idx+=1
+        f1      = u/np.linalg.norm(u)
+        fb_prev = np.matmul(Impp, h_prev)
+
+        if args.ee_collisions:
+
+            def f_rhs(t,y, cc_ee):
+                return np.dot(Impp, np.dot(Cmat_p_Emat + cc_ee , f1 + y) - np.dot(u, np.dot(Wmat,(f1+y))) * (f1+y))
             
-            if args.ee_collisions:
-                hl, gl      = collOp.rosenbluth_potentials(hl_op, gl_op, Minv, h_prev, maxwellian, vth)
+            ode_int = scipy.integrate.ode(f_rhs).set_integrator('vode', method='bdf')
+
+
+            while t_curr < t_end:
+                if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
+                    solution_vector[sample_idx,:] = h_prev
+                    sample_idx+=1
+
                 gamma_a     = collOp.gamma_a(h_prev, maxwellian, vth, collisions.AR_NEUTRAL_N, ion_deg)
-                CC_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * (np.dot(cc_op_a, hl) + np.dot(cc_op_b, gl))
+                CC_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * np.dot(cc_op, h_prev)
                 CC_ee       = np.matmul(Minv, CC_ee)
+                
 
-                Pmat        = Imat - dt * Lmat - dt * CC_ee
-                Pmat_inv    = np.linalg.pinv(Pmat, rcond=1e-14/np.linalg.cond(Pmat))
+                # Pmat        = Imat - dt * np.matmul(Impp , (Cmat_p_Emat + CC_ee))
+                # Pmat_inv    = np.linalg.pinv(Pmat, rcond=1e-14/np.linalg.cond(Pmat))
+                # rhs_vec     = fb_prev + dt * np.matmul(Impp, np.dot(Cmat_p_Emat + CC_ee, f1) - np.dot(u,np.dot(Wmat, h_prev)) * h_prev)
+                # fb_curr     = np.dot(Pmat_inv, rhs_vec)
+                # h_curr      = f1 + fb_curr
 
-            h_curr = np.dot(Pmat_inv,h_prev)
-            rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)
-            atol= (np.linalg.norm(h_prev - h_curr))
-            t_curr+= dt
-            t_step+=1
-            h_prev = h_curr
-            print("time = %.3E solution convergence atol = %.8E rtol = %.8E"%(t_curr, atol, rtol))
+                
+                ode_int.set_f_params(CC_ee)
+                ode_int.set_initial_value(fb_prev, t_curr)
+                
+                fb_curr = ode_int.integrate(t_curr + dt)
+                h_curr  = f1 + fb_curr
+
+                rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)
+                atol= (np.linalg.norm(h_prev - h_curr))
+
+                t_curr+= dt
+                t_step+=1
+                h_prev  = h_curr
+                fb_prev = fb_curr
+
+                #if t_step%100 == 0: 
+                print("time = %.3E solution convergence atol = %.8E rtol = %.8E"%(t_curr, atol, rtol))
+        else:
+            while t_curr < t_end:
+                if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
+                    solution_vector[sample_idx,:] = h_prev
+                    sample_idx+=1
+
+                rhs_vec = fb_prev + dt * np.matmul(Impp, np.dot(Cmat_p_Emat,f1) - np.dot(u,np.dot(Wmat, h_prev)) * h_prev)
+
+                fb_curr = np.dot(Pmat_inv,rhs_vec)
+                h_curr  = fb_curr + f1
+
+                rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)
+                atol= (np.linalg.norm(h_prev - h_curr))
+
+                t_curr+= dt
+                t_step+=1
+                h_prev  = h_curr
+                fb_prev = fb_curr
+
+                if t_step%100 == 0: 
+                    print("time = %.3E solution convergence atol = %.8E rtol = %.8E"%(t_curr, atol, rtol))
 
         solution_vector[-1,:] = h_curr
-        
         return {'sol':solution_vector, 'htest': htest, 'atol': atol, 'rtol':rtol, 'tgrid':tgrid}
-
-        ##!!!No suprise, yet the explicit solver is unstable with coulombic collisions.         
-        # if args.ee_collisions:
-        #     def f_rhs(t,y):
-        #         hl, gl      = collOp.rosenbluth_potentials(hl_op, gl_op, Minv, y, maxwellian, vth)
-        #         gamma_a     = collOp.gamma_a(y, maxwellian, vth, collisions.AR_NEUTRAL_N, ion_deg)
-        #         CC_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * (np.dot(cc_op_a, hl) + np.dot(cc_op_b, gl))
-        #         CC_ee       = np.matmul(Minv, CC_ee)
-
-        #         return np.matmul(Cmat_p_Emat + CC_ee, y)
-        # else:
-        #     def f_rhs(t,y):
-        #         return np.matmul(Cmat_p_Emat, y)
-        # rtol=1
-        # t_curr=0
-        # h_curr = h_init
-        # dt_fac = 1000 
-        # while rtol>1e-4:
-        #     sol = scipy.integrate.solve_ivp(f_rhs, (t_curr, t_curr + dt_fac * dt), h_curr, max_step=dt, method='RK45',atol=1e-15, rtol=2.220446049250313e-14,t_eval=np.linspace(t_curr, t_curr + dt_fac * dt, 10))
-        #     rtol= (np.linalg.norm(sol.y[:,-2] - sol.y[:,-1]))/np.linalg.norm(sol.y[:,-1])
-        #     atol= (np.linalg.norm(sol.y[:,-2] - sol.y[:,-1]))
-        #     print("time = %.3E solution convergence atol = %.8E rtol = %.8E"%(t_curr, atol, rtol))
-        #     h_curr = sol.y[:,-1]
-        #     t_curr+= dt_fac * dt
-        # solution_vector = np.zeros((2,h_init.shape[0]))
-        # solution_vector[0,:] = np.matmul(qA, h_init)
-        # solution_vector[1,:] = np.matmul(qA, h_curr) 
-        # return {'sol':solution_vector, 'htest': htest, 'atol': atol, 'rtol':rtol}
 
 def solve_bte(steady_state, collOp, maxwellian, vth, E_field, t_end, dt,t_tol, collisions_included):
 
@@ -1324,7 +1374,7 @@ for run_id in range(len(run_params)):
                 for t_idx, tt in enumerate(tgrid):
                     radial_tt[t_idx, :, : ] = BEUtils.compute_radial_components(ev, spec_sp, data_tt[t_idx,:], maxwellian, VTH, 1)
                     scale                   = 1./( np.trapz(radial_tt[t_idx,0,:]*np.sqrt(ev),x=ev) )
-                    radial_tt[i, :, :]      *= scale
+                    radial_tt[t_idx, :, :]  *= scale
 
             # spherical components plots
 

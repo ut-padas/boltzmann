@@ -489,16 +489,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             t2 = time()
             print("Coulomb collision Op. assembly %.8E"%(t2-t1))
             
-            # cc_1 = np.matmul(Minv, np.dot(cc_op, h_prev))
-            # cc_2 = np.matmul(Minv, np.dot(np.swapaxes(cc_op,1,2), h_prev))
-
-            # U1, S1, V1 = np.linalg.svd(cc_1)
-            # U2, S2, V2 = np.linalg.svd(cc_2)
-            # plt.semilogy(S1, label='fixed on h,g')
-            # plt.semilogy(S2, label='fixed on f')
-            # plt.grid()
-            # plt.legend()
-            # plt.show()
+            
 
             #cc_op = np.swapaxes(cc_op,1,2)
             
@@ -512,8 +503,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             # print("cc_a cond %.8E"%(np.linalg.cond(cc_a)))
             # print("cc_b cond %.8E"%(np.linalg.cond(cc_b)))
 
-
-            
+            h_init = np.copy(h_prev)
             while (rel_error> rtol and abs_error > atol and iteration_steps < max_iter):
                 if args.ee_collisions:
                     gamma_a     = collOp.gamma_a(h_prev, maxwellian, vth, collisions.AR_NEUTRAL_N, ion_deg)
@@ -538,6 +528,33 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 iteration_steps+=1
 
             print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))
+
+            # cc_1 = np.matmul(Minv, np.dot(cc_op, h_init))
+            # cc_2 = np.matmul(Minv, np.dot(np.swapaxes(cc_op,1,2), h_init))
+
+            # print("f maxwellian condition number on fixed h,g %.4E  on fixed f %.4E"%(np.linalg.cond(cc_1), np.linalg.cond(cc_2)))
+
+            # U1, S1, V1 = np.linalg.svd(cc_1)
+            # U2, S2, V2 = np.linalg.svd(cc_2)
+            # plt.semilogy(S1, label='fixed on h,g = f_init')
+            # plt.semilogy(S2, label='fixed on f = f_init')
+            
+            # cc_1 = np.matmul(Minv, np.dot(cc_op, h_curr))
+            # cc_2 = np.matmul(Minv, np.dot(np.swapaxes(cc_op,1,2), h_curr))
+
+            # print("f at steady state condition number on fixed h,g %.4E  on fixed f %.4E"%(np.linalg.cond(cc_1), np.linalg.cond(cc_2)))
+
+            # U1, S1, V1 = np.linalg.svd(cc_1)
+            # U2, S2, V2 = np.linalg.svd(cc_2)
+            # plt.semilogy(S1, label='fixed on h,g = f_final')
+            # plt.semilogy(S2, label='fixed on f = f_final')
+            # plt.grid()
+            # plt.legend()
+            # plt.show()
+            
+
+
+
             return h_curr, abs_error, rel_error
 
 
@@ -555,14 +572,15 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             if lm[0] > 0:
                 u[lm_idx::num_sh] = 0.0 
         
-        u        = np.matmul(np.transpose(u), qA)
+        u               = np.matmul(np.transpose(u), qA)
+        p_vec           = u.reshape((u.shape[0], 1)) / np.sqrt(np.dot(u, u))
         
         ion_deg         = args.ion_deg
         Cmat_p_Emat     = Cmat + Emat
         Cmat_p_Emat     = np.matmul(Minv, Cmat_p_Emat)
         Wmat            = Cmat_p_Emat
         Imat            = np.eye(Wmat.shape[0])
-        Impp            = (Imat - np.matmul(u.reshape((u.shape[0],1)) , np.transpose(u.reshape((u.shape[0],1)))))
+        Impp            = (Imat - np.matmul(p_vec , np.transpose(p_vec)))
 
         atol   = 1.0
         rtol   = 1.0
@@ -602,16 +620,23 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
 
         solution_vector[0,:] = h_prev
 
-        f1      = u/np.linalg.norm(u)
+        f1      = u / np.dot(u, u)
         fb_prev = np.matmul(Impp, h_prev)
-
+        #print(np.dot(u,f1), np.dot(u,fb_prev), np.dot(u, f1+fb_prev))
+        cfl_factor = 0.2
+        steady_state_tol = 1e-7
         if args.ee_collisions:
 
             def f_rhs(t,y, cc_ee):
                 return np.dot(Impp, np.dot(Cmat_p_Emat + cc_ee , f1 + y) - np.dot(u, np.dot(Wmat,(f1+y))) * (f1+y))
             
-            ode_int = scipy.integrate.ode(f_rhs).set_integrator('vode', method='bdf')
-
+            ode_int  = scipy.integrate.ode(f_rhs).set_integrator('vode', method='bdf', atol=1e-10, rtol=1e-10, order=5)
+            gamma_a  = collOp.gamma_a(h_prev, maxwellian, vth, collisions.AR_NEUTRAL_N, ion_deg)
+            # dt_min   = min(cfl_factor * (E_field/ MVTH) * collisions.ELECTRON_CHARGE_MASS_RATIO, gamma_a * collisions.AR_NEUTRAL_N * ion_deg * (1/np.linalg.cond(np.dot(cc_op,h_prev))))
+            # # if dt > dt_min:
+            # #     print("dt is too large, < %.2E"%(dt_min))
+            # #     dt = dt_min
+            # dt = dt_min
 
             while t_curr < t_end:
                 if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
@@ -645,7 +670,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 fb_prev = fb_curr
 
                 #if t_step%100 == 0: 
-                print("time = %.3E solution convergence atol = %.8E rtol = %.8E"%(t_curr, atol, rtol))
+                print("time = %.3E solution convergence atol = %.8E rtol = %.8E mass %.10E"%(t_curr, atol, rtol, np.dot(u,h_curr)))
         else:
             while t_curr < t_end:
                 if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
@@ -666,7 +691,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 fb_prev = fb_curr
 
                 if t_step%100 == 0: 
-                    print("time = %.3E solution convergence atol = %.8E rtol = %.8E"%(t_curr, atol, rtol))
+                    print("time = %.3E solution convergence atol = %.8E rtol = %.8E mass %.10E"%(t_curr, atol, rtol, np.dot(u,h_curr)))
 
         solution_vector[-1,:] = h_curr
         return {'sol':solution_vector, 'htest': htest, 'atol': atol, 'rtol':rtol, 'tgrid':tgrid}
@@ -1452,10 +1477,10 @@ for run_id in range(len(run_params)):
         fig.subplots_adjust(wspace=0.4)
 
         if (args.radial_poly == "bspline"):
-            fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field)+"V/m"+ "  %.2E"%(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+ "(Td)\n" + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + "q_per_knot="+str(args.spline_q_pts_per_knot) + "ionization degree=%.2E"%(args.ion_deg))
+            fig.suptitle("Collisions: " + str(args.collisions) + ", E = " + str(args.E_field)+"V/m"+ "  %.2E"%(args.E_field/collisions.AR_NEUTRAL_N/1e-21)+ "(Td)\n" + ", polys = " + str(args.radial_poly)+", sp_order= " + str(args.spline_order) + ", Nr = " + str(args.NUM_P_RADIAL) + ", bscale = " + str(args.basis_scale) + " (sweeping " + args.sweep_param + ")" + " q_per_knot="+str(args.spline_q_pts_per_knot) + " ne/N = %.2E"%(args.ion_deg) + " Tg = %.2E(K)"%(args.Tg))
             # plt.show()
             if len(spec_sp._basis_p._dg_idx)==2:
-                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) +".png")
+                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
                 plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E" + str(args.E_field) + "_poly_" + str(args.radial_poly)+ "_sp_"+ str(args.spline_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_q_pts_per_knot) + "_bscale" + str(args.basis_scale) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max)+"_ion_deg_%.2E"%(args.ion_deg) +".png")
         else:

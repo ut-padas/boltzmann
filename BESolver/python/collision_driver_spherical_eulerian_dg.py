@@ -363,7 +363,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
 
         
         num_time_samples = 5
-        tgrid            = np.append(np.array([0]), np.logspace(np.log10(dt), np.log10(t_end), num_time_samples-1, base=10)) #np.linspace(0, t_end, num_time_samples)
+        tgrid            = np.append(np.array([0]), np.logspace(np.log10(2*dt), np.log10(t_end), num_time_samples-1, base=10)) #np.linspace(0, t_end, num_time_samples)
         tgrid_idx        = np.int64(np.floor(tgrid / dt))
         #print(tgrid_idx, tgrid)
 
@@ -400,10 +400,14 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 
                 Lmat        = Cmat_p_Emat + cc_ee_1
                 Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) #+ dt * np.dot(u,np.dot(Wmat,h_prev)) * Imat_r
-                Pmat_inv    = np.linalg.inv(Pmat)
-                rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(u,np.dot(Wmat,h_prev)) * QT, h_prev)
+                #qq,rr       = np.linalg.qr(Pmat)
+                #rr_inv      = scipy.linalg.solve_triangular(rr, Imat_r)
+                #print(np.linalg.norm(Imat_r - np.dot(np.transpose(qq), qq)))
+                #print(np.linalg.norm(Imat_r - np.dot(rr_inv, rr)))
+                #Pmat_inv    = np.dot(rr_inv, np.transpose(qq)) #np.linalg.inv(Pmat)
+                rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(u,np.dot(Wmat + cc_ee_1, h_prev)) * QT, h_prev)
 
-                fb_curr     = np.dot(Pmat_inv,rhs_vec)
+                fb_curr     = np.linalg.solve(Pmat, rhs_vec) #np.dot(Pmat_inv,rhs_vec)
                 h_curr      = f1 + np.dot(Q,fb_curr)
                 
                 # ode_int.set_f_params(CC_ee)
@@ -436,7 +440,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 # semi-explit on mass growth term (only need to compute the inverse matrix once)
                 rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Cmat_p_Emat),f1) - dt * np.dot(np.dot(u,np.dot(Wmat,h_prev)) * QT, h_prev)
 
-                fb_curr = np.dot(Pmat_inv,rhs_vec)
+                fb_curr     = np.linalg.solve(Pmat, rhs_vec) #np.dot(Pmat_inv,rhs_vec)
                 h_curr  = f1 + np.dot(Q,fb_curr)
 
                 rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)

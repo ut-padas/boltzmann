@@ -796,47 +796,57 @@ Let $\hat{f}(t,\vect{v})= a(t) f(t, \vect{v})$ be the normalized distribution fu
 \end{align*} For the normalized distribution function we can write, 
 \begin{align*}
 	\partial_t {\hat{f}} &= \frac{1}{n} \partial_t f - \hat{f} \of{\frac{\partial_t n }{n}}\\
-	\partial_t {\hat{f}} &=(C+E)\hat{f} + n C_{ee}\of{\hat{f}, \hat{f}} - (u^T W) \hat{f}\\
+\end{align*} where, we can write $W(\hat{f}, \hat{f})$ as follows. Since columbic collisions conserve mass, we can simplify $W(\hat{f}, \hat{f}) = W(\hat{f})$. 
+\begin{align*}
+	u^T W (\hat{f}, \hat{f}) = \frac{\partial_t n}{n} = u^T(C+ E)\hat{f} + n u^T C_{ee}(\hat{f},\hat{f}) 
+\end{align*} Therefore, the final PDE system can be written as, 
+\begin{align*}
+	\partial_t {\hat{f}} &=(C+E)\hat{f} + n C_{ee}\of{\hat{f}, \hat{f}} - (u^T W(\hat{f}, \hat{f})) \hat{f}\\
 	&\text{ with constraint } u^T \hat{f} = 1  
-\end{align*} where we can derive the $W(\hat{f})$ as follows. 
-\begin{align*}
-	u^T W \hat{f} = \frac{\partial_t n}{n} = u^T(C+ E + n C_{ee}(\hat{f})) \hat{f}
 \end{align*}
-For the transient solution we need to evolve the above ODE with the mass constraint $u^T \hat{f}=1$. Let $\hat{f} = f_1 + \bar{f}$ such that $u^T f_1 = 1$ and $u^T \bar{f}=0$.  Let $f_1= \frac{u}{\norm{u}_2^2}$, we can write, 
-\begin{align*}
-	\partial_t \hat{f} = \partial_t \bar{f} = (C+E)\hat{f} + n C_{ee}(\hat{f}, \hat{f}) - \of{u^T W} \hat{f}
-\end{align*}. Let $p = \frac{u}{\norm{u}_2}$ then note that $(I-pp^T)\bar{f} = \bar{f}$. Therefore we can write, 
-\begin{align*}
-	\partial_t \bar{f} = (I-pp^T)  \partial_t \bar{f} = (I-pp^T) \of{(C+E)\hat{f} + n C_{ee}(\hat{f}, \hat{f}) - \of{u^T W} \hat{f}}
-\end{align*} Note that $u^T \bar{f}=0$ by construction. 
-Then we evolve the above with $\bar{f}(0) = (I-pp^T) f(0)$
+For the transient solution we need to evolve the above ODE with the mass constraint $u^T \hat{f}=1$.  Let $p = \frac{u}{\norm{u}_2}$ then note that $(I-pp^T)\bar{f} = \bar{f}$. We write, QR factorization of the projection matrix $(I-pp^T) = Q_{n\times (n-1)} R_{(n-1)\times n}$. For simple notation let $Q \equiv Q_{n \times (n-1)}$ and $R \equiv R_{(n-1)\times n}$.
 
-For the steady state solve we can use,\\
-\textbf{Algorithm 1:} We use the newton step with linearized $C_{ee}$ term. 
+Let $\hat{f} = f_1 + Q\bar{f}$ such that $u^T f_1 = 1$ and $u^T Q\bar{f}=0$ where $\bar{f}\in \R^{n-1}$.  Let $f_1= \frac{u}{\norm{u}_2^2}$. Note that $\partial_t \hat{f} = \partial_t (f_1 + Q\bar{f} ) = Q\partial_t \bar{f}$ we can write, 
 \begin{align*}
-	&R(\hat{f}^{n}) =
-	 \begin{bmatrix}
-		(C + E)\hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + nC_{ee}(\hat{f}^{n-1}) \hat{f}^{n}\\
-		u^T \hat{f} -1
-	\end{bmatrix} =0 \\
-	&J(\hat{f}^{n}) =
-	\begin{bmatrix}
-		(C + E) - 2(u^T W)\hat{f}^{n} + nC_{ee}(\hat{f}^{n-1})\\
-		u^T -1
-	\end{bmatrix} =0 \\
-	& \hat{f}^{n+1} = \hat{f}^{n} - \alpha J^{-1}(\hat{f}^n) (R(\hat{f}^n))
-\end{align*}
-\textbf{Algorithm 2:} Explicit on the coulomb collision operator. \\
+	\partial_t \bar{f} = Q^T(C+E)\hat{f} + n Q^T C_{ee}(\hat{f}, \hat{f}) \\
+	- \of{u^T W(\hat{f})} Q^T\hat{f}
+\end{align*}, where $\bar{f}(0) = Rf(0)$. 
+For backward Euler method, we can write, 
 \begin{align*}
-	& \partial_t \hat{f} = (C + E) \hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + nC_{ee} (\hat{f}^{n}, \hat{f}^{n}) =0 \\
-	& \hat{f}^{n+1} = (C+E)^{-1} \of{-nC_{ee} (\hat{f}^{n}, \hat{f}^{n}) +  (u^T W(\hat{f}^{n})) \hat{f}^{n} }
-\end{align*}
-
-\textbf{Algorithm 3:} Semi-implicit on the coulomb collision operator. \\
+	\of{I - dtQ^T \of{C+ E + n C_{ee}(\hat{f}^{n},\cdot)} Q} \bar{f}^{n+1} = Q^T\of{C+E + n C_{ee}(\hat{f}^{n},\cdot)}f_1 -u^T W(\hat{f}^{n}) Q^T \hat{f}^{n}
+ \end{align*}
+For the steady state solve let, 
 \begin{align*}
-	& \partial_t \hat{f} = (C + E) \hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + nC_{ee} (\hat{f}^{n}, \hat{f}^{n}) =0 \\
-	& \hat{f}^{n+1} = (C+E + nC_{ee}(\hat{f}^{n}))^{-1} \of{ (u^T W(\hat{f}^{n})) \hat{f}^{n} }
+R(\hat{f}) &= (C+E)\hat{f} + nC_{ee}(\hat{f},\hat{f}) -(u^TW(\hat{f})) \hat{f}\\
+R(\hat{f} + d\hat{f}) \approx &(C+E)\hat{f} + nC_{ee}(\hat{f}, \hat{f}) -(u^TW(\hat{f}))\hat{f} 
+						+ \of{C+ E + nC_{ee}(\cdot, \hat{f}) + nC_{ee}(\hat{f},\cdot)} d\hat{f} \\
+R(\hat{f} + d\hat{f}) &\approx R(\hat{f}) + J(\hat{f}) d\hat{f}
 \end{align*}
+%\textbf{Algorithm 1:} We use the newton step with linearized $C_{ee}$ term. 
+%\begin{align*}
+%	&R(\hat{f}^{n}) =
+%	 \begin{bmatrix}
+%		(C + E)\hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + nC_{ee}(\hat{f}^{n-1}) \hat{f}^{n}\\
+%		u^T \hat{f} -1
+%	\end{bmatrix} =0 \\
+%	&J(\hat{f}^{n}) =
+%	\begin{bmatrix}
+%		(C + E) - 2(u^T W)\hat{f}^{n} + nC_{ee}(\hat{f}^{n-1})\\
+%		u^T -1
+%	\end{bmatrix} =0 \\
+%	& \hat{f}^{n+1} = \hat{f}^{n} - \alpha J^{-1}(\hat{f}^n) (R(\hat{f}^n))
+%\end{align*}
+%\textbf{Algorithm 2:} Explicit on the coulomb collision operator. \\
+%\begin{align*}
+%	& \partial_t \hat{f} = (C + E) \hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + nC_{ee} (\hat{f}^{n}, \hat{f}^{n}) =0 \\
+%	& \hat{f}^{n+1} = (C+E)^{-1} \of{-nC_{ee} (\hat{f}^{n}, \hat{f}^{n}) +  (u^T W(\hat{f}^{n})) \hat{f}^{n} }
+%\end{align*}
+%
+%\textbf{Algorithm 3:} Semi-implicit on the coulomb collision operator. \\
+%\begin{align*}
+%	& \partial_t \hat{f} = (C + E) \hat{f}^{n} - (u^T W(\hat{f}^{n})) \hat{f}^{n} + nC_{ee} (\hat{f}^{n}, \hat{f}^{n}) =0 \\
+%	& \hat{f}^{n+1} = (C+E + nC_{ee}(\hat{f}^{n}))^{-1} \of{ (u^T W(\hat{f}^{n})) \hat{f}^{n} }
+%\end{align*}
 
 %\textbf{Algorithm 3:} Semi-explicit scheme on the collision operator \\
 %\begin{align*}

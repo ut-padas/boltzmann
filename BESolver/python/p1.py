@@ -6,37 +6,33 @@ plt.rcParams.update({
     "text.usetex": True,
     "font.family": "Helvetica",
     "font.size": 16,
-    "lines.linewidth":1.2
+    "lines.linewidth":1.2,
+    "lines.markersize" : 4
 })
 
 
 
 def plot_pde_vs_bolsig():
 
-    df          = pd.read_csv (r'pde_vs_bolsig_ee_collisions_lmax1/pde_vs_bolsig_02_04_2023_coulomb_nr64_lmax1.csv')
-    fout_name   = 'pde_vs_bolsig_ee_collisions_lmax1/pde_vs_bolsig_with_coulomb'
+    # df          = pd.read_csv (r'pde_vs_bolsig_ee_collisions_lmax1/pde_vs_bolsig_02_04_2023_coulomb_nr64_lmax1.csv')
+    # fout_name   = 'pde_vs_bolsig_ee_collisions_lmax1/pde_vs_bolsig_with_coulomb'
 
-    df          = pd.read_csv (r'pde_vs_bolsig_ee_collisions_lmax3/pde_vs_bolsig_02_05_2023_coulomb_nr64_lmax3.csv')
-    fout_name   = 'pde_vs_bolsig_ee_collisions_lmax3/pde_vs_bolsig_with_coulomb'
+    df          = pd.read_csv (r'pde_vs_bolsig_ee_collisions_lmax1_03_31_2023/pde_vs_bolsig_03_31_2023_11:44:46.csv')
+    fout_name   = 'pde_vs_bolsig_ee_collisions_lmax1_03_31_2023/pde_vs_bolsig_with_coulomb_collision'
 
     rows = 2
     cols = 2
 
-    for ion_deg in [1e-1,1e-2,1e-3]:
-        # rr_data_lo = df[df['Nr']==64][df['ion_deg']==ion_deg][df['E(V/m)']<1e4]
-        # rr_data_hi = df[df['Nr']==256][df['ion_deg']==ion_deg][df['E(V/m)']>=1e4]
-
-        # rr_data    = pd.concat([rr_data_lo, rr_data_hi], ignore_index=True)
-        # print(rr_data) 
+    fig        = plt.figure(figsize=(21, 9), dpi=300)
+    color_list = ["red","blue", "orange"]
+    for idx, ion_deg in enumerate([1e-1,1e-2,1e-3]):
         rr_data = df[df['Nr']==64.0][df['ion_deg']==ion_deg]
-        print(rr_data)
         e_field = np.array(rr_data['E/N(Td)'])
-
-        fig = plt.figure(figsize=(21, 9), dpi=300)
+        color   = color_list[idx]
+        
         plt.subplot(rows, cols,   1)
-        #plt.plot(e_field_pic, np.array(df_pic['PIC G0']), 'g*', label="PIC g0")
-        plt.plot(e_field, np.array(rr_data['bolsig_g0']), 'b*', label="Bolsig+")
-        plt.plot(e_field, np.array(rr_data['g0']), 'rx', label="PDE")
+        plt.plot(e_field, np.array(rr_data['bolsig_g0']), '.', color=color, label="bolsig ne/n0=%.1E"%(ion_deg))
+        plt.plot(e_field, np.array(rr_data['g0']), 'x'       , color=color, label="pde ne/n0=%.1E"%(ion_deg))
         plt.xlabel(r"E/N (Td)")
         plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
         plt.xscale('log')
@@ -46,87 +42,130 @@ def plot_pde_vs_bolsig():
         plt.grid()
 
         plt.subplot(rows, cols,   2)
-        #plt.plot(e_field_pic, np.array(df_pic['PIC G2']), 'g*', label="PIC g2")
-        plt.plot(e_field, np.array(rr_data['bolsig_g2']), 'b*', label="Bolsig+")
-        plt.plot(e_field, np.array(rr_data['g2']), 'rx', label="PDE")
+        plt.plot(e_field, np.array(rr_data['bolsig_g2']), '.', color=color, label="bolsig ne/n0=%.1E"%(ion_deg))
+        plt.plot(e_field, np.array(rr_data['g2']), 'x'       , color=color, label="pde ne/n0=%.1E"%(ion_deg))
         plt.xlabel(r"E/N (Td)")
         plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
         plt.xscale('log')
         plt.yscale('log')
-        plt.legend()
         plt.title(r"Ionization ($e + Ar \rightarrow 2e + Ar^{+}$)")
         plt.grid()
 
-
         plt.subplot(rows, cols,   3)
-        #plt.plot(e_field_pic, np.array(df_pic['PIC ENERGY']), 'g*', label="PIC")
-        plt.plot(e_field, np.array(rr_data['bolsig_energy']), 'b*', label="Bolsig+")
-        plt.plot(e_field, np.array(rr_data['energy']), 'rx', label="PDE")
+        plt.plot(e_field, np.array(rr_data['bolsig_energy']), '.', color=color, label="bolsig ne/n0=%.1E"%(ion_deg))
+        plt.plot(e_field, np.array(rr_data['energy']), 'x'       , color=color, label="pde ne/n0=%.1E"%(ion_deg))
         plt.xlabel(r"E/N (Td)")
         plt.ylabel(r"energy (eV)")
         plt.xscale('log')
         plt.yscale('log')
-        plt.legend()
         plt.title(r"steady-state energy")
         plt.grid()
 
         plt.subplot(rows, cols,   4)
-        #plt.plot(e_field_pic, np.array(df_pic['PIC ENERGY']), 'g*', label="PIC")
-        plt.plot(e_field, np.array(rr_data['bolsig_mobility']), 'b*', label="Bolsig+")
-        plt.plot(e_field, np.array(rr_data['mobility']), 'rx', label="PDE")
+        plt.plot(e_field, np.array(rr_data['bolsig_mobility']), '.', color=color , label="bolsig ne/n0=%.1E"%(ion_deg))
+        plt.plot(e_field, np.array(rr_data['mobility']), 'x'       , color=color , label="pde ne/n0=%.1E"%(ion_deg))
         plt.xlabel(r"E/N (Td)")
         plt.ylabel(r"mobility (N (1/m/V/s))")
         plt.xscale('log')
         plt.yscale('log')
-        plt.legend()
         plt.title(r"mobility")
         plt.grid()
-
-        fig.suptitle("Gas temperature =%.3E K, ion_deg = %.3E with Nr=%d"%(rr_data.iloc[0]['Tg'],rr_data.iloc[0]['ion_deg'], rr_data.iloc[0]['Nr'])) # or plt.suptitle('Main title')
-
-        plt.tight_layout()
-        plt.savefig("%s_ion_deg_%.3E.png"%(fout_name,ion_deg))
-        plt.close()
+        
 
 
 
-        fig = plt.figure(figsize=(10, 9), dpi=300)
-        #plt.plot(e_field_pic, np.array(df_pic['PIC G0']), 'g*', label="PIC g0")
+    fig.suptitle("Gas temperature =%.2EK, with Nr=%d"%(rr_data.iloc[0]['Tg'], rr_data.iloc[0]['Nr'])) # or plt.suptitle('Main title')
+    plt.tight_layout()
+    plt.savefig("%s.svg"%(fout_name))
+    plt.close()
+
+    rows = 3 
+    cols = 2
+    fig = plt.figure(figsize=(21, 15), dpi=300)
+    color_list = ["red","blue", "orange"]
+    for idx, ion_deg in enumerate([1e-1,1e-2,1e-3]):
+        rr_data = df[df['Nr']==64.0][df['ion_deg']==ion_deg]
+        e_field = np.array(rr_data['E/N(Td)'])
+        color   = color_list[idx]
+
+        plt.subplot(rows, cols,   1)
         w0        = np.array(rr_data['bolsig_g0'])
         w1        = np.array(rr_data['g0'])
         rel_error = np.abs(1-w1/w0)
-        plt.plot(e_field, rel_error, 'r*--', label="elastic")
-
-        w0        = np.array(rr_data['bolsig_g2'])
-        w1        = np.array(rr_data['g2'])
-        rel_error = np.abs(1-w1/w0)
-        rel_error[np.where(w0==0)]=0
-
-        plt.plot(e_field, rel_error, 'b*--', label="ionization")
-
-        w0        = np.array(rr_data['bolsig_energy'])
-        w1        = np.array(rr_data['energy'])
-        rel_error = np.abs(1-w1/w0)
-        plt.plot(e_field, rel_error, 'g*--', label="mean energy")
-
-        w0        = np.array(rr_data['bolsig_mobility'])
-        w1        = np.array(rr_data['mobility'])
-        rel_error = np.abs(1-w1/w0)
-        plt.plot(e_field, rel_error, 'y*--', label="mobility")
-
+        plt.plot(e_field, rel_error, 'x--', color=color ,  label="ne/n0=%.1E"%(ion_deg))
         plt.xlabel(r"E/N (Td)")
-        plt.ylabel(r"relative error")
+        plt.ylabel(r"relative error ")
         plt.xscale('log')
         plt.yscale('log')
+        plt.title(r"Elastic ($e + Ar \rightarrow e + Ar$)")
         plt.legend()
         plt.grid()
 
+        plt.subplot(rows, cols,   2)
+        w0        = np.array(rr_data['bolsig_g2'])
+        w1        = np.array(rr_data['g2'])
+        rel_error = np.abs(1-w1/w0)
+        plt.plot(e_field, rel_error, 'x--', color=color, label="ne/n0=%.1E"%(ion_deg))
+        plt.xlabel(r"E/N (Td)")
+        plt.ylabel(r"relative error ")
+        plt.xscale('log')
+        plt.yscale('log')
+        #plt.legend()
+        plt.title(r"Ionization ($e + Ar \rightarrow 2e + Ar^{+}$)")
+        plt.grid()
 
-        #plt.title("Gas temperature =%.3E, Nr=64 E/N(Td) less than 220 otherwise Nr=256 ne/n0 = %.3E "%(rr_data['Tg'][0],rr_data['ion_deg'][0])) # or plt.suptitle('Main title')
-        plt.suptitle("Gas temperature =%.3E K, ion_deg = %.3E with Nr=%d"%(rr_data.iloc[0]['Tg'],rr_data.iloc[0]['ion_deg'], rr_data.iloc[0]['Nr'])) # or plt.suptitle('Main title')
-        plt.tight_layout()
-        plt.savefig("%s_ion_deg_%.3E_error.png"%(fout_name,ion_deg))
-        plt.close()
+        plt.subplot(rows, cols,   3)
+        w0        = np.array(rr_data['bolsig_energy'])
+        w1        = np.array(rr_data['energy'])
+        rel_error = np.abs(1-w1/w0)
+        plt.plot(e_field, rel_error, 'x--', color=color , label="ne/n0=%.1E"%(ion_deg))
+        plt.xlabel(r"E/N (Td)")
+        plt.ylabel(r"relative error ")
+        plt.xscale('log')
+        plt.yscale('log')
+        #plt.legend()
+        plt.title(r"steady-state energy")
+        plt.grid()
+
+        plt.subplot(rows, cols,   4)
+        w0        = np.array(rr_data['bolsig_mobility'])
+        w1        = np.array(rr_data['mobility'])
+        rel_error = np.abs(1-w1/w0)
+        plt.plot(e_field, rel_error, 'x--', color=color , label="ne/n0=%.1E"%(ion_deg))
+        plt.xlabel(r"E/N (Td)")
+        plt.ylabel(r"relative error ")
+        plt.xscale('log')
+        plt.yscale('log')
+        #plt.legend()
+        plt.title(r"mobility")
+        plt.grid()
+
+        plt.subplot(rows, cols,   5)
+        rel_error = np.array(rr_data['l2_f0'])
+        plt.plot(e_field, rel_error, 'x--', color=color , label="ne/n0=%.1E"%(ion_deg))
+        plt.xlabel(r"E/N (Td)")
+        plt.ylabel(r"relative error ")
+        plt.xscale('log')
+        plt.yscale('log')
+        #plt.legend()
+        plt.title(r"f0")
+        plt.grid()
+
+        plt.subplot(rows, cols,   6)
+        rel_error = np.array(rr_data['l2_f1'])
+        plt.plot(e_field, rel_error, 'x--', color=color , label="ne/n0=%.1E"%(ion_deg))
+        plt.xlabel(r"E/N (Td)")
+        plt.ylabel(r"relative error ")
+        plt.xscale('log')
+        plt.yscale('log')
+        #plt.legend()
+        plt.title(r"f1")
+        plt.grid()
+
+    plt.suptitle("Gas temperature =%.2EK with Nr=%d"%(rr_data.iloc[0]['Tg'], rr_data.iloc[0]['Nr'])) # or plt.suptitle('Main title')
+    plt.tight_layout()
+    plt.savefig("%s_error.svg"%(fout_name))
+    plt.close()
 
 def plot_lmax1_vs_lmax3():
     dir_1 = "pde_vs_bolsig_ee_collisions_lmax1"
@@ -195,7 +234,8 @@ def plot_lmax1_vs_lmax3():
             fig.clear()
             plt.close()
             
-plot_lmax1_vs_lmax3()
+#plot_lmax1_vs_lmax3()
+plot_pde_vs_bolsig()
 
 
     

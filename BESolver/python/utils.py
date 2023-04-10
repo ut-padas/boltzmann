@@ -111,6 +111,11 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
         MP_klm = np.dot(MP_klm,gmw)
         MP_klm = np.transpose(MP_klm)
         MP_klm = MP_klm.reshape(num_p*num_sph_harm)
+
+        for lm_idx, lm in enumerate(sph_harm_lm):
+            if lm[0]>0:
+                MP_klm[lm_idx::num_sph_harm] = 0.0
+
         mm_g = np.append(mm_g, MP_klm)
 
     MP_klm   = mm_g
@@ -262,6 +267,11 @@ def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
         MP_klm = np.dot(MP_klm,gmw)
         MP_klm = np.transpose(MP_klm)
         MP_klm = MP_klm.reshape(num_p*num_sph_harm)
+
+        for lm_idx, lm in enumerate(sph_harm_lm):
+            if lm[0]>0:
+                MP_klm[lm_idx::num_sph_harm] = 0.0
+                
         mm_g   = np.append(mm_g, MP_klm)
 
     MP_klm = mm_g
@@ -732,7 +742,7 @@ def compute_radial_components(ev_pts, spec_sp : spec_spherical.SpectralExpansion
 
     return output
 
-def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g, mw, vth):
+def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw, vth):
     """
     reaction rate op R for collision g
 
@@ -745,36 +755,90 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g, mw
     
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
-    num_sph_harm = len(sph_harm_lm)
+    num_sh = len(sph_harm_lm)
 
-    gmx,gmw      = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
     
-    legendre     = basis.Legendre()
-    [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
-    VTheta_q     = np.arccos(glx)
-    VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
-
-    assert NUM_Q_VP>1
-    sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
-    WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
-
-    #trap. weights
-    WVPhi_q[0]  = 0.5 * WVPhi_q[0]
-    WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
-
-    quad_grid = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
-    P_kr = spec_sp.Vq_r(quad_grid[0], 0 , 1.0) 
-    Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
-
     c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
-    ev_qx    =  (quad_grid[0] * vth / c_gamma)**2
-    cs_total =  g.total_cross_section(ev_qx)
+    cs_total = 0
+    for g in g_list:
+        cs_total += g.total_cross_section((gmx_a * vth / c_gamma)**2)
+
+    rr_op    = np.zeros(num_p)
     
     if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-        MP_klm = np.array([((quad_grid[0]**3)) * cs_total * P_kr[i] * Y_lm[j] for i in range(num_p) for j in range(num_sph_harm)])
-        MP_klm = np.dot(MP_klm,WVPhi_q)
-        MP_klm = np.dot(MP_klm,glw)
-        MP_klm = np.dot(MP_klm,gmw) * (2 * vth**4 / (c_gamma**3))
-        return MP_klm
+        k_vec      = spec_sp._basis_p._t
+        dg_idx     = spec_sp._basis_p._dg_idx
+        sp_order   = spec_sp._basis_p._sp_order
+
+        for p in range(num_p):
+            qx_idx = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
+            gmx    = gmx_a[qx_idx]
+            gmw    = gmw_a[qx_idx]
+
+            rr_op[p] = (2 * vth**4 / c_gamma**3) * np.dot(gmw, gmx**3 * cs_total[qx_idx] * spec_sp.basis_eval_radial(gmx, p, 0))
+
+        return rr_op
+    else:
+        raise NotImplementedError
+    
+def mobility_op(spec_sp : spec_spherical.SpectralExpansionSpherical, mw, vth):
+    NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+    NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
+    NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+    
+    num_p        = spec_sp._p +1
+    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    num_sh = len(sph_harm_lm)
+
+    gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    
+    c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
+    rr_op    = np.zeros(num_p)
+    
+    if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        k_vec      = spec_sp._basis_p._t
+        dg_idx     = spec_sp._basis_p._dg_idx
+        sp_order   = spec_sp._basis_p._sp_order
+
+        for p in range(num_p):
+            qx_idx   = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
+            gmx      = gmx_a[qx_idx]
+            gmw      = gmw_a[qx_idx]
+            rr_op[p] = (2 * vth**4 / c_gamma**4) * np.dot(gmw, gmx**3 * spec_sp.basis_eval_radial(gmx, p, 0))
+        return rr_op
+    else:
+        raise NotImplementedError
+    
+def diffusion_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw, vth):
+
+    c_gamma      = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
+    NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+    NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
+    NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+    
+    num_p        = spec_sp._p +1
+    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    num_sh       = len(sph_harm_lm)
+
+    gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    total_cs     = 0
+
+    for g in g_list:
+        total_cs += g.total_cross_section((gmx_a * vth / c_gamma)**2)
+    
+    rr_op    = np.zeros(num_p)
+    
+    if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        k_vec      = spec_sp._basis_p._t
+        dg_idx     = spec_sp._basis_p._dg_idx
+        sp_order   = spec_sp._basis_p._sp_order
+
+        for p in range(num_p):
+            qx_idx = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
+            gmx    = gmx_a[qx_idx]
+            gmw    = gmw_a[qx_idx]
+            rr_op[p] = (2 * vth**4 / c_gamma**4) * np.dot(gmw, gmx**3 * spec_sp.basis_eval_radial(gmx, p, 0) / total_cs[qx_idx])
+        return rr_op
     else:
         raise NotImplementedError

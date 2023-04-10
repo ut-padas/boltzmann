@@ -53,9 +53,10 @@ PLASMA_FREQUENCY  = np.sqrt(MAXWELLIAN_N * (scipy.constants.elementary_charge**2
 
 class Collisions(abc.ABC):
 
-    def __init__(self)->None:
-        self._is_scattering_mat_assembled=False
-        self._sc_direction_mat=None
+    def __init__(self , cross_section:str)->None:
+        self._is_scattering_mat_assembled = False
+        self._sc_direction_mat            = None
+        self._analytic_cross_section_type = cross_section
         pass
     
     def load_cross_section(self,fname)->None:
@@ -155,7 +156,8 @@ class Collisions(abc.ABC):
         """
         computes the total cross section based on the experimental data. 
         """
-        return self._total_cs_interp1d(energy)
+        return Collisions.synthetic_tcs(energy,self._analytic_cross_section_type)  
+        #return self._total_cs_interp1d(energy)
 
     @staticmethod
     def diff_cs_to_total_cs_ratio(energy,scattering_angle):
@@ -672,10 +674,9 @@ when computing the scattering velocity
 class eAr_G0_NoEnergyLoss(Collisions):
 
     def __init__(self, cross_section="g0") -> None:
-        super().__init__()
+        super().__init__(cross_section)
         self.load_cross_section("lxcat_data/eAr_Elastic.txt")
         self._type=CollisionType.EAR_G0
-        self._analytic_cross_section_type = cross_section
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -723,11 +724,10 @@ e + Ar -> e + Ar
 class eAr_G0(Collisions):
 
     def __init__(self, cross_section="g0") -> None:
-        super().__init__()
+        super().__init__(cross_section)
         self.load_cross_section("lxcat_data/eAr_Elastic.txt")
         self._type=CollisionType.EAR_G0
         self._v_scale=None
-        self._analytic_cross_section_type = cross_section
 
     @staticmethod
     def compute_scattering_velocity(v0, polar_angle, azimuthal_angle):
@@ -779,10 +779,9 @@ e + Ar -> e + Ar^*
 class eAr_G1(Collisions):
     
     def __init__(self, cross_section="g1", threshold=E_AR_EXCITATION_eV) -> None:
-        super().__init__()
+        super().__init__(cross_section)
         self.load_cross_section("lxcat_data/eAr_Excitation.txt")
         self._type=CollisionType.EAR_G1
-        self._analytic_cross_section_type = cross_section
         self._reaction_threshold = threshold
 
     @staticmethod
@@ -838,11 +837,10 @@ e + Ar -> e + Ar^+
 class eAr_G2(Collisions):
     
     def __init__(self, cross_section="g2", threshold=E_AR_IONIZATION_eV) -> None:
-        super().__init__()
+        super().__init__(cross_section)
         self.load_cross_section("lxcat_data/eAr_Ionization.txt")
         self._type=CollisionType.EAR_G2
         self._momentum_setup = False
-        self._analytic_cross_section_type = cross_section
         self._reaction_threshold = threshold
         
     def compute_scattering_velocity(self, v0, polar_angle, azimuthal_angle):

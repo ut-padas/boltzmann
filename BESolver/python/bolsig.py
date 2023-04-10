@@ -131,20 +131,20 @@ def run_bolsig(args, run_convergence=False):
 
     for i, cc in enumerate(args.collisions):
         if "g0" in str(cc):
-            prefix_line=g0_str
-
-            ev1=np.logspace(-4,4,500,base=10)
-            tcs = collisions.Collisions.synthetic_tcs(ev1,cc)
+            prefix_line = g0_str
+            g           = collisions.eAr_G0(cross_section=cc)
+            ev1         = np.logspace(np.log10(g._energy[0] + 1e-4), np.log10(g._energy[-1]), 800, base=10)
+            tcs         = g.total_cross_section(ev1)
 
             cs_data=np.concatenate((ev1,tcs),axis=0)
             cs_data=cs_data.reshape((2,-1))
             cs_data=np.transpose(cs_data)
 
         elif "g2" in str(cc):
-            prefix_line=g2_str
-
-            ev1=np.logspace(np.log10(15.76),4,500,base=10)
-            tcs = collisions.Collisions.synthetic_tcs(ev1,cc)
+            prefix_line = g2_str
+            g           = collisions.eAr_G2(cross_section=cc)
+            ev1         = np.logspace(np.log10(g._energy[0] + 1e-4), np.log10(g._energy[-1]), 800, base=10)
+            tcs         = g.total_cross_section(ev1)
 
             cs_data=np.concatenate((ev1,tcs),axis=0)
             cs_data=cs_data.reshape((2,-1))

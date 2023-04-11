@@ -62,6 +62,7 @@ def normalized_distribution(spec_sp: sp.SpectralExpansionSpherical, mm_op, f_vec
 
     mm_fac       = spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
     scale        = np.dot(f_vec, mm_op / mm_fac) * (2 * (vth/c_gamma)**3)
+    #scale         = np.dot(f_vec,mm_op) * maxwellian(0) * vth**3
     return f_vec/scale
 
 class CollissionMode(enum.Enum):
@@ -162,7 +163,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, mw_vth, vth_curr)
             sigma_m  += g.total_cross_section(gx_ev)
         elif "g2" in col:
-            g  = collisions.eAr_G2()
+            g  = collisions.eAr_G2(cross_section=col)
             g.reset_scattering_direction_sp_mat()
             FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, mw_vth, vth_curr)
             sigma_m  += g.total_cross_section(gx_ev)
@@ -359,7 +360,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
             return h_curr, abs_error, rel_error
 
         
-        h_curr  , atol, rtol  = solver_0(h_prev, rtol = 1e-8, atol=1e-2, max_iter=100)
+        h_curr  , atol, rtol  = solver_0(h_prev, rtol = 1e-13, atol=1e-2, max_iter=100)
         h_pde                 = normalized_distribution(spec_sp, mass_op, h_curr, maxwellian, vth)
 
         norm_L2               = lambda vv : np.dot(vv, np.dot(Mmat, vv))
@@ -882,8 +883,8 @@ for run_id in range(len(run_params)):
         else:
             sig_pts = None #np.array([np.sqrt(0.5 * (ev[0] + ev[-1])) * c_gamma/VTH])
             
-        ev_range = ((0*VTH/c_gamma)**2, (1.2 + 1e-8) * ev[-1])
-        #ev_range = ((0*VTH/c_gamma)**2, (4*VTH/c_gamma)**2)
+        ev_range = ((0*VTH/c_gamma)**2, (1.3) * ev[-1])
+        #ev_range = ((0*VTH/c_gamma)**2, (6*VTH/c_gamma)**2)
         k_domain = (np.sqrt(ev_range[0]) * c_gamma / VTH, np.sqrt(ev_range[1]) * c_gamma / VTH)
         print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
         if(sig_pts is not None):

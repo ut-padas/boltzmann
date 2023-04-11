@@ -464,7 +464,7 @@ class CollisionOpSP():
             q_tol = 1e-12
             assert m>=0 , "m=%d"%(m)
             q_order       = ((sp_order + abs(m) + 1)//2) + 1
-            q_order      *= 32
+            q_order      *= 4
             qq_re         = np.polynomial.legendre.leggauss(q_order) 
             qq_re_points  = qq_re[0]
             qq_re_weights = qq_re[1]

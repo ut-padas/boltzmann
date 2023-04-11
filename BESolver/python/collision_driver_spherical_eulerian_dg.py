@@ -144,6 +144,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
     FOp      = 0
     sigma_m  = 0
     gg_list  = list()
+    fig      = plt.figure(figsize=(10, 10), dpi=300) 
     t1 = time()
     for col_idx, col in enumerate(collisions_included):
         print("collision %d included %s"%(col_idx, col))
@@ -170,12 +171,19 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
         else:
             print("%s unknown collision"%(col))
             sys.exit(0)
-        
+
+        plt.loglog(gx_ev, g._total_cs_interp1d(gx_ev) , ".",label="%s (lxcat)"%(col))
+        plt.loglog(gx_ev, g.total_cross_section(gx_ev), "x",label="%s (approx)"%(col))
         gg_list.append(g)
     t2 = time()
     print("Assembled the collision op. for Vth : ", vth_curr)
     print("Collision Operator assembly time (s): ",(t2-t1))
-
+    plt.xlabel(r"energy (eV)")
+    plt.ylabel(r"cross section (m^2)")
+    plt.grid(visible=True)
+    plt.legend()
+    fig.savefig("pde_cross_sections.svg")
+    plt.close()
     num_p   = spec_sp._p + 1
     num_sh  = len(spec_sp._sph_harm_lm)
 

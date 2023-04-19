@@ -67,8 +67,8 @@ class Collisions(abc.ABC):
         self._cs_fields = ["energy", "cross section"]
         np_data         = cross_section.lxcat_cross_section_to_numpy(self._cs_fname, self._cs_fields)
         self._energy    = np_data[0]
-        self._total_cs  = np_data[1]
-        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear',bounds_error=False,fill_value=0.0)
+        self._total_cs  = np_data[1] #self._total_cs  = Collisions.synthetic_tcs(self._energy, self._analytic_cross_section_type) #np_data[1]
+        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear', bounds_error=False,fill_value=(self._total_cs[0],self._total_cs[-1]))
         return
 
     @staticmethod
@@ -468,8 +468,9 @@ class Collisions(abc.ABC):
             """
             G2 cross section data fit with analytical function (ionization)
             """
-            y=np.zeros_like(ev)
-            y[ev>15.76] =(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1)) * np.exp(-1e-2*((ev[ev>15.76]-90)/90)**2)
+            y               = np.zeros_like(ev)
+            threshold_value = 15.76
+            y[ev>threshold_value] = (2.860000e-20/np.log(90-threshold_value)) * np.log((ev[ev>threshold_value]-threshold_value + 1)) * np.exp(-1e-2*((ev[ev>threshold_value]-90)/90)**2)
             # y[ev>1000]=0
             # print(y[y<0])
             return  y
@@ -712,10 +713,8 @@ class eAr_G0_NoEnergyLoss(Collisions):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        #total_cs  = self._total_cs_interp1d(energy_ev)
-        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
-        diff_cs    = total_cs / (4*np.pi)
+        total_cs  = self._total_cs_interp1d(energy_ev)
+        diff_cs   = total_cs / (4*np.pi)
         return diff_cs
 
 """
@@ -766,11 +765,9 @@ class eAr_G0(Collisions):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        #total_cs  = self._total_cs_interp1d(energy_ev)
-        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        # total_cs   = Collisions.synthetic_tcs(energy_ev,"g0")
-        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
-        diff_cs    = total_cs / (4*np.pi)
+        total_cs  = self._total_cs_interp1d(energy_ev)
+        total_cs  = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
+        diff_cs   = total_cs / (4*np.pi)
         return diff_cs
 
 """
@@ -825,10 +822,8 @@ class eAr_G1(Collisions):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        #total_cs  = self._total_cs_interp1d(energy_ev)
-        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
-        diff_cs    = total_cs / (4*np.pi)
+        total_cs  = self._total_cs_interp1d(energy_ev)
+        diff_cs   = total_cs / (4*np.pi)
         return diff_cs
 
 """
@@ -900,10 +895,8 @@ class eAr_G2(Collisions):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        #total_cs  = self._total_cs_interp1d(energy_ev)
-        #diff_cs   = total_cs #(total_cs*energy_ev)/(4 * np.pi * (1 + energy_ev * (np.sin(0.5*chi))**2 ) * np.log(1+energy_ev) )
-        total_cs   = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
-        diff_cs    = total_cs / (4*np.pi)
+        total_cs  = self._total_cs_interp1d(energy_ev)
+        diff_cs   = total_cs / (4*np.pi)
         return diff_cs
 
 

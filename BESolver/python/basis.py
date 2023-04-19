@@ -36,6 +36,16 @@ class BasisType(enum.Enum):
     CHEBYSHEV_POLY=8
 
 
+def gauss_legendre_quad(deg, a, b):
+    q_pts   = np.polynomial.legendre.leggauss(deg) #quadpy.c1.gauss_legendre(q_per_knot)
+    qx      = q_pts[0]
+    qw      = q_pts[1]
+
+    qx      = 0.5 * (b - a) * qx + 0.5 * (a + b)
+    qw      = 0.5 * (b - a) * qw
+
+    return qx, qw
+
 class Basis(abc.ABC):
     abc.abstractmethod
     def __init__(self, domain, window):
@@ -258,7 +268,8 @@ class BSpline(Basis):
             if dg_splines:
                 self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots(k_domain, num_p, spline_order)
             else:
-                self._t      = BSpline.uniform_knots(k_domain, num_p, spline_order) 
+                self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
+                #self._t      = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 2 * k_domain[1])
                 self._ele    = None
                 self._ele_p  = None 
 
@@ -513,6 +524,28 @@ class BSpline(Basis):
         t          = (k_domain[0])*np.ones(sp_order)
         t          = np.append(t,np.linspace(k_domain[0] , k_domain[1] , num_p-sp_order , endpoint=False))
         t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+        return t
+
+    @staticmethod
+    def uniform_knots_with_extended_bdy(k_domain, num_p, sp_order, ext_kdomain=10.0):
+        # t          = (k_domain[0])*np.ones(sp_order+1)
+        # glx, _        = Legendre().Gauss_Pn(num_p-sp_order-1)
+        # # Np         = num_p-sp_order-1 + 2
+        # # glx        = -np.cos(np.pi*np.linspace(0,Np-1,Np)/(Np-1))
+        # # glx        = glx[1:-1]
+        # glx        = glx * (k_domain[1]-k_domain[0]) * 0.5 + (k_domain[1] + k_domain[0]) * 0.5
+        # t          = np.append(t,glx)
+        # t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+
+        num_p1     = 3 * (num_p //4)
+        num_p2     = num_p -num_p1
+
+        t          = (k_domain[0])*np.ones(sp_order)
+        t          = np.append(t , np.linspace(k_domain[0] , k_domain[1] , num_p1 , endpoint=False))
+        t          = np.append(t , np.logspace(np.log10(k_domain[1]), np.log10(ext_kdomain), num_p2-sp_order,endpoint=False))
+        t          = np.append(t , ext_kdomain * np.ones(sp_order+1))
+
+        print(len(t), num_p+sp_order+1)
         return t
     
     @staticmethod

@@ -169,11 +169,18 @@ class SpectralExpansionSpherical:
 
                 #print("velocity radial domain (v/vth) :", (xb,xe), "with basis idx: ", ib, ie, gx_e)
 
-                Vq   = self.Vq_r(gx_e, 0)
                 mm_l = np.zeros((num_p,num_p))
                 for p in range(ib, ie+1):
-                    for k in range(ib, ie+1):
-                        mm_l[p,k]= np.dot((gx_e**2) * Vq[p,:] * Vq[k,:], gw_e)
+                    k_min   = k_vec[p]
+                    k_max   = k_vec[p + sp_order + 1]
+                    qx_idx  = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                    gmx     = gx_e[qx_idx]
+                    gmw     = gw_e[qx_idx]
+                    b_p     = self.basis_eval_radial(gmx, p, 0)  
+
+                    for k in range(max(ib, p - (sp_order+3) ), min(ie+1, p + (sp_order+3))):
+                        b_k       = self.basis_eval_radial(gmx, k, 0)
+                        mm_l[p,k] = np.dot((gmx**2) * b_p * b_k, gmw)
 
                 for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
                     for p in range(ib,ie+1):
@@ -349,27 +356,35 @@ class SpectralExpansionSpherical:
         elif self.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
             return assemble_advection_matix_lp_max_energy(self._p, self._sph_harm_lm)
         elif self.get_radial_basis_type() == basis.BasisType.SPLINES:
-            num_p  = self._p+1
-            num_sh = len(self._sph_harm_lm)
+            num_p     = self._p+1
+            num_sh    = len(self._sph_harm_lm)
+            sp_order  = self._basis_p._sp_order
+            k_vec     = self._basis_p._t
+            dg_idx    = self._basis_p._dg_idx
+
+            assert len(dg_idx)==2 , ""
     
             lmodes = list(set([l for l,_ in self._sph_harm_lm]))
             num_l  = len(lmodes)
             l_max  = lmodes[-1]
             
-            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+            [gx_e, gw_e] = self._basis_p.Gauss_Pn(self._num_q_radial)
             
-            mm1=np.zeros((num_p,num_p,num_l,num_l))
-            mm2=np.zeros((num_p,num_p,num_l,num_l))
+            mm1=np.zeros((num_p,num_p))
+            mm2=np.zeros((num_p,num_p))
 
-            for pl in range(num_l):
-                Vr_pl  = self.Vq_r(gx,pl)
-                for kl in range(num_l):
-                    Vr_kl  = self.Vq_r(gx,kl)
-                    Vdr_kl = self.Vdq_r(gx,kl,d_order=1)
-                    for p in range(num_p):
-                        for k in range(num_p):
-                            mm1[p,k,pl,kl] = np.dot((gx**2) * Vr_pl[p,:] * Vdr_kl[k,:],gw)
-                            mm2[p,k,pl,kl] = np.dot(gx * Vr_pl[p,:] * Vr_kl[k,:],gw)
+            for p in range(num_p):
+                k_min   = k_vec[p]
+                k_max   = k_vec[p + sp_order + 1]
+                qx_idx  = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                gmx     = gx_e[qx_idx]
+                gmw     = gw_e[qx_idx]
+                b_p     = self.basis_eval_radial(gmx, p, 0)  
+                for k in range(max(0, p - (sp_order+3)), min(num_p, p + (sp_order+3))):
+                    b_k  = self.basis_eval_radial(gmx, k, 0)
+                    db_k = self.basis_derivative_eval_radial(gmx, k, 0, 1)
+                    mm1[p,k] = np.dot((gmx ** 2) * b_p * db_k, gmw)
+                    mm2[p,k] = np.dot( gmx * b_p * b_k, gmw)
 
             
             advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))
@@ -379,14 +394,14 @@ class SpectralExpansionSpherical:
                     lm_idx = self._sph_harm_lm.index(lm)
                     qs_mat = qs[0]**2+qs[0]+qs[1]
                     lm_mat = lm[0]**2+lm[0]+lm[1]
-                    advec_mat[:,qs_idx,:,lm_idx] = mm1[:,:,qs[0],lm[0]] * AM(lm[0],lm[1]) + AD(lm[0],lm[1]) * mm2[:,:,qs[0],lm[0]]
+                    advec_mat[:,qs_idx,:,lm_idx] = mm1[:,:] * AM(lm[0],lm[1]) + AD(lm[0],lm[1]) * mm2[:,:]
 
                 lm     =  [qs[0]-1, qs[1]]
                 if lm in self._sph_harm_lm:
                     lm_idx = self._sph_harm_lm.index(lm)
                     qs_mat = qs[0]**2+qs[0]+qs[1]
                     lm_mat = lm[0]**2+lm[0]+lm[1]
-                    advec_mat[:,qs_idx,:,lm_idx] = mm1[:,:,qs[0],lm[0]] * BM(lm[0],lm[1]) + BD(lm[0],lm[1]) * mm2[:,:,qs[0],lm[0]]
+                    advec_mat[:,qs_idx,:,lm_idx] = mm1[:,:] * BM(lm[0],lm[1]) + BD(lm[0],lm[1]) * mm2[:,:]
                 
             
             advec_mat = advec_mat.reshape(num_p*num_sh, num_p*num_sh)

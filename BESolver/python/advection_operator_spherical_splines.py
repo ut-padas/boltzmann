@@ -174,7 +174,7 @@ error_l2_2d   = np.zeros(len(num_dofs_all))
 
 DT       = args.T_DT
 T_END    = args.T_END
-V_DOMAIN = (0,8)
+V_DOMAIN = (0,3)
 SP_ORDER = args.spline_order
 
 x = np.linspace(0, 0.9999 * V_DOMAIN[1], 50)

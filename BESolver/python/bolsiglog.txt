@@ -1,4 +1,0 @@
-BOLSIG+ script file: /home/dbochkov/Dropbox/bolsig/minimal-argon.dat
-READCOLLISIONS
-Cannot find file ./g0_g2.txt
- ABORT: Error in input file line:           9

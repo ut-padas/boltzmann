@@ -348,6 +348,31 @@ class CollisionOpSP():
                             psi_p  = spec_sp.basis_eval_radial(gmx,p,0)
                             tmp_q1[p,k] = np.dot(gmw, -V_TH * t_cs * gmx**3 * spec_sp.basis_eval_radial(gmx, k, 0) * psi_p)
                 
+
+                # x_max       = k_vec[-1]
+                # gp_z, gw_z  = np.polynomial.laguerre.laggauss(50)
+                # gp_x        = np.sqrt(gp_z) +  x_max
+                # total_cs    = g.total_cross_section((gp_x * V_TH / c_gamma)**2)
+
+                # ev_ext      = (gp_x * V_TH/c_gamma)**2
+                # check_1          = (gp_x * V_TH/c_gamma)**2 >= g._reaction_threshold
+                # v_post           = np.zeros_like(gp_x)
+                # v_post[check_1]  = c_gamma * np.sqrt( (1/2) * ((gp_x[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+
+                # print("extended domain (%.4E, %.4E)"%(np.min(ev_ext), np.max(ev_ext)))
+                # ev_post = (v_post * V_TH/c_gamma)**2
+                # print("post energy (%.4E, %.4E)"%(np.min(ev_post), np.max(ev_post)))
+
+                # for e_id in range(0,len(dg_idx),2):
+                #     ib=dg_idx[e_id]
+                #     ie=dg_idx[e_id+1] 
+                #     for p in range(ib,ie+1):
+                #         psi_p0  = (gain_fac * spec_sp.basis_eval_radial(v_post ,p, 0) - spec_sp.basis_eval_radial(gp_x,p,0))
+                #         psi_p1  = spec_sp.basis_eval_radial(gp_x,p,0)
+                #         #print(p, np.dot(gw_z, V_TH * gp_x**3 * total_cs * psi_p0 / (2 * np.sqrt(gp_z))))
+                #         tmp_q0[p,num_p-1] +=  np.dot(gw_z, V_TH * gp_x**3 * total_cs * psi_p0 / (2 * np.sqrt(gp_z)))
+                #         tmp_q1[p,num_p-1] += -np.dot(gw_z, V_TH * gp_x**3 * total_cs * psi_p1 / (2 * np.sqrt(gp_z)))
+
                 # bdy_sp_kvec = [k_vec[-1] for i in range(sp_order)]
                 # bdy_sp_kvec.append(g._energy[-1])
 

@@ -423,22 +423,11 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 
                 Lmat        = Cmat_p_Emat + cc_ee_1
                 Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) #+ dt * np.dot(u,np.dot(Wmat,h_prev)) * Imat_r
-                #qq,rr       = np.linalg.qr(Pmat)
-                #rr_inv      = scipy.linalg.solve_triangular(rr, Imat_r)
-                #print(np.linalg.norm(Imat_r - np.dot(np.transpose(qq), qq)))
-                #print(np.linalg.norm(Imat_r - np.dot(rr_inv, rr)))
-                #Pmat_inv    = np.dot(rr_inv, np.transpose(qq)) #np.linalg.inv(Pmat)
-                rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(u,np.dot(Wmat + cc_ee_1, h_prev)) * QT, h_prev)
+                rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
 
-                fb_curr     = np.linalg.solve(Pmat, rhs_vec) #np.dot(Pmat_inv,rhs_vec)
+                fb_curr     = np.linalg.solve(Pmat, rhs_vec) 
                 h_curr      = f1 + np.dot(Q,fb_curr)
                 
-                # ode_int.set_f_params(CC_ee)
-                # ode_int.set_initial_value(fb_prev, t_curr)
-                
-                # fb_curr = ode_int.integrate(t_curr + dt)
-                # h_curr  = f1 + fb_curr
-
                 rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)
                 atol= (np.linalg.norm(h_prev - h_curr))
 
@@ -462,7 +451,7 @@ def solve_collop_dg(steady_state, collOp : colOpSp.CollisionOpSP, maxwellian, vt
                 # rhs_vec     = fb_prev + dt * np.dot((np.dot(QT, Cmat_p_Emat) - np.dot(u,np.dot(Wmat,h_prev)) * QT),f1)
 
                 # semi-explit on mass growth term (only need to compute the inverse matrix once)
-                rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Cmat_p_Emat),f1) - dt * np.dot(np.dot(u,np.dot(Wmat,h_prev)) * QT, h_prev)
+                rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Cmat_p_Emat),f1) - dt * np.dot(np.dot(Wmat,h_prev) * QT, h_prev)
 
                 fb_curr     = np.linalg.solve(Pmat, rhs_vec) #np.dot(Pmat_inv,rhs_vec)
                 h_curr  = f1 + np.dot(Q,fb_curr)
@@ -845,10 +834,11 @@ parser.add_argument("-bolsig_grid_pts", "--bolsig_grid_pts"       , help="grid p
 
 
 args                = parser.parse_args()
-EbyN_Td             = np.array([1, 5, 20, 50])
+#EbyN_Td             = np.array([1, 5, 20, 50])
+#EbyN_Td             = np.array([20])
 #e_values           = np.logspace(np.log10(0.148), np.log10(4e4), 60, base=10) 
-e_values            = EbyN_Td * collisions.AR_NEUTRAL_N * 1e-21
-ion_deg_values      = np.array([1e-1, 1e-2, 1e-3])
+#e_values            = EbyN_Td * collisions.AR_NEUTRAL_N * 1e-21
+#ion_deg_values      = np.array([1e-1, 1e-2, 1e-4, 1e-6, 1e-8, 1e-10])
 #ion_deg_values      = np.array([0.0])
 #ion_deg_values     = np.array([0.0])
 e_values            = np.array([args.E_field])
@@ -875,6 +865,7 @@ for  col_idx, col in enumerate(args.collisions):
 
 COLLISOIN_NAMES["g0"] = "elastic"
 COLLISOIN_NAMES["g2"] = "ionization"
+COLLISOIN_NAMES["g2Regul"] = "ionization"
 
 for run_id in range(len(run_params)):
     args.E_field = run_params[run_id][0] #e_values[run_id]
@@ -1173,11 +1164,11 @@ for run_id in range(len(run_params)):
 
     if SAVE_EEDF:
         with open('eedf_%s.npy'%(str_datetime), 'ab') as f:
-            np.save(f, spec_sp._p + 1)
-            np.save(f, spec_sp._sph_harm_lm[-1][0])
-            np.save(f, args.E_field)
-            np.save(f, args.ion_deg)
-            np.save(f, args.Tg)
+            np.save(f, np.array([spec_sp._p + 1]))
+            np.save(f, np.array([spec_sp._sph_harm_lm[-1][0]]))
+            np.save(f, np.array([args.E_field]))
+            np.save(f, np.array([args.ion_deg]))
+            np.save(f, np.array([args.Tg]))
             np.save(f, ev)
 
             for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):

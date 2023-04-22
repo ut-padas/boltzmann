@@ -135,7 +135,7 @@ def run_bolsig(args, run_convergence=False):
             prefix_line = g0_str
             g           = collisions.eAr_G0(cross_section=cc)
             #ev1         = g._energy
-            ev1         = np.logspace(np.log10(g._energy[0] + 1e-12), np.log10(ev_max), 800, base=10)
+            ev1         = np.logspace(np.log10(g._energy[0] + 1e-3), np.log10(ev_max), 800, base=10)
             tcs         = g.total_cross_section(ev1)
 
             # ev1         = np.append(ev1, ev_max)

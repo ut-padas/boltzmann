@@ -68,7 +68,7 @@ class Collisions(abc.ABC):
         np_data         = cross_section.lxcat_cross_section_to_numpy(self._cs_fname, self._cs_fields)
         self._energy    = np_data[0]
         self._total_cs  = np_data[1] #self._total_cs  = Collisions.synthetic_tcs(self._energy, self._analytic_cross_section_type) #np_data[1]
-        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear', bounds_error=False,fill_value=(self._total_cs[0],self._total_cs[-1]))
+        self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='cubic', bounds_error=False,fill_value=(self._total_cs[0],self._total_cs[-1]))
         return
 
     @staticmethod

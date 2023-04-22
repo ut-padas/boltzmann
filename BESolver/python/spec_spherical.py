@@ -182,6 +182,10 @@ class SpectralExpansionSpherical:
                         b_k       = self.basis_eval_radial(gmx, k, 0)
                         mm_l[p,k] = np.dot((gmx**2) * b_p * b_k, gmw)
 
+                # boundary correction term assuming exponential analytically integrated out. 
+                # x_max = k_vec[-1]
+                # mm_l[num_p-1, num_p-1]+=(1.0/16.0) * (4 * x_max * (np.sqrt(2*np.pi) * x_max + 2) + np.sqrt(2*np.pi))
+
                 for lm_idx, (l,m) in enumerate(self._sph_harm_lm):
                     for p in range(ib,ie+1):
                         for k in range(ib,ie+1):
@@ -385,6 +389,11 @@ class SpectralExpansionSpherical:
                     db_k = self.basis_derivative_eval_radial(gmx, k, 0, 1)
                     mm1[p,k] = np.dot((gmx ** 2) * b_p * db_k, gmw)
                     mm2[p,k] = np.dot( gmx * b_p * b_k, gmw)
+
+            # boundary correction term assuming exponential analytically integrated out. 
+            # x_max = k_vec[-1]
+            # mm1[num_p-1, num_p-1] += 0.25 * (-x_max * (2 * x_max + np.sqrt(2 * np.pi)) -1)
+            # mm2[num_p-1, num_p-1] += 0.25 * (np.sqrt(2 * np.pi) * x_max + 1)
 
             
             advec_mat  = np.zeros((num_p,num_sh,num_p,num_sh))

@@ -6,31 +6,31 @@
 /READCOLLISIONS can be called multiple times to read from different files
 
 READCOLLISIONS
-"g0Const.txt"   / File
+"g0_g2Regul.txt"   / File
 Ar
-1                        / Extrapolate: 0= No 1= Yes
+0                        / Extrapolate: 0= No 1= Yes
 
 CONDITIONS
-0.031055900621118016 / Electric field / N (Td)
+5.00000000E+00		/ Electric field / N (Td)
 0.        / Angular field frequency / N (m3/s)
 0.        / Cosine of E-B field angle
-1e-16     / Gas temperature (K)
+0.00000000E+00		/ Gas temperature (K)
 0         / Excitation temperature (K)
 0.        / Transition energy (eV)
-0.        / Ionization degree
-3.22e22   / Plasma density (1/m3)
+1.00000000E-03		/ Ionization degree
+3.22000000E+19		/ Plasma Density (1/m^3)
 0.        / Ion charge parameter
 1.        / Ion/neutral mass ratio
-0         / e-e momentum effects: 0=No; 1=Yes*
+1		// e-e momentum effects: 0=No; 1=Yes*
 1         / Energy sharing: 1=Equal*; 2=One takes all
 1         / Growth: 1=Temporal*; 2=Spatial; 3=Not included; 4=Grad-n expansion
 0.        / Maxwellian mean energy (eV)
-1000 / # of grid points
+1024   / # of grid points
 0         / Manual grid: 0=No; 1=Linear; 2=Parabolic
-100.      / Manual maximum energy (eV)
-1e-20     / Precision
-1e-10     / Convergence
-1000      / Maximum # of iterations
+10.      / Manual maximum energy (eV)
+1e-11   / Precision
+1e-08   / Convergence
+1000     / Maximum # of iterations
 1.0       / Gas composition fractions
 1         / Normalize composition to unity: 0=No; 1=Yes
 

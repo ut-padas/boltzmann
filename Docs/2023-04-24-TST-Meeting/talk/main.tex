@@ -186,17 +186,43 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 
 \begin{frame}
 	\frametitle{Outline}
-	\begin{itemize}
-		\item Focus on spatially homogeneous Boltzmann equation
-		\item Formulation \& Discretization
-		\item Collision operators
-		\begin{itemize}
-			\item electron-heavy collisions
-			\item electron-electron collisions
-		\end{itemize}
-		\item Steady-state solutions
-		\item Verification with Bolsig
-	\end{itemize}
+	\begin{columns}
+		\begin{column}{0.4\textwidth}
+				\begin{itemize}
+				\item Spatially homogeneous Boltzmann equation
+				\item Formulation \& Discretization
+				\item Collision operators
+				\begin{itemize}
+					\item electron-heavy collisions
+					\item electron-electron collisions
+				\end{itemize}
+				\item Steady-state solutions
+				\item Verification with Bolsig
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.6\textwidth}
+			\begin{itemize}
+				\item Year 1 : Discretization and formulation 
+				\begin{itemize}
+					\item B-Splines + Spherical harmonics (established)
+				\end{itemize}	
+				\item Year 2 : Verification with Bolsig
+				\item Year 3 : Glow discharge problem
+					\begin{itemize}
+						\item Issues with the boundary condition
+						\item Importance on the electron-electron collisions
+					\end{itemize}
+				\item \textbf{Completed}
+				\begin{itemize}
+					\item Verification with bolsig with electron-heavy and electron-electron collisions
+					\item Beyond 2-term approximation
+					\item Ability to handle cases without azimuthal symmetry
+					\item Implementation of 1d2v glow-discharge with Boltzmann  
+				\end{itemize}\textbf{}
+			\end{itemize}
+		\end{column}
+	\end{columns}
+
 %	\begin{itemize}
 %		\item \large spatially homogeneous Boltzmann solver 
 %		\begin{itemize}
@@ -233,24 +259,26 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	% \end{itemize}
 \end{frame}
 
+
+
 \begin{frame}
 	\frametitle{Boltzmann equation}
 	\begin{itemize}
 		\item For a given electric field $\vect{E}$
 		\begin{align}
-			\partial_t f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}(f) + C_{ee}(f,f)
+			\partial_t f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}f + C_{ee}(f)
 		\end{align}
 		\item $C_{en}$ : electron-heavy collisions (i.e., elastic, ionization)
 		\begin{itemize}
-			\item Use experimental cross-section data 
+			\item Use LXCAT cross-section data 
 			\item Linear in $f$
 		\end{itemize} 
-		\item $C_{ee}$ : electron-electron (i.e., Columbic collisions) collisions 
+		\item $C_{ee}$ : electron-electron Columbic collisions 
 		\begin{itemize}
-			\item Modeled using Fokker-Plank equation with analytical cross-section expressions
-			\item Quadratic in $f$
+			\item Modeled using Fokker-Plank equation with analytical cross-section
+			\item Nonlinear in $f$
 		\end{itemize}
-		\item $C_{ei}$: electron-ion Columbic can be modeled similarly if needed
+		%\item $C_{ei}$: electron-ion Columbic can be modeled similarly if needed
 %		\item Derived the steady state equation
 %		\begin{align}
 %			\textcolor{black!70}{\partial_t \hat{f} = -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} \text{ where } \hat{f}(\vect{v},t) = \frac{f(v,t)}{\myint_{R^3} f(\vect{v},t) \diff{\vect{v}}}}\\
@@ -264,10 +292,9 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\begin{columns}
 		\begin{column}{0.3\textwidth}
 			\begin{itemize}
-				\item Non-smooth cross sections $\Rightarrow$ non-smooth solutions
-				\item Strong advection causes stabilization issues
-				\item To capture reaction rates needs accurate tail representations of $f$
-				\item Need compact representation of $f$ (for 3D3V case)
+				\item Non-smooth cross sections $\Rightarrow$ non-smooth $f$ solutions
+				\item Strong advection may cause stabilization issues
+				\item To compute QoIs $\rightarrow$ need accurate tails of $f$ 
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.7\textwidth}
@@ -283,7 +310,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\frametitle{Discretization}
 	\small
 	\begin{itemize}
-		\item Representation of $f\of{\vect{v},t} = \sum_{klm} f_{klm} \underbrace{\phi_k\of{v}}_{\text{radial basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$, with B-splines as radial basis 
+		\item Representation of $f\of{\vect{v},t} = \sum_{klm} f_{klm} \underbrace{\phi_k\of{v}}_{\text{B-Spline basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$ 
 		\item Weak formulation
 			$
 			\displaystyle
@@ -295,9 +322,9 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 			\quad
 			\Rightarrow \quad
 			\partial_t \myint_{R^3} f \phi\of{\vect{v}} \ud \vect{v} = 
-			\myint_{R^3} \of{C_{en}(f) + C_{ee}(f,f)} \phi\of{\vect{v}} \ud \vect{v} + \myint_{R^3} \of{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}} f} \phi(\vect{v}) \ud \vect{v}\text{ , } 
+			\myint_{R^3} \of{C_{en}f + C_{ee}(f)} \phi\of{\vect{v}} \ud \vect{v} + \myint_{R^3} \of{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}} f} \phi(\vect{v}) \ud \vect{v}\text{ , } 
 			\forall \phi(\vect{v})$
-		\item Weak form of the collision operator \\
+		\item Weak form of the collision operator (5d integral) \\
 			$
 			\displaystyle
 			\quad 
@@ -312,7 +339,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 			\right)
 			\diff{\vect{v}_e} \diff{\vect{\omega}}
 			$
-		\item Assuming isotropic scattering, with azimuthal symmetry, and using spherical harmonics addition theorem we can simplify above for 1d integral\\
+		\item Isotropic scattering, azimuthal symmetry, and using spherical harmonics addition (1d integral)\\
 		$
 		\displaystyle
 		\quad 
@@ -332,21 +359,21 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 \begin{frame}
 	\frametitle{Electron-electron collisions}
 	\begin{itemize}
-		\item We use Rosenbluth's (1957) derivation on electron-electron collisions using Fokker-Plank equation.
-		\begin{align*}
-			C_{ee}(f,f) &= \Gamma_a(-\nabla \cdot (f \nabla h ) + \frac{1}{2} H : \of{f H g}) \text{ where } \Delta h  = -8\pi f \text{ and } \Delta^2 g =-8\pi f	
-		\end{align*}
+		\item We use Rosenbluth's (1957) Fokker-Plank derivation for electron-electron collisions. Let $H=\partial^2_{ab}$
+		\begin{align}
+			C_{ee}(f) &= \Gamma_a(-\nabla \cdot (f \nabla h ) + \frac{1}{2} H : \of{f H g}) \text{ where } \Delta h  = -8\pi f \text{ and } \Delta^2 g =-8\pi f	
+		\end{align}
 		\item Assuming azimuthal symmetry, we can compute Rosenbluth potentials, 
-		\begin{align*}
+		\begin{align}
 			& h_a\of{\vect{v}} = \sum_{l} A^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi}  \text{ and } g\of{\vect{v}} = \sum_{l} B^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi}\text{ where } \\
 			& A^{b}_l\of{v} = \frac{8\pi}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
 			B^{b}_{l}\of{v} & = -\frac{4\pi}{(4l^2-1)} \of
 			{
-				\int_{0}^{v} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v^\prime}^{l+2}}{v^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v^\prime}^2 }{v^2}}} } + \\
+				\int_{0}^{v} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v^\prime}^{l+2}}{v^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v^\prime}^2 }{v^2}}} } + \nonumber\\
 			&-\frac{4\pi U_{l0}}{(4l^2-1)} \of{
 				\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
 			}
-		\end{align*}
+		\end{align}
 	\end{itemize}
 \end{frame}
 
@@ -354,13 +381,13 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\frametitle{Electron-electron collisions}
 	\begin{itemize}
 		\item Weak form of the coulomb collisions
-		\begin{align*}
-			\int_{R^3} C_{ee}(f,f) \psi(\vect{v})\diff{\vect{v}} = \Gamma_a \of{\int_{R^3} \nabla \psi\of{\vect{v}} \cdot (f \nabla h ) \diff{\vect{v}}  + \frac{1}{2} \int_{R^3} H\psi\of{\vect{v}} : \of{f H g} \diff{\vect{v}}} 
-		\end{align*}
+		\begin{align}
+			\int_{R^3} C_{ee}(f) \psi(\vect{v})\diff{\vect{v}} = \Gamma_a \of{\int_{R^3} \nabla \psi\of{\vect{v}} \cdot (f \nabla h ) \diff{\vect{v}}  + \frac{1}{2} \int_{R^3} H\psi\of{\vect{v}} : \of{f H g} \diff{\vect{v}}} 
+		\end{align}
 		\item For given test function $\psi_{pq}$, we can pre-compute 6th order tensor ${C_{ee}}_{rs,kl}^{pq}$
-		\begin{align*}
+		\begin{align}
 			[C_{ee}]_{rs,kl}^{pq} = \int_{R^3} C_{ee}(\phi_{rs}, \phi_{kl}) \phi_{pq} \diff{\vect{v}} 
-		\end{align*}
+		\end{align}
 		\item SymPy based symbolic framework for weak form derivation in spherical coordinates
 		\begin{itemize}
 			\item Ability to derive equation for arbitrary order of polar modes
@@ -373,34 +400,35 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 \begin{frame}
 	\frametitle{Transient and steady-state solutions}
 	\begin{itemize}
-		\item For a given $E$ field and ionization degree $n_e/N$ (i.e., controls the effect on electron-electron collisions) the normalized system will reach a steady-state
-		\begin{align*}
-			\partial_t {\hat{f}} &=(C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}, \hat{f}} - \mu(\hat{f}) \hat{f} \text{ where } \mu(\hat{f}) = \frac{\partial_t n_e}{n_e} = u^T C_{en}(\hat{f})\\
-			&\text{ with constraint } u^T \hat{f} = 1  
-		\end{align*}
-		\item For transient case, above DAE is solved with implicit time integration
-		\item For steady-state solution we solve $\partial_t {\hat{f}} = 0$, with $R(\hat{f}) = (C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}, \hat{f}} - \mu(\hat{f})$, we can write the Jacobian $\frac{d R}{d\hat{f}} = J(\hat{f}) = C_{en} + E + n_e \of{C_{ee}\of{\cdot,\hat{f}} + C_{ee}\of{\hat{f},\cdot}} -\mu(\hat{f})I$
-		\item $\hat{f}^{n+1} = \hat{f}^{n} - \alpha [J(\hat{f}^n)]^{-1}R(\hat{f}^n)$, where $\alpha \in(0,1]$ determined by line-search algorithm 
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Boltzmann solver verification}
-	\begin{itemize}
-		\item We use Bolsig+\footnote[frame]{Hagelaar, G.J.M. and Pitchford, L.C., 2005. Solving the Boltzmann equation to obtain electron transport coefficients and rate coefficients for fluid models. Plasma sources science and technology, 14(4), p.722.} code for verification step 
-		\item Bolsig+ fixed two term approximation $f(\vect{v},t) = f_0(v, t) + f_1(v,t)\cos v_\theta$, assumes higher order correction terms negligible
-		\item Uses exponential finite differences with uniform grid in energy
-		\item Implemented version only supports steady state solutions
+		\item Steady-state solution for a given $E/N$ field and ionization degree $n_e/N$ 
+		\begin{align}
+			\partial_t {\hat{f}} &=(C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}} - \mu(\hat{f}) \hat{f} \text{ where } \mu(\hat{f}) = \frac{\partial_t n_e}{n_e} = u^T C_{en}(\hat{f})\\
+			&\text{ with constraint } u^T \hat{f} = 1 \nonumber 
+		\end{align}
+		\item Use Newton's method with line search
+		\item Implicit time integration
+%		\item For steady-state solution we solve $\partial_t {\hat{f}} = 0$, with $R(\hat{f}) = (C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}, \hat{f}} - \mu(\hat{f})$, we can write the Jacobian $\frac{d R}{d\hat{f}} = J(\hat{f}) = C_{en} + E + n_e \of{C_{ee}\of{\cdot,\hat{f}} + C_{ee}\of{\hat{f},\cdot}} -\mu(\hat{f})I$
+		%\item $\hat{f}^{n+1} = \hat{f}^{n} - \alpha [J(\hat{f}^n)]^{-1}R(\hat{f}^n)$, where $\alpha \in(0,1]$ determined by line-search algorithm 
 	\end{itemize}
 \end{frame}
 
 \begin{frame}
 	\frametitle{Effect of Columbic collisions}
-	$E/N$ = 1Td with elastic + ionization reactions
+	$E/N$ = 1Td with elastic + ionization with varying $n_e/N$
 	\vspace*{-0.1in}
 	\begin{center}
 		\includegraphics[width=0.85\textwidth]{1Td_cc.png}
 	\end{center}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Boltzmann solver verification}
+	\begin{itemize}
+		\item We use Bolsig\footnote[frame]{Hagelaar, G.J.M. and Pitchford, L.C., 2005. Solving the Boltzmann equation to obtain electron transport coefficients and rate coefficients for fluid models. Plasma sources science and technology, 14(4), p.722.} code for verification step 
+		\item Bolsig+ fixed two term approximation $f(\vect{v},t) = f_0(v, t) + f_1(v,t)\cos v_\theta$, assumes higher order correction terms negligible
+		\item finite differences with uniform grid in energy
+		\item supports steady state solutions or time-harmonic 
+	\end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -413,6 +441,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 
 \begin{frame}[fragile]
 	\frametitle{Verification with Bolsig+ code}
+	\vspace{-0.1in}
 	\begin{center}
 		\resizebox*{0.63\textwidth}{!}{
 		\renewcommand{\arraystretch}{1.2}
@@ -459,8 +488,9 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 		\includegraphics[width=\textwidth]{20Td_lmax3_ion_deg_1e-2.png}
 	\end{center}
 	\begin{itemize}
-		\item Stronger $E$ field $\rightarrow$ trigger anisotropy, can makes the higher order modes significant to ignore.
-		\item Specially close to the boundaries of the torch application
+		\item Higher order modes triggered by larger E field and/or boundary conditions
+		%\item Stronger $E$ field $\rightarrow$ trigger anisotropy, can makes the higher order modes significant to ignore.
+		%\item Specially close to the boundaries of the torch application
 	\end{itemize}  
 \end{frame}
 
@@ -471,7 +501,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 		\includegraphics[width=\textwidth]{5Td_transient_ion_deg_1e-3.png}
 	\end{center}
 	\begin{itemize}
-		\item Relaxation time $\tau$ for the higher order modes, if $\tau > \tau_{torch}$ $\Rightarrow$ higher order terms are significant
+		\item Relaxation time $\tau$ for the higher order modes, if $\tau > \tau_{torch}$ $\Rightarrow$ higher order terms maybe significant
 	\end{itemize}
 \end{frame}
 
@@ -479,11 +509,11 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\frametitle{Conclusions}
 	\begin{itemize}
 		\item B-Splines + spherical harmonic based continuous Galerkin formulation for v-space Boltzmann eq.
-		\item Elastic, ionization and ability add similar reaction terms
+		\item Linear in $f$ collision terms (i.e., elastic, ionization, excitation)
 		\item Support for electron-electron collisions with symbolic code generation
 		\item \textbf{Beyond two-term expansion}: Generalization to higher order correction terms 
-		\item Open-source python based implementation
-		\item Future work
+		\item Open-source Python based implementation
+		\item Ongoing work
 		\begin{itemize}
 			\item Integration with PyKokos and Parla + HPC 
 			\item Initial 1D + 3V approximation for the torch application

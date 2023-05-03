@@ -154,7 +154,7 @@ class SpectralExpansionSpherical:
             num_l  = len(l_modes)
             l_max  = l_modes[-1]
 
-            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+            [gx, gw] = self._basis_p.Gauss_Pn((sp_order + 2) * self._basis_p._num_knot_intervals)
             mm=np.zeros((num_p*num_sh, num_p*num_sh))
 
             for e_id in range(0,len(dg_idx),2):
@@ -372,7 +372,7 @@ class SpectralExpansionSpherical:
             num_l  = len(lmodes)
             l_max  = lmodes[-1]
             
-            [gx_e, gw_e] = self._basis_p.Gauss_Pn(self._num_q_radial)
+            [gx_e, gw_e] = self._basis_p.Gauss_Pn((sp_order + 2) * self._basis_p._num_knot_intervals)
             
             mm1=np.zeros((num_p,num_p))
             mm2=np.zeros((num_p,num_p))
@@ -442,7 +442,7 @@ class SpectralExpansionSpherical:
             num_l  = len(lmodes)
             l_max  = lmodes[-1]
 
-            [gx, gw] = self._basis_p.Gauss_Pn(self._num_q_radial)
+            [gx, gw] = self._basis_p.Gauss_Pn((sp_order + 2) * self._basis_p._num_knot_intervals)
             D_pk=np.zeros((num_p,num_p))
             S_pk=np.zeros((num_p,num_p))
 
@@ -505,7 +505,7 @@ class SpectralExpansionSpherical:
                         flux_mat[f[1] * num_sh + lm_idx, f[1]*num_sh + lm_idx] += - advection_dir * eA[lm_idx, lm_idx]  * fx**2
                         flux_mat[f[0] * num_sh + lm_idx, f[1]*num_sh + lm_idx] +=   advection_dir * eA[lm_idx, lm_idx]  * fx**2
             
-            aply_bdy=False
+            aply_bdy=True
             if(aply_bdy):
                 fx = k_vec[dg_idx[-1] + sp_order]
                 assert fx == k_vec[-1], "flux assembly face coords does not match at the boundary"

@@ -266,7 +266,10 @@ class BSpline(Basis):
         
         if knots_vec is None:
             if dg_splines:
-                self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots(k_domain, num_p, spline_order)
+                if sig_pts==None:
+                    self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots(k_domain, num_p, spline_order)
+                else:
+                    self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots_1(k_domain, num_p, spline_order,sig_pts)
             else:
                 self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
                 #self._t      = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 2 * k_domain[1])
@@ -602,4 +605,4 @@ class BSpline(Basis):
         #print(t)
         num_k      = np.sum(np.array([(2*sp_order + (_num_p[i] -(sp_order+1)) + 2) for i in range(num_d)])) - (num_d-1)*(sp_order+1)
         assert len(t)==num_k , "knot length of %d does not match with spline order %d"%(len(t),sp_order)
-        return t
+        return t, num_d, _num_p

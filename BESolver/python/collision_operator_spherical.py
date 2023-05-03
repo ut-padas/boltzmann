@@ -184,8 +184,8 @@ class CollisionOpSP():
         self._p3 = Pm(3)
         self._p5 = Pm(5)
 
-        self._mass_op = BEUtils.mass_op(spec_sp, None, 64, 2, 1)
-        self._temp_op = BEUtils.temp_op(spec_sp, None, 64, 2, 1)
+        self._mass_op = BEUtils.mass_op(spec_sp, None, 2, 2, 1)
+        self._temp_op = BEUtils.temp_op(spec_sp, None, 2, 2, 1)
 
         return
 
@@ -199,218 +199,311 @@ class CollisionOpSP():
         spec_sp       = self._spec
         num_p         = spec_sp._p+1
         num_sh        = len(spec_sp._sph_harm_lm)
-        if self._r_basis_type == basis.BasisType.CHEBYSHEV_POLY:
-            raise NotImplementedError
-        elif self._r_basis_type == basis.BasisType.SPLINES:
-
-            k_vec    = spec_sp._basis_p._t
-            dg_idx   = spec_sp._basis_p._dg_idx
-            sp_order = spec_sp._basis_p._sp_order
-            
-            c_gamma      = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
-            l_modes      = list(set([l for (l,m) in self._sph_harm_lm]))
-            
-            gx_e , gw_e  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-            Mp_r         = (gx_e * V_TH) * ( gx_e **2 )
-            total_cs     = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
+        
+        if self._r_basis_type == basis.BasisType.SPLINES:
+            k_vec        = spec_sp._basis_p._t
+            dg_idx       = spec_sp._basis_p._dg_idx
+            sp_order     = spec_sp._basis_p._sp_order
             cc_collision = spec_sp.create_mat()
+            c_gamma      = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
 
-            if(g._type == collisions.CollisionType.EAR_G0):
-                gain_fac = 1.0
-                c_mu     = 2 * collisions.MASS_R_EARGON 
-                v_scale  = np.sqrt(1- c_mu)
-                v_post   = gx_e * v_scale
+            k_vec_uq      = np.unique(k_vec)
+            k_vec_dx      = k_vec_uq[1] - k_vec_uq[0]
 
-                kappa    = (scipy.constants.Boltzmann * collisions.AR_TEMP_K * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
-
-                tmp_q0   = np.zeros((num_p,num_p))
-                tmp_q1   = np.zeros((num_p,num_p))
-
-                for k in range(num_p):
-                    k_min  = k_vec[k]
-                    k_max  = k_vec[k + sp_order + 1]
-                    qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-
-                    gmx    = gx_e[qx_idx] 
-                    gmw    = gw_e[qx_idx]
-                    vp     = v_post[qx_idx]
-                    t_cs   = total_cs[qx_idx] 
-
-                    for e_id in range(0,len(dg_idx),2):
-                        ib=dg_idx[e_id]
-                        ie=dg_idx[e_id+1]
-                        
-                        for p in range(ib,ie+1):
-                            #-0.5 * c_mu * gx_e * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1)
-                            #psi_p  = (-0.5 * c_mu * gx_e) * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1) + (-0.5 * c_mu * gx_e)**2 * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 2) 
-                            psi_p = (gain_fac * spec_sp.basis_eval_radial(vp ,p, 0) - spec_sp.basis_eval_radial(gmx,p,0))
-                        
-                            tmp_q0[p,k] = np.dot(gmw, V_TH * gmx**3 * t_cs * spec_sp.basis_eval_radial(gmx, k, 0) * psi_p  - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * spec_sp.
-                            basis_derivative_eval_radial(gmx, k, 0, 1))
-
-                for k in range(num_p):
-                    k_min  = k_vec[k]
-                    k_max  = k_vec[k + sp_order + 1]
-                    qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-                    
-                    gmx    = gx_e[qx_idx] 
-                    gmw    = gw_e[qx_idx]
-                    t_cs   = total_cs[qx_idx]
-
-                    for e_id in range(0,len(dg_idx),2):
-                        ib=dg_idx[e_id]
-                        ie=dg_idx[e_id+1] 
-                        for p in range(ib,ie+1):
-                            psi_p  = spec_sp.basis_eval_radial(gmx,p,0)
-                            tmp_q1[p,k] = np.dot(gmw, -V_TH * t_cs * gmx**3 * spec_sp.basis_eval_radial(gmx, k, 0) * psi_p)
-                
-                for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
-                    if q==0:
-                        for p in range(num_p):
-                            for k in range(num_p):
-                                cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q0[p,k]
-                    else:
-                        for p in range(num_p):
-                            for k in range(num_p):
-                                cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
-
-            elif(g._type == collisions.CollisionType.EAR_G2):
-                # v_pre       = np.sqrt(2 * (gx_e * V_TH)**2 + g._reaction_threshold * c_gamma**2) / V_TH 
-                # gain_fac    = 2.0
-                # total_cs    = g.total_cross_section((v_pre * V_TH / c_gamma)**2) 
-                
-                # tmp_q0   = np.zeros((num_p,num_p))
-                # tmp_q1   = np.zeros((num_p,num_p))
-
-                # for k in range(num_p):
-                #     k_min  = k_vec[k]
-                #     k_max  = k_vec[k + sp_order + 1]
-                #     qx_idx = np.logical_and(v_pre >= k_min, v_pre <= k_max)
-                    
-                #     gmx    = gx_e[qx_idx] 
-                #     gmw    = gw_e[qx_idx]
-                #     vp     = v_pre[qx_idx]
-                #     t_cs   = total_cs[qx_idx] 
-
-                #     for e_id in range(0,len(dg_idx),2):
-                #         ib=dg_idx[e_id]
-                #         ie=dg_idx[e_id+1]
-                        
-                #         for p in range(ib,ie+1):
-                #             #-0.5 * c_mu * gx_e * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1)
-                #             #psi_p  = (-0.5 * c_mu * gx_e) * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1) + (-0.5 * c_mu * gx_e)**2 * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 2) 
-                #             psi_p = (gain_fac * spec_sp.basis_eval_radial(gmx ,p, 0) - spec_sp.basis_eval_radial(vp,p,0))
-                        
-                #             tmp_q0[p,k] = np.dot(gmw, 2 * (gmx/vp) * V_TH * vp**3 * t_cs * spec_sp.basis_eval_radial(vp, k, 0) * psi_p)
-
-                gain_fac         = 2.0
-                check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
-                v_post           = np.zeros_like(gx_e)
-                v_post[check_1]  = c_gamma * np.sqrt( (1/2) * ((gx_e[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
-
-                tmp_q0   = np.zeros((num_p,num_p))
-                tmp_q1   = np.zeros((num_p,num_p))
-
-                for k in range(num_p):
-                    k_min  = k_vec[k]
-                    k_max  = k_vec[k + sp_order + 1]
-                    qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-                    
-                    gmx    = gx_e[qx_idx] 
-                    gmw    = gw_e[qx_idx]
-                    vp     = v_post[qx_idx]
-                    t_cs   = total_cs[qx_idx] 
-
-                    for e_id in range(0,len(dg_idx),2):
-                        ib=dg_idx[e_id]
-                        ie=dg_idx[e_id+1]
-                        
-                        for p in range(ib,ie+1):
-                            #-0.5 * c_mu * gx_e * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1)
-                            #psi_p  = (-0.5 * c_mu * gx_e) * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 1) + (-0.5 * c_mu * gx_e)**2 * spec_sp.basis_derivative_eval_radial(gx_e, p, 0, 2) 
-                            psi_p = (gain_fac * spec_sp.basis_eval_radial(vp ,p, 0) - spec_sp.basis_eval_radial(gmx,p,0))
-                        
-                            tmp_q0[p,k] = np.dot(gmw, V_TH * gmx**3 * t_cs * spec_sp.basis_eval_radial(gmx, k, 0) * psi_p)
-
-                for k in range(num_p):
-                    k_min  = k_vec[k]
-                    k_max  = k_vec[k + sp_order + 1]
-                    qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-                    
-                    gmx    = gx_e[qx_idx] 
-                    gmw    = gw_e[qx_idx]
-                    t_cs   = total_cs[qx_idx]
-
-                    for e_id in range(0,len(dg_idx),2):
-                        ib=dg_idx[e_id]
-                        ie=dg_idx[e_id+1] 
-                        for p in range(ib,ie+1):
-                            psi_p  = spec_sp.basis_eval_radial(gmx,p,0)
-                            tmp_q1[p,k] = np.dot(gmw, -V_TH * t_cs * gmx**3 * spec_sp.basis_eval_radial(gmx, k, 0) * psi_p)
-                
-
-                # x_max       = k_vec[-1]
-                # gp_z, gw_z  = np.polynomial.laguerre.laggauss(50)
-                # gp_x        = np.sqrt(gp_z) +  x_max
-                # total_cs    = g.total_cross_section((gp_x * V_TH / c_gamma)**2)
-
-                # ev_ext      = (gp_x * V_TH/c_gamma)**2
-                # check_1          = (gp_x * V_TH/c_gamma)**2 >= g._reaction_threshold
-                # v_post           = np.zeros_like(gp_x)
-                # v_post[check_1]  = c_gamma * np.sqrt( (1/2) * ((gp_x[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
-
-                # print("extended domain (%.4E, %.4E)"%(np.min(ev_ext), np.max(ev_ext)))
-                # ev_post = (v_post * V_TH/c_gamma)**2
-                # print("post energy (%.4E, %.4E)"%(np.min(ev_post), np.max(ev_post)))
-
-                # for e_id in range(0,len(dg_idx),2):
-                #     ib=dg_idx[e_id]
-                #     ie=dg_idx[e_id+1] 
-                #     for p in range(ib,ie+1):
-                #         psi_p0  = (gain_fac * spec_sp.basis_eval_radial(v_post ,p, 0) - spec_sp.basis_eval_radial(gp_x,p,0))
-                #         psi_p1  = spec_sp.basis_eval_radial(gp_x,p,0)
-                #         #print(p, np.dot(gw_z, V_TH * gp_x**3 * total_cs * psi_p0 / (2 * np.sqrt(gp_z))))
-                #         tmp_q0[p,num_p-1] +=  np.dot(gw_z, V_TH * gp_x**3 * total_cs * psi_p0 / (2 * np.sqrt(gp_z)))
-                #         tmp_q1[p,num_p-1] += -np.dot(gw_z, V_TH * gp_x**3 * total_cs * psi_p1 / (2 * np.sqrt(gp_z)))
-
-                # bdy_sp_kvec = [k_vec[-1] for i in range(sp_order)]
-                # bdy_sp_kvec.append(g._energy[-1])
-
-                # bdy_sp    = scipy.interpolate.BSpline.basis_element(bdy_sp_kvec,False)
-                # bqx , bqw = basis.gauss_legendre_quad(128, k_vec[-1], np.sqrt(g._energy[-1]) * c_gamma/V_TH) 
-                # #bqx , bqw = basis.gauss_legendre_quad(128, k_vec[-1], k_vec[-1] + np.sqrt(2 * (k_vec[-1] * V_TH)**2 + g._reaction_threshold * c_gamma**2) / V_TH ) 
-                # #print(bqx)
-
-                # check_1          = (bqx * V_TH/c_gamma)**2 >= g._reaction_threshold
-                # vp               = np.zeros_like(bqx)
-                # vp[check_1]      = c_gamma * np.sqrt( (1/2) * ((bqx[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
-                # t_cs_bdy         = g.total_cross_section((bqx * V_TH / c_gamma)**2) 
-
-                # for e_id in range(0,len(dg_idx),2):
-                #     ib=dg_idx[e_id]
-                #     ie=dg_idx[e_id+1] 
-                #     for p in range(ib,ie+1):
-                #         psi_p = (gain_fac * spec_sp.basis_eval_radial(vp ,p, 0))
-                #         #print(np.dot(bqw, V_TH * bqx**3 * t_cs_bdy * bdy_sp(bqx) * psi_p))
-                #         #for w in range(1,6):
-                #         tmp_q0[p , num_p-1] += np.dot(bqw, np.exp(-bqx**2) * V_TH * bqx**3 * t_cs_bdy * psi_p) 
-
-                for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
-                    if q==0:
-                        for p in range(num_p):
-                            for k in range(num_p):
-                                cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q0[p,k]
-                    else:
-                        for p in range(num_p):
-                            for k in range(num_p):
-                                cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
-
-
-                
-            else:
-                raise NotImplementedError
+            if len(dg_idx) == 2:
+                # continuous basis grid
+                gx_e , gw_e  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+                total_cs     = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
             
+                if(g._type == collisions.CollisionType.EAR_G0):
+                    c_mu     = 2 * collisions.MASS_R_EARGON 
+                    v_scale  = np.sqrt(1- c_mu)
+                    v_post   = gx_e * v_scale
+                    kappa    = (scipy.constants.Boltzmann * collisions.AR_TEMP_K * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
+
+                    tmp_q0   = np.zeros((num_p,num_p))
+                    tmp_q1   = np.zeros((num_p,num_p))
+
+                    for k in range(num_p):
+                        k_min  = k_vec[k]
+                        k_max  = k_vec[k + sp_order + 1]
+                        qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+
+                        gmx    = gx_e[qx_idx] 
+                        gmw    = gw_e[qx_idx]
+                        vp     = v_post[qx_idx]
+                        t_cs   = total_cs[qx_idx]
+
+                        phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
+                        dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
+
+                        for p in range(num_p):
+                            psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
+                            psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
+                            tmp_q0[p,k]  = np.dot(gmw, V_TH  * gmx**3 * t_cs * phi_k * (psi_pp-psi_pm)  - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
+                            tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+
+                    for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
+                        if q==0:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q0[p,k]
+                        else:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
+
+                elif(g._type == collisions.CollisionType.EAR_G2):
+                    check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
+                    v_post           = np.zeros_like(gx_e)
+                    v_post[check_1]  = c_gamma * np.sqrt( (1/2) * ((gx_e[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+
+                    tmp_q0   = np.zeros((num_p,num_p))
+                    tmp_q1   = np.zeros((num_p,num_p))
+
+                    for k in range(num_p):
+                        k_min  = k_vec[k]
+                        k_max  = k_vec[k + sp_order + 1]
+                        qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                        
+                        gmx    = gx_e[qx_idx] 
+                        gmw    = gw_e[qx_idx]
+                        vp     = v_post[qx_idx]
+                        t_cs   = total_cs[qx_idx] 
+
+                        phi_k  = spec_sp.basis_eval_radial(gmx, k, 0)
+
+                        for p in range(num_p):
+                            psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
+                            psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
+                            tmp_q0[p,k]  = np.dot(gmw,  V_TH * gmx**3 * t_cs * phi_k * (2 * psi_pp - psi_pm))
+                            tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+
+                    for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
+                        if q==0:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q0[p,k]
+                        else:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
+                else:
+                    raise NotImplementedError
+            else:
+                # discontinuous basis grid 
+                #gx_e , gw_e  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+                #total_cs     = g.total_cross_section((gx_e * V_TH / c_gamma)**2)
+
+                dg_q_per_knot = sp_order + 2
+                if(g._type == collisions.CollisionType.EAR_G0):
+
+                    c_mu     = 2 * collisions.MASS_R_EARGON 
+                    v_scale  = np.sqrt(1- c_mu)
+                    kappa    = (scipy.constants.Boltzmann * collisions.AR_TEMP_K * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
+
+                    tmp_q0   = np.zeros((num_p,num_p))
+                    tmp_q1   = np.zeros((num_p,num_p))
+
+                    gx_m     = np.array([])
+                    gw_m     = np.array([])
+
+                    gx_p     = np.array([])
+                    gw_p     = np.array([])
+
+
+                    for e_id in range(0,len(dg_idx),2):
+                        ib = dg_idx[e_id]
+                        ie = dg_idx[e_id+1]
+
+                        xb = k_vec[ib]
+                        xe = k_vec[ie+sp_order+1]
+
+                        xb_eps = xb / v_scale
+                        xe_eps = xe / v_scale
+
+                        if xb_eps > xb:
+                            a0, b0 = basis.gauss_legendre_quad(dg_q_per_knot, xb, xb_eps)
+                            gx_m   = np.append(gx_m, a0)
+                            gw_m   = np.append(gw_m, b0)
+                            #print("e_id=%d (%.4E,%.4E) sp_idx pre (%d,%d) dx = (%.6E, %.6E)"%(e_id,xb,xe,ib,ie, xb, xb_eps))
+                            
+
+
+                        # computing the collision loss term xb to xe domain integration
+                        for ii in range(ib, ie + sp_order + 1):
+                            if k_vec[ii]< k_vec[ii+1]:
+                                a0, b0 = basis.gauss_legendre_quad(dg_q_per_knot, max(xb_eps,k_vec[ii]), k_vec[ii+1])
+
+                                gx_m = np.append(gx_m, a0)
+                                gw_m = np.append(gw_m, b0)
+
+                                gx_p = np.append(gx_p, a0)
+                                gw_p = np.append(gw_p, b0)
+                                #print("e_id=%d (%.4E,%.4E) internal dx = (%.6E, %.6E)"%(e_id,xb, xe, max(xb_eps,k_vec[ii]), k_vec[ii+1]))
+
+                        if xe_eps > xe:
+                            a0, b0 = basis.gauss_legendre_quad(dg_q_per_knot, xe, xe_eps)
+                            gx_p   = np.append(gx_p, a0)
+                            gw_p   = np.append(gw_p, b0)
+                            #print("e_id=%d (%.4E,%.4E) sp_idx post (%d,%d) dx = (%.6E, %.6E)"%(e_id,xb,xe,ib,ie, xe, xe_eps))
+
+                    total_cs_m  = g.total_cross_section((gx_m * V_TH / c_gamma)**2)
+                    total_cs_p  = g.total_cross_section((gx_p * V_TH / c_gamma)**2)
+
+                    v_post_p    = gx_p * v_scale
+
+                    for e_id in range(0,len(dg_idx),2):
+                        ib = dg_idx[e_id]
+                        ie = dg_idx[e_id+1]
+
+                        xb = k_vec[ib]
+                        xe = k_vec[ie+sp_order+1]
+
+                        # computing the collision loss term xb to xe domain integration
+                        for k in range(ib,ie+1):
+                            k_min  = k_vec[k]
+                            k_max  = k_vec[k + sp_order + 1]
+                            qx_idx = np.logical_and(gx_m >= k_min, gx_m <= k_max)
+
+                            gmx    = gx_m[qx_idx] 
+                            gmw    = gw_m[qx_idx]
+                            t_cs   = total_cs_m[qx_idx]
+
+                            phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
+                            dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
+
+                            for p in range(ib,ie+1):
+                                psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
+                                tmp_q0[p,k]  += np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm  - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
+                                tmp_q1[p,k]  += np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+
+                        for k in range(ib, min(ie + sp_order + 2, num_p)):
+                            k_min  = k_vec[k]
+                            k_max  = k_vec[k + sp_order + 1]
+                            qx_idx = np.logical_and(gx_p >= k_min, gx_p <= k_max)
+
+                            gmx    = gx_p[qx_idx] 
+                            gmw    = gw_p[qx_idx]
+
+                            vp     = v_post_p[qx_idx]
+                            t_cs   = total_cs_p[qx_idx]
+
+                            phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
+                            for p in range(ib,ie+1):
+                                psi_pp        = spec_sp.basis_eval_radial(vp, p, 0)
+                                tmp_q0[p,k]  += np.dot(gmw, V_TH * gmx**3 * t_cs * phi_k * psi_pp)
+                    
+                    for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
+                        if q==0:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q0[p,k]
+                        else:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
+                
+                elif(g._type == collisions.CollisionType.EAR_G2):
+
+                    tmp_q0   = np.zeros((num_p,num_p))
+                    tmp_q1   = np.zeros((num_p,num_p))
+
+                    gx_m     = np.array([])
+                    gw_m     = np.array([])
+
+                    gx_p     = np.array([])
+                    gw_p     = np.array([])
+
+                    v_pre    = lambda x : np.sqrt(2 * x**2 + c_gamma**2 * g._reaction_threshold/V_TH**2)
+
+
+                    for e_id in range(0,len(dg_idx),2):
+                        ib = dg_idx[e_id]
+                        ie = dg_idx[e_id+1]
+
+                        xb = k_vec[ib]
+                        xe = k_vec[ie+sp_order+1]
+
+                      
+                        # computing the collision loss term xb to xe domain integration
+                        for ii in range(ib, ie + sp_order + 1):
+                            if k_vec[ii]< k_vec[ii+1]:
+                                a0, b0 = basis.gauss_legendre_quad(dg_q_per_knot, k_vec[ii], k_vec[ii+1])
+
+                                gx_m = np.append(gx_m, a0)
+                                gw_m = np.append(gw_m, b0)
+
+                                a0, b0 = basis.gauss_legendre_quad(dg_q_per_knot, v_pre(k_vec[ii]), v_pre(k_vec[ii+1]))
+
+                                #print(k_vec[ii], k_vec[ii+1], "to ", v_pre(k_vec[ii]), v_pre(k_vec[ii+1]))
+
+                                gx_p = np.append(gx_p, a0)
+                                gw_p = np.append(gw_p, b0)
+                                #print("e_id=%d (%.4E,%.4E) internal dx = (%.6E, %.6E)"%(e_id,xb, xe, max(xb_eps,k_vec[ii]), k_vec[ii+1]))
+
+                    #print(np.sum(gw_m),k_vec[-1])
+                    total_cs_m  = g.total_cross_section((gx_m * V_TH / c_gamma)**2)
+                    total_cs_p  = g.total_cross_section((gx_p * V_TH / c_gamma)**2)
+
+                    v_post_p    = c_gamma * np.sqrt( (1/2) * ((gx_p * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+
+                    for e_id in range(0,len(dg_idx),2):
+                        ib = dg_idx[e_id]
+                        ie = dg_idx[e_id+1]
+
+                        xb = k_vec[ib]
+                        xe = k_vec[ie+sp_order+1]
+
+                        # computing the collision loss term xb to xe domain integration
+                        for k in range(ib,ie+1):
+                            k_min  = k_vec[k]
+                            k_max  = k_vec[k + sp_order + 1]
+                            qx_idx = np.logical_and(gx_m >= k_min, gx_m <= k_max)
+
+                            gmx    = gx_m[qx_idx] 
+                            gmw    = gw_m[qx_idx]
+                            t_cs   = total_cs_m[qx_idx]
+
+                            phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
+                            
+                            for p in range(ib,ie+1):
+                                psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
+                                tmp_q0[p,k]  += np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+                                tmp_q1[p,k]  += np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+
+                        for k in range(ib, num_p):
+                            k_min  = k_vec[k]
+                            k_max  = k_vec[k + sp_order + 1]
+                            qx_idx = np.logical_and(gx_p >= k_min, gx_p <= k_max)
+
+                            gmx    = gx_p[qx_idx] 
+                            gmw    = gw_p[qx_idx]
+
+                            vp     = v_post_p[qx_idx]
+                            t_cs   = total_cs_p[qx_idx]
+
+                            phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
+                            for p in range(ib,ie+1):
+                                psi_pp        = 2 * spec_sp.basis_eval_radial(vp, p, 0)
+                                tmp_q0[p,k]  += np.dot(gmw, V_TH * gmx**3 * t_cs * phi_k * psi_pp)
+                    
+                    for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
+                        if q==0:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q0[p,k]
+                        else:
+                            for p in range(num_p):
+                                for k in range(num_p):
+                                    cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
+
+                else:
+                    raise NotImplementedError
+                                
             return cc_collision
+        else:
+            raise NotImplementedError
 
     def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3)):
         Lij = self._LOp_eulerian_radial_only(collision,maxwellian,vth)
@@ -798,15 +891,18 @@ class CollisionOpSP():
         ELE_VOLT      = collisions.ELECTRON_VOLT
         MAXWELLIAN_N  = collisions.MAXWELLIAN_N
         AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
-        
+
         spec_sp  :sp.SpectralExpansionSpherical     = self._spec
         num_p         = spec_sp._p+1
         sph_lm        = spec_sp._sph_harm_lm
         num_sh        = len(spec_sp._sph_harm_lm)
-        
+
         if self._r_basis_type != basis.BasisType.SPLINES:
             raise NotImplementedError
 
+        self._mass_op = BEUtils.mass_op(spec_sp, None, 2, 2, 1)
+        self._temp_op = BEUtils.temp_op(spec_sp, None, 2, 2, 1)
+        
         v      = sympy.Symbol('vr')
         mu     = sympy.Symbol('mu')
         phi    = sympy.Symbol('phi')
@@ -880,10 +976,10 @@ class CollisionOpSP():
                     DB_k_dvr     = DB(gmx, k, 1)
                     DB_k_dvr_dvr = DB(gmx, k, 2)
 
-                    B_r_vr       =  B(gmx, r)
-                    DB_r_dvr     = DB(gmx, r, 1)
-                    DB_r_dvr_dvr = DB(gmx, r, 2)
-
+                    B_r_vr               =  B(gmx, r)
+                    DB_r_dvr             = DB(gmx, r, 1)
+                    DB_r_dvr_dvr         = DB(gmx, r, 2)
+                    
                     for idx in cc_terms.Ib_nz:
                         
                         if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:

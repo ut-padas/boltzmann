@@ -908,6 +908,42 @@ Let's summarize the Boltzmann equation projected on to the spherical basis.
 	%\boldsymbol{\psi}(x)&=[\psi_0(x), ... , \psi_{N}(x)]^T
 \end{align*} 
  
+\newpage
+\subsection{DG-collision operator}
+For simplicity we assume the weak form of the collision operator of the form given by \eqref{eq:weak_collission_op}.
+\begin{align}
+	C^{q}_{l}  = n_0 v_{th}^4 \myint_{R} x^3 \sigma\of{\varepsilon} f_{l}\of{x} \delta_{ql} \of{T\of{x^\prime}\delta_{q0} - T\of{x}} \diff{x} \label{eq:weak_collission_op}
+\end{align}where $\varepsilon=(\frac{x v_{th}}{\gamma})^2$
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+	\draw[thick, black] (0,0) -- (8,0);
+	\draw[thick, black] (4,-0.2) --node[below]{$x_1$} (4,0.2);
+	\draw[thick, black] (0,-0.2) --node[below]{$x_0$} (0,0.2);
+	\draw[thick, black] (8,-0.2) --node[below]{$x_2$} (8,0.2);
+	\node at (2,-0.5) {$\Omega_0$};
+	\node at (6,-0.5) {$\Omega_1$};
+\end{tikzpicture}
+\caption{Radial grid showing discontinuous domains $\Omega_0$ and $\Omega_1$.}
+\end{figure}
+Let's consider elastic collisions, where $v^\prime = (\sqrt{1-\mu})v$ and $\mu=m_e/M \approx 10^{-5}$.
+For the domain $\Omega_0$, we can write, 
+\begin{align}
+	C_{\Omega_0}^{-} &= -v_{th}^4\int_{x0}^{x1} x^3 \sigma f_{l}^{(\Omega_0)}\of{x} T^{(\Omega_0)}\of{x} dx \\
+		& -v_{th}^4\int_{x0}^{x0/\sqrt{1-\mu}} x^3 \sigma f_{l}^{(\Omega_0)}\of{x} T^{(\Omega_0)}\of{x} dx -v_{th}^4 \int_{x0/\sqrt{1-\mu}}^{x1}x^3 \sigma f_{l}^{(\Omega_0)}\of{x} T^{(\Omega_0)}\of{x} dx
+\end{align}
+For the gain term we can write, 
+\begin{align}
+	C_{\Omega_0}^{+} &= v_{th}^4\int_{x0/\sqrt{1-\mu}}^{x1} x^3 \sigma f_{l}^{(\Omega_0)}\of{x} T^{(\Omega_0)}\of{x^\prime} dx + v_{th}^4\int_{x1}^{x1/\sqrt{1-\mu}} x^3 \sigma f_{l}^{(\Omega_1)}\of{x} T^{(\Omega_0)}\of{x^\prime}dx
+\end{align}
+For general collision terms with energy threshold is larger than the quadrature grid resolution, we can write, 
+\begin{align}
+	C_{\Omega_0}^{-} &= -v_{th}^4\int_{x0}^{x1} x^3 \sigma f_{l}^{(\Omega_0)}\of{x} T^{(\Omega_0)}\of{x} dx
+\end{align}
+\begin{align}
+	C_{\Omega_0}^{+} &= v_{th}^4\int_{x0 + \epsilon(x_0)}^{x1 + \epsilon(x_1)} x^3 \sigma f_{l}\of{x} T^{(\Omega_0)}\of{x^\prime} dx
+\end{align}
+
 
 
 
@@ -923,7 +959,7 @@ Let's summarize the Boltzmann equation projected on to the spherical basis.
 %	&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
 %	&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
 %\end{align*}
-
+\newpage
 \subsection{Using piecewise polynomials}
 $P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,1]$. For $\of{\frac{v}{v_{th}}} \in [a,b]$, we can write 
 \begin{align*}

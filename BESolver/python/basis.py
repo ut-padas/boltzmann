@@ -273,8 +273,8 @@ class BSpline(Basis):
             else:
                 self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
                 #self._t      = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 2 * k_domain[1])
-                self._ele    = None
-                self._ele_p  = None 
+                self._ele    = 1
+                self._ele_p  = num_p
 
                 if sig_pts is not None:
                     for i in range(len(sig_pts)):
@@ -304,7 +304,7 @@ class BSpline(Basis):
         self._t_unique           = np.unique(self._t)
         self._num_knot_intervals = len(self._t_unique)
 
-        if self._ele is not None:
+        if self._ele >1:
             self._dg_idx    = list()
             ele_offsets     = np.zeros_like(self._ele_p)
             ele_offsets[1:] = np.cumsum(self._ele_p)[0:-1]
@@ -316,8 +316,8 @@ class BSpline(Basis):
 
         print("num_p \n ", self._ele_p)
         print("dg node indices\n", self._dg_idx)
-        print("knots vector\n", self._t)
-        print("knots vector (unique)\n", self._t_unique)
+        #print("knots vector\n", self._t)
+        #print("knots vector (unique)\n", self._t_unique)
         # print(self._t)
         # for i in range(self._num_p):
         #     print("spline ", i , self._t[i:i+spline_order+2])
@@ -575,11 +575,11 @@ class BSpline(Basis):
     @staticmethod
     def uniform_dg_knots_1(k_domain, num_p, sp_order, dg_pts):
         if dg_pts is None:
-            return BSpline.uniform_knots(k_domain, num_p, sp_order)
+            return BSpline.uniform_knots(k_domain, num_p, sp_order),1, num_p
 
         _dg_pts = dg_pts[np.logical_and(dg_pts>k_domain[0], dg_pts<k_domain[1])]
         if len(_dg_pts)==0:
-            return BSpline.uniform_knots(k_domain, num_p, sp_order)
+            return BSpline.uniform_knots(k_domain, num_p, sp_order), 1, num_p
         
         dg_domains = [(k_domain[0], _dg_pts[0])]
         dg_domains.extend([(dg_pts[i-1], dg_pts[i]) for i in range(1, len(_dg_pts))])

@@ -39,155 +39,45 @@ class CollisionOpSP():
         
         self._spec              = spec_sp
         self._r_basis_type      = spec_sp.get_radial_basis_type()
-        self._NUM_Q_VR          = params.BEVelocitySpace.NUM_Q_VR
-        self._NUM_Q_VT          = params.BEVelocitySpace.NUM_Q_VT
-        self._NUM_Q_VP          = params.BEVelocitySpace.NUM_Q_VP
-        self._NUM_Q_CHI         = params.BEVelocitySpace.NUM_Q_CHI
-        self._NUM_Q_PHI         = params.BEVelocitySpace.NUM_Q_PHI
-        self._sph_harm_lm       = params.BEVelocitySpace.SPH_HARM_LM 
-        self._num_p             = spec_sp._p +1
-        self._num_sh            = len(spec_sp._sph_harm_lm)
-
-        self._gmx,self._gmw     = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-        legendre                = basis.Legendre()
-        self._glx,self._glw     = legendre.Gauss_Pn(self._NUM_Q_VT)
-        self._VTheta_q          = np.arccos(self._glx)
-        self._VPhi_q            = np.linspace(0,2*np.pi,self._NUM_Q_VP)
-
-        self._glx_s,self._glw_s = legendre.Gauss_Pn(self._NUM_Q_CHI)
-        self._Chi_q             = np.arccos(self._glx_s)
-        self._Phi_q             = np.linspace(0,2*np.pi,self._NUM_Q_PHI)
-
-        assert self._NUM_Q_VP  > 1 
-        assert self._NUM_Q_PHI > 1
+        # self._NUM_Q_VR          = params.BEVelocitySpace.NUM_Q_VR
+        # self._NUM_Q_VT          = params.BEVelocitySpace.NUM_Q_VT
+        # self._NUM_Q_VP          = params.BEVelocitySpace.NUM_Q_VP
+        # self._NUM_Q_CHI         = params.BEVelocitySpace.NUM_Q_CHI
+        # self._NUM_Q_PHI         = params.BEVelocitySpace.NUM_Q_PHI
         
-        sq_fac_v = (2*np.pi/(self._NUM_Q_VP-1))
-        sq_fac_s = (2*np.pi/(self._NUM_Q_PHI-1))
+        self._num_p               = spec_sp._p +1
+        self._num_sh              = len(spec_sp._sph_harm_lm)
+        self._sph_harm_lm         = spec_sp._sph_harm_lm  
+        
 
-        self._WPhi_q   = np.ones(self._NUM_Q_PHI)*sq_fac_s
-        self._WVPhi_q  = np.ones(self._NUM_Q_VP)*sq_fac_v
+        # self._gmx,self._gmw     = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+        # legendre                = basis.Legendre()
+        # self._glx,self._glw     = legendre.Gauss_Pn(self._NUM_Q_VT)
+        # self._VTheta_q          = np.arccos(self._glx)
+        # self._VPhi_q            = np.linspace(0,2*np.pi,self._NUM_Q_VP)
 
-        #trap. weights
-        self._WPhi_q[0]  = 0.5 * self._WPhi_q[0]
-        self._WPhi_q[-1] = 0.5 * self._WPhi_q[-1]
+        # self._glx_s,self._glw_s = legendre.Gauss_Pn(self._NUM_Q_CHI)
+        # self._Chi_q             = np.arccos(self._glx_s)
+        # self._Phi_q             = np.linspace(0,2*np.pi,self._NUM_Q_PHI)
 
-        self._WVPhi_q[0]  = 0.5 * self._WVPhi_q[0]
-        self._WVPhi_q[-1] = 0.5 * self._WVPhi_q[-1]
+        # assert self._NUM_Q_VP  > 1 
+        # assert self._NUM_Q_PHI > 1
+        
+        # sq_fac_v = (2*np.pi/(self._NUM_Q_VP-1))
+        # sq_fac_s = (2*np.pi/(self._NUM_Q_PHI-1))
 
+        # self._WPhi_q   = np.ones(self._NUM_Q_PHI)*sq_fac_s
+        # self._WVPhi_q  = np.ones(self._NUM_Q_VP)*sq_fac_v
+
+        # #trap. weights
+        # self._WPhi_q[0]  = 0.5 * self._WPhi_q[0]
+        # self._WPhi_q[-1] = 0.5 * self._WPhi_q[-1]
+
+        # self._WVPhi_q[0]  = 0.5 * self._WVPhi_q[0]
+        # self._WVPhi_q[-1] = 0.5 * self._WVPhi_q[-1]
+
+        self._NUM_Q_VR = self._spec._num_q_radial
         return 
-
-    def setup_coulombic_collisions(self):
-        """
-        Setup the moments for columbic collisions based on Fokker-Plank approximation. 
-        """
-
-        spec_sp       = self._spec
-        num_p         = spec_sp._p+1
-        num_sh        = len(spec_sp._sph_harm_lm)
-
-        gmx, gmw = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-
-        k_vec    = spec_sp._basis_p._t
-        dg_idx   = spec_sp._basis_p._dg_idx
-        sp_order = spec_sp._basis_p._sp_order
-
-        # compute the moment vectors
-        def Pm(m):
-            q_order       = ((sp_order + m + 1)//2) + 1
-            q_order       *= 64
-            qq_re         = np.polynomial.legendre.leggauss(q_order) #quadpy.c1.gauss_legendre(q_order)
-            qq_re_points  = qq_re[0]
-            qq_re_weights = qq_re[1]
-            
-            pm       = np.zeros((num_p, len(gmx)))
-            for i in range(num_p):
-                a_idx = np.where(k_vec[i] <= gmx)[0]
-                b_idx = np.where(gmx <= k_vec[i + sp_order + 1])[0]
-                idx   = np.sort(np.intersect1d(a_idx, b_idx))
-                for j in idx:
-                    xb      = k_vec[i]
-                    xe      = gmx[j]
-                    qx      = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
-                    qw      = 0.5 * (xe - xb) * qq_re_weights
-                    pm[i,j] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
-
-                # if idx[-1] < (len(gmx) -1):
-                #     assert gmx[ idx[-1] + 1 ] > k_vec[i + sp_order + 1] , "moment computation fail Pm"
-                #     xb  = k_vec[i]
-                #     xe  = k_vec[i + sp_order + 1]
-                #     qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
-                #     qw  = 0.5 * (xe - xb) * qq_re_weights
-                #     pm[i, idx[-1] + 1:] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
-
-                a_idx = np.where(k_vec[i + sp_order + 1] < gmx)[0]
-                xb  = k_vec[i]
-                xe  = k_vec[i + sp_order + 1]
-                qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
-                qw  = 0.5 * (xe - xb) * qq_re_weights
-                pm[i, a_idx] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
-
-
-
-
-                    # scipy_int = scipy.integrate.quadrature(lambda qx : (qx**m) * spec_sp.basis_eval_radial(qx, i , 0), xb, xe, maxiter=100, tol=1e-16, rtol=1e-16)
-                    # print("pm spline_id", i, 'm', m , 2*q_order-1,  "xe", xe, "quad : ", pm[i,j], "scipy int", scipy_int, 'rtol : ', abs(pm[i,j]-scipy_int[0])/scipy_int[0])
-            
-            return pm
-        
-        def Qm(m):
-            q_order       = ((sp_order + m + 1)//2) + 1
-            q_order       *= 64
-            qq_re         = np.polynomial.legendre.leggauss(q_order) #quadpy.c1.gauss_legendre(q_order)
-            qq_re_points  = qq_re[0]
-            qq_re_weights = qq_re[1]
-            
-            qm       = np.zeros((num_p, len(gmx)))
-            for i in range(num_p):
-                a_idx = np.where(k_vec[i] <= gmx)[0]
-                b_idx = np.where(gmx <= k_vec[i + sp_order + 1])[0]
-                idx   = np.sort(np.intersect1d(a_idx, b_idx))
-                for j in idx:
-                    xb  = gmx[j]
-                    xe  = k_vec[i + sp_order+1]
-                    qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
-                    qw  = 0.5 * (xe - xb) * qq_re_weights
-                    qm[i,j] =  np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
-
-                # if idx[0] > 0:
-                #     assert gmx[idx[0] - 1 ] < k_vec[i] , "moment computation fail Qm"
-                #     xb  = k_vec[i]
-                #     xe  = k_vec[i + sp_order+1]
-                #     qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
-                #     qw  = 0.5 * (xe - xb) * qq_re_weights
-                #     qm[i,0:idx[0]] =  np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
-
-                a_idx = np.where(gmx < k_vec[i])[0]
-                xb  = k_vec[i]
-                xe  = k_vec[i + sp_order + 1]
-                qx  = 0.5 * ((xe - xb) * qq_re_points +  (xe + xb))
-                qw  = 0.5 * (xe - xb) * qq_re_weights
-                qm[i, a_idx] = np.dot(qw, (qx**m) * spec_sp.basis_eval_radial(qx, i , 0))
-
-                    # scipy_int = scipy.integrate.quadrature(lambda qx : (qx**m) * spec_sp.basis_eval_radial(qx, i , 0), xb, xe, maxiter=100, tol=1e-16, rtol=1e-16)
-                    # print("qm spline_id", i, 'm', m , "xe", xe, "quad : ", qm[i,j], "scipy int", scipy_int, 'rtol : ', abs(qm[i,j]-scipy_int[0])/scipy_int[0])
-            
-            return qm
-
-        # the factor 2 comes form 4pi/ 2pi from spherical harmonics projection.
-
-        self._p2 = Pm(2)      
-        self._p4 = Pm(4)      
-        self._q1 = Qm(1)
-
-        self._q0 = Qm(0)
-        self._q3 = Qm(3)
-        self._p3 = Pm(3)
-        self._p5 = Pm(5)
-
-        self._mass_op = BEUtils.mass_op(spec_sp, None, 2, 2, 1)
-        self._temp_op = BEUtils.temp_op(spec_sp, None, 2, 2, 1)
-
-        return
 
     def _LOp_eulerian_radial_only(self, collision, maxwellian, vth):
         V_TH          = vth     
@@ -900,8 +790,8 @@ class CollisionOpSP():
         if self._r_basis_type != basis.BasisType.SPLINES:
             raise NotImplementedError
 
-        self._mass_op = BEUtils.mass_op(spec_sp, None, 2, 2, 1)
-        self._temp_op = BEUtils.temp_op(spec_sp, None, 2, 2, 1)
+        self._mass_op = BEUtils.mass_op(spec_sp, 1)
+        self._temp_op = BEUtils.temp_op(spec_sp, 1)
         
         v      = sympy.Symbol('vr')
         mu     = sympy.Symbol('mu')

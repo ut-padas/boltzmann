@@ -57,6 +57,7 @@ class Collisions(abc.ABC):
         self._is_scattering_mat_assembled = False
         self._sc_direction_mat            = None
         self._analytic_cross_section_type = cross_section
+        self._reaction_threshold          = 0.0
         pass
     
     def load_cross_section(self,fname)->None:

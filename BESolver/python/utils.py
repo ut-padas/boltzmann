@@ -55,24 +55,14 @@ def cartesian_to_spherical(vx,vy,vz):
 def spherical_to_cartesian(v_abs, v_theta, v_phi):
     return [v_abs * np.sin(v_theta) * np.cos(v_phi), v_abs * np.sin(v_theta) * np.sin(v_phi), v_abs * np.cos(v_theta)]
 
-def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
+def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, scale=1.0):
     """
     returns the operator that captures the mass of the distribution function. 
     mass = (maxwellian(0) * VTH**3) * np.dot(cf,M_klm) 
     we need to get this properly scaled for the appropiate maxwellian i.e., v_thermal
     """
-    if NUM_Q_VR is None:
-        NUM_Q_VR=params.BEVelocitySpace.NUM_Q_VR
-        
-    if NUM_Q_VT is None:
-        NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    
-    if NUM_Q_VP is None:
-        NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-    
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
-    num_sph_harm = len(sph_harm_lm)
+    num_sh       = len(spec_sp._sph_harm_lm)
 
     if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
         k_vec        = spec_sp._basis_p._t
@@ -80,7 +70,7 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
         sp_order     = spec_sp._basis_p._sp_order
 
         gx_m , gw_m  = spec_sp._basis_p.Gauss_Pn((sp_order//2 + 2) * spec_sp._basis_p._num_knot_intervals)
-        MP_klm       = np.zeros(num_p * num_sph_harm)
+        MP_klm       = np.zeros(num_p * num_sh)
         sph_fac      = spec_sp.basis_eval_spherical(0,0,0,0) * 4 * np.pi
 
         for e_id in range(0,len(dg_idx),2):
@@ -95,7 +85,7 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
                 gmx    = gx_m[qx_idx] 
                 gmw    = gw_m[qx_idx]
 
-                MP_klm[k * num_sph_harm + 0] = sph_fac * np.dot(gmw, gmx**2 * spec_sp.basis_eval_radial(gmx, k, 0))
+                MP_klm[k * num_sh + 0] = sph_fac * np.dot(gmw, gmx**2 * spec_sp.basis_eval_radial(gmx, k, 0))
         return MP_klm
     else:
         legendre     = basis.Legendre()
@@ -241,17 +231,10 @@ def mean_velocity_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_V
     Vp_klm = vpop_g
     return [Vr_klm,Vt_klm, Vp_klm]
 
-def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
-    if NUM_Q_VR is None:
-        NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
-    if NUM_Q_VT is None:
-        NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    if NUM_Q_VP is None:
-        NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, scale=1.0):
     
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
-    num_sph_harm = len(sph_harm_lm)
+    num_sh       = len(spec_sp._sph_harm_lm)
 
     if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
         
@@ -260,7 +243,7 @@ def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
         sp_order     = spec_sp._basis_p._sp_order
 
         gx_m , gw_m  = spec_sp._basis_p.Gauss_Pn((sp_order//2 + 3) * spec_sp._basis_p._num_knot_intervals)
-        MP_klm       = np.zeros(num_p * num_sph_harm)
+        MP_klm       = np.zeros(num_p * num_sh)
         sph_fac      = spec_sp.basis_eval_spherical(0,0,0,0) * 4 * np.pi
 
         for e_id in range(0,len(dg_idx),2):
@@ -275,7 +258,7 @@ def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_
                 gmx    = gx_m[qx_idx] 
                 gmw    = gw_m[qx_idx]
 
-                MP_klm[k * num_sph_harm + 0] = sph_fac * np.dot(gmw, gmx**4 * spec_sp.basis_eval_radial(gmx, k, 0))
+                MP_klm[k * num_sh + 0] = sph_fac * np.dot(gmw, gmx**4 * spec_sp.basis_eval_radial(gmx, k, 0))
         return MP_klm
 
     else:
@@ -407,15 +390,6 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     Note the function is assumed to be f(v) = M(v) h(v) and computes the projection coefficients
     should be compatible with the weight function of the polynomials. 
     """
-    if NUM_Q_VR is None:
-        NUM_Q_VR=params.BEVelocitySpace.NUM_Q_VR
-
-    if NUM_Q_VT is None:
-        NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    
-    if NUM_Q_VP is None:
-        NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-            
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sph_harm = len(sph_harm_lm)
@@ -796,27 +770,23 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_lis
     np.dot(R,f) * vth**3 / mass(f) 
 
     """
-    NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
-    NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-    
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sh = len(sph_harm_lm)
 
-    gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-    
-    c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
-    cs_total = 0
-    for g in g_list:
-        cs_total += g.total_cross_section((gmx_a * vth / c_gamma)**2)
-
-    rr_op    = np.zeros(num_p)
-    
     if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+
         k_vec      = spec_sp._basis_p._t
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
+
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn((sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
+        cs_total = 0
+        for g in g_list:
+            cs_total += g.total_cross_section((gmx_a * vth / c_gamma)**2)
+
+        rr_op    = np.zeros(num_p)
 
         for p in range(num_p):
             qx_idx = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
@@ -830,16 +800,11 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_lis
         raise NotImplementedError
     
 def mobility_op(spec_sp : spec_spherical.SpectralExpansionSpherical, mw, vth):
-    NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
-    NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
     
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sh = len(sph_harm_lm)
 
-    gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-    
     c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
     rr_op    = np.zeros(num_p)
     
@@ -847,6 +812,8 @@ def mobility_op(spec_sp : spec_spherical.SpectralExpansionSpherical, mw, vth):
         k_vec      = spec_sp._basis_p._t
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
+
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn((sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
 
         for p in range(num_p):
             qx_idx   = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
@@ -860,19 +827,11 @@ def mobility_op(spec_sp : spec_spherical.SpectralExpansionSpherical, mw, vth):
 def diffusion_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw, vth):
 
     c_gamma      = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
-    NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
-    NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
     
     num_p        = spec_sp._p +1
     sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
     num_sh       = len(sph_harm_lm)
 
-    gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-    total_cs     = 0
-
-    for g in g_list:
-        total_cs += g.total_cross_section((gmx_a * vth / c_gamma)**2)
     
     rr_op    = np.zeros(num_p)
     
@@ -881,6 +840,12 @@ def diffusion_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
 
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn((sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        total_cs     = 0
+        
+        for g in g_list:
+            total_cs += g.total_cross_section((gmx_a * vth / c_gamma)**2)
+    
         for p in range(num_p):
             qx_idx = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
             gmx    = gmx_a[qx_idx]

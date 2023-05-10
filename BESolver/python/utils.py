@@ -322,7 +322,7 @@ def moment_n_f(spec_sp: spec_spherical.SpectralExpansionSpherical,cf, maxwellian
         NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
     
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    sph_harm_lm  = spec_sp._sph_harm_lm 
     num_sph_harm = len(sph_harm_lm)
     
     legendre     = basis.Legendre()
@@ -391,7 +391,7 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     should be compatible with the weight function of the polynomials. 
     """
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    sph_harm_lm  = spec_sp._sph_harm_lm
     num_sph_harm = len(sph_harm_lm)
     
     legendre     = basis.Legendre()
@@ -651,7 +651,7 @@ def get_eedf(ev_pts, spec_sp : spec_spherical.SpectralExpansionSpherical, cf, ma
     NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
     
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    sph_harm_lm  = spec_sp._sph_harm_lm 
     num_sph_harm = len(sph_harm_lm)
     
     legendre     = basis.Legendre()
@@ -771,7 +771,7 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_lis
 
     """
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    sph_harm_lm  = spec_sp._sph_harm_lm 
     num_sh = len(sph_harm_lm)
 
     if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
@@ -802,7 +802,7 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_lis
 def mobility_op(spec_sp : spec_spherical.SpectralExpansionSpherical, mw, vth):
     
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    sph_harm_lm  = spec_sp._sph_harm_lm 
     num_sh = len(sph_harm_lm)
 
     c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
@@ -829,7 +829,7 @@ def diffusion_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw
     c_gamma      = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
     
     num_p        = spec_sp._p +1
-    sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    sph_harm_lm  = spec_sp._sph_harm_lm 
     num_sh       = len(sph_harm_lm)
 
     

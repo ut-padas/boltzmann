@@ -120,7 +120,7 @@ for run_id in range(len(run_params)):
         
         bte_solver._args = args
         bte_solver.setup()
-        
+
         if args.steady_state == 1:
             r_data    = bte_solver.steady_state_solver()
             #r_data   = bte_solver.steady_state_solver_two_term()
@@ -203,7 +203,7 @@ for run_id in range(len(run_params)):
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
         
-        fig       = plt.figure(figsize=(num_plt_cols * 5 + 0.5*(num_plt_cols-1), num_plt_rows * 5 + 0.5*(num_plt_rows-1)), dpi=300)
+        fig       = plt.figure(figsize=(num_plt_cols * 6 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
         
         COLLISOIN_NAMES = bte_solver._collision_names
 

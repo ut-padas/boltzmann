@@ -13,57 +13,32 @@ import argparse
 import bolsig
 import sys
 import scipy.interpolate
+import scipy.constants
 
 
+def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol = 1e-5, atol=1e-5, max_iter=1000):
 
-def read_parameter_file(fname):
-    """
-    parameters for the 0d3v problem
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-l_max" , "--l_max"                          , help="max polar modes in SH expansion", type=int, default=1)
-    parser.add_argument("-c"     , "--collisions"                     , help="collisions included (g0, g2)",nargs='+', type=str, default=["g0","g2"])
-    parser.add_argument("-ev"    , "--electron_volt"                  , help="initial electron volt", type=float, default=1.0)
-    parser.add_argument("-ev_max", "--ev_max"                         , help="grid cut-off in energy", type=float, default=30.0)
-    parser.add_argument("-T",  "--T"                                  , help="time horizon (s)"  , type=float, default=1e-6)
-    parser.add_argument("-dt", "--dt"                                 , help="time step size (s)", type=float, default=1e-11)
-    parser.add_argument("-E", "--E_field"                             , help="Electric field in V/m", type=float, default=100)
-    parser.add_argument("-steady", "--steady"                         , help="Steady state or transient", type=int, default=1)
-    parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
-    parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knot", type=int, default=5)
-    parser.add_argument("-q_vr", "--quad_radial"                      , help="quadrature in r"        , type=int, default=200)
-    parser.add_argument("-q_vt", "--quad_theta"                       , help="quadrature in polar"    , type=int, default=2)
-    parser.add_argument("-q_vp", "--quad_phi"                         , help="quadrature in azimuthal", type=int, default=2)
-    parser.add_argument("-q_st", "--quad_s_theta"                     , help="quadrature in scattering polar"    , type=int, default=2)
-    parser.add_argument("-q_sp", "--quad_s_phi"                       , help="quadrature in scattering azimuthal", type=int, default=2)
-    parser.add_argument("-sweep_values", "--sweep_values"             , help="Values for parameter sweep", nargs='+', type=float, default=[32, 64, 128])
-    parser.add_argument("-sweep_param", "--sweep_param"               , help="Parameter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
-    parser.add_argument("-dg", "--use_dg"                             , help="enable dg splines", type=int, default=0)
-    parser.add_argument("-Tg", "--Tg"                                 , help="Gas temperature (K)" , type=float, default=1e-12)
-    parser.add_argument("-ion_deg", "--ion_deg"                       , help="Ionization degree"   , type=float, default=0.0)
-    parser.add_argument("-ee_collisions", "--ee_collisions"           , help="Enable electron-electron collisions", type=int, default=0)
-    parser.add_argument("-store_eedf", "--store_eedf"                 , help="store EEDF"   , type=int, default=0)
-    parser.add_argument("-store_csv" , "--store_csv"                  , help="store csv format of QoI comparisons", type=int, default=0)
-    parser.add_argument("-bolsig", "--bolsig_dir"                     , help="Bolsig directory", type=str, default="../../Bolsig/")
-    parser.add_argument("-run_bolsig_only", "--run_bolsig_only"       , help="run the bolsig code only", type=bool, default=False)
-    parser.add_argument("-bolsig_precision", "--bolsig_precision"     , help="precision value for bolsig code", type=float, default=1e-11)
-    parser.add_argument("-bolsig_convergence", "--bolsig_convergence" , help="convergence value for bolsig code", type=float, default=1e-8)
-    parser.add_argument("-bolsig_grid_pts", "--bolsig_grid_pts"       , help="grid points for bolsig code"      , type=int, default=1024)
-    args                = parser.parse_args()
+    k_vec     = spec_sp._basis_p._t
+    dg_idx    = spec_sp._basis_p._dg_idx
+    sp_order  = spec_sp._basis_p._sp_order
 
-def newton_solve(h0, res_func, jac_func, Qmat, mass_op, rtol = 1e-5, atol=1e-5, max_iter=1000):
+    num_p     = spec_sp._p + 1
+    num_sh    = len(spec_sp._sph_harm_lm)
+
     abs_error       = 1.0
     rel_error       = 1.0 
     iteration_steps = 0        
-            
-    h_prev   = np.copy(h0)
+
+    fb_prev  = np.dot(Rmat, h0)
+    f1p      = f1
+    h_prev   = f1p + np.dot(Qmat,fb_prev)
+
     while ((rel_error> rtol and abs_error > atol) and iteration_steps < max_iter):
         Lmat      =  jac_func(h_prev)
         rhs_vec   = -res_func(h_prev)
         abs_error = np.linalg.norm(rhs_vec)
 
         p       = np.linalg.lstsq(Lmat, rhs_vec, rcond=1e-16 /np.linalg.cond(Lmat))[0]
-        #print("|Jp - b| / |b| = %.8E"%(np.linalg.norm(np.dot(Lmat,p)-rhs_vec)/np.linalg.norm(rhs_vec)))
         p      = np.dot(Qmat,p)
 
         alpha  = 1e0
@@ -85,7 +60,8 @@ def newton_solve(h0, res_func, jac_func, Qmat, mass_op, rtol = 1e-5, atol=1e-5, 
             rel_error = np.linalg.norm(h_prev-h_curr)/np.linalg.norm(h_curr)
             print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(abs_error, rel_error, np.dot(mass_op, h_prev)))
         
-        h_prev      = h_curr
+        #fb_prev      = np.dot(Rmat,h_curr)
+        h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
         iteration_steps+=1
 
     print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))
@@ -295,6 +271,7 @@ class bte_0d3v():
 
         self._mass_op               = bte_utils.mass_op(spec_sp, 1)
         self._temp_op               = bte_utils.temp_op(spec_sp, 1)
+        self._temp_op_ev            = self._temp_op * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
 
         mw  = self._mw
         self._mobility_op           = bte_utils.mobility_op(spec_sp, mw, vth)
@@ -367,20 +344,27 @@ class bte_0d3v():
         mw        = self._mw
         vth       = self._vth
 
+        mass_op   = self._mass_op
+        temp_op   = self._temp_op_ev
+
         if init_type == "maxwellian":
             v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
             hv      = lambda v,vt,vp : np.exp(-((v/v_ratio)**2)) / v_ratio**3
             h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=Minv)
-            return h_init
         elif init_type == "anisotropic":
             v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
             hv      = lambda v,vt,vp : (np.exp(-((v/v_ratio)**2)) / v_ratio**3) * (1 + np.cos(vt))
             h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 4, 2, Minv=Minv)
-            return h_init
         else:
             raise NotImplementedError
+        
+        m0 = np.dot(mass_op,h_init) * mw(0) * vth**3
+        print("initial data")
+        print("  mass = %.8E"%(m0))
+        print("  temp = %.8E"%(np.dot(temp_op,h_init) * mw(0) * vth**5/m0))
+        return h_init
 
-    def steady_state_solver_two_term(self):
+    def steady_state_solver_two_term(self,h_init=None):
 
         args = self._args
         if args.ee_collisions == 1 or args.use_dg==1:
@@ -431,31 +415,30 @@ class bte_0d3v():
         num_p  = spec_sp._p + 1
         num_sh = len(spec_sp._sph_harm_lm)
         
-        FOp       = Cmat
+        FOp       =  Cmat
         FOp       =  FOp[0::num_sh, 0::num_sh]
         Minv      = Minv[0::num_sh, 0::num_sh]
         Mmat      = Mmat[0::num_sh, 0::num_sh]
 
-        u         = mass_op / (np.sqrt(np.pi)**3)
+        u         = mass_op * mw(0) * vth**3
         sigma_m   = sigma_m * np.sqrt(gx_ev) * c_gamma * collisions.AR_NEUTRAL_N
-    
         u         = u[0::num_sh]
         
     
         g_rate = np.matmul(u.reshape(1,-1), np.matmul(Minv, FOp))
         # g_rate  = np.zeros(FOp.shape[0])
-        # for col_idx, col in enumerate(collisions_included):
+        # for col_idx, col in enumerate(args.collisions):
         #     if "g2" in col:
         #         g  = collisions.eAr_G2(cross_section=col)
         #         g.reset_scattering_direction_sp_mat()
-        #         g_rate += collisions.AR_NEUTRAL_N *  BEUtils.reaction_rates_op(spec_sp, [g], maxwellian, vth)
-    
+        #         g_rate += collisions.AR_NEUTRAL_N *  bte_utils.reaction_rates_op(spec_sp, [g], mw, vth)
+
         # print(g_rate1)
         # print(g_rate)
 
         Ev     = args.E_field * collisions.ELECTRON_CHARGE_MASS_RATIO
         Vq_d1  = spec_sp.Vdq_r(gx,0,1,1)
-        Wt     = Mmat 
+        Wt     = Mmat
     
         ### if we need to apply some boundary conditions. 
         # fx      = k_vec[num_p -4 :  num_p] 
@@ -555,8 +538,9 @@ class bte_0d3v():
 
             return hh, abs_tol, rel_tol
 
-        h_init                = self.initialize(init_type="maxwellian")
-        h_init                = h_init/np.dot(self._mass_op,h_init)
+        if h_init==None:
+            h_init                = self.initialize(init_type="maxwellian")
+            h_init                = h_init/np.dot(u,h_init[0::num_sh])
 
         hh, abs_tol, rel_tol  = solver_0(h_init, rtol=1e-8, atol=1e-4, max_iter=100)
         h_pde                 = normalized_distribution(spec_sp, mass_op, hh, mw, vth)
@@ -611,7 +595,7 @@ class bte_0d3v():
         spec_sp = self._spec_sp
         num_p   = spec_sp._p +1 
         num_sh  = len(spec_sp._sph_harm_lm)
-        
+
         mm_op   = mass_op * mw(0) * vth**3
         u       = mm_op
         u       = np.dot(np.transpose(mm_op),qA)
@@ -663,7 +647,7 @@ class bte_0d3v():
         h_init                = h_init/np.dot(mm_op,h_init)
         h_init                = np.dot(np.transpose(qA),h_init)
 
-        h_curr , atol, rtol   = newton_solve(h_init, res_func, jac_func, Q, u, rtol = 1e-13, atol=1e-8, max_iter=300)
+        h_curr , atol, rtol   = newton_solve(spec_sp, h_init, res_func, jac_func, f1, Q, R, u, rtol = 1e-13, atol=1e-8, max_iter=300)
         h_pde                 = normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
 
         solution_vector = np.zeros((2, h_init.shape[0]))
@@ -673,7 +657,7 @@ class bte_0d3v():
 
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':None}
 
-    def transient_solver(self, T, dt):
+    def transient_solver(self, T, dt, h_init=None):
         """
         computes the transient solution
         """
@@ -741,10 +725,9 @@ class bte_0d3v():
         tgrid            = np.linspace(0,T, num_time_samples)
         tgrid_idx        = np.int64(np.floor(tgrid / dt))
         
-        #h_init           = self.initialize(init_type="maxwellian")
-        h_init           = self.initialize(init_type="anisotropic")
-        h_init           = h_init/np.dot(mm_op,h_init)
-
+        if h_init is None:
+            h_init           = self.initialize(init_type="maxwellian")
+            h_init           = h_init/np.dot(mm_op,h_init)
         
         h_prev       = np.dot(np.transpose(qA), h_init)
         rtol_desired = 1e-8
@@ -769,7 +752,7 @@ class bte_0d3v():
             
             cc_op  = self._cc_op
             cc_op1 = cc_op
-            #cc_op2 = np.swapaxes(cc_op,1,2)
+            cc_op2 = np.swapaxes(cc_op,1,2)
 
             while t_curr < T:
                 if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
@@ -778,31 +761,31 @@ class bte_0d3v():
                     sample_idx+=1
 
                 gamma_a     = collOp.gamma_a(h_prev, mw, vth, collisions.AR_NEUTRAL_N, ion_deg, eff_rr_op)
-                cc_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * np.dot(cc_op1,h_prev)
+                # cc_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * np.dot(cc_op1,h_prev)
 
-                Lmat        = Cmat_p_Emat + cc_ee
-                #Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) 
-                #rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
+                # Lmat        = Cmat_p_Emat + cc_ee
+                # #Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) 
+                # #rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
 
-                #rhs_cond = np.linalg.cond(np.dot(QT, Lmat)) + np.linalg.norm(Wmat)
-                #dt       = 0.01/rhs_cond#min(, dt)
-                # print("%.8E"%rhs_cond)
+                # #rhs_cond = np.linalg.cond(np.dot(QT, Lmat)) + np.linalg.norm(Wmat)
+                # #dt       = 0.01/rhs_cond#min(, dt)
+                # # print("%.8E"%rhs_cond)
 
-                Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) + dt * np.dot(Wmat,h_prev) * Imat_r
-                rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(Wmat, h_prev) * QT, f1)
+                # Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) + dt * np.dot(Wmat,h_prev) * Imat_r
+                # rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(Wmat, h_prev) * QT, f1)
 
                 
-                fb_curr     = np.linalg.solve(Pmat, rhs_vec) 
-                #print("%.8E "%(np.linalg.norm(rhs_vec-np.dot(Pmat, fb_curr)) / np.linalg.norm(rhs_vec) ))
-                h_curr      = f1 + np.dot(Q,fb_curr)
-                
-                # cc_f          = gamma_a * collisions.AR_NEUTRAL_N * ion_deg
-                # Lmat        = Cmat_p_Emat +  cc_f * np.dot(cc_op1,h_prev) + cc_f * np.dot(cc_op2,h_prev)
-                # Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat, Q)) 
-                # rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
-
-                # fb_curr     = fb_prev + np.linalg.solve(Pmat, rhs_vec) 
+                # fb_curr     = np.linalg.solve(Pmat, rhs_vec) 
+                # #print("%.8E "%(np.linalg.norm(rhs_vec-np.dot(Pmat, fb_curr)) / np.linalg.norm(rhs_vec) ))
                 # h_curr      = f1 + np.dot(Q,fb_curr)
+                
+                cc_f        = gamma_a * collisions.AR_NEUTRAL_N * ion_deg
+                Lmat        = Cmat_p_Emat +  cc_f * np.dot(cc_op1,h_prev) + cc_f * np.dot(cc_op2,h_prev)
+                Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat, Q)) 
+                rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
+
+                fb_curr     = fb_prev + np.linalg.solve(Pmat, rhs_vec) 
+                h_curr      = f1 + np.dot(Q,fb_curr)
                 
                 rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)
                 atol= (np.linalg.norm(h_prev - h_curr))

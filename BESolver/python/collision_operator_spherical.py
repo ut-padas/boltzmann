@@ -103,9 +103,8 @@ class CollisionOpSP():
             if len(dg_idx) == 2:
                 # continuous basis grid
                 gx_e , gw_e  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-                total_cs     = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
-            
                 if(g._type == collisions.CollisionType.EAR_G0):
+                    total_cs = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
                     c_mu     = 2 * collisions.MASS_R_EARGON 
                     v_scale  = np.sqrt(1- c_mu)
                     v_post   = gx_e * v_scale
@@ -145,9 +144,16 @@ class CollisionOpSP():
 
                 elif(g._type == collisions.CollisionType.EAR_G2):
                     check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
-                    v_post           = np.zeros_like(gx_e)
-                    v_post[check_1]  = c_gamma * np.sqrt( (1/2) * ((gx_e[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+                    # v_post           = np.zeros_like(gx_e)
+                    # v_post[check_1]  = c_gamma * np.sqrt( (1/2) * ((gx_e[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
 
+                    gx_e             = gx_e[check_1]
+                    gw_e             = gw_e[check_1]
+
+                    total_cs         = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
+                    v_post           = c_gamma * np.sqrt( (1/2) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+
+                    
                     tmp_q0   = np.zeros((num_p,num_p))
                     tmp_q1   = np.zeros((num_p,num_p))
 

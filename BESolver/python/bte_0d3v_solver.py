@@ -67,25 +67,6 @@ def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol 
     print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))
     return h_curr, abs_error, rel_error
     
-def normalized_distribution(spec_sp: sp.SpectralExpansionSpherical, mm_op, f_vec, maxwellian,vth):
-    c_gamma      = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
-    num_p        = spec_sp._p +1
-    num_sh       = len(spec_sp._sph_harm_lm)
-    # radial_proj  =  BEUtils.compute_radial_components(ev, spec_sp, f_vec, maxwellian, vth, 1)
-    # scale        =  1./(np.trapz(radial_proj[0,:]*np.sqrt(ev),x=ev))
-    # NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
-    # NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    # NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-    # sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
-    # num_sh = len(sph_harm_lm)
-    # gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-    # mm1_op  = np.array([np.dot(gmw_a, spec_sp.basis_eval_radial(gmx_a, k, 0) * gmx_a**2 ) * 2 * (vth/c_gamma)**3 for k in range(num_p)])
-
-    mm_fac       = spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
-    scale        = np.dot(f_vec, mm_op / mm_fac) * (2 * (vth/c_gamma)**3)
-    #scale         = np.dot(f_vec,mm_op) * maxwellian(0) * vth**3
-    return f_vec/scale
-
 class bte_0d3v():
 
     def __init__(self, args) -> None:
@@ -145,7 +126,7 @@ class bte_0d3v():
 
         #print("setting PDE code ev va")
         self._args.electron_volt = (bolsig_mu/1.5)
-        self._args.ev_max        = 1.2 * bolsig_ev[-1]
+        self._args.ev_max        = (1+ 1e-2) * bolsig_ev[-1]
         return 
 
     def setup(self):
@@ -328,7 +309,7 @@ class bte_0d3v():
         ff    = lambda v,vt,vp : f0_cf(.5*(v* vth)**2/collisions.ELECTRON_CHARGE_MASS_RATIO) * (1. - fa_cf(.5*(v* vth)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
 
         hh    =  bte_utils.function_to_basis(spec_sp, ff, maxwellian, spec_sp._num_q_radial, 2, 2, Minv=Minv)
-        hh    =  normalized_distribution(spec_sp, self._mass_op, hh, maxwellian, vth)
+        hh    =  bte_utils.normalized_distribution(spec_sp, self._mass_op, hh, maxwellian, vth)
 
         self._bolsig_data["bolsig_hh"] = hh
 
@@ -344,24 +325,24 @@ class bte_0d3v():
         mw        = self._mw
         vth       = self._vth
 
-        mass_op   = self._mass_op
+        mass_op   = self._mass_op 
         temp_op   = self._temp_op_ev
 
         if init_type == "maxwellian":
             v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
-            hv      = lambda v,vt,vp : np.exp(-((v/v_ratio)**2)) / v_ratio**3
+            hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
             h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=Minv)
         elif init_type == "anisotropic":
             v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
-            hv      = lambda v,vt,vp : (np.exp(-((v/v_ratio)**2)) / v_ratio**3) * (1 + np.cos(vt))
+            hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3 ) * (np.exp(-((v/v_ratio)**2)) / v_ratio**3) * (1 + np.cos(vt))
             h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 4, 2, Minv=Minv)
         else:
             raise NotImplementedError
         
-        m0 = np.dot(mass_op,h_init) * mw(0) * vth**3
+        m0 = np.dot(mass_op,h_init) 
         print("initial data")
         print("  mass = %.8E"%(m0))
-        print("  temp = %.8E"%(np.dot(temp_op,h_init) * mw(0) * vth**5/m0))
+        print("  temp = %.8E"%(np.dot(temp_op,h_init) * vth**2 /m0))
         return h_init
 
     def steady_state_solver_two_term(self,h_init=None):
@@ -420,21 +401,27 @@ class bte_0d3v():
         Minv      = Minv[0::num_sh, 0::num_sh]
         Mmat      = Mmat[0::num_sh, 0::num_sh]
 
-        u         = mass_op * mw(0) * vth**3
+        u         = mass_op 
         sigma_m   = sigma_m * np.sqrt(gx_ev) * c_gamma * collisions.AR_NEUTRAL_N
         u         = u[0::num_sh]
         
-    
-        g_rate = np.matmul(u.reshape(1,-1), np.matmul(Minv, FOp))
-        # g_rate  = np.zeros(FOp.shape[0])
+        # g         = collisions.eAr_G2(cross_section=col)
+        # Wmat      = collisions.AR_NEUTRAL_N * self._collision_op.assemble_mat(g, mw, vth)[0::num_sh, 0::num_sh]
+
+        g_rate  = np.matmul(u.reshape(1,-1), np.matmul(Minv, FOp))
+        # g_rate2 = np.matmul(u.reshape(1,-1), np.matmul(Minv, FOp))
+        # g_rate1 = np.zeros(FOp.shape[0])
         # for col_idx, col in enumerate(args.collisions):
         #     if "g2" in col:
         #         g  = collisions.eAr_G2(cross_section=col)
         #         g.reset_scattering_direction_sp_mat()
-        #         g_rate += collisions.AR_NEUTRAL_N *  bte_utils.reaction_rates_op(spec_sp, [g], mw, vth)
+        #         g_rate1 += collisions.AR_NEUTRAL_N *  bte_utils.growth_rates_op(spec_sp, [g], mw, vth) * np.sqrt(4 * np.pi)
 
         # print(g_rate1)
         # print(g_rate)
+        # print(g_rate1/g_rate)
+        # print(np.abs(g_rate - g_rate1)/g_rate)
+        # g_rate = g_rate1
 
         Ev     = args.E_field * collisions.ELECTRON_CHARGE_MASS_RATIO
         Vq_d1  = spec_sp.Vdq_r(gx,0,1,1)
@@ -463,7 +450,7 @@ class bte_0d3v():
             tmp  = np.sqrt(w_ev * gw) * gx * Vq_d1
             At   = np.matmul(tmp, np.transpose(tmp))
 
-            #print("mass = ",np.dot(u,x))
+            #print("mass = %.8E vi =%.8E %.8E, %.8E" %(np.dot(u,x), g_rate_mu, np.dot(FOp, x), np.dot(Wt * g_rate_mu, x)))
 
             # fx = k_vec[dg_idx[-1] + sp_order]
             # assert fx == k_vec[-1], "flux assembly face coords does not match at the boundary"
@@ -495,12 +482,12 @@ class bte_0d3v():
             Ji              = np.zeros((nn+1,nn))
             Rf              = np.zeros(nn+1)
         
-            abs_tol = 1
-            rel_tol = 1 
+            abs_tol = atol * 2
+            rel_tol = rtol * 2 
             iteration_steps = 0
             h_prev          = h0[0::num_sh]
             rf_initial      = np.linalg.norm(residual_func(h_prev))
-            while (rel_tol > rtol and iteration_steps < max_iter):
+            while (abs_tol > atol and rel_tol > rtol and iteration_steps < max_iter):
                 Rf              = residual_func(h_prev)
                 #Rf              = np.append(Rf,np.dot(u,h_prev)-1) 
                 abs_tol         = np.linalg.norm(Rf)
@@ -511,7 +498,8 @@ class bte_0d3v():
                     
                 Ji = jacobian_func(h_prev)
                 #Ji = np.vstack((Ji,u))
-                p  = np.matmul(np.linalg.pinv(Ji,rcond=1e-16/np.linalg.cond(Ji)), -Rf)
+                #p  = np.matmul(np.linalg.pinv(Ji,rcond=1e-16/np.linalg.cond(Ji)), -Rf)
+                p = np.linalg.solve(Ji, -Rf)
                 
                 alpha=1e0
                 is_diverged = False
@@ -538,19 +526,20 @@ class bte_0d3v():
 
             return hh, abs_tol, rel_tol
 
+        h_bolsig             = self._bolsig_data["bolsig_hh"]
         if h_init==None:
             h_init                = self.initialize(init_type="maxwellian")
             h_init                = h_init/np.dot(u,h_init[0::num_sh])
+            
 
-        hh, abs_tol, rel_tol  = solver_0(h_init, rtol=1e-8, atol=1e-4, max_iter=100)
-        h_pde                 = normalized_distribution(spec_sp, mass_op, hh, mw, vth)
+        hh, abs_tol, rel_tol  = solver_0(h_init, rtol=1e-16, atol=1e-6, max_iter=1000)
+        h_pde                 = bte_utils.normalized_distribution(spec_sp, mass_op, hh, mw, vth)
         norm_L2               = lambda vv : np.dot(vv, np.dot(Mmat, vv))
 
         solution_vector = np.zeros((2, h_init.shape[0]))
-        solution_vector[0,:] = normalized_distribution(spec_sp, mass_op, h_init, mw, vth)
-        solution_vector[1,:] = normalized_distribution(spec_sp, mass_op, hh,     mw, vth)
-        h_bolsig             = self._bolsig_data["bolsig_hh"]
-
+        solution_vector[0,:] = bte_utils.normalized_distribution(spec_sp, mass_op, h_init, mw, vth)
+        solution_vector[1,:] = bte_utils.normalized_distribution(spec_sp, mass_op, hh,     mw, vth)
+        
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': abs_tol, 'rtol':rel_tol, 'tgrid':None}
 
     def steady_state_solver(self):
@@ -648,11 +637,11 @@ class bte_0d3v():
         h_init                = np.dot(np.transpose(qA),h_init)
 
         h_curr , atol, rtol   = newton_solve(spec_sp, h_init, res_func, jac_func, f1, Q, R, u, rtol = 1e-13, atol=1e-8, max_iter=300)
-        h_pde                 = normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
+        h_pde                 = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
 
         solution_vector = np.zeros((2, h_init.shape[0]))
-        solution_vector[0,:] = normalized_distribution(spec_sp, mass_op, np.dot(qA,h_init), mw, vth)
-        solution_vector[1,:] = normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
+        solution_vector[0,:] = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_init), mw, vth)
+        solution_vector[1,:] = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
         h_bolsig             = self._bolsig_data["bolsig_hh"]
 
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':None}
@@ -745,7 +734,7 @@ class bte_0d3v():
         f1      = u / np.dot(u, u)
         fb_prev = np.dot(R,h_prev)
         
-        h_pde                = normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
+        h_pde                = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
         solution_vector[0,:] = h_pde
 
         if args.ee_collisions:
@@ -756,7 +745,7 @@ class bte_0d3v():
 
             while t_curr < T:
                 if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
-                    h_pde                         = normalized_distribution(spec_sp, mass_op, h_prev, mw, vth)
+                    h_pde                         = bte_utils.normalized_distribution(spec_sp, mass_op, h_prev, mw, vth)
                     solution_vector[sample_idx,:] = h_pde
                     sample_idx+=1
 
@@ -800,7 +789,7 @@ class bte_0d3v():
         else:
             while t_curr < T:
                 if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
-                    h_pde                         = normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
+                    h_pde                         = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
                     solution_vector[sample_idx,:] = h_pde
                     sample_idx+=1
 
@@ -832,7 +821,7 @@ class bte_0d3v():
         # print(h_curr)
         # print(np.dot(qA,h_curr))
 
-        h_pde                 = normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
+        h_pde                 = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
         solution_vector[-1,:] = h_pde
         h_bolsig              = self._bolsig_data["bolsig_hh"]
         

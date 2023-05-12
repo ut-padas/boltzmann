@@ -813,7 +813,7 @@ Let $\hat{f} = f_1 + Q\bar{f}$ such that $u^T f_1 = 1$ and $u^T Q\bar{f}=0$ wher
 \end{align*}, where $\bar{f}(0) = Rf(0)$. 
 For backward Euler method, we can write, 
 \begin{align*}
-	\of{I - dtQ^T \of{C+ E + n C_{ee}(\hat{f}^{n},\cdot)} Q} \bar{f}^{n+1} = Q^T\of{C+E + n C_{ee}(\hat{f}^{n},\cdot)}f_1 -u^T W(\hat{f}^{n}) Q^T \hat{f}^{n}
+	\of{I - dtQ^T \of{C+ E + n C_{ee}(\hat{f}^{n},\cdot)} Q} \bar{f}^{n+1} -\bar{f}^{n}= dtQ^T\of{C+E + n C_{ee}(\hat{f}^{n},\cdot)}f_1 -dt u^T W(\hat{f}^{n}) Q^T \hat{f}^{n}
  \end{align*}
 For the steady state solve let, 
 \begin{align*}

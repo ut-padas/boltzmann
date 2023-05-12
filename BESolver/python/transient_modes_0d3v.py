@@ -136,7 +136,7 @@ for run_id in range(len(run_params)):
             h_init[0::num_sh] = ss_init[-1][0::num_sh]
             h_init[1::num_sh] = ss_init[-1][1::num_sh]
 
-            h_init[l::num_sh] += ss_init[0][0::num_sh] + ss_init[-1][l::num_sh]
+            h_init[l::num_sh] += ss_init[0][0::num_sh] #+ ss_init[-1][l::num_sh]
 
             m0 = np.dot(mass_op, h_init)
             t0 = np.dot(temp_op, h_init)/m0

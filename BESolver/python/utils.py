@@ -854,3 +854,56 @@ def diffusion_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw
         return rr_op
     else:
         raise NotImplementedError
+
+def growth_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw, vth):
+    """
+    growth rate op R for collision g
+    np.dot(R,f) * vth**3 / mass(f) 
+    """
+    num_p        = spec_sp._p +1
+    sph_harm_lm  = spec_sp._sph_harm_lm 
+    num_sh       = len(sph_harm_lm)
+
+    if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+
+        k_vec      = spec_sp._basis_p._t
+        dg_idx     = spec_sp._basis_p._dg_idx
+        sp_order   = spec_sp._basis_p._sp_order
+
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn((sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
+        cs_total = 0
+        for g in g_list:
+            cs_total += g.total_cross_section((gmx_a * vth / c_gamma)**2)
+
+        rr_op    = np.zeros(num_p)
+
+        for p in range(num_p):
+            qx_idx = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
+            gmx    = gmx_a[qx_idx]
+            gmw    = gmw_a[qx_idx]
+
+            rr_op[p] = vth * np.dot(gmw, gmx**3 * cs_total[qx_idx] * spec_sp.basis_eval_radial(gmx, p, 0))
+
+        return rr_op
+    else:
+        raise NotImplementedError
+    
+def normalized_distribution(spec_sp, mm_op, f_vec, maxwellian,vth):
+    c_gamma      = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
+    num_p        = spec_sp._p +1
+    num_sh       = len(spec_sp._sph_harm_lm)
+    # radial_proj  =  BEUtils.compute_radial_components(ev, spec_sp, f_vec, maxwellian, vth, 1)
+    # scale        =  1./(np.trapz(radial_proj[0,:]*np.sqrt(ev),x=ev))
+    # NUM_Q_VR     = params.BEVelocitySpace.NUM_Q_VR
+    # NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
+    # NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
+    # sph_harm_lm  = params.BEVelocitySpace.SPH_HARM_LM 
+    # num_sh = len(sph_harm_lm)
+    # gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    # mm1_op  = np.array([np.dot(gmw_a, spec_sp.basis_eval_radial(gmx_a, k, 0) * gmx_a**2 ) * 2 * (vth/c_gamma)**3 for k in range(num_p)])
+
+    mm_fac       = spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
+    scale        = np.dot(f_vec, mm_op / mm_fac) * (2 * (vth/c_gamma)**3)
+    #scale         = np.dot(f_vec,mm_op) * maxwellian(0) * vth**3
+    return f_vec/scale

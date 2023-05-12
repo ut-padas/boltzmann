@@ -125,7 +125,7 @@ for run_id in range(len(run_params)):
             r_data    = bte_solver.steady_state_solver()
             #r_data   = bte_solver.steady_state_solver_two_term()
         else:
-            r_data    = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<(2 * i)))
+            r_data    = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<(i)))
         
         solver_data.append(r_data)
         spec_list.append(bte_solver._spec_sp)
@@ -153,6 +153,10 @@ for run_id in range(len(run_params)):
         for col_idx, col in enumerate(args.collisions):
             rates[col_idx].append(rr[col_idx][-1])
         
+        # tmp       = BEUtils.compute_radial_components(ev, spec_sp, h_bolsig,mw, vth, 1)
+        # bolsig_f0 = tmp[0]
+        # bolsig_f1 = tmp[1]
+
         
     if SAVE_CSV:
         with open("%s.csv"%args.out_fname, 'a', encoding='UTF8') as f:
@@ -258,7 +262,7 @@ for run_id in range(len(run_params)):
                 plt_idx+=1
 
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
-            plt.semilogy(ev,  abs(radial[i, 0]/bolsig_f0-1), '-', label=lbl, color=color)
+            plt.semilogy(ev,  abs(abs(radial[i, 0])/abs(bolsig_f0)-1), '-', label=lbl, color=color)
             plt.ylim((None, 1))
             plt.ylabel(r"relative error")
             plt.xlabel(r"evergy (eV)")
@@ -266,7 +270,7 @@ for run_id in range(len(run_params)):
             plt.title("f0 (PDE vs. Bolsig)")
             
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 1)
-            plt.semilogy(ev,  abs(abs(radial[i, 1])/bolsig_f1-1), '-', label=lbl, color=color)
+            plt.semilogy(ev,  abs(abs(radial[i, 1])/abs(bolsig_f1)-1), '-', label=lbl, color=color)
             plt.ylim((None, 1))
             plt.ylabel(r"relative error")
             plt.xlabel(r"evergy (eV)")

@@ -273,7 +273,7 @@ class bte_0d3v():
         FOp   = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
         
         Cmat  = FOp 
-        Emat  = (args.E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO *advmat
+        Emat  = advmat
 
         self._Cmat   = Cmat
         self._Emat   = Emat
@@ -357,7 +357,7 @@ class bte_0d3v():
 
         args    = self._args
         Cmat    = self._Cmat
-        Emat    = self._Emat
+        Emat    = self._Emat * (args.E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
         Mmat    = self._mass_mat
         Minv    = self._inv_mass_mat
 
@@ -550,7 +550,7 @@ class bte_0d3v():
 
         args    = self._args
         Cmat    = self._Cmat
-        Emat    = self._Emat
+        Emat    = self._Emat * (args.E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
         Mmat    = self._mass_mat
         Minv    = self._inv_mass_mat
         qA      = self._Qa
@@ -659,7 +659,7 @@ class bte_0d3v():
 
         args    = self._args
         Cmat    = self._Cmat
-        Emat    = self._Emat
+        Emat    = self._Emat * (args.E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
         Mmat    = self._mass_mat
         Minv    = self._inv_mass_mat
         qA      = self._Qa
@@ -743,6 +743,10 @@ class bte_0d3v():
             cc_op1 = cc_op
             cc_op2 = np.swapaxes(cc_op,1,2)
 
+            QT_Cmat_p_Emat_Q  = np.dot(QT, np.dot(Cmat_p_Emat,Q))
+            QT_Cmat_p_Emat    = np.dot(QT, Cmat_p_Emat)
+            cc_op1_p_cc_op2   = cc_op1 + cc_op2
+
             while t_curr < T:
                 if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
                     h_pde                         = bte_utils.normalized_distribution(spec_sp, mass_op, h_prev, mw, vth)
@@ -750,29 +754,14 @@ class bte_0d3v():
                     sample_idx+=1
 
                 gamma_a     = collOp.gamma_a(h_prev, mw, vth, collisions.AR_NEUTRAL_N, ion_deg, eff_rr_op)
-                # cc_ee       = gamma_a * collisions.AR_NEUTRAL_N * ion_deg * np.dot(cc_op1,h_prev)
-
-                # Lmat        = Cmat_p_Emat + cc_ee
-                # #Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) 
-                # #rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
-
-                # #rhs_cond = np.linalg.cond(np.dot(QT, Lmat)) + np.linalg.norm(Wmat)
-                # #dt       = 0.01/rhs_cond#min(, dt)
-                # # print("%.8E"%rhs_cond)
-
-                # Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat ,Q)) + dt * np.dot(Wmat,h_prev) * Imat_r
-                # rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Lmat), f1) - dt * np.dot(np.dot(Wmat, h_prev) * QT, f1)
-
-                
-                # fb_curr     = np.linalg.solve(Pmat, rhs_vec) 
-                # #print("%.8E "%(np.linalg.norm(rhs_vec-np.dot(Pmat, fb_curr)) / np.linalg.norm(rhs_vec) ))
-                # h_curr      = f1 + np.dot(Q,fb_curr)
-                
                 cc_f        = gamma_a * collisions.AR_NEUTRAL_N * ion_deg
-                Lmat        = Cmat_p_Emat +  cc_f * np.dot(cc_op1,h_prev) + cc_f * np.dot(cc_op2,h_prev)
-                Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat, Q)) 
-                rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
+                #Lmat        = Cmat_p_Emat +  cc_f * np.dot(cc_op1,h_prev) + cc_f * np.dot(cc_op2,h_prev)
+                #Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat, Q)) 
+                #rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
 
+                Pmat        = Imat_r - dt * QT_Cmat_p_Emat_Q - dt * np.dot(QT, np.dot(cc_f * np.dot(cc_op1_p_cc_op2,h_prev), Q))
+                rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
+                
                 fb_curr     = fb_prev + np.linalg.solve(Pmat, rhs_vec) 
                 h_curr      = f1 + np.dot(Q,fb_curr)
                 
@@ -787,6 +776,10 @@ class bte_0d3v():
                 if t_step%100 == 0: 
                     print("time = %.3E solution convergence dt=%.2E atol = %.8E rtol = %.8E mass %.10E"%(t_curr, dt, atol, rtol, np.dot(u,h_curr)))
         else:
+            QT_Cmat_p_Emat_Q  = np.dot(QT, np.dot(Cmat_p_Emat,Q))
+            QT_Cmat_p_Emat_f1 = np.dot(np.dot(QT, Cmat_p_Emat),f1)
+            QT_f1             = np.dot(QT,f1)
+
             while t_curr < T:
                 if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
                     h_pde                         = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
@@ -794,13 +787,189 @@ class bte_0d3v():
                     sample_idx+=1
 
                 # fully implicit on mass growth term
-                Pmat        = Imat_r - dt * np.dot(QT, np.dot(Cmat_p_Emat,Q)) + dt * np.dot(Wmat,h_prev) * Imat_r
+                Pmat        = Imat_r  - dt * QT_Cmat_p_Emat_Q  + dt * np.dot(Wmat,h_prev) * Imat_r
                 #Pmat_inv    = np.linalg.inv(Pmat)
-                rhs_vec     = fb_prev + dt * np.dot((np.dot(QT, Cmat_p_Emat) - np.dot(Wmat,h_prev) * QT),f1)
+                rhs_vec     = fb_prev + dt * QT_Cmat_p_Emat_f1 - dt * np.dot(Wmat,h_prev) * QT_f1
                 fb_curr     = np.linalg.solve(Pmat, rhs_vec) 
 
                 # semi-explit on mass growth term (only need to compute the inverse matrix once)
-                #rhs_vec     = fb_prev + dt * np.dot(np.dot(QT, Cmat_p_Emat),f1) - dt * np.dot(np.dot(Wmat,h_prev) * QT, h_prev)
+                #rhs_vec     = fb_prev + dt * QT_Cmat_p_Emat_f1 - dt * np.dot(np.dot(Wmat,h_prev) * QT, h_prev)
+                #fb_curr     = np.dot(Pmat_inv,rhs_vec)
+                
+                h_curr      = f1 + np.dot(Q,fb_curr)
+
+                rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)
+                atol= (np.linalg.norm(h_prev - h_curr))
+
+                t_curr+= dt
+                t_step+=1
+                h_prev  = h_curr
+                fb_prev = fb_curr
+
+                if t_step%100 == 0: 
+                    print("time = %.3E solution convergence atol = %.8E rtol = %.8E mass %.10E"%(t_curr, atol, rtol, np.dot(u,h_curr)))
+        # atol = 0
+        # rtol = 0
+        # h_curr = f1 + np.dot(Q,fb_prev)
+        # print(h_curr)
+        # print(np.dot(qA,h_curr))
+
+        h_pde                 = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
+        solution_vector[-1,:] = h_pde
+        h_bolsig              = self._bolsig_data["bolsig_hh"]
+        
+        return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':tgrid}
+
+    def transient_solver_time_harmonic_efield(self, T, dt, h_init=None):
+        """
+        computes the transient solution
+        """
+        args    = self._args
+        spec_sp = self._spec_sp
+
+        mass_op = self._mass_op
+        mw      = self._mw
+        vth     = self._vth
+
+        args    = self._args
+        Cmat    = self._Cmat
+        Emat    = self._Emat 
+        Mmat    = self._mass_mat
+        Minv    = self._inv_mass_mat
+        qA      = self._Qa
+
+        collOp  = self._collision_op 
+
+        num_p   = spec_sp._p +1 
+        num_sh  = len(spec_sp._sph_harm_lm)
+        
+        mm_op   = mass_op * mw(0) * vth**3
+        u       = mm_op
+        u       = np.dot(np.transpose(mm_op),qA)
+        p_vec   = u.reshape((u.shape[0], 1)) / np.sqrt(np.dot(u, u))
+
+        ion_deg     = args.ion_deg
+        
+        Imat        = np.eye(Cmat.shape[0])
+        Imat_r      = np.eye(Imat.shape[0]-1)
+        Impp        = (Imat - np.outer(p_vec, p_vec))
+        Qm,Rm       = np.linalg.qr(Impp)
+
+        if args.use_dg == 1 : 
+            Q           = np.delete(Qm,(num_p-1) * num_sh + num_sh-1, axis=1)
+            R           = np.delete(Rm,(num_p-1) * num_sh + num_sh-1, axis=0)
+            QT          = np.transpose(Q)
+        else:
+            Q           = np.delete(Qm,(num_p-1) * num_sh + 0, axis=1)
+            R           = np.delete(Rm,(num_p-1) * num_sh + 0, axis=0)
+            QT          = np.transpose(Q)
+        
+        qr_error1       = np.linalg.norm(Impp - np.dot(Q,R)) / np.linalg.norm(Impp)
+        qr_error2       = np.linalg.norm(np.dot(QT,Q)-np.eye(QT.shape[0]))
+
+        print("|Impp - QR|/|Impp| = %.8E"%(qr_error1))
+        print("|I - QT Q|         = %.8E"%(qr_error2))
+
+        assert qr_error1 < 1e-10
+        assert qr_error2 < 1e-10
+
+
+        num_time_samples = 500
+        tgrid            = np.linspace(0,T, num_time_samples)
+        tgrid_idx        = np.int64(np.floor(tgrid / dt))
+        
+        if h_init is None:
+            h_init           = self.initialize(init_type="maxwellian")
+            h_init           = h_init/np.dot(mm_op,h_init)
+        
+        h_prev       = np.dot(np.transpose(qA), h_init)
+        rtol_desired = 1e-8
+        atol_desired = 1e-4
+        t_curr       = 0.0
+
+        solution_vector = np.zeros((num_time_samples,h_init.shape[0]))
+
+        sample_idx = 1
+        t_step     = 0
+
+        gg_list         = self._gg_list
+        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * collisions.AR_NEUTRAL_N
+
+        f1      = u / np.dot(u, u)
+        fb_prev = np.dot(R,h_prev)
+        
+        h_pde                = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
+        solution_vector[0,:] = h_pde
+
+        Ef = lambda t : args.E_field * np.cos(np.pi * 2 * t / args.efield_period)
+
+        if args.ee_collisions:
+
+            cc_op  = self._cc_op
+            cc_op1 = cc_op
+            cc_op2 = np.swapaxes(cc_op,1,2)
+
+            Cmat        = np.dot(Minv, Cmat)
+            Emat        = np.dot(Minv, Emat)
+            Wmat        = np.dot(u, Cmat)
+
+            cc_op1_p_cc_op2   = cc_op1 + cc_op2
+
+            while t_curr < T:
+                E_field           = Ef(t_curr)
+                Cmat_p_Emat       = Cmat + Emat * (E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
+                QT_Cmat_p_Emat_Q  = np.dot(QT, np.dot(Cmat_p_Emat,Q))
+                QT_Cmat_p_Emat    = np.dot(QT, Cmat_p_Emat)
+
+                if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
+                    h_pde                         = bte_utils.normalized_distribution(spec_sp, mass_op, h_prev, mw, vth)
+                    solution_vector[sample_idx,:] = h_pde
+                    sample_idx+=1
+
+                gamma_a     = collOp.gamma_a(h_prev, mw, vth, collisions.AR_NEUTRAL_N, ion_deg, eff_rr_op)
+                cc_f        = gamma_a * collisions.AR_NEUTRAL_N * ion_deg
+                #Lmat        = Cmat_p_Emat +  cc_f * np.dot(cc_op1,h_prev) + cc_f * np.dot(cc_op2,h_prev)
+                #Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat, Q)) 
+                #rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
+
+                Pmat        = Imat_r - dt * QT_Cmat_p_Emat_Q - dt * np.dot(QT, np.dot(cc_f * np.dot(cc_op1_p_cc_op2,h_prev), Q))
+                rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
+                
+                fb_curr     = fb_prev + np.linalg.solve(Pmat, rhs_vec) 
+                h_curr      = f1 + np.dot(Q,fb_curr)
+                
+                rtol= (np.linalg.norm(h_prev - h_curr))/np.linalg.norm(h_curr)
+                atol= (np.linalg.norm(h_prev - h_curr))
+
+                t_curr+= dt
+                t_step+=1
+                h_prev  = h_curr
+                fb_prev = fb_curr
+
+                if t_step%100 == 0: 
+                    print("time = %.3E solution convergence dt=%.2E atol = %.8E rtol = %.8E mass %.10E"%(t_curr, dt, atol, rtol, np.dot(u,h_curr)))
+        else:
+            QT_f1             = np.dot(QT,f1)
+            while t_curr < T:
+                E_field           = Ef(t_curr)
+                print(E_field)
+                Cmat_p_Emat       = Cmat + Emat * (E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
+                QT_Cmat_p_Emat_Q  = np.dot(QT, np.dot(Cmat_p_Emat,Q))
+                QT_Cmat_p_Emat_f1 = np.dot(np.dot(QT, Cmat_p_Emat),f1)
+
+                if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
+                    h_pde                         = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
+                    solution_vector[sample_idx,:] = h_pde
+                    sample_idx+=1
+
+                # fully implicit on mass growth term
+                Pmat        = Imat_r  - dt * QT_Cmat_p_Emat_Q  + dt * np.dot(Wmat,h_prev) * Imat_r
+                #Pmat_inv    = np.linalg.inv(Pmat)
+                rhs_vec     = fb_prev + dt * QT_Cmat_p_Emat_f1 - dt * np.dot(Wmat,h_prev) * QT_f1
+                fb_curr     = np.linalg.solve(Pmat, rhs_vec) 
+
+                # semi-explit on mass growth term (only need to compute the inverse matrix once)
+                #rhs_vec     = fb_prev + dt * QT_Cmat_p_Emat_f1 - dt * np.dot(np.dot(Wmat,h_prev) * QT, h_prev)
                 #fb_curr     = np.dot(Pmat_inv,rhs_vec)
                 
                 h_curr      = f1 + np.dot(Q,fb_curr)

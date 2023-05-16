@@ -105,6 +105,15 @@ for run_id in range(len(run_params)):
 
     pb_mode_begin   = 2 
 
+    E_field = args.E_field
+    ion_deg = args.ion_deg
+
+    EbyN_frac_list    = [0]
+    if args.ee_collisions == 0:
+        ion_deg_frac_list = [0]
+    else:
+        ion_deg_frac_list = [0]
+
     for i, value in enumerate(args.sweep_values):
         if args.sweep_param == "Nr":
             args.NUM_P_RADIAL = int(value)
@@ -131,37 +140,34 @@ for run_id in range(len(run_params)):
         ss_init[0] = ss_sol[0] / np.dot(mass_op, ss_sol[0])
         ss_init[1] = ss_sol[1] / np.dot(mass_op, ss_sol[1])
 
-        for l in range(pb_mode_begin, num_sh):
-            h_init            = np.zeros(num_p * num_sh)
+        for ii, EbyN_fraction in enumerate(EbyN_frac_list):
+            for jj, ion_deg_fraction in enumerate(ion_deg_frac_list):
+                h_init            = np.copy(ss_init[1])
 
-            h_init[0::num_sh] = ss_init[-1][0::num_sh]
-            h_init[1::num_sh] = ss_init[-1][1::num_sh]
+                m0 = np.dot(mass_op, h_init)
+                t0 = np.dot(temp_op, h_init)/m0
 
-            h_init[l::num_sh] += ss_init[0][0::num_sh] #+ ss_init[-1][l::num_sh]
+                args.E_field = E_field * (1 + EbyN_fraction)
+                args.ion_deg = ion_deg * (1 + ion_deg_fraction)
 
-            m0 = np.dot(mass_op, h_init)
-            t0 = np.dot(temp_op, h_init)/m0
-
-            print("perturbing mode %d"%l)
-            print("  mass = %.8E"%(m0))
-            print("  temp = %.8E"%(t0))
-
-            if args.efield_period == 0:
-                ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), h_init)
-            else:
-                ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init)
-            ts_qoi_all[(i,l)] = bte_solver.compute_QoIs(ts_sol["sol"])
-
-            # ts_ss     = np.zeros((2,len(h_init)))
-            # ts_ss[0]  = ts_sol["sol"][0]
-            # ts_ss[-1] = ts_sol["sol"][-1]
-            ts_ss_all [(i,l)] = ts_sol
+                print("running transient solver for E = %.2E and ne/n0 = %.2E"%(args.E_field, args.ion_deg))
+                print("  mass = %.8E"%(m0))
+                print("  temp = %.8E"%(t0))
+                
+                if args.efield_period == 0:
+                    ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), h_init)
+                else:
+                    ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init)
+                ts_qoi_all[(i, ii, jj)] = bte_solver.compute_QoIs(ts_sol["sol"])
+                ts_ss_all [(i, ii, jj)] = ts_sol
     
-
+        args.E_field = E_field
+        args.ion_deg = ion_deg
+    
     if (1):
         maxwellian   = bte_solver._mw
         vth          = bte_solver._vth
-        num_subplots = num_sh + len(args.sweep_values) * 4
+        num_subplots = max(num_sh,4) + len(args.sweep_values) * 4
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
         
@@ -197,52 +203,58 @@ for run_id in range(len(run_params)):
                     plt.legend(prop={'size': 8})
                 
                 plt_idx+=1
-
+        plt_idx = max(num_sh, 4) + 1
         color_list = list()
-        for l_idx in range(0,num_sh):
-            color = next(plt.gca()._get_lines.prop_cycler)['color']
-            color_list.append(color)
+        for ii, EbyN_fraction in enumerate(EbyN_frac_list):
+            for jj, ion_deg_fraction in enumerate(ion_deg_frac_list):
+                color = next(plt.gca()._get_lines.prop_cycler)['color']
+                color_list.append(color)
 
         for i, value in enumerate(args.sweep_values):
-            for l_idx in range(pb_mode_begin,num_sh):
-                color  = color_list[l_idx] 
-                qois   = ts_qoi_all[(i,l_idx)]
-                ts_sol = ts_ss_all[(i,l_idx)]
+            for ii, EbyN_fraction in enumerate(EbyN_frac_list):
+                for jj, ion_deg_fraction in enumerate(ion_deg_frac_list):
+                    color    = color_list[ii * len(ion_deg_frac_list) + jj] 
+                    
+                    qois     = ts_qoi_all[(i, ii, jj)]
+                    ts_sol   = ts_ss_all [(i ,ii, jj)]
 
-                tgrid  = ts_sol["tgrid"]
-                dt     = args.T_DT / (1<<(1 * i ))
-                
-                lbl ="f mode=%d"%(l_idx)
-                plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
-                plt.semilogy(tgrid,  qois["energy"], '-', label=lbl, color=color)
-                plt.ylabel(r"energy (ev)")
-                plt.xlabel(r"time (s)")
-                plt.title("Nr = %d dt =%.4E"%(value, dt))
-                plt.grid(visible=True)
-                plt.legend()
+                    tgrid    = ts_sol["tgrid"]
+                    dt       = args.T_DT / (1<<(1 * i ))
 
-                plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 1)
-                plt.semilogy(tgrid,  np.abs(qois["mobility"]), '-', label=lbl, color=color)
-                plt.ylabel(r"mobility ($N (1/m/V/s $))")
-                plt.xlabel(r"time (s)")
-                plt.title("Nr = %d dt =%.4E"%(value, dt))
-                plt.grid(visible=True)
-
-                for col_idx, col in enumerate(args.collisions):
-                    plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 2 + col_idx)
-                    plt.semilogy(tgrid, qois["rates"][col_idx], '-', label=lbl, color=color)
-
-                    plt.title(COLLISOIN_NAMES[col])
-                    plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
+                    ebyn     = args.E_field * (1 + EbyN_fraction) / collisions.AR_NEUTRAL_N / 1e-21
+                    ion_deg  = args.ion_deg * (1 + ion_deg_fraction) 
+                    
+                    lbl ="E/N = %.4E ne/ni = %.4E"%(ebyn, ion_deg)
+                    plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
+                    plt.semilogy(tgrid,  qois["energy"], '-', label=lbl, color=color)
+                    plt.ylabel(r"energy (ev)")
                     plt.xlabel(r"time (s)")
                     plt.title("Nr = %d dt =%.4E"%(value, dt))
                     plt.grid(visible=True)
-            
+                    plt.legend()
+
+                    plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 1)
+                    plt.semilogy(tgrid,  np.abs(qois["mobility"]), '-', label=lbl, color=color)
+                    plt.ylabel(r"mobility ($N (1/m/V/s $))")
+                    plt.xlabel(r"time (s)")
+                    plt.title("Nr = %d dt =%.4E"%(value, dt))
+                    plt.grid(visible=True)
+
+                    for col_idx, col in enumerate(args.collisions):
+                        plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 2 + col_idx)
+                        plt.semilogy(tgrid, qois["rates"][col_idx], '-', label=lbl, color=color)
+
+                        plt.title(COLLISOIN_NAMES[col])
+                        plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
+                        plt.xlabel(r"time (s)")
+                        plt.title("Nr = %d dt =%.4E"%(value, dt))
+                        plt.grid(visible=True)
+                
             plt_idx+= 2 + len(args.collisions)
         
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
 
-        plt.savefig("perturb_modes_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
+        plt.savefig("perturb_params_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
 
         plt.close()
 

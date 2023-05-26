@@ -45,6 +45,7 @@ parser.add_argument("-T", "--T_END"                               , help="Simula
 parser.add_argument("-dt", "--T_DT"                               , help="Simulation time step size ", type=float, default=1e-7)
 parser.add_argument("-o",  "--out_fname"                          , help="output file name", type=str, default='pde_vs_bolsig')
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
+parser.add_argument("-l_pt_mode", "--l_pt_mode"                   , help="perturb mode", type=int, default=2)
 parser.add_argument("-c", "--collisions"                          , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)",nargs='+', type=str, default=["g0Const"])
 parser.add_argument("-ev", "--electron_volt"                      , help="initial electron volt", type=float, default=0.25)
 parser.add_argument("-q_vr", "--quad_radial"                      , help="quadrature in r"        , type=int, default=200)
@@ -136,9 +137,9 @@ for run_id in range(len(run_params)):
     mm_op  = bte_solver._mass_op * mw(0) * vth**3
 
     ss_sol /= np.dot(mm_op,ss_sol)
-    if num_sh>2:
+    if num_sh> args.l_pt_mode:
         # to perturb mode 2 and sets all the other modes to zero. 
-        ss_sol[2::num_sh] = data[0,0::num_sh]
+        ss_sol[args.l_pt_mode::num_sh] = data[0,0::num_sh]
     
     def ss_dist(vv):
         s=0

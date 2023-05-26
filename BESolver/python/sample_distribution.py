@@ -130,11 +130,16 @@ for run_id in range(len(run_params)):
     radial[:, :]      = BEUtils.compute_radial_components(ev, spec_sp, data[-1,:], mw, vth, 1)
 
 
-    ss_sol = data[-1]
+    ss_sol = np.zeros(num_p * num_sh) 
+    ss_sol[0::num_sh] = data[-1,0::num_sh]
+    ss_sol[1::num_sh] = data[-1,1::num_sh]
     mm_op  = bte_solver._mass_op * mw(0) * vth**3
 
     ss_sol /= np.dot(mm_op,ss_sol)
-
+    if num_sh>2:
+        # to perturb mode 2 and sets all the other modes to zero. 
+        ss_sol[2::num_sh] = data[0,0::num_sh]
+    
     def ss_dist(vv):
         s=0
         for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):

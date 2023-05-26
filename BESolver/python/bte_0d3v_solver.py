@@ -542,7 +542,7 @@ class bte_0d3v():
         
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': abs_tol, 'rtol':rel_tol, 'tgrid':None}
 
-    def steady_state_solver(self):
+    def steady_state_solver(self, h_init=None):
         """steady state solver"""
         mass_op = self._mass_op
         mw      = self._mw
@@ -631,8 +631,9 @@ class bte_0d3v():
         # Wmat[0::num_sh] = np.dot(u[0::num_sh], np.dot(Minv[0::num_sh, 0::num_sh], Cmat[0::num_sh, 0::num_sh]))
         # Wmat[1::num_sh] = 0.0
 
-        
-        h_init                = self.initialize(init_type="maxwellian")
+        if h_init is None:
+            h_init                = self.initialize(init_type="maxwellian")
+
         h_init                = h_init/np.dot(mm_op,h_init)
         h_init                = np.dot(np.transpose(qA),h_init)
 
@@ -646,7 +647,7 @@ class bte_0d3v():
 
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':None}
 
-    def transient_solver(self, T, dt, h_init=None):
+    def transient_solver(self, T, dt, num_time_samples=500, h_init=None):
         """
         computes the transient solution
         """
@@ -710,7 +711,6 @@ class bte_0d3v():
             Pmat_inv    = np.linalg.pinv(Pmat, rcond=1e-14/np.linalg.cond(Pmat))
 
         
-        num_time_samples = 100
         tgrid            = np.linspace(0,T, num_time_samples)
         tgrid_idx        = np.int64(np.floor(tgrid / dt))
         
@@ -820,7 +820,7 @@ class bte_0d3v():
         
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':tgrid}
 
-    def transient_solver_time_harmonic_efield(self, T, dt, h_init=None):
+    def transient_solver_time_harmonic_efield(self, T, dt, num_time_samples=500, h_init=None):
         """
         computes the transient solution
         """
@@ -873,8 +873,6 @@ class bte_0d3v():
         assert qr_error1 < 1e-10
         assert qr_error2 < 1e-10
 
-
-        num_time_samples = 500
         tgrid            = np.linspace(0,T, num_time_samples)
         tgrid_idx        = np.int64(np.floor(tgrid / dt))
         
@@ -901,7 +899,8 @@ class bte_0d3v():
         h_pde                = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
         solution_vector[0,:] = h_pde
 
-        Ef = lambda t : args.E_field * np.cos(np.pi * 2 * t / args.efield_period)
+        E_max = args.E_field
+        Ef    = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
 
         if args.ee_collisions:
 
@@ -952,7 +951,6 @@ class bte_0d3v():
             QT_f1             = np.dot(QT,f1)
             while t_curr < T:
                 E_field           = Ef(t_curr)
-                print(E_field)
                 Cmat_p_Emat       = Cmat + Emat * (E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
                 QT_Cmat_p_Emat_Q  = np.dot(QT, np.dot(Cmat_p_Emat,Q))
                 QT_Cmat_p_Emat_f1 = np.dot(np.dot(QT, Cmat_p_Emat),f1)
@@ -989,7 +987,7 @@ class bte_0d3v():
         # h_curr = f1 + np.dot(Q,fb_prev)
         # print(h_curr)
         # print(np.dot(qA,h_curr))
-
+        args.E_field          = E_max
         h_pde                 = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
         solution_vector[-1,:] = h_pde
         h_bolsig              = self._bolsig_data["bolsig_hh"]
@@ -1022,3 +1020,75 @@ class bte_0d3v():
             rr.append(reaction_rate)
         
         return {"energy":mu, "mobility":M, "diffusion": D, "rates": rr}
+    
+    def time_harmonic_efield_with_series_ss_solves(self, T, dt, num_time_samples=500, h_init=None):
+        """
+        computes the transient solution
+        """
+        args    = self._args
+        spec_sp = self._spec_sp
+
+        mass_op = self._mass_op
+        mw      = self._mw
+        vth     = self._vth
+
+        args    = self._args
+        Cmat    = self._Cmat
+        Emat    = self._Emat 
+        Mmat    = self._mass_mat
+        Minv    = self._inv_mass_mat
+        qA      = self._Qa
+
+        collOp  = self._collision_op 
+
+        num_p   = spec_sp._p +1 
+        num_sh  = len(spec_sp._sph_harm_lm)
+        
+        mm_op   = mass_op * mw(0) * vth**3
+        u       = mm_op
+        
+        tgrid            = np.linspace(0,T, num_time_samples)
+        tgrid_idx        = np.int64(np.floor(tgrid / dt))
+        
+        if h_init is None:
+            h_init           = self.initialize(init_type="maxwellian")
+            h_init           = h_init/np.dot(mm_op,h_init)
+        
+        
+        solution_vector = np.zeros((num_time_samples,h_init.shape[0]))
+
+        sample_idx = 0
+        t_step     = 0
+        t_curr     = 0.0
+
+        
+        E_max   = args.E_field
+        Ef      = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
+        
+        while t_curr < T:
+            args.E_field       = Ef(t_curr)
+            print("time = %.3E E= %4E" %(t_curr, args.E_field))
+            ss_sol             = self.steady_state_solver(h_init)
+            atol               = ss_sol['atol']
+            h_prev             = ss_sol['sol'][-1, :]
+            if atol > 1:
+                print("ss solver failed")
+                h_prev = h_prev * 0
+
+            if sample_idx < num_time_samples and t_step == tgrid_idx[sample_idx]:
+                print(sample_idx)
+                h_pde                         = bte_utils.normalized_distribution(spec_sp, mass_op, h_prev, mw, vth)
+                solution_vector[sample_idx,:] = h_pde
+                sample_idx+=1
+
+            t_curr+= dt
+            t_step+=1
+            
+
+        args.E_field          = E_max
+        
+        h_pde                 = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_prev), mw, vth)
+        solution_vector[-1,:] = h_pde
+        h_bolsig              = self._bolsig_data["bolsig_hh"]
+
+        return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': 0.0, 'rtol':0.0, 'tgrid':tgrid}

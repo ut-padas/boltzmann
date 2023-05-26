@@ -907,3 +907,32 @@ def normalized_distribution(spec_sp, mm_op, f_vec, maxwellian,vth):
     scale        = np.dot(f_vec, mm_op / mm_fac) * (2 * (vth/c_gamma)**3)
     #scale         = np.dot(f_vec,mm_op) * maxwellian(0) * vth**3
     return f_vec/scale
+
+def mcmc_sampling(dist_pdf, prior_dist, n_samples, burn_in_fac=0.2):
+    
+    def random_coin(p):
+        unif = np.random.uniform(0,1)
+        if unif>=p:
+            return False
+        else:
+            return True
+
+    states  = list() 
+    hops    = int(n_samples + n_samples * burn_in_fac)
+    burn_in = int(n_samples * burn_in_fac)
+    current = prior_dist()
+    
+    #print(hops,burn_in)
+
+    for i in range(hops):
+        states.append(current)
+        movement = prior_dist()
+        
+        curr_prob = dist_pdf(current)
+        move_prob = dist_pdf(movement)
+
+        acceptance = min(move_prob/curr_prob,1)
+        if random_coin(acceptance):
+            current = movement
+    
+    return np.array(states[burn_in:])

@@ -132,8 +132,9 @@ for run_id in range(len(run_params)):
 
 
     ss_sol = np.zeros(num_p * num_sh) 
-    ss_sol[0::num_sh] = data[-1,0::num_sh]
-    ss_sol[1::num_sh] = data[-1,1::num_sh]
+    for l in range(num_sh):
+        ss_sol[l::num_sh] = data[-1,l::num_sh]
+        ss_sol[l::num_sh] = data[-1,l::num_sh]
     mm_op  = bte_solver._mass_op * mw(0) * vth**3
 
     ss_sol /= np.dot(mm_op,ss_sol)
@@ -182,6 +183,15 @@ for run_id in range(len(run_params)):
     plt.xlabel(r"ev")
     plt.title(r"$f_1$")
     plt.grid(visible=True)
+
+    if num_sh > 2:
+        plt.subplot(num_plt_rows, num_plt_cols, 3)
+        #plt.semilogy(bte_solver._bolsig_data["ev"], np.abs(bte_solver._bolsig_data["f1"]), 'k-', label="bolsig")
+        plt.semilogy(ev, np.abs(radial[2,:]),'r-', label="pde")
+        plt.xlabel(r"ev")
+        plt.title(r"$f_2$")
+        plt.grid(visible=True)
+
    
     plt.subplot(num_plt_rows, num_plt_cols, 4)
     plt.plot(vr, ss_r0, 'b-')

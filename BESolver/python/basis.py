@@ -15,6 +15,13 @@ import scipy.special
 #import quadpy
 import math
 import matplotlib.pyplot as plt
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.size": 12,
+    #"ytick.major.size": 3,
+    #"font.family": "Helvetica",
+    #"lines.linewidth":2.0
+})
 
 # some parameters related to splines. 
 XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 3
@@ -416,14 +423,18 @@ class BSpline(Basis):
         return lambda x,l : b_deriv(x)
 
     def plot(self):
-        dd = self._kdomain
-        x  = np.linspace(dd[0], dd[1], self._num_p * 100)
+        dd  = self._kdomain
+        x   = np.linspace(dd[0], dd[1], self._num_p * 100)
+        
+        fig = plt.figure(figsize=(8,3),dpi=300)
         for i in range(self._num_p):
-            plt.plot(x, self.Pn(i)(x,0), label="b_%d"%(i), linewidth=2)
+            plt.plot(x, self.Pn(i)(x,0), linewidth=0.8)
 
-        plt.legend()
+        plt.xlabel(r"v")
+        #plt.legend()
         plt.grid()
-        plt.show()
+        plt.savefig("bspline_basis.png")
+        #plt.show()
         plt.close()
 
     def fit(self, f):

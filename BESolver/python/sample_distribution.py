@@ -43,9 +43,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-Nr", "--NUM_P_RADIAL"                       , help="Number of polynomials in radial direction", type=int, default=16)
 parser.add_argument("-T", "--T_END"                               , help="Simulation time", type=float, default=1e-4)
 parser.add_argument("-dt", "--T_DT"                               , help="Simulation time step size ", type=float, default=1e-7)
-parser.add_argument("-o",  "--out_fname"                          , help="output file name", type=str, default='pde_vs_bolsig')
+parser.add_argument("-o",  "--out_fname"                          , help="output file name", type=str, default='samples')
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
 parser.add_argument("-l_pt_mode", "--l_pt_mode"                   , help="perturb mode", type=int, default=2)
+parser.add_argument("-sample_pts", "--sample_pts"                 , help="number of samples to draw", type=int, default=100000)
+parser.add_argument("-num_chains", "--num_chains"                 , help="number of chains for MCMC sampling", type=int, default=4)
 parser.add_argument("-c", "--collisions"                          , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)",nargs='+', type=str, default=["g0Const"])
 parser.add_argument("-ev", "--electron_volt"                      , help="initial electron volt", type=float, default=0.25)
 parser.add_argument("-q_vr", "--quad_radial"                      , help="quadrature in r"        , type=int, default=200)
@@ -107,7 +109,7 @@ for run_id in range(len(run_params)):
 
     if args.steady_state == 1:
         
-        if args.ee_collisions ==0 and args.l_max ==1:
+        if args.ee_collisions ==0 and args.l_max ==1 and args.use_dg==0:
             r_data   = bte_solver.steady_state_solver_two_term()
         else:
             r_data    = bte_solver.steady_state_solver()
@@ -151,14 +153,12 @@ for run_id in range(len(run_params)):
                 s+=ss_sol[k * num_sh + lm_idx] * bk_vr * sph_v * vv[0]**2 * np.sin(vv[1])
         return s
 
-    mu  = np.zeros(3)
-    cov = np.array([[np.sqrt(0.5), 0, 0], [0, np.sqrt(0.5), 0], [0, 0, np.sqrt(0.5)]])
-    def prior_dist():
-        x   = np.random.multivariate_normal(mu,cov)
-        xp  = bte_utils.cartesian_to_spherical(x[0], x[1], x[2])
-        return np.array(xp)
-
-    samples = bte_utils.mcmc_sampling(ss_dist, prior_dist, 2000, burn_in_fac=0.5)
+    prior_mu  = np.zeros(3)
+    prior_cov = np.array([[np.sqrt(0.5), 0, 0], [0, np.sqrt(0.5), 0], [0, 0, np.sqrt(0.5)]])
+    
+    samples = bte_utils.mcmc_sampling(ss_dist, prior_mu, prior_cov, args.sample_pts, burn_in_fac=0.2, num_chains = args.num_chains)
+    fname   = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E.npy"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg)
+    np.save(fname, samples)
     
     vr    = np.linspace(0,3,100)
     vq    = spec_sp.Vq_r(vr,0,1)

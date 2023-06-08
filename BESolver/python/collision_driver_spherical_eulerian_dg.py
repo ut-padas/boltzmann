@@ -29,11 +29,11 @@ from   datetime import datetime
 import bte_0d3v_solver as bte_0d3v
 
 plt.rcParams.update({
-    "text.usetex": False,
-    "font.size": 12,
+    "text.usetex": True,
+    "font.size": 24,
     #"ytick.major.size": 3,
     #"font.family": "Helvetica",
-    #"lines.linewidth":2.0
+    "lines.linewidth":2.0
 })
 
 parser = argparse.ArgumentParser()
@@ -184,7 +184,7 @@ for run_id in range(len(run_params)):
         
 
     if SAVE_EEDF:
-        with open("%s.npy"%args.out_fname, 'a', encoding='UTF8') as f:
+        with open("%s.npy"%args.out_fname, 'ab') as f:
             np.save(f, np.array([spec_sp._p + 1]))
             np.save(f, np.array([spec_sp._sph_harm_lm[-1][0]]))
             np.save(f, np.array([args.E_field]))
@@ -197,6 +197,23 @@ for run_id in range(len(run_params)):
                 
             np.save(f, bolsig_f0)
             np.save(f, bolsig_f1)
+            
+        fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E.csv"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg)
+        sol_data = np.zeros((len(ev),  1 + 2 + args.l_max+1))
+        sol_data[:,0] = ev 
+        sol_data[:,1] = bolsig_f0
+        sol_data[:,2] = bolsig_f1
+
+        header_str = "ev\tbolsig_f0\tbolsig_f1\t"
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            sol_data[:,3 + lm_idx] = radial[-1,lm_idx,:]
+            header_str+="f%d\t"%lm[0]
+
+        np.savetxt(fname, sol_data, delimiter='\t',header=header_str)
+
+
+        
+
 
     if (1):
         maxwellian   = bte_solver._mw
@@ -207,16 +224,44 @@ for run_id in range(len(run_params)):
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
         
-        fig       = plt.figure(figsize=(num_plt_cols * 6 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
+        fig       = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
         
         COLLISOIN_NAMES = bte_solver._collision_names
 
-        #f0
-        plt.subplot(num_plt_rows, num_plt_cols,  1)
-        plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
-        # f1
-        plt.subplot(num_plt_rows, num_plt_cols,  2)
-        plt.semilogy(bolsig_ev,  abs(bolsig_f1), '-k', label="bolsig")
+        # #f0
+        # plt.subplot(num_plt_rows, num_plt_cols,  1)
+        # plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
+        # # f1
+        # plt.subplot(num_plt_rows, num_plt_cols,  2)
+        # plt.semilogy(bolsig_ev,  abs(bolsig_f1), '-k', label="bolsig")
+
+        plt.subplot(num_plt_rows, num_plt_cols, 1)
+        plt.semilogy(args.sweep_values, abs(np.array(mu)/bolsig_mu-1), 'o-', label='mean energy')
+        
+        for col_idx, col in enumerate(args.collisions):
+            if bolsig_rates[col_idx] != 0:
+                plt.semilogy(args.sweep_values, abs(rates[col_idx]/bolsig_rates[col_idx]-1), 'o-', label=COLLISOIN_NAMES[col])
+        
+        plt.semilogy(args.sweep_values, abs(np.array(M)/bolsig_M-1), 'o-', label='mobility')
+        plt.xlabel(args.sweep_param)
+        plt.ylabel(r"relative error")
+        plt.title("PDE vs. Bolsig")
+        plt.legend()
+        plt.grid(visible=True)
+
+        plt.subplot(num_plt_rows, num_plt_cols, 2)
+        plt.semilogy(args.sweep_values, abs(np.array(mu)/mu[-1]-1), 'o-', label='mean energy')
+        
+        for col_idx, col in enumerate(args.collisions):
+            if bolsig_rates[col_idx] != 0:
+                plt.semilogy(args.sweep_values, abs(rates[col_idx]/rates[col_idx][-1]-1), 'o-', label=COLLISOIN_NAMES[col])
+        
+        plt.semilogy(args.sweep_values, abs(np.array(M)/M[-1]-1), 'o-', label='mobility')
+        plt.xlabel(args.sweep_param)
+        plt.ylabel(r"relative error")
+        #plt.title("PDE vs. PDE")
+        plt.legend()
+        plt.grid(visible=True)
 
         pde_vs_bolsig_L2 = list()
         for i, value in enumerate(args.sweep_values):
@@ -239,7 +284,7 @@ for run_id in range(len(run_params)):
                 #     radial_tt[t_idx, :, : ] = BEUtils.compute_radial_components(ev, spec_sp, data_tt[tt,:], maxwellian, vth, 1)
 
             # spherical components plots
-            plt_idx=1
+            plt_idx=3
             for l_idx in range(num_sh):
                 plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
                 color = next(plt.gca()._get_lines.prop_cycler)['color']
@@ -254,10 +299,11 @@ for run_id in range(len(run_params)):
                 
                 plt.xlabel(r"energy (eV)")
                 plt.ylabel(r"radial component")
-                plt.title("f%d"%(l_idx))
+                plt.title(r"$f_%d$"%(l_idx))
                 plt.grid(visible=True)
-                if l_idx == 0:
-                    plt.legend(prop={'size': 8})
+                if l_idx == 0 or l_idx==2:
+                    #plt.legend(prop={'size': 16})
+                    plt.legend()
                 
                 plt_idx+=1
 
@@ -316,35 +362,6 @@ for run_id in range(len(run_params)):
                     plt.xlabel(r"time (s)")
                     plt.grid(visible=True)
                 
-
-        plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 4)
-        plt.semilogy(args.sweep_values, abs(np.array(mu)/bolsig_mu-1), 'o-', label='mean energy')
-        
-        for col_idx, col in enumerate(args.collisions):
-            if bolsig_rates[col_idx] != 0:
-                plt.semilogy(args.sweep_values, abs(rates[col_idx]/bolsig_rates[col_idx]-1), 'o-', label=COLLISOIN_NAMES[col])
-        
-        plt.semilogy(args.sweep_values, abs(np.array(M)/bolsig_M-1), 'o-', label='mobility')
-        plt.xlabel(args.sweep_param)
-        plt.ylabel(r"relative error")
-        plt.title("PDE vs. Bolsig")
-        plt.legend()
-        plt.grid(visible=True)
-
-        plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 5)
-        plt.semilogy(args.sweep_values, abs(np.array(mu)/mu[-1]-1), 'o-', label='mean energy')
-        
-        for col_idx, col in enumerate(args.collisions):
-            if bolsig_rates[col_idx] != 0:
-                plt.semilogy(args.sweep_values, abs(rates[col_idx]/rates[col_idx][-1]-1), 'o-', label=COLLISOIN_NAMES[col])
-        
-        plt.semilogy(args.sweep_values, abs(np.array(M)/M[-1]-1), 'o-', label='mobility')
-        plt.xlabel(args.sweep_param)
-        plt.ylabel(r"relative error")
-        plt.title("PDE vs. PDE")
-        plt.legend()
-        plt.grid(visible=True)
-
 
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
         # plt.show()

@@ -31,11 +31,11 @@ import bte_0d3v_solver as bte_0d3v
 import utils as bte_utils
 
 plt.rcParams.update({
-    "text.usetex": False,
-    "font.size": 12,
+    "text.usetex": True,
+    "font.size": 24,
     #"ytick.major.size": 3,
     #"font.family": "Helvetica",
-    #"lines.linewidth":2.0
+    "lines.linewidth":2.0
 })
 
 parser = argparse.ArgumentParser()
@@ -155,9 +155,9 @@ for run_id in range(len(run_params)):
                 print("  temp = %.8E"%(t0))
                 
                 if args.efield_period == 0:
-                    ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), h_init)
+                    ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), h_init=h_init)
                 else:
-                    ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init)
+                    ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init=h_init)
                 ts_qoi_all[(i, ii, jj)] = bte_solver.compute_QoIs(ts_sol["sol"])
                 ts_ss_all [(i, ii, jj)] = ts_sol
     
@@ -229,15 +229,15 @@ for run_id in range(len(run_params)):
                     plt.semilogy(tgrid,  qois["energy"], '-', label=lbl, color=color)
                     plt.ylabel(r"energy (ev)")
                     plt.xlabel(r"time (s)")
-                    plt.title("Nr = %d dt =%.4E"%(value, dt))
+                    #plt.title("Nr = %d dt =%.4E"%(value, dt))
                     plt.grid(visible=True)
-                    plt.legend()
+                    #plt.legend()
 
                     plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 1)
                     plt.semilogy(tgrid,  np.abs(qois["mobility"]), '-', label=lbl, color=color)
                     plt.ylabel(r"mobility ($N (1/m/V/s $))")
                     plt.xlabel(r"time (s)")
-                    plt.title("Nr = %d dt =%.4E"%(value, dt))
+                    #plt.title("Nr = %d dt =%.4E"%(value, dt))
                     plt.grid(visible=True)
 
                     for col_idx, col in enumerate(args.collisions):
@@ -247,7 +247,7 @@ for run_id in range(len(run_params)):
                         plt.title(COLLISOIN_NAMES[col])
                         plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
                         plt.xlabel(r"time (s)")
-                        plt.title("Nr = %d dt =%.4E"%(value, dt))
+                        #plt.title("Nr = %d dt =%.4E"%(value, dt))
                         plt.grid(visible=True)
                 
             plt_idx+= 2 + len(args.collisions)

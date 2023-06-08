@@ -908,31 +908,62 @@ def normalized_distribution(spec_sp, mm_op, f_vec, maxwellian,vth):
     #scale         = np.dot(f_vec,mm_op) * maxwellian(0) * vth**3
     return f_vec/scale
 
-def mcmc_sampling(dist_pdf, prior_dist, n_samples, burn_in_fac=0.2):
-    
-    def random_coin(p):
-        unif = np.random.uniform(0,1)
-        if unif>=p:
-            return False
-        else:
-            return True
+def mcmc_chain(dist_pdf, prior_mu, prior_cov, n_samples, burn_in_fac):
+        def random_coin(p):
+            unif = np.random.uniform(0,1)
+            if unif>=p:
+                return False
+            else:
+                return True
+            
+        def prior_dist():
+            np.random.seed()
+            x   = np.random.multivariate_normal(prior_mu, prior_cov)
+            xp  = cartesian_to_spherical(x[0], x[1], x[2])
+            return np.array(xp)
+        
+        hops    = int(n_samples + n_samples * burn_in_fac)
+        burn_in = int(n_samples * burn_in_fac)
+        states  = list() 
+        current = prior_dist()
+        #print(current)
 
-    states  = list() 
-    hops    = int(n_samples + n_samples * burn_in_fac)
-    burn_in = int(n_samples * burn_in_fac)
-    current = prior_dist()
+        for i in range(hops):
+            states.append(current)
+            movement = prior_dist()
+        
+            curr_prob = max(1e-12, dist_pdf(current))
+            move_prob = dist_pdf(movement)
+
+            acceptance = min(move_prob/curr_prob,1)
+            if random_coin(acceptance):
+                current = movement
+    
+        return np.array(states[burn_in:])
+
+def mcmc_sampling(dist_pdf, prior_mu, prior_cov, n_samples, burn_in_fac=0.2, num_chains=4):
     
     #print(hops,burn_in)
+    import multiprocessing as mp
+    pool = mp.Pool()
 
-    for i in range(hops):
-        states.append(current)
-        movement = prior_dist()
-        
-        curr_prob = dist_pdf(current)
-        move_prob = dist_pdf(movement)
-
-        acceptance = min(move_prob/curr_prob,1)
-        if random_coin(acceptance):
-            current = movement
+    result_list = []
+    def log_result(result):
+        # This is called whenever foo_pool(i) returns a result.
+        # result_list is modified only by the main process, not the pool workers.
+        result_list.append(result)
     
-    return np.array(states[burn_in:])
+    for i in range(num_chains):
+        pi = pool.apply_async(mcmc_chain, args=(dist_pdf, prior_mu, prior_cov, n_samples, burn_in_fac), callback=log_result)
+        
+    pool.close()
+    pool.join()
+
+    samples = np.copy(result_list[0])
+    for i in range(1,num_chains):
+        samples = np.append(samples, result_list[i],axis=0)
+    
+    #print(samples)
+    return samples
+    
+    

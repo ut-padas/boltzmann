@@ -31,11 +31,11 @@ import bte_0d3v_solver as bte_0d3v
 import utils as bte_utils
 
 plt.rcParams.update({
-    "text.usetex": False,
-    "font.size": 12,
+    "text.usetex": True,
+    "font.size": 24,
     #"ytick.major.size": 3,
     #"font.family": "Helvetica",
-    #"lines.linewidth":2.0
+    "lines.linewidth":2.0
 })
 
 parser = argparse.ArgumentParser()
@@ -132,12 +132,8 @@ for run_id in range(len(run_params)):
         ss_init[1] = ss_sol[1] / np.dot(mass_op, ss_sol[1])
 
         for l in range(pb_mode_begin, num_sh):
-            h_init            = np.zeros(num_p * num_sh)
-
-            h_init[0::num_sh] = ss_init[-1][0::num_sh]
-            h_init[1::num_sh] = ss_init[-1][1::num_sh]
-
-            h_init[l::num_sh] += ss_init[0][0::num_sh] #+ ss_init[-1][l::num_sh]
+            h_init            = np.copy(ss_init[-1])
+            h_init[l::num_sh] = ss_init[0][0::num_sh] 
 
             m0 = np.dot(mass_op, h_init)
             t0 = np.dot(temp_op, h_init)/m0
@@ -147,7 +143,7 @@ for run_id in range(len(run_params)):
             print("  temp = %.8E"%(t0))
 
             if args.efield_period == 0:
-                ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), h_init)
+                ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), num_time_samples=200, h_init=h_init)
             else:
                 ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init)
             ts_qoi_all[(i,l)] = bte_solver.compute_QoIs(ts_sol["sol"])
@@ -161,11 +157,11 @@ for run_id in range(len(run_params)):
     if (1):
         maxwellian   = bte_solver._mw
         vth          = bte_solver._vth
-        num_subplots = num_sh + len(args.sweep_values) * 4
+        num_subplots = int(np.ceil(num_sh/4)) * 4 + len(args.sweep_values) * 4
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
         
-        fig       = plt.figure(figsize=(num_plt_cols * 6 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
+        fig       = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
 
         #f0
         plt.subplot(num_plt_rows, num_plt_cols,  1)
@@ -198,6 +194,7 @@ for run_id in range(len(run_params)):
                 
                 plt_idx+=1
 
+        plt_idx = int(np.ceil(num_sh/4)) * 4 +1
         color_list = list()
         for l_idx in range(0,num_sh):
             color = next(plt.gca()._get_lines.prop_cycler)['color']
@@ -212,12 +209,12 @@ for run_id in range(len(run_params)):
                 tgrid  = ts_sol["tgrid"]
                 dt     = args.T_DT / (1<<(1 * i ))
                 
-                lbl ="f mode=%d"%(l_idx)
+                lbl =r"$f_%d$"%(l_idx)
                 plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
                 plt.semilogy(tgrid,  qois["energy"], '-', label=lbl, color=color)
                 plt.ylabel(r"energy (ev)")
                 plt.xlabel(r"time (s)")
-                plt.title("Nr = %d dt =%.4E"%(value, dt))
+                #plt.title("Nr = %d dt =%.4E"%(value, dt))
                 plt.grid(visible=True)
                 plt.legend()
 
@@ -225,7 +222,8 @@ for run_id in range(len(run_params)):
                 plt.semilogy(tgrid,  np.abs(qois["mobility"]), '-', label=lbl, color=color)
                 plt.ylabel(r"mobility ($N (1/m/V/s $))")
                 plt.xlabel(r"time (s)")
-                plt.title("Nr = %d dt =%.4E"%(value, dt))
+                #plt.title("Nr = %d dt =%.4E"%(value, dt))
+                plt.legend()
                 plt.grid(visible=True)
 
                 for col_idx, col in enumerate(args.collisions):
@@ -235,7 +233,7 @@ for run_id in range(len(run_params)):
                     plt.title(COLLISOIN_NAMES[col])
                     plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
                     plt.xlabel(r"time (s)")
-                    plt.title("Nr = %d dt =%.4E"%(value, dt))
+                    #plt.title("Nr = %d dt =%.4E"%(value, dt))
                     plt.grid(visible=True)
             
             plt_idx+= 2 + len(args.collisions)

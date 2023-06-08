@@ -157,7 +157,7 @@ for run_id in range(len(run_params)):
     prior_cov = np.array([[np.sqrt(0.5), 0, 0], [0, np.sqrt(0.5), 0], [0, 0, np.sqrt(0.5)]])
     
     samples = bte_utils.mcmc_sampling(ss_dist, prior_mu, prior_cov, args.sample_pts, burn_in_fac=0.2, num_chains = args.num_chains)
-    fname   = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E.npy"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg)
+    fname   = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_lmode%d.npy"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, args.l_pt_mode)
     np.save(fname, samples)
     
     vr    = np.linspace(0,3,100)

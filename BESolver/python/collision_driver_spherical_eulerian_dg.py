@@ -53,6 +53,8 @@ parser.add_argument("-sp_order", "--sp_order"                     , help="b-spli
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-EbyN", "--EbyN"                             , help="Effective electric field in Td", type=float, nargs='+', default=1)
 parser.add_argument("-E", "--E_field"                             , help="Electric field in V/m", type=float, default=100)
+parser.add_argument("-efield_period", "--efield_period"           , help="Oscillation period in seconds", type=float, default=0.0)
+parser.add_argument("-num_tsamples", "--num_tsamples"             , help="number of samples to the time to collect QoIs", type=int, default=500)
 parser.add_argument("-steady", "--steady_state"                   , help="Steady state or transient", type=int, default=1)
 parser.add_argument("-sweep_values", "--sweep_values"             , help="Values for parameter sweep", nargs='+', type=float, default=[32, 64, 128])
 parser.add_argument("-sweep_param", "--sweep_param"               , help="Parameter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
@@ -83,6 +85,13 @@ for run_id in range(len(run_params)):
     args.E_field = run_params[run_id][0]
     args.ion_deg = run_params[run_id][1]
     #print(args)
+
+    if args.ion_deg == 0:
+        args.ee_collisions = 0
+        args.use_dg        = 1
+    else:
+        args.ee_collisions = 1
+        args.use_dg        = 0
 
     bte_solver = bte_0d3v.bte_0d3v(args)
     bte_solver.run_bolsig_solver()
@@ -125,7 +134,7 @@ for run_id in range(len(run_params)):
             r_data    = bte_solver.steady_state_solver()
             #r_data   = bte_solver.steady_state_solver_two_term()
         else:
-            r_data    = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<(i)))
+            r_data    = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<(i)), num_time_samples=args.num_tsamples)
         
         solver_data.append(r_data)
         spec_list.append(bte_solver._spec_sp)
@@ -142,7 +151,7 @@ for run_id in range(len(run_params)):
         radial_base[i,:,:]  = BEUtils.compute_radial_components(ev, spec_sp, data[0,:] , mw, vth, 1)
         radial[i, :, :]     = BEUtils.compute_radial_components(ev, spec_sp, data[-1,:], mw, vth, 1)
 
-        qois = bte_solver.compute_QoIs(data)
+        qois = bte_solver.compute_QoIs(data, r_data["tgrid"])
         qoi_list.append(qois)
         
         mu.append(qois["energy"][-1])
@@ -157,16 +166,57 @@ for run_id in range(len(run_params)):
         # bolsig_f0 = tmp[0]
         # bolsig_f1 = tmp[1]
 
+        if SAVE_EEDF:
+            # with open("%s.npy"%args.out_fname, 'ab') as f:
+            #     np.save(f, np.array([spec_sp._p + 1]))
+            #     np.save(f, np.array([spec_sp._sph_harm_lm[-1][0]]))
+            #     np.save(f, np.array([args.E_field]))
+            #     np.save(f, np.array([args.ion_deg]))
+            #     np.save(f, np.array([args.Tg]))
+            #     np.save(f, ev)
+
+            #     for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            #         np.save(f, radial[-1,lm_idx,:])
+                    
+            #     np.save(f, bolsig_f0)
+            #     np.save(f, bolsig_f1)
+
+            fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E.csv"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg)
+            sol_data = np.zeros((len(ev),  1 + 2 + args.l_max+1))
+            sol_data[:,0] = ev 
+            sol_data[:,1] = bolsig_f0
+            sol_data[:,2] = bolsig_f1
+
+            header_str = "ev\tbolsig_f0\tbolsig_f1\t"
+            for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                sol_data[:,3 + lm_idx] = radial[i,lm_idx,:]
+                header_str+="f%d\t"%lm[0]
+
+            np.savetxt(fname, sol_data, delimiter='\t',header=header_str,comments='')
+
         
     if SAVE_CSV:
-        with open("%s.csv"%args.out_fname, 'a', encoding='UTF8') as f:
-            writer = csv.writer(f)
+        fname = "%s_lmax%d_Tg%.2E.csv"%(args.out_fname, spec_sp._sph_harm_lm[-1][0], args.Tg)
+        with open("%s_qois.csv"%fname, 'a', encoding='UTF8') as f:
+            writer = csv.writer(f,delimiter='\t')
             if run_id == 0:
                 # write the header
                 header = ["E/N(Td)", "E(V/m)", "Nr", "energy", "diffusion", "mobility", "bolsig_energy", "bolsig_defussion", "bolsig_mobility", "l2_f0", "l2_f1", "Tg", "ion_deg", "atol", "rtol"]
                 for g in args.collisions:
                     header.append(str(g))
                     header.append("bolsig_"+str(g))
+
+                header.append("rel_energy")
+                header.append("rel_mobility")
+                header.append("rel_diffusion")
+                for g in args.collisions:
+                    header.append("rel_"+str(g))
+                
+                header.append("rel_energy_vs_bolsig")
+                header.append("rel_mobility_vs_bolsig")
+                header.append("rel_diffusion_vs_bolsig")
+                for g in args.collisions:
+                    header.append("rel_"+str(g)+"_vs_bolsig")
 
                 writer.writerow(header)
             
@@ -180,40 +230,20 @@ for run_id in range(len(run_params)):
                     data.append(rates[col_idx][i])
                     data.append(bolsig_rates[col_idx])
 
+                data.append(np.abs(mu[i]/ mu[-1]-1))
+                data.append(np.abs(M[i] / M[-1] -1))
+                data.append(np.abs(D[i] / D[-1] -1))
+                for col_idx , _ in enumerate(args.collisions):
+                    data.append(np.abs(rates[col_idx][i]/rates[col_idx][-1]-1))
+
+                data.append(np.abs(mu[i]/ bolsig_mu-1))
+                data.append(np.abs(M[i] / bolsig_M -1))
+                data.append(np.abs(D[i] / bolsig_D -1))
+                for col_idx , _ in enumerate(args.collisions):
+                    data.append(np.abs(rates[col_idx][i]/bolsig_rates[col_idx]-1))
+
                 writer.writerow(data)
         
-
-    if SAVE_EEDF:
-        with open("%s.npy"%args.out_fname, 'ab') as f:
-            np.save(f, np.array([spec_sp._p + 1]))
-            np.save(f, np.array([spec_sp._sph_harm_lm[-1][0]]))
-            np.save(f, np.array([args.E_field]))
-            np.save(f, np.array([args.ion_deg]))
-            np.save(f, np.array([args.Tg]))
-            np.save(f, ev)
-
-            for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-                np.save(f, radial[-1,lm_idx,:])
-                
-            np.save(f, bolsig_f0)
-            np.save(f, bolsig_f1)
-            
-        fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E.csv"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg)
-        sol_data = np.zeros((len(ev),  1 + 2 + args.l_max+1))
-        sol_data[:,0] = ev 
-        sol_data[:,1] = bolsig_f0
-        sol_data[:,2] = bolsig_f1
-
-        header_str = "ev\tbolsig_f0\tbolsig_f1\t"
-        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-            sol_data[:,3 + lm_idx] = radial[-1,lm_idx,:]
-            header_str+="f%d\t"%lm[0]
-
-        np.savetxt(fname, sol_data, delimiter='\t',header=header_str)
-
-
-        
-
 
     if (1):
         maxwellian   = bte_solver._mw

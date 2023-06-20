@@ -55,6 +55,7 @@ parser.add_argument("-sp_order", "--sp_order"                     , help="b-spli
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-EbyN", "--EbyN"                             , help="Effective electric field in Td", type=float, nargs='+', default=1)
 parser.add_argument("-efield_period", "--efield_period"           , help="Oscillation period in seconds", type=float, default=0.0)
+parser.add_argument("-num_tsamples", "--num_tsamples"             , help="number of samples to the time to collect QoIs", type=int, default=500)
 parser.add_argument("-E", "--E_field"                             , help="Electric field in V/m", type=float, default=100)
 parser.add_argument("-steady", "--steady_state"                   , help="Steady state or transient", type=int, default=1)
 parser.add_argument("-sweep_values", "--sweep_values"             , help="Values for parameter sweep", nargs='+', type=float, default=[32, 64, 128])
@@ -155,10 +156,10 @@ for run_id in range(len(run_params)):
                 print("  temp = %.8E"%(t0))
                 
                 if args.efield_period == 0:
-                    ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), h_init=h_init)
+                    ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), num_time_samples=args.num_tsamples ,h_init=h_init)
                 else:
-                    ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init=h_init)
-                ts_qoi_all[(i, ii, jj)] = bte_solver.compute_QoIs(ts_sol["sol"])
+                    ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), num_time_samples=args.num_tsamples, h_init=h_init)
+                ts_qoi_all[(i, ii, jj)] = bte_solver.compute_QoIs(ts_sol["sol"], ts_sol["tgrid"])
                 ts_ss_all [(i, ii, jj)] = ts_sol
     
         args.E_field = E_field
@@ -200,7 +201,7 @@ for run_id in range(len(run_params)):
                 plt.title("f%d"%(l_idx))
                 plt.grid(visible=True)
                 if l_idx == 0:
-                    plt.legend(prop={'size': 8})
+                    plt.legend()
                 
                 plt_idx+=1
         plt_idx = max(num_sh, 4) + 1
@@ -253,7 +254,7 @@ for run_id in range(len(run_params)):
             plt_idx+= 2 + len(args.collisions)
         
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
-
+        #plt.show()
         plt.savefig("perturb_params_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
 
         plt.close()

@@ -55,8 +55,9 @@ parser.add_argument("-q_sp", "--quad_s_phi"                       , help="quadra
 parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-EbyN", "--EbyN"                             , help="Effective electric field in Td", type=float, nargs='+', default=1)
-parser.add_argument("-efield_period", "--efield_period"           , help="Oscillation period in seconds", type=float, default=0.0)
 parser.add_argument("-E", "--E_field"                             , help="Electric field in V/m", type=float, default=100)
+parser.add_argument("-efield_period", "--efield_period"           , help="Oscillation period in seconds", type=float, default=0.0)
+parser.add_argument("-num_tsamples", "--num_tsamples"             , help="number of samples to the time to collect QoIs", type=int, default=500)
 parser.add_argument("-steady", "--steady_state"                   , help="Steady state or transient", type=int, default=1)
 parser.add_argument("-sweep_values", "--sweep_values"             , help="Values for parameter sweep", nargs='+', type=float, default=[32, 64, 128])
 parser.add_argument("-sweep_param", "--sweep_param"               , help="Parameter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
@@ -79,7 +80,7 @@ ion_deg_values      = np.array(args.ion_deg)
 if not args.ee_collisions:
     ion_deg_values = np.array([0])
 
-df                  = pd.read_csv (r'pde_vs_bolsig/g0g2eeNr64/pde_vs_bolsig_03_31_2023_11:44:46.csv')
+df                  = pd.read_csv(r'pde_vs_bolsig/g0g2eeNr64/pde_vs_bolsig_03_31_2023_11:44:46.csv')
 interpolation_kind  = 'cubic'
 
 run_params          = [(e_values[i], ion_deg_values[j]) for i in range(len(e_values)) for j in range(len(ion_deg_values))]
@@ -161,7 +162,7 @@ for run_id in range(len(run_params)):
 
         assert args.efield_period > 0
         
-        ts_sol1      = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), num_time_samples=500, h_init = h_init)
+        ts_sol1      = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), num_time_samples=args.num_tsamples, h_init = h_init)
         #ts_sol2      = bte_solver.time_harmonic_efield_with_series_ss_solves(args.efield_period, args.efield_period/128, num_time_samples = 128)
 
         
@@ -173,9 +174,9 @@ for run_id in range(len(run_params)):
         ss_sol["diffusion"]  = np.zeros_like(ts_qoi_all[i]["energy"])
 
         c_gamma              = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
-        ss_sol["mobility"]   = b_mu(ss_sol["energy"]) / (-(c_gamma / (3 * (args.E_field * np.cos(2 * np.pi * ts_sol1["tgrid"]/args.efield_period) ))))
+        ss_sol["mobility"]   = b_mu(ss_sol["energy"]) 
         ss_sol["rates"]      = [b_g0(ss_sol["energy"]), b_g2(ss_sol["energy"])]
-        ts_qoi_all_ss[i] = ss_sol
+        ts_qoi_all_ss[i]     = ss_sol
         #ts_ss_all_ss [i] = ts_sol2
 
         
@@ -256,13 +257,13 @@ for run_id in range(len(run_params)):
 
             for col_idx, col in enumerate(args.collisions):
                 plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 2 + col_idx)
-                #plt.semilogy(tgrid1,  qois1["rates"][col_idx], '-', label ="transient"   , color=color)
-                #plt.semilogy(tgrid2,  qois2["rates"][col_idx], '--', label="steady-state", color=color)
-                plt.semilogy(tgrid1,  np.abs(qois1["rates"][col_idx]/qois2["rates"][col_idx]-1), '-', color=color)
+                plt.semilogy(tgrid1,  qois1["rates"][col_idx], '-', label ="transient"   , color=color)
+                plt.semilogy(tgrid2,  qois2["rates"][col_idx], '--', label="steady-state", color=color)
+                #plt.semilogy(tgrid1,  np.abs(qois1["rates"][col_idx]/qois2["rates"][col_idx]-1), '-', color=color)
 
                 plt.title(COLLISOIN_NAMES[col])
-                #plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
-                plt.ylabel(r"relative error")
+                plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
+                #plt.ylabel(r"relative error")
                 plt.xlabel(r"time (s)")
                 #plt.title("Nr = %d dt =%.4E"%(value, dt))
                 plt.grid(visible=True)

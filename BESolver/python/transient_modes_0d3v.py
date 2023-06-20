@@ -146,7 +146,7 @@ for run_id in range(len(run_params)):
                 ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), num_time_samples=200, h_init=h_init)
             else:
                 ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init)
-            ts_qoi_all[(i,l)] = bte_solver.compute_QoIs(ts_sol["sol"])
+            ts_qoi_all[(i,l)] = bte_solver.compute_QoIs(ts_sol["sol"], ts_sol["tgrid"])
 
             # ts_ss     = np.zeros((2,len(h_init)))
             # ts_ss[0]  = ts_sol["sol"][0]

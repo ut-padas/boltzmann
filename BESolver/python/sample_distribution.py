@@ -88,6 +88,13 @@ for run_id in range(len(run_params)):
     args.ion_deg = run_params[run_id][1]
     #print(args)
 
+    if args.ion_deg == 0:
+        args.ee_collisions = 0
+        args.use_dg        = 1
+    else:
+        args.ee_collisions = 1
+        args.use_dg        = 0
+
     bte_solver = bte_0d3v.bte_0d3v(args)
     bte_solver.run_bolsig_solver()
     ev = bte_solver._bolsig_data["ev"]
@@ -142,27 +149,38 @@ for run_id in range(len(run_params)):
     ss_sol /= np.dot(mm_op,ss_sol)
     if num_sh> args.l_pt_mode:
         # to perturb mode 2 and sets all the other modes to zero. 
-        ss_sol[args.l_pt_mode::num_sh] = data[0,0::num_sh]
+        ss_sol[args.l_pt_mode::num_sh] = (1-1e-4) * data[-1,0::num_sh]
     
-    def ss_dist(vv):
+    def ss_dist(xx):
         s=0
+        vr = np.linalg.norm(xx,axis=1)
+        vt = np.arccos(xx[:,2]/vr)
+        vp = np.arctan2(xx[:,1], xx[:,0]) % (2 * np.pi)
+        
         for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-            sph_v = spec_sp.basis_eval_spherical(vv[1],vv[2],lm[0],lm[1])
+            sph_v = spec_sp.basis_eval_spherical(vt, vp, lm[0],lm[1])
             for k in range(num_p):
-                bk_vr = spec_sp.basis_eval_radial(vv[0],k,0)
-                s+=ss_sol[k * num_sh + lm_idx] * bk_vr * sph_v * vv[0]**2 * np.sin(vv[1])
-        return s
-
-    prior_mu  = np.zeros(3)
-    prior_cov = np.array([[np.sqrt(0.5), 0, 0], [0, np.sqrt(0.5), 0], [0, 0, np.sqrt(0.5)]])
+                bk_vr = spec_sp.basis_eval_radial(vr,k,0)
+                s+=(ss_sol[k * num_sh + lm_idx] * bk_vr * sph_v) 
+        return np.abs(s)
     
-    samples = bte_utils.mcmc_sampling(ss_dist, prior_mu, prior_cov, args.sample_pts, burn_in_fac=0.2, num_chains = args.num_chains)
-    fname   = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_lmode%d.npy"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, args.l_pt_mode)
-    np.save(fname, samples)
+    c_gamma      = bte_solver._c_gamma
+    x_domain     = (np.sqrt(0) * c_gamma / vth , np.sqrt(bte_solver._args.ev_max) * c_gamma / vth)
+
+    def prior_dist(size):
+        return np.random.uniform([-x_domain[1], -x_domain[1], -x_domain[1]], [x_domain[1], x_domain[1], x_domain[1]], size=(size,3))
+
+    x_cart   = bte_utils.mcmc_sampling(ss_dist, prior_dist, args.sample_pts, burn_in=0.8, num_chains = args.num_chains)
+    
+    x_sph      = np.zeros_like(x_cart)
+    x_sph[:,0] = np.linalg.norm(x_cart,axis=1)
+    x_sph[:,1] = np.arccos(x_cart[:,2]/x_sph[:,0])
+    x_sph[:,2] = np.arctan2(x_cart[:,1],x_cart[:,0]) % (2 * np.pi)
     
     vr    = np.linspace(0,3,100)
     vq    = spec_sp.Vq_r(vr,0,1)
     ss_r0 = np.dot(ss_sol[0::num_sh], vq) * vr**2 
+    ss_r0 /= np.trapz(ss_r0, vr)
 
     num_plt_cols = 3
     num_plt_rows = 2
@@ -195,23 +213,31 @@ for run_id in range(len(run_params)):
    
     plt.subplot(num_plt_rows, num_plt_cols, 4)
     plt.plot(vr, ss_r0, 'b-')
-    plt.hist(samples[:,0],bins=30,density=1)
+    plt.hist(x_sph[:,0],bins=30,density=1)
     plt.xlabel(r"$v_r$")
     plt.grid(visible=True)
 
     plt.subplot(num_plt_rows, num_plt_cols, 5)
-    plt.hist(samples[:,1],bins=30,density=1)
+    plt.hist(x_sph[:,1],bins=30,density=1)
     plt.xlabel(r"$v_\theta$")
     plt.grid(visible=True)
 
     plt.subplot(num_plt_rows, num_plt_cols, 6)
-    plt.hist(samples[:,2],bins=30,density=1)
+    plt.hist(x_sph[:,2],bins=30,density=1)
     plt.xlabel(r"$v_\phi$")
     plt.grid(visible=True)
 
     #plt.show()
     plt.savefig("sampling_example.png")
     plt.close()
+
+    x_cart[:,0] *=vth
+    x_cart[:,1] *=vth
+    x_cart[:,2] *=vth
+
+    fname   = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_lmode%d.npy"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, args.l_pt_mode)
+    np.save(fname, x_cart)
+    
 
 
 

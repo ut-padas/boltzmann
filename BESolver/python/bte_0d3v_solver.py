@@ -902,15 +902,15 @@ class bte_0d3v():
         E_max = args.E_field
         Ef    = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
 
+        Cmat        = np.dot(Minv, Cmat)
+        Emat        = np.dot(Minv, Emat)
+        Wmat        = np.dot(u, Cmat)
+
         if args.ee_collisions:
 
             cc_op  = self._cc_op
             cc_op1 = cc_op
             cc_op2 = np.swapaxes(cc_op,1,2)
-
-            Cmat        = np.dot(Minv, Cmat)
-            Emat        = np.dot(Minv, Emat)
-            Wmat        = np.dot(u, Cmat)
 
             cc_op1_p_cc_op2   = cc_op1 + cc_op2
 
@@ -994,7 +994,7 @@ class bte_0d3v():
         
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':tgrid}
 
-    def compute_QoIs(self, hh):
+    def compute_QoIs(self, hh, tgrid):
 
         args = self._args
         mw   = self._mw
@@ -1004,14 +1004,27 @@ class bte_0d3v():
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
 
+        E_max   = args.E_field
+        if args.efield_period > 0:
+            Ef              = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
+            e_field_t       = Ef(tgrid)
+            e_field_t[np.abs(e_field_t) < 1e-6] = 0 
+        elif tgrid is None:
+            e_field_t       = E_max
+        else:
+            e_field_t       = E_max
+
         hh =hh.reshape((-1, num_p * num_sh))
         c_gamma   = self._c_gamma
         eavg_to_K = (2/(3*scipy.constants.Boltzmann))
 
+        #print(tgrid/1e-5)
+        #print(Ef(tgrid))
+
         mm  = np.dot(hh, self._mass_op) * mw(0) * vth**3
         mu  = np.dot(hh, self._temp_op) * mw(0) * vth**5 * (0.5 * collisions.MASS_ELECTRON * eavg_to_K / mm ) * 1.5 / collisions.TEMP_K_1EV
 
-        M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * (args.E_field / collisions.AR_NEUTRAL_N))))
+        M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( e_field_t / collisions.AR_NEUTRAL_N))))
         D   = np.dot(hh[:, 0::num_sh], self._diffusion_op) * (c_gamma / 3.)
         
         rr  = list()

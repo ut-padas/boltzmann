@@ -6,6 +6,7 @@ import parameters as params
 import spec_spherical
 import basis
 import scipy.constants
+from numba import jit
 
 MAX_GMX_Q_VR_PTS=278
 
@@ -908,62 +909,63 @@ def normalized_distribution(spec_sp, mm_op, f_vec, maxwellian,vth):
     #scale         = np.dot(f_vec,mm_op) * maxwellian(0) * vth**3
     return f_vec/scale
 
-def mcmc_chain(dist_pdf, prior_mu, prior_cov, n_samples, burn_in_fac):
-        def random_coin(p):
-            unif = np.random.uniform(0,1)
-            if unif>=p:
-                return False
-            else:
-                return True
-            
-        def prior_dist():
-            np.random.seed()
-            x   = np.random.multivariate_normal(prior_mu, prior_cov)
-            xp  = cartesian_to_spherical(x[0], x[1], x[2])
-            return np.array(xp)
+def mcmc_chain(target_pdf, prior_samples, n_samples, burn_in):
+
+    chain_sz        = np.int64(n_samples  + burn_in * n_samples)
+    state_offset    = 1
+    
+    uniform         = np.log(np.random.uniform(0, 1, size=chain_sz))
+    xp              = prior_samples(size=chain_sz+1)
+    xpp             = prior_samples(size=chain_sz+1)
+
+    p_xp            = target_pdf(xp)
+    p_xpp           = target_pdf(xpp)
+
+    p_xp[p_xp<=1e-14]    = 1e-14
+    p_xpp[p_xpp<=1e-14]  = 1e-14
+
+    p_xp            = np.log(p_xp)
+    p_xpp           = np.log(p_xpp)
+
+    a_ratio         = np.zeros(chain_sz,dtype=np.int64)
+    states          = np.zeros_like(xp)
+
+    for i in range(chain_sz):
+        states[i + state_offset] = xp[i]
+        acceptance = min(p_xpp[i] - p_xp[i], 0) #min(p_xpp[i]/p_xp[i],1) more stable log evaluation
         
-        hops    = int(n_samples + n_samples * burn_in_fac)
-        burn_in = int(n_samples * burn_in_fac)
-        states  = list() 
-        current = prior_dist()
-        #print(current)
+        if uniform[i] <= acceptance:
+            a_ratio[i] = 1.0
+            xp[i+1]    = xpp[i]
+            p_xp[i+1]  = p_xpp[i]
+        else:
+            xp[i+1]    = xp[i]
+            p_xp[i+1]  = p_xp[i]
 
-        for i in range(hops):
-            states.append(current)
-            movement = prior_dist()
+    return states[-n_samples:]
+
+def mcmc_sampling(dist_pdf, prior, n_samples, burn_in=0.3, num_chains=4):
+    
+    # #print(hops,burn_in)
+    # import multiprocessing as mp
+    # pool = mp.Pool()
+
+    # result_list = []
+    # def log_result(result):
+    #     # This is called whenever foo_pool(i) returns a result.
+    #     # result_list is modified only by the main process, not the pool workers.
+    #     result_list.append(result)
+    
+    # for i in range(num_chains):
+    #     pi = pool.apply_async(mcmc_chain, args=(dist_pdf, prior, n_samples, burn_in), callback=log_result)
         
-            curr_prob = max(1e-12, dist_pdf(current))
-            move_prob = dist_pdf(movement)
+    # pool.close()
+    # pool.join()
 
-            acceptance = min(move_prob/curr_prob,1)
-            if random_coin(acceptance):
-                current = movement
-    
-        return np.array(states[burn_in:])
-
-def mcmc_sampling(dist_pdf, prior_mu, prior_cov, n_samples, burn_in_fac=0.2, num_chains=4):
-    
-    #print(hops,burn_in)
-    import multiprocessing as mp
-    pool = mp.Pool()
-
-    result_list = []
-    def log_result(result):
-        # This is called whenever foo_pool(i) returns a result.
-        # result_list is modified only by the main process, not the pool workers.
-        result_list.append(result)
-    
-    for i in range(num_chains):
-        pi = pool.apply_async(mcmc_chain, args=(dist_pdf, prior_mu, prior_cov, n_samples, burn_in_fac), callback=log_result)
-        
-    pool.close()
-    pool.join()
-
-    samples = np.copy(result_list[0])
-    for i in range(1,num_chains):
-        samples = np.append(samples, result_list[i],axis=0)
-    
-    #print(samples)
+    # samples = np.copy(result_list[0])
+    # for i in range(1,num_chains):
+    #     samples = np.append(samples, result_list[i],axis=0)
+    samples = mcmc_chain(dist_pdf, prior, n_samples, burn_in)
     return samples
     
     

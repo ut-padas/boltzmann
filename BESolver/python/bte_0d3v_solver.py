@@ -710,6 +710,9 @@ class bte_0d3v():
             Pmat        = Imat_r - dt * np.dot(QT, np.dot(Cmat_p_Emat,Q)) 
             Pmat_inv    = np.linalg.pinv(Pmat, rcond=1e-14/np.linalg.cond(Pmat))
 
+        if num_time_samples > int(T/dt) + 1:
+            print("provided dt=%.2E is too large to get %d samples. Resetting number of samples to %d"%(dt, num_time_samples, int(T/args.T_DT)))
+            num_time_samples = int(T/args.T_DT)
         
         tgrid            = np.linspace(0,T, num_time_samples)
         tgrid_idx        = np.int64(np.floor(tgrid / dt))
@@ -790,6 +793,7 @@ class bte_0d3v():
                 Pmat        = Imat_r  - dt * QT_Cmat_p_Emat_Q  + dt * np.dot(Wmat,h_prev) * Imat_r
                 #Pmat_inv    = np.linalg.inv(Pmat)
                 rhs_vec     = fb_prev + dt * QT_Cmat_p_Emat_f1 - dt * np.dot(Wmat,h_prev) * QT_f1
+                #fb_curr     = np.dot(Pmat_inv, rhs_vec)
                 fb_curr     = np.linalg.solve(Pmat, rhs_vec) 
 
                 # semi-explit on mass growth term (only need to compute the inverse matrix once)
@@ -872,6 +876,10 @@ class bte_0d3v():
 
         assert qr_error1 < 1e-10
         assert qr_error2 < 1e-10
+
+        if num_time_samples > int(T/dt) + 1:
+            print("provided dt=%.2E is too large to get %d samples. Resetting number of samples to %d"%(dt, num_time_samples, int(T/args.T_DT)))
+            num_time_samples = int(T/args.T_DT)
 
         tgrid            = np.linspace(0,T, num_time_samples)
         tgrid_idx        = np.int64(np.floor(tgrid / dt))

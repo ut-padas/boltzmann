@@ -968,4 +968,35 @@ def mcmc_sampling(dist_pdf, prior, n_samples, burn_in=0.3, num_chains=4):
     samples = mcmc_chain(dist_pdf, prior, n_samples, burn_in)
     return samples
     
+
+
+def sample_distribution_with_uniform_prior(spec_sp, ss_sol, x_domain, vth, fname, n_samples):
+    """
+    @brief sample given distribution function with uniform prior.    
+    """
+    num_p     = spec_sp._p + 1
+    num_sh    = len(spec_sp._sph_harm_lm)
+
+    def ss_dist(xx):
+        s=0
+        vr = np.linalg.norm(xx,axis=1)
+        vt = np.arccos(xx[:,2]/vr)
+        vp = np.arctan2(xx[:,1], xx[:,0]) % (2 * np.pi)
+        
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            sph_v = spec_sp.basis_eval_spherical(vt, vp, lm[0],lm[1])
+            for k in range(num_p):
+                bk_vr = spec_sp.basis_eval_radial(vr,k,0)
+                s+=(ss_sol[k * num_sh + lm_idx] * bk_vr * sph_v) 
+        return np.abs(s)
     
+    def prior_dist(size):
+        return np.random.uniform([-x_domain[1], -x_domain[1], -x_domain[1]], [x_domain[1], x_domain[1], x_domain[1]], size=(size,3))
+
+    x_cart   = mcmc_sampling(ss_dist, prior_dist, n_samples, burn_in=0.9, num_chains = 1)
+    x_cart  *= vth
+
+    np.save("%s"%(fname), x_cart)
+    return 0
+    
+

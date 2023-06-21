@@ -85,6 +85,13 @@ for run_id in range(len(run_params)):
     args.ion_deg = run_params[run_id][1]
     #print(args)
 
+    if args.ion_deg == 0:
+        args.ee_collisions = 0
+        args.use_dg        = 1
+    else:
+        args.ee_collisions = 1
+        args.use_dg        = 0
+
     bte_solver = bte_0d3v.bte_0d3v(args)
     bte_solver.run_bolsig_solver()
     ev = bte_solver._bolsig_data["ev"]

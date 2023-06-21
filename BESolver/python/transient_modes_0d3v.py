@@ -84,6 +84,14 @@ for run_id in range(len(run_params)):
     args.ion_deg = run_params[run_id][1]
     #print(args)
 
+    if args.ion_deg == 0:
+        args.ee_collisions = 0
+        args.use_dg        = 1
+    else:
+        args.ee_collisions = 1
+        args.use_dg        = 0
+    
+    print(args)
     bte_solver = bte_0d3v.bte_0d3v(args)
     bte_solver.run_bolsig_solver()
     ev = bte_solver._bolsig_data["ev"]
@@ -103,7 +111,7 @@ for run_id in range(len(run_params)):
     
     COLLISOIN_NAMES = bte_solver._collision_names
 
-    pb_mode_begin   = 2 
+    pb_mode_begin   = 0 
 
     for i, value in enumerate(args.sweep_values):
         if args.sweep_param == "Nr":
@@ -132,21 +140,58 @@ for run_id in range(len(run_params)):
         ss_init[1] = ss_sol[1] / np.dot(mass_op, ss_sol[1])
 
         for l in range(pb_mode_begin, num_sh):
-            h_init            = np.copy(ss_init[-1])
-            h_init[l::num_sh] = ss_init[0][0::num_sh] 
+            h_init            = spec_sp.create_vec().reshape(-1)
+            h_init[0::num_sh] = ss_init[-1][0::num_sh]
+            h_init[l::num_sh] = (1- 1e-10) * ss_init[-1][0::num_sh]
+            
+            # h_init            = np.copy(ss_init[-1])
+            # h_init[l::num_sh] = ss_init[0][0::num_sh] 
+
+            # if args.store_csv == 1 and i==(len(args.sweep_values)-1):
+            #     n_samples = int(1e6)
+            #     fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_perturb_l_%d.npy"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, l)
+            #     print("sampling for l-perturb %d size %.2E"%(l,n_samples))
+            #     c_gamma      = bte_solver._c_gamma
+            #     x_domain     = (np.sqrt(0) * c_gamma / vth , np.sqrt(bte_solver._args.ev_max) * c_gamma / vth)
+            #     bte_utils.sample_distribution_with_uniform_prior(spec_sp, h_init, x_domain, vth, fname, n_samples)
 
             m0 = np.dot(mass_op, h_init)
             t0 = np.dot(temp_op, h_init)/m0
 
+            dt = args.T_DT/(1<<i) 
+
             print("perturbing mode %d"%l)
             print("  mass = %.8E"%(m0))
             print("  temp = %.8E"%(t0))
+            print("  dt   = %.8E"%(dt))
 
             if args.efield_period == 0:
-                ts_sol = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<i), num_time_samples=200, h_init=h_init)
+                ts_sol = bte_solver.transient_solver(args.T_END, dt, num_time_samples=200, h_init=h_init)
             else:
-                ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), h_init)
+                ts_sol = bte_solver.transient_solver_time_harmonic_efield(args.T_END, dt, h_init)
             ts_qoi_all[(i,l)] = bte_solver.compute_QoIs(ts_sol["sol"], ts_sol["tgrid"])
+
+            ss_diff = np.linalg.norm(ss_sol[1]-ts_sol["sol"][-1])/np.linalg.norm(ss_sol[1])
+            print("relative error with ss solution = %.4E"%(ss_diff))
+
+            if args.store_csv == 1 :
+                fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_perturb_l_%d_dt%.2E.csv"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, l, dt)
+                sol_data = np.zeros((len(ts_sol["tgrid"]),  len(args.collisions) + 3 ))
+                
+                sol_data[:,0] = ts_sol["tgrid"]
+                sol_data[:,1] = ts_qoi_all[(i,l)]["energy"]
+                sol_data[:,2] = ts_qoi_all[(i,l)]["mobility"]
+                rr            = ts_qoi_all[(i,l)]["rates"]
+
+                for col_idx, col in enumerate(args.collisions):
+                    sol_data[:,3 + col_idx] = rr[col_idx]
+                
+                header_str = "time\tenergy\tmobility\t"
+                for col_idx, col in enumerate(args.collisions):
+                    header_str+=str(col)+"\t"
+
+                np.savetxt(fname, sol_data, delimiter='\t',header=header_str,comments='')
+
 
             # ts_ss     = np.zeros((2,len(h_init)))
             # ts_ss[0]  = ts_sol["sol"][0]
@@ -190,9 +235,25 @@ for run_id in range(len(run_params)):
                 plt.title("f%d"%(l_idx))
                 plt.grid(visible=True)
                 if l_idx == 0:
-                    plt.legend(prop={'size': 8})
+                    plt.legend(prop={'size': 24})
+
+                # for pl_idx in range(pb_mode_begin,num_sh):
+                #     ts_sol   = ts_ss_all[(i,pl_idx)]
+                #     ts_data  = ts_sol["sol"]
+                #     ts_radial   = bte_utils.compute_radial_components(ev, spec_sp, ts_data[-1],maxwellian,vth)
+                #     plt.semilogy(ev,  abs(ts_radial[l_idx]), '--', label=lbl+" ts ", color=color)
+
+
                 
                 plt_idx+=1
+        
+        for i, value in enumerate(args.sweep_values):
+            
+                spec_sp  = spec_list[i]
+
+                radial   = bte_utils.compute_radial_components(ev, spec_sp, data[-1],maxwellian,vth)
+
+
 
         plt_idx = int(np.ceil(num_sh/4)) * 4 +1
         color_list = list()
@@ -208,13 +269,15 @@ for run_id in range(len(run_params)):
 
                 tgrid  = ts_sol["tgrid"]
                 dt     = args.T_DT / (1<<(1 * i ))
-                
-                lbl =r"$f_%d$"%(l_idx)
+                if(l_idx==0):
+                    lbl =r"$f_%d$"%(l_idx)
+                else:
+                    lbl =r"$f_0 + f_%d$"%(l_idx)
                 plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
                 plt.semilogy(tgrid,  qois["energy"], '-', label=lbl, color=color)
                 plt.ylabel(r"energy (ev)")
                 plt.xlabel(r"time (s)")
-                #plt.title("Nr = %d dt =%.4E"%(value, dt))
+                plt.title("Nr = %d dt =%.4E"%(value, dt))
                 plt.grid(visible=True)
                 plt.legend()
 
@@ -222,7 +285,7 @@ for run_id in range(len(run_params)):
                 plt.semilogy(tgrid,  np.abs(qois["mobility"]), '-', label=lbl, color=color)
                 plt.ylabel(r"mobility ($N (1/m/V/s $))")
                 plt.xlabel(r"time (s)")
-                #plt.title("Nr = %d dt =%.4E"%(value, dt))
+                plt.title("Nr = %d dt =%.4E"%(value, dt))
                 plt.legend()
                 plt.grid(visible=True)
 
@@ -240,7 +303,7 @@ for run_id in range(len(run_params)):
         
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
 
-        plt.savefig("perturb_modes_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
+        plt.savefig(args.out_fname+"_perturb_modes_use_dg"+str(args.use_dg)+"_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
 
         plt.close()
 

@@ -957,8 +957,20 @@ class bte_0d3v():
                     print("time = %.3E solution convergence dt=%.2E atol = %.8E rtol = %.8E mass %.10E"%(t_curr, dt, atol, rtol, np.dot(u,h_curr)))
         else:
             QT_f1             = np.dot(QT,f1)
+            emat_p , _, _     = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
+            emat_m , _, _     = spec_sp.compute_advection_matix_dg(advection_dir=1.0)
+
+            emat_p            = np.matmul(Minv, emat_p)
+            emat_m            = np.matmul(Minv, emat_m)
+
             while t_curr < T:
                 E_field           = Ef(t_curr)
+
+                if E_field >= 0:
+                    Emat = emat_p
+                else:
+                    Emat = emat_m
+
                 Cmat_p_Emat       = Cmat + Emat * (E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
                 QT_Cmat_p_Emat_Q  = np.dot(QT, np.dot(Cmat_p_Emat,Q))
                 QT_Cmat_p_Emat_f1 = np.dot(np.dot(QT, Cmat_p_Emat),f1)
@@ -1016,7 +1028,7 @@ class bte_0d3v():
         if args.efield_period > 0:
             Ef              = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
             e_field_t       = Ef(tgrid)
-            e_field_t[np.abs(e_field_t) < 1e-6] = 0 
+            e_field_t[np.abs(e_field_t) < 32.22] = 0 
         elif tgrid is None:
             e_field_t       = E_max
         else:

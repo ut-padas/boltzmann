@@ -80,16 +80,30 @@ ion_deg_values      = np.array(args.ion_deg)
 if not args.ee_collisions:
     ion_deg_values = np.array([0])
 
-df                  = pd.read_csv(r'pde_vs_bolsig/g0g2eeNr64/pde_vs_bolsig_03_31_2023_11:44:46.csv')
-interpolation_kind  = 'cubic'
+interpolation_kind  = 'linear'
 
 run_params          = [(e_values[i], ion_deg_values[j]) for i in range(len(e_values)) for j in range(len(ion_deg_values))]
 for run_id in range(len(run_params)):
     args.E_field = run_params[run_id][0]
     args.ion_deg = run_params[run_id][1]
-    #print(args)
 
-    r_data  = df[df['Nr']==64.0][df['ion_deg']==args.ion_deg]
+    if args.ion_deg == 0:
+        args.ee_collisions = 0
+        args.use_dg        = 1
+        #df                 = pd.read_csv(r'pde_vs_bolsig/g0g2Nr128/pde_vs_bolsig_04_21_2023_18:06:18.csv')
+        #r_data             = df[df['Nr']==128.0][df['ion_deg']==args.ion_deg]
+        
+        df                 = pd.read_csv(r'pde_vs_bolsig/g0g2_two_term/pde_vs_bolsig_09_14_2022_collop_approx.csv')
+        r_data             = df[df['Nr']==128.0]
+
+    else:
+        args.ee_collisions = 1
+        args.use_dg        = 0
+        df                 = pd.read_csv(r'pde_vs_bolsig/g0g2eeNr64/pde_vs_bolsig_03_31_2023_11:44:46.csv')
+        r_data             = df[df['Nr']==64.0][df['ion_deg']==args.ion_deg]
+    
+    
+    
     x         = np.array(r_data["bolsig_energy"])
     y         = np.array(r_data["bolsig_mobility"])
     b_mu      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind)
@@ -166,7 +180,7 @@ for run_id in range(len(run_params)):
         #ts_sol2      = bte_solver.time_harmonic_efield_with_series_ss_solves(args.efield_period, args.efield_period/128, num_time_samples = 128)
 
         
-        ts_qoi_all[i]    = bte_solver.compute_QoIs(ts_sol1["sol"])
+        ts_qoi_all[i]    = bte_solver.compute_QoIs(ts_sol1["sol"], ts_sol1["tgrid"])
         
         ts_ss_all[i]         = ts_sol1
         ss_sol               = dict()
@@ -190,7 +204,7 @@ for run_id in range(len(run_params)):
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
         
-        fig       = plt.figure(figsize=(num_plt_cols * 6 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
+        fig       = plt.figure(figsize=(num_plt_cols * 15 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
 
         #f0
         plt.subplot(num_plt_rows, num_plt_cols,  1)
@@ -240,7 +254,7 @@ for run_id in range(len(run_params)):
 
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
             plt.semilogy(tgrid1,  qois1["energy"], '-', label ="transient"   , color=color)
-            plt.semilogy(tgrid2,  qois2["energy"], '--', label="steady-state", color=color)
+            plt.semilogy(tgrid2,  qois2["energy"], '--*b', label="steady-state", markersize=1)
             plt.ylabel(r"energy (ev)")
             plt.xlabel(r"time (s)")
             #plt.title("Nr = %d dt =%.4E"%(value, dt))
@@ -249,7 +263,7 @@ for run_id in range(len(run_params)):
 
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 1)
             plt.semilogy(tgrid1, np.abs(qois1["mobility"]), '-', label ="transient"   , color=color)
-            plt.semilogy(tgrid2, np.abs(qois2["mobility"]), '--', label="steady-state", color=color)
+            plt.semilogy(tgrid2, np.abs(qois2["mobility"]), '--*b', label="steady-state",markersize=1)
             plt.ylabel(r"mobility ($N (1/m/V/s $))")
             plt.xlabel(r"time (s)")
             #plt.title("Nr = %d dt =%.4E"%(value, dt))
@@ -258,7 +272,7 @@ for run_id in range(len(run_params)):
             for col_idx, col in enumerate(args.collisions):
                 plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 2 + col_idx)
                 plt.semilogy(tgrid1,  qois1["rates"][col_idx], '-', label ="transient"   , color=color)
-                plt.semilogy(tgrid2,  qois2["rates"][col_idx], '--', label="steady-state", color=color)
+                plt.semilogy(tgrid2,  qois2["rates"][col_idx], '--*b', label="steady-state", markersize=1)
                 #plt.semilogy(tgrid1,  np.abs(qois1["rates"][col_idx]/qois2["rates"][col_idx]-1), '-', color=color)
 
                 plt.title(COLLISOIN_NAMES[col])
@@ -272,7 +286,7 @@ for run_id in range(len(run_params)):
         
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
 
-        plt.savefig("residual_exp1_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
+        plt.savefig("rs" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
 
         plt.close()
 

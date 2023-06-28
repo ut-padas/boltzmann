@@ -217,13 +217,18 @@ for run_id in range(len(run_params)):
                 header.append("rel_diffusion_vs_bolsig")
                 for g in args.collisions:
                     header.append("rel_"+str(g)+"_vs_bolsig")
+                
+                for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                    header.append("l2_f%d%d"%(lm[0],lm[1]))
 
                 writer.writerow(header)
             
+            normL2 = lambda f1, f2, x : np.trapz(x * (f1 - f2)**2, x) / np.trapz(x * f2 , x)
+
             for i, value in enumerate(args.sweep_values):
                 # write the data
-                l2_f0     = np.linalg.norm(np.abs(radial[i, 0])-np.abs(bolsig_f0))/np.linalg.norm(np.abs(bolsig_f0))
-                l2_f1     = np.linalg.norm(np.abs(radial[i, 1])-np.abs(bolsig_f1))/np.linalg.norm(np.abs(bolsig_f1))
+                l2_f0     = normL2(np.abs(radial[i, 0]), np.abs(bolsig_f0), ev) #np.linalg.norm(np.abs(radial[i, 0])-np.abs(bolsig_f0))/np.linalg.norm(np.abs(bolsig_f0))
+                l2_f1     = normL2(np.abs(radial[i, 1]), np.abs(bolsig_f1), ev) #np.linalg.norm(np.abs(radial[i, 1])-np.abs(bolsig_f1))/np.linalg.norm(np.abs(bolsig_f1))
 
                 data = [args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.E_field, args.sweep_values[i], mu[i], D[i], M[i], bolsig_mu, bolsig_D, bolsig_M, l2_f0, l2_f1, args.Tg, args.ion_deg, solver_data[i]["atol"], solver_data[i]["rtol"]]
                 for col_idx , _ in enumerate(args.collisions):
@@ -242,15 +247,19 @@ for run_id in range(len(run_params)):
                 for col_idx , _ in enumerate(args.collisions):
                     data.append(np.abs(rates[col_idx][i]/bolsig_rates[col_idx]-1))
 
+                for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                    l2_error = normL2(np.abs(radial[i, lm[0]]), np.abs(radial[-1, lm[0]]), ev) #np.linalg.norm(np.abs(radial[i, lm_idx])-np.abs(radial[-1, lm_idx]))/np.linalg.norm(np.abs(radial[-1, lm_idx]))
+                    data.append(l2_error)
+
                 writer.writerow(data)
         
 
     if (1):
         maxwellian   = bte_solver._mw
         if args.steady_state == 0:
-            num_subplots = num_sh + 2 + 2 + 1 + 4
+            num_subplots = num_sh + 2 + 2 + 2 + 4
         else:
-            num_subplots = num_sh + 2 + 2 + 1 
+            num_subplots = num_sh + 2 + 2 + 2
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
         
@@ -371,20 +380,20 @@ for run_id in range(len(run_params)):
                 data_tt   = r_data['sol']
                 tgrid     = list(r_data['tgrid'])
 
-                plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 6)
+                plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 4)
                 plt.semilogy(tgrid,  qois["energy"], '-', label=lbl, color=color)
                 plt.ylabel(r"energy (ev)")
                 plt.xlabel(r"time (s)")
                 plt.grid(visible=True)
 
-                plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 7)
+                plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 5)
                 plt.semilogy(tgrid,  np.abs(qois["mobility"]), '-', label=lbl, color=color)
                 plt.ylabel(r"mobility ($N (1/m/V/s $))")
                 plt.xlabel(r"time (s)")
                 plt.grid(visible=True)
 
                 for col_idx, col in enumerate(args.collisions):
-                    plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 8 + col_idx)
+                    plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 6 + col_idx)
                     plt.semilogy(tgrid, qois["rates"][col_idx], '-', label=lbl, color=color)
 
                     plt.title(COLLISOIN_NAMES[col])

@@ -223,7 +223,7 @@ for run_id in range(len(run_params)):
 
                 writer.writerow(header)
             
-            normL2 = lambda f1, f2, x : np.trapz(x * (f1 - f2)**2, x) / np.trapz(x * f2 , x)
+            normL2 = lambda f1, f2, x : np.trapz(x * (f1 - f2)**2, x) / np.trapz(x * f2**2 , x)
 
             for i, value in enumerate(args.sweep_values):
                 # write the data

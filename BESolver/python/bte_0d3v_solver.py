@@ -1028,7 +1028,7 @@ class bte_0d3v():
         if args.efield_period > 0:
             Ef              = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
             e_field_t       = Ef(tgrid)
-            e_field_t[np.abs(e_field_t) < 32.22] = 0 
+            e_field_t[np.abs(e_field_t) < 1e-2] = 0 
         elif tgrid is None:
             e_field_t       = E_max
         else:

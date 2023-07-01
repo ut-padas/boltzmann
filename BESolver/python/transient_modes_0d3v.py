@@ -111,7 +111,7 @@ for run_id in range(len(run_params)):
     
     COLLISOIN_NAMES = bte_solver._collision_names
 
-    pb_mode_begin   = 0 
+    pb_mode_begin   = 2 
 
     for i, value in enumerate(args.sweep_values):
         if args.sweep_param == "Nr":
@@ -143,6 +143,8 @@ for run_id in range(len(run_params)):
             h_init            = spec_sp.create_vec().reshape(-1)
             h_init[0::num_sh] = ss_init[-1][0::num_sh]
             h_init[l::num_sh] = (1- 1e-10) * ss_init[-1][0::num_sh]
+            # for k in range(l, num_sh):
+            #     h_init[k::num_sh] = (1- 1e-10) * ss_init[-1][0::num_sh]
             
             # h_init            = np.copy(ss_init[-1])
             # h_init[l::num_sh] = ss_init[0][0::num_sh] 

@@ -175,8 +175,8 @@ for run_id in range(len(run_params)):
         t0 = np.dot(temp_op, h_init)/m0
 
         assert args.efield_period > 0
-        
-        ts_sol1      = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT/(1<<i), num_time_samples=args.num_tsamples, h_init = h_init)
+        dt          = args.T_DT/(1<<i)
+        ts_sol1     = bte_solver.transient_solver_time_harmonic_efield(args.T_END, dt , num_time_samples=args.num_tsamples, h_init = h_init)
         #ts_sol2      = bte_solver.time_harmonic_efield_with_series_ss_solves(args.efield_period, args.efield_period/128, num_time_samples = 128)
 
         
@@ -196,50 +196,80 @@ for run_id in range(len(run_params)):
         
         args.E_field = E_field
         args.ion_deg = ion_deg
+
+        if args.store_csv == 1 :
+            fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_dt%.2E.csv"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, dt)
+            sol_data = np.zeros((len(ts_sol1["tgrid"]),  2 * (len(args.collisions) + 3) - 1))
+            
+            sol_data[:,0] = ts_sol1["tgrid"]
+            sol_data[:,1] = ts_qoi_all[i]["energy"]
+            sol_data[:,2] = ts_qoi_all[i]["mobility"]
+            rr            = ts_qoi_all[i]["rates"]
+
+            for col_idx, col in enumerate(args.collisions):
+                sol_data[:,3 + col_idx] = rr[col_idx]
+            
+            sol_data[:, 5] = ts_qoi_all_ss[i]["energy"]
+            sol_data[:, 6] = ts_qoi_all_ss[i]["mobility"]
+            rr             = ts_qoi_all_ss[i]["rates"]
+
+            for col_idx, col in enumerate(args.collisions):
+                sol_data[:,7 + col_idx] = rr[col_idx]
+            
+            header_str = "time\tenergy\tmobility\t"
+            for col_idx, col in enumerate(args.collisions):
+                header_str+=str(col)+"\t"
+
+            header_str += "energy_inp\tmobility_inp\t"
+            for col_idx, col in enumerate(args.collisions):
+                header_str+=str(col)+"_inp\t"
+            
+            np.savetxt(fname, sol_data, delimiter='\t',header=header_str,comments='')
     
     if (1):
         maxwellian   = bte_solver._mw
         vth          = bte_solver._vth
-        num_subplots = max(num_sh,4) + len(args.sweep_values) * 4
+        num_subplots = 4 * len(args.sweep_values) #int(np.ceil(num_sh/4)) * 4 + len(args.sweep_values) * 4
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
-        
-        fig       = plt.figure(figsize=(num_plt_cols * 15 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
 
-        #f0
-        plt.subplot(num_plt_rows, num_plt_cols,  1)
-        plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
-        # f1
-        plt.subplot(num_plt_rows, num_plt_cols,  2)
-        plt.semilogy(bolsig_ev,  abs(bolsig_f1), '-k', label="bolsig")
+        fig       = plt.figure(figsize=(num_plt_cols * 6 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
+
+        # #f0
+        # plt.subplot(num_plt_rows, num_plt_cols,  1)
+        # plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
+        # # f1
+        # plt.subplot(num_plt_rows, num_plt_cols,  2)
+        # plt.semilogy(bolsig_ev,  abs(bolsig_f1), '-k', label="bolsig")
 
     
-        for i, value in enumerate(args.sweep_values):
-            spec_sp   = spec_list[i]
-            data      = ss_list[i]
+        # for i, value in enumerate(args.sweep_values):
+        #     spec_sp   = spec_list[i]
+        #     data      = ss_list[i]
 
-            lbl       = args.sweep_param+"="+str(value)
-            radial    = bte_utils.compute_radial_components(ev, spec_sp, data[-1],maxwellian,vth)
+        #     lbl       = args.sweep_param+"="+str(value)
+        #     radial    = bte_utils.compute_radial_components(ev, spec_sp, data[-1],maxwellian,vth)
             
-            # spherical components plots
-            plt_idx=1
-            for l_idx in range(num_sh):
-                plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
-                color = next(plt.gca()._get_lines.prop_cycler)['color']
-                plt.semilogy(ev,  abs(radial[l_idx]), '-', label=lbl, color=color)
+        #     # spherical components plots
+        #     plt_idx=1
+        #     for l_idx in range(num_sh):
+        #         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
+        #         color = next(plt.gca()._get_lines.prop_cycler)['color']
+        #         plt.semilogy(ev,  abs(radial[l_idx]), '-', label=lbl, color=color)
 
-                plt.xlabel(r"energy (eV)")
-                plt.ylabel(r"radial component")
-                plt.title("f%d"%(l_idx))
-                plt.grid(visible=True)
-                if l_idx == 0:
-                    plt.legend(prop={'size': 8})
+        #         plt.xlabel(r"energy (eV)")
+        #         plt.ylabel(r"radial component")
+        #         plt.title("f%d"%(l_idx))
+        #         plt.grid(visible=True)
+        #         if l_idx == 0:
+        #             plt.legend(prop={'size': 8})
                 
-                plt_idx+=1
-        plt_idx = max(num_sh, 4) + 1
+        #         plt_idx+=1
+        # plt_idx = max(num_sh, 4) + 1
+        plt_idx = 1
         
         for i, value in enumerate(args.sweep_values):
-            color = next(plt.gca()._get_lines.prop_cycler)['color']
+            color = "red"#next(plt.gca()._get_lines.prop_cycler)['color']
             
             qois1    = ts_qoi_all[i]
             ts_sol1  = ts_ss_all [i]
@@ -257,7 +287,7 @@ for run_id in range(len(run_params)):
             plt.semilogy(tgrid2,  qois2["energy"], '--*b', label="steady-state", markersize=1)
             plt.ylabel(r"energy (ev)")
             plt.xlabel(r"time (s)")
-            #plt.title("Nr = %d dt =%.4E"%(value, dt))
+            plt.title("Nr = %d dt =%.4E"%(value, dt))
             plt.grid(visible=True)
             plt.legend()
 
@@ -266,8 +296,9 @@ for run_id in range(len(run_params)):
             plt.semilogy(tgrid2, np.abs(qois2["mobility"]), '--*b', label="steady-state",markersize=1)
             plt.ylabel(r"mobility ($N (1/m/V/s $))")
             plt.xlabel(r"time (s)")
-            #plt.title("Nr = %d dt =%.4E"%(value, dt))
+            plt.title("Nr = %d dt =%.4E"%(value, dt))
             plt.grid(visible=True)
+            plt.legend()
 
             for col_idx, col in enumerate(args.collisions):
                 plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 2 + col_idx)
@@ -279,14 +310,15 @@ for run_id in range(len(run_params)):
                 plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
                 #plt.ylabel(r"relative error")
                 plt.xlabel(r"time (s)")
-                #plt.title("Nr = %d dt =%.4E"%(value, dt))
+                plt.title("Nr = %d dt =%.4E"%(value, dt))
                 plt.grid(visible=True)
+                plt.legend()
         
             plt_idx+= 2 + len(args.collisions)
         
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
 
-        plt.savefig("rs" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
+        plt.savefig("rs_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
 
         plt.close()
 

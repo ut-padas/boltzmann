@@ -142,16 +142,18 @@ class CollisionOpSP():
                                 for k in range(num_p):
                                     cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
 
-                elif(g._type == collisions.CollisionType.EAR_G2):
-                    check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
-                    # v_post           = np.zeros_like(gx_e)
-                    # v_post[check_1]  = c_gamma * np.sqrt( (1/2) * ((gx_e[check_1] * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+                elif(g._type == collisions.CollisionType.EAR_G1 or g._type == collisions.CollisionType.EAR_G2):
+                    
+                    energy_split = 1.0
+                    if g._type == collisions.CollisionType.EAR_G2:
+                        energy_split= 2.0
 
+                    check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
                     gx_e             = gx_e[check_1]
                     gw_e             = gw_e[check_1]
 
                     total_cs         = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
-                    v_post           = c_gamma * np.sqrt( (1/2) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+                    v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
 
                     
                     tmp_q0   = np.zeros((num_p,num_p))
@@ -172,7 +174,7 @@ class CollisionOpSP():
                         for p in range(num_p):
                             psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
                             psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
-                            tmp_q0[p,k]  = np.dot(gmw,  V_TH * gmx**3 * t_cs * phi_k * (2 * psi_pp - psi_pm))
+                            tmp_q0[p,k]  = np.dot(gmw,  V_TH * gmx**3 * t_cs * phi_k * (energy_split * psi_pp - psi_pm))
                             tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
 
                     for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
@@ -300,7 +302,11 @@ class CollisionOpSP():
                                 for k in range(num_p):
                                     cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
                 
-                elif(g._type == collisions.CollisionType.EAR_G2):
+                elif(g._type == collisions.CollisionType.EAR_G1 or g._type == collisions.CollisionType.EAR_G2):
+                    
+                    energy_split = 1.0
+                    if g._type == collisions.CollisionType.EAR_G2:
+                        energy_split= 2.0
 
                     tmp_q0   = np.zeros((num_p,num_p))
                     tmp_q1   = np.zeros((num_p,num_p))
@@ -311,7 +317,7 @@ class CollisionOpSP():
                     gx_p     = np.array([])
                     gw_p     = np.array([])
 
-                    v_pre    = lambda x : np.sqrt(2 * x**2 + c_gamma**2 * g._reaction_threshold/V_TH**2)
+                    v_pre    = lambda x : np.sqrt(energy_split * x**2 + c_gamma**2 * g._reaction_threshold/V_TH**2)
 
 
                     for e_id in range(0,len(dg_idx),2):
@@ -342,7 +348,7 @@ class CollisionOpSP():
                     total_cs_m  = g.total_cross_section((gx_m * V_TH / c_gamma)**2)
                     total_cs_p  = g.total_cross_section((gx_p * V_TH / c_gamma)**2)
 
-                    v_post_p    = c_gamma * np.sqrt( (1/2) * ((gx_p * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+                    v_post_p    = c_gamma * np.sqrt( (1/energy_split) * ((gx_p * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
 
                     for e_id in range(0,len(dg_idx),2):
                         ib = dg_idx[e_id]
@@ -381,7 +387,7 @@ class CollisionOpSP():
 
                             phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
                             for p in range(ib,ie+1):
-                                psi_pp        = 2 * spec_sp.basis_eval_radial(vp, p, 0)
+                                psi_pp        = energy_split * spec_sp.basis_eval_radial(vp, p, 0)
                                 tmp_q0[p,k]  += np.dot(gmw, V_TH * gmx**3 * t_cs * phi_k * psi_pp)
                     
                     for qs_idx, (q,s) in enumerate(self._sph_harm_lm):

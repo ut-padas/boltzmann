@@ -15,6 +15,8 @@ from scipy import interpolate
 import scipy.constants
 import utils as BEUtils
 import scipy.ndimage
+import basis
+import spec_spherical as sp
 
 def electron_thermal_velocity(T):
     """
@@ -50,14 +52,19 @@ ELECTRON_THEMAL_VEL = electron_thermal_velocity(MAXWELLIAN_TEMP_K)
 #http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node6.html
 PLASMA_FREQUENCY  = np.sqrt(MAXWELLIAN_N * (scipy.constants.elementary_charge**2) / (scipy.constants.epsilon_0  * scipy.constants.electron_mass))
 
-
+class CollisionInterpolationType():
+    USE_PICEWICE_LINEAR_INTERPOLATION = 0
+    USE_BSPLINE_PROJECTION            = 1
+    USE_ANALYTICAL_FUNCTION_FIT       = 2 
+    
 class Collisions(abc.ABC):
 
     def __init__(self , cross_section:str)->None:
         self._is_scattering_mat_assembled = False
         self._sc_direction_mat            = None
-        self._analytic_cross_section_type = cross_section
+        self._col_name = cross_section
         self._reaction_threshold          = 0.0
+        self._cs_interp_type              = CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT
         pass
     
     def load_cross_section(self,fname)->None:
@@ -69,8 +76,60 @@ class Collisions(abc.ABC):
         np_data         = cross_section.lxcat_cross_section_to_numpy(self._cs_fname, self._cs_fields)
         self._energy    = np_data[0]
         self._total_cs  = np_data[1] 
-        #self._total_cs  = Collisions.synthetic_tcs(self._energy, self._analytic_cross_section_type) #np_data[1]
         self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear', bounds_error=False,fill_value=(self._total_cs[0],self._total_cs[-1]))
+
+        if self._cs_interp_type == CollisionInterpolationType.USE_BSPLINE_PROJECTION:
+            sp_order        = 8
+            num_p           = 128
+            k_domain        = (np_data[0][0], np_data[0][-1]) 
+            k_vec           = basis.BSpline.logspace_knots(k_domain, num_p, sp_order, 0.5 *(np_data[0][1] + np_data[0][0]) , base=2)
+            bb              = basis.BSpline(k_domain, sp_order, num_p, sig_pts=None, knots_vec=k_vec, dg_splines=0, verbose=False)
+            
+            num_intervals   = bb._num_knot_intervals
+            q_pts           = (2 * sp_order + 1)
+            gx, gw          = basis.Legendre().Gauss_Pn(q_pts)
+
+            mm_mat    = np.zeros((num_p, num_p))  
+            b_rhs     = np.zeros(num_p)
+            for p in range(num_p):
+                k_min   = bb._t[p]
+                k_max   = bb._t[p + sp_order + 1]
+
+                gmx     = 0.5 * (k_max-k_min) * gx + 0.5 * (k_min + k_max)
+                gmw     = 0.5 * (k_max-k_min) * gw
+                b_p     = bb.Pn(p)(gmx, 0)
+                b_rhs[p] = np.dot(gmw, b_p * self._total_cs_interp1d(gmx))
+                for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+                    b_k          = bb.Pn(k)(gmx, 0)
+                    mm_mat[p,k]  = np.dot(gmw, b_p * b_k)
+
+            def schur_inv(M):
+                #return np.linalg.pin1v(M,rcond=1e-30)
+                rtol=1e-14
+                atol=1e-14
+
+                T, Q = scipy.linalg.schur(M)
+                Tinv = scipy.linalg.solve_triangular(T, np.identity(M.shape[0]),lower=False)
+                #print("spline cross-section fit mass mat inverse = %.6E "%(np.linalg.norm(np.matmul(T,Tinv)-np.eye(T.shape[0]))/np.linalg.norm(np.eye(T.shape[0]))))
+                return np.matmul(np.linalg.inv(np.transpose(Q)), np.matmul(Tinv, np.linalg.inv(Q)))
+            
+            mm_inv = schur_inv(mm_mat)
+            self._sigma_k = np.dot(mm_inv, b_rhs)
+            self._bb      = bb  
+
+            
+        import matplotlib.pyplot as plt
+        fig=plt.figure(figsize=(8,8), dpi=300)
+        plt.loglog(np_data[0], np_data[1],'r-*',label=r"tabulated")
+        plt.loglog(np_data[0], self.total_cross_section(np_data[0]), 'b--^', label=r"interpolated")
+        
+        plt.legend()
+        plt.grid(visible=True)
+        plt.xlabel(r"energy (eV)")
+        plt.ylabel(r"cross section ($m^2$)")
+        plt.savefig("col_%s.png"%(self._col_name))
+        plt.close()
+
         return
 
     @staticmethod
@@ -158,8 +217,15 @@ class Collisions(abc.ABC):
         """
         computes the total cross section based on the experimental data. 
         """
-        return Collisions.synthetic_tcs(energy,self._analytic_cross_section_type)  
-        #return self._total_cs_interp1d(energy)
+        if self._cs_interp_type == CollisionInterpolationType.USE_BSPLINE_PROJECTION:
+            bb    =  self._bb
+            num_p =  bb._num_p 
+            Vq = np.array([bb.Pn(p)(energy, 0) for p in range(num_p)]).reshape((num_p, len(energy)))
+            return np.dot(self._sigma_k, Vq)
+        elif self._cs_interp_type == CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT:
+            return Collisions.synthetic_tcs(energy,self._col_name)  
+        else:
+            return self._total_cs_interp1d(energy)
 
     @staticmethod
     def diff_cs_to_total_cs_ratio(energy,scattering_angle):
@@ -201,6 +267,90 @@ class Collisions(abc.ABC):
         #print("synthetic mode : ", mode)
         if mode==0:
             return 2e-20 * np.ones_like(ev)
+        
+        elif mode == "g0":
+            """
+            G0 cross section data fit with analytical function
+            """
+            ev =     ev+1e-13
+            a0 =    0.008787
+            b0 =     0.07243
+            c  =    0.007048
+            d  =      0.9737
+            a1 =        3.27
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            y=9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+            assert len(y[y<0]) == 0 , "g0 cross section is negative" 
+            return  y
+        
+        elif mode == "g2":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            y               = np.zeros_like(ev)
+            threshold_value = 15.76
+            y[ev>threshold_value] = (2.860000e-20/np.log(90-threshold_value)) * np.log((ev[ev>threshold_value]-threshold_value + 1)) * np.exp(-1e-2*((ev[ev>threshold_value]-90)/90)**2)
+            y[ev>=10000]=0
+            return  y
+
+        elif mode == "g2Regul":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            #ev =     ev+1e-8
+            a = 2.84284159e-22
+            b = 1.02812034e-17
+            c =-1.40391999e-15
+            d = 9.97783291e-14
+            e =-3.82647294e-12
+            f =-5.70400826e+01-0.535743163918511
+
+
+            trans_width = 3
+            z = ((ev+1e-15)-(15.76))/(trans_width)
+            # z = (np.log(ev+1e-15)-np.log(15.76))/np.log(trans_width)
+
+            transition = np.zeros_like(z)
+            gt0 = z>0
+            lt1 = z<1
+            bw01 = np.logical_and(gt0, lt1)
+            transition[np.logical_not(gt0)] = 0
+            transition[np.logical_not(lt1)] = 1
+            transition[bw01] = .5*(1.+np.tanh((2*z[bw01]-1)/np.sqrt((1.-z[bw01])*z[bw01])))
+
+            # print(transition[transition<0])
+            
+            x=ev-f
+            y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
+            y = y * transition
+            y[ev>=10000]=0
+            
+            # y[ev<=15.76]=0
+            # y[ev>1e3]=0
+            
+            return  y
+        elif mode == "g1":
+            """
+            G1 cross section data fit with analytical function (excitation)
+            """
+            #ev =     ev+1e-8
+            a  = -4.06265154e-21
+            b=  6.46808245e-22
+            c  = -3.20434420e-23
+            d  = 6.39873618e-25
+            e  = -4.37947887e-27
+            f  = -1.30972221e-23
+            g  =  2.15683845e-19
+            mixing = 1./(1+np.exp(-(ev-32)))
+            y = (a +  b * ev + c * ev**2 + d * ev**3 + e * ev**4)*(1-mixing) + mixing*(f + g/ev**2)
+            y[ev<=11.55] = 0
+            y[y<0]       = 8e-25
+            y[ev>=200]   = 0
+            
+            return y
+            
         elif mode==1:
             """
             high gradient increasing
@@ -413,70 +563,6 @@ class Collisions(abc.ABC):
 
             return elastic_shifted_MERT(theta,ev)
 
-        elif mode == "g0":
-            """
-            G0 cross section data fit with analytical function
-            """
-            ev =     ev+1e-13
-            a0 =    0.008787
-            b0 =     0.07243
-            c  =    0.007048
-            d  =      0.9737
-            a1 =        3.27
-            b1 =       3.679
-            x0 =      0.2347
-            x1 =       11.71
-            y=9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
-            assert len(y[y<0]) == 0 , "g0 cross section is negative" 
-            return  y
-        
-        elif mode == "g1":
-            """
-            G1 cross section data fit with analytical function (excitation)
-            """
-            #ev =     ev+1e-8
-            a  = -4.06265154e-21
-            b  =  6.46808245e-22
-            c  = -3.20434420e-23
-            d  = 6.39873618e-25 
-            e  = -4.37947887e-27
-            f  = -1.30972221e-23
-            g  =  2.15683845e-19
-            y = a +  b * ev**1 + c * ev**2 + d * ev**3 + e * ev **4 
-            y[ev<=11.55] = 0 
-            y[ev>35.00] = f + g * (1/pow(ev[ev>35.00],2))
-            y[ev>=200]   = 0
-            return y     
-
-        elif mode == "g1smoother":
-            """
-            G1 cross section data fit with analytical function (excitation)
-            """
-            #ev =     ev+1e-8
-            a  = -4.06265154e-21
-            b  =  6.46808245e-22
-            c  = -3.20434420e-23
-            d  = 6.39873618e-25 
-            e  = -4.37947887e-27
-            f  = -1.30972221e-23
-            g  =  2.15683845e-19
-            mixing = 1./(1.+np.exp(-(ev-32.)))
-            y = (a +  b * ev + c * ev**2 + d * ev**3 + e * ev**4)*(1.-mixing) + mixing*(f + g/ev**2)
-            y[ev<=11.55] = 0 
-            # y[ev>=200]   = 0
-            return y    
-        
-        elif mode == "g2":
-            """
-            G2 cross section data fit with analytical function (ionization)
-            """
-            y               = np.zeros_like(ev)
-            threshold_value = 15.76
-            y[ev>threshold_value] = (2.860000e-20/np.log(90-threshold_value)) * np.log((ev[ev>threshold_value]-threshold_value + 1)) * np.exp(-1e-2*((ev[ev>threshold_value]-90)/90)**2)
-            # y[ev>1000]=0
-            # print(y[y<0])
-            return  y
-
         elif mode == "g2step":
             """
             G2 cross section data fit with analytical function (ionization)
@@ -548,43 +634,6 @@ class Collisions(abc.ABC):
             
             return  y    
         
-        elif mode == "g2Regul":
-            """
-            G2 cross section data fit with analytical function (ionization)
-            """
-            #ev =     ev+1e-8
-            a = 2.84284159e-22
-            b = 1.02812034e-17
-            c =-1.40391999e-15
-            d = 9.97783291e-14
-            e =-3.82647294e-12
-            f =-5.70400826e+01-0.535743163918511
-
-
-            trans_width = 3
-            z = ((ev+1e-15)-(15.76))/(trans_width)
-            # z = (np.log(ev+1e-15)-np.log(15.76))/np.log(trans_width)
-
-            transition = np.zeros_like(z)
-            gt0 = z>0
-            lt1 = z<1
-            bw01 = np.logical_and(gt0, lt1)
-            transition[np.logical_not(gt0)] = 0
-            transition[np.logical_not(lt1)] = 1
-            transition[bw01] = .5*(1.+np.tanh((2*z[bw01]-1)/np.sqrt((1.-z[bw01])*z[bw01])))
-
-            # print(transition[transition<0])
-            
-            x=ev-f
-            y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
-            y = y * transition
-            y[y<=0] = 0
-            
-            # y[ev<=15.76]=0
-            # y[ev>1e3]=0
-            
-            return  y      
-
         elif mode == "g2Const":
 
             return  9.9e-21 * np.ones_like(ev)
@@ -767,8 +816,7 @@ class eAr_G0(Collisions):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        total_cs  = self._total_cs_interp1d(energy_ev)
-        total_cs  = Collisions.synthetic_tcs(energy_ev, self._analytic_cross_section_type)
+        total_cs  = self.total_cross_section(energy_ev)
         diff_cs   = total_cs / (4*np.pi)
         return diff_cs
 
@@ -824,7 +872,7 @@ class eAr_G1(Collisions):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        total_cs  = self._total_cs_interp1d(energy_ev)
+        total_cs  = self.total_cross_section(energy_ev)
         diff_cs   = total_cs / (4*np.pi)
         return diff_cs
 
@@ -881,7 +929,7 @@ class eAr_G2(Collisions):
 
     @staticmethod
     def get_cross_section_scaling():
-        return 1.0#AR_IONIZED_N
+        return 1.0
 
     def reset_scattering_direction_sp_mat(self):
         self._is_scattering_mat_assembled=False
@@ -897,7 +945,7 @@ class eAr_G2(Collisions):
         Note!! : If the energy threshold is not satisfied diff. cross section would be zero. 
         """
         energy_ev = (0.5 * MASS_ELECTRON * (v**2))/ELECTRON_VOLT
-        total_cs  = self._total_cs_interp1d(energy_ev)
+        total_cs  = self.total_cross_section(energy_ev)
         diff_cs   = total_cs / (4*np.pi)
         return diff_cs
 

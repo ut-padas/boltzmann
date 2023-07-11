@@ -88,6 +88,7 @@ class bte_0d3v():
             self._collision_names[col]=col
 
         self._collision_names["g0"]      = "elastic"
+        self._collision_names["g1"]      = "excitation"
         self._collision_names["g2"]      = "ionization"
         self._collision_names["g2Regul"] = "ionization"
 
@@ -108,12 +109,12 @@ class bte_0d3v():
             self._bolsig_data["diffusion"] = bolsig_D
             self._bolsig_data["rates" ]    = bolsig_rates
             self._bolsig_data["cc_log"]    = bolsig_cclog
-            
 
-            
         except:
-            print(self._args.bolsig_dir+"argon.out file not found due to Bolsig+ run failure")
-            sys.exit(0)
+           print(self._args.bolsig_dir+"argon.out file not found due to Bolsig+ run failure")
+           import traceback
+           traceback.print_exc()
+           sys.exit(0)
 
 
         print("bolsig temp      = %.8E"%((bolsig_mu /1.5)))
@@ -145,7 +146,7 @@ class bte_0d3v():
         self._mw            = bte_utils.get_maxwellian_3d(self._vth, self._mw_ne)
         self._c_gamma       = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
 
-        sig_pts   =  list()
+        self._coll_list     = list()
         for col_idx, col in enumerate(args.collisions):
             if "g0NoLoss" == col:
                 g  = collisions.eAr_G0_NoEnergyLoss()
@@ -156,13 +157,21 @@ class bte_0d3v():
             elif "g0" in str(col):
                 g = collisions.eAr_G0(cross_section=col)
                 g.reset_scattering_direction_sp_mat()
+            elif "g1" in str(col):
+                g = collisions.eAr_G1(cross_section=col)
+                g.reset_scattering_direction_sp_mat()
             elif "g2" in str(col):
                 g = collisions.eAr_G2(cross_section=col)
                 g.reset_scattering_direction_sp_mat()
             else:
                 print("unknown collision %s"%(col))
                 sys.exit(0)
-            
+
+            self._coll_list.append(g)
+
+        sig_pts   =  list()
+        for col_idx, col in enumerate(args.collisions):
+            g  = self._coll_list[col_idx]
             if g._reaction_threshold >0:
                 sig_pts.append(g._reaction_threshold)
         
@@ -214,41 +223,38 @@ class bte_0d3v():
 
         FOp      = 0
         sigma_m  = 0
-        gg_list  = list()
         
         t1 = time()
         for col_idx, col in enumerate(args.collisions):
+            g = self._coll_list[col_idx]
+            g.reset_scattering_direction_sp_mat()
+            assert col == g._col_name
             print("collision %d included %s"%(col_idx, col))
+
             if "g0NoLoss" == col:
-                g  = collisions.eAr_G0_NoEnergyLoss()
-                g.reset_scattering_direction_sp_mat()
                 FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g0ConstNoLoss" == col:
-                g  = collisions.eAr_G0_NoEnergyLoss(cross_section="g0Const")
-                g.reset_scattering_direction_sp_mat()
                 FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g0" in col:
-                g       = collisions.eAr_G0(cross_section=col)
-                g.reset_scattering_direction_sp_mat()
+                FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
+                sigma_m  += g.total_cross_section(gx_ev)
+            elif "g1" in col:
                 FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g2" in col:
-                g  = collisions.eAr_G2(cross_section=col)
-                g.reset_scattering_direction_sp_mat()
                 FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
                 sigma_m  += g.total_cross_section(gx_ev)
             else:
                 print("%s unknown collision"%(col))
                 sys.exit(0)
 
-            gg_list.append(g)
         t2 = time()
         print("Assembled the collision op. for Vth : ", vth)
         print("Collision Operator assembly time (s): ",(t2-t1))
 
-        self._gg_list = gg_list
+        gg_list = self._coll_list
 
         self._mass_op               = bte_utils.mass_op(spec_sp, 1)
         self._temp_op               = bte_utils.temp_op(spec_sp, 1)
@@ -256,7 +262,7 @@ class bte_0d3v():
 
         mw  = self._mw
         self._mobility_op           = bte_utils.mobility_op(spec_sp, mw, vth)
-        self._diffusion_op          = bte_utils.diffusion_op(spec_sp, self._gg_list, mw, vth)
+        self._diffusion_op          = bte_utils.diffusion_op(spec_sp, self._coll_list, mw, vth)
         self._rr_op                 = np.zeros((len(gg_list),num_p))
 
         for col_idx, g in enumerate(gg_list):
@@ -372,22 +378,20 @@ class bte_0d3v():
         sigma_m  = 0
         gx_ev    = (gx * vth / c_gamma)**2
         for col_idx, col in enumerate(args.collisions):
+            g = self._coll_list[col_idx]
+            g.reset_scattering_direction_sp_mat()
+            assert col == g._col_name
             print("collision %d included %s"%(col_idx, col))
+            
             if "g0NoLoss" == col:
-                g  = collisions.eAr_G0_NoEnergyLoss()
-                g.reset_scattering_direction_sp_mat()
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g0ConstNoLoss" == col:
-                g  = collisions.eAr_G0_NoEnergyLoss(cross_section="g0Const")
-                g.reset_scattering_direction_sp_mat()
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g0" in col:
-                g       = collisions.eAr_G0(cross_section=col)
-                g.reset_scattering_direction_sp_mat()
+                sigma_m  += g.total_cross_section(gx_ev)
+            elif "g1" in col:
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g2" in col:
-                g  = collisions.eAr_G2(cross_section=col)
-                g.reset_scattering_direction_sp_mat()
                 sigma_m  += g.total_cross_section(gx_ev)
             else:
                 print("%s unknown collision"%(col))
@@ -618,7 +622,7 @@ class bte_0d3v():
         assert qr_error1 < 1e-10
         assert qr_error2 < 1e-10
 
-        gg_list         = self._gg_list
+        gg_list         = self._coll_list
         f1              = u / np.dot(u, u)
         eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * collisions.AR_NEUTRAL_N
 
@@ -731,7 +735,7 @@ class bte_0d3v():
         sample_idx = 1
         t_step     = 0
 
-        gg_list         = self._gg_list
+        gg_list         = self._coll_list
         eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * collisions.AR_NEUTRAL_N
 
         f1      = u / np.dot(u, u)
@@ -898,7 +902,7 @@ class bte_0d3v():
         sample_idx = 1
         t_step     = 0
 
-        gg_list         = self._gg_list
+        gg_list         = self._coll_list
         eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * collisions.AR_NEUTRAL_N
 
         f1      = u / np.dot(u, u)
@@ -1048,7 +1052,7 @@ class bte_0d3v():
         D   = np.dot(hh[:, 0::num_sh], self._diffusion_op) * (c_gamma / 3.)
         
         rr  = list()
-        for col_idx, g in enumerate(self._gg_list):
+        for col_idx, g in enumerate(self._coll_list):
             reaction_rate = np.dot(hh[:,0::num_sh], self._rr_op[col_idx])
             rr.append(reaction_rate)
         

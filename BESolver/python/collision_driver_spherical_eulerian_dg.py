@@ -267,12 +267,12 @@ for run_id in range(len(run_params)):
         
         COLLISOIN_NAMES = bte_solver._collision_names
 
-        # #f0
-        # plt.subplot(num_plt_rows, num_plt_cols,  1)
-        # plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
-        # # f1
-        # plt.subplot(num_plt_rows, num_plt_cols,  2)
-        # plt.semilogy(bolsig_ev,  abs(bolsig_f1), '-k', label="bolsig")
+        #f0
+        plt.subplot(num_plt_rows, num_plt_cols,  3)
+        plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
+        # f1
+        plt.subplot(num_plt_rows, num_plt_cols,  4)
+        plt.semilogy(bolsig_ev,  abs(bolsig_f1), '-k', label="bolsig")
 
         plt.subplot(num_plt_rows, num_plt_cols, 1)
         plt.semilogy(args.sweep_values, abs(np.array(mu)/bolsig_mu-1), 'o-', label='mean energy')
@@ -404,16 +404,17 @@ for run_id in range(len(run_params)):
 
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
         # plt.show()
+        effective_efield = args.E_field/collisions.AR_NEUTRAL_N/1e-21
         if len(spec_sp._basis_p._dg_idx)==2:
             if args.steady_state == 1 : 
-                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
+                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
             else:
-                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".svg")
+                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".svg")
         else:
             if args.steady_state == 1 : 
-                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
+                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
             else:
-                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".svg")
+                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".svg")
 
         plt.close()
 

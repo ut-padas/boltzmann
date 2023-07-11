@@ -127,5 +127,14 @@ COLUMNS: Energy (eV) | Cross section (m2)
  6.000000e+2	3.150000e-21
  8.000000e+2	2.190000e-21
  1.000000e+3	1.610000e-21
+ 1300.	        0.1285E-20
+ 1690.	        0.1025E-20
+ 2197.	        0.8163E-21
+ 2856.	        0.6493E-21
+ 3713.	        0.5160E-21
+ 4827.	        0.4096E-21
+ 6275.	        0.3248E-21
+ 8157.	        0.2573E-21
+ 0.1060E+05	    0.2037E-21
 -----------------------------
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

@@ -264,7 +264,7 @@ class Laguerre(Basis):
 
 class BSpline(Basis):
     
-    def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=None, knots_vec=None, dg_splines=False):
+    def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=list(), knots_vec=None, dg_splines=False, verbose=True):
         self._basis_type = BasisType.SPLINES
         self._domain     = k_domain
         self._window     = k_domain
@@ -273,7 +273,7 @@ class BSpline(Basis):
         
         if knots_vec is None:
             if dg_splines:
-                if sig_pts==None:
+                if len(sig_pts)==0:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots(k_domain, num_p, spline_order)
                 else:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots_1(k_domain, num_p, spline_order,sig_pts)
@@ -295,15 +295,22 @@ class BSpline(Basis):
             
 
         else:
-            if sig_pts is not None and False:
-                ii              = list(knots_vec).index(sig_pts[0])
-                self._t         = np.append(np.ones(self._sp_order) * knots_vec[0], knots_vec[0:ii+1])
-                self._t         = np.append(self._t, np.ones(self._sp_order) * knots_vec[ii])
-                self._t         = np.append(self._t, knots_vec[ii+1:])
-                self._t         = np.append(self._t, np.ones(self._sp_order) * knots_vec[-1])
+            # if sig_pts is not None and False:
+            #     ii              = list(knots_vec).index(sig_pts[0])
+            #     self._t         = np.append(np.ones(self._sp_order) * knots_vec[0], knots_vec[0:ii+1])
+            #     self._t         = np.append(self._t, np.ones(self._sp_order) * knots_vec[ii])
+            #     self._t         = np.append(self._t, knots_vec[ii+1:])
+            #     self._t         = np.append(self._t, np.ones(self._sp_order) * knots_vec[-1])
+            # else:
+            #     self._t         = np.append(np.ones(self._sp_order) * knots_vec[0], knots_vec)
+            #     self._t         = np.append(self._t, np.ones(self._sp_order) * knots_vec[-1])
+            if dg_splines==0:
+                self._t         = knots_vec 
+                self._ele       = 1
+                self._ele_p     = num_p
             else:
-                self._t         = np.append(np.ones(self._sp_order) * knots_vec[0], knots_vec)
-                self._t         = np.append(self._t, np.ones(self._sp_order) * knots_vec[-1])
+                assert False
+            
             self._kdomain   = (self._t[0], self._t[-1])
             self._num_p     = len(self._t) - (self._sp_order+1)
             
@@ -321,8 +328,9 @@ class BSpline(Basis):
         else:
             self._dg_idx    = [0, num_p-1]
 
-        print("num_p \n ", self._ele_p)
-        print("dg node indices\n", self._dg_idx)
+        if verbose == True:
+            print("num_p \n ", self._ele_p)
+            print("dg node indices\n", self._dg_idx)
         #print("knots vector\n", self._t)
         #print("knots vector (unique)\n", self._t_unique)
         # print(self._t)
@@ -537,6 +545,22 @@ class BSpline(Basis):
 
         t          = (k_domain[0])*np.ones(sp_order)
         t          = np.append(t,np.linspace(k_domain[0] , k_domain[1] , num_p-sp_order , endpoint=False))
+        t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+        return t
+
+    @staticmethod
+    def logspace_knots(k_domain, num_p, sp_order, xmin_p1, base=2):
+        # t          = (k_domain[0])*np.ones(sp_order+1)
+        # glx, _        = Legendre().Gauss_Pn(num_p-sp_order-1)
+        # # Np         = num_p-sp_order-1 + 2
+        # # glx        = -np.cos(np.pi*np.linspace(0,Np-1,Np)/(Np-1))
+        # # glx        = glx[1:-1]
+        # glx        = glx * (k_domain[1]-k_domain[0]) * 0.5 + (k_domain[1] + k_domain[0]) * 0.5
+        # t          = np.append(t,glx)
+        # t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+        log_min    = np.log2(xmin_p1)/np.log2(base)
+        t          = (k_domain[0])*np.ones(sp_order)
+        t          = np.append(t,np.logspace(log_min , np.log2(k_domain[1])/np.log2(base) , num_p-sp_order , endpoint=False, base=base))
         t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
         return t
 

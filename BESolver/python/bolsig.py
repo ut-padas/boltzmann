@@ -19,7 +19,7 @@ def parse_bolsig(file, num_collisions):
     ratelist = []
     clogarithmlist = []
 
-    rate = np.zeros(2)
+    rate = np.zeros(num_collisions)
 
     with open(file, 'r') as F:
         line = F.readline()
@@ -57,12 +57,20 @@ def parse_bolsig(file, num_collisions):
             else:
                 clogarithmlist.append(0)
 
-            for i in range(num_collisions):
-                if (len(line)>=8):
-                    if (line[0:8]=='C'+str(i+1)+'    Ar'):
-                        rate[i] = float(line.split()[-1]) 
-                        print("Found collision rate no. "+str(i+1)+" = ", rate[i])
-                        ratelist.append(rate)
+            if "Rate coefficients (m3/s)" in line:
+                for i in range(num_collisions):
+                    rr_line = F.readline()
+                    rate[i] = float(rr_line.split()[-1]) 
+                    print("Found collision rate no. "+str(i+1)+" = ", rate[i])
+                    ratelist.append(rate)
+
+                # if (len(line)>=8):
+                #     print(line)
+                #     if (line[0:8]=='C'+str(i+1)+'    Ar'):
+                #         print(line[0:8])
+                #         rate[i] = float(line.split()[-1]) 
+                #         print("Found collision rate no. "+str(i+1)+" = ", rate[i])
+                #         ratelist.append(rate)
 
             line = F.readline()
 
@@ -117,6 +125,18 @@ def run_bolsig(args, run_convergence=False):
     UPDATED: 2011-06-06 11:19:56
     COLUMNS: Energy (eV) | Cross section (m2)
     """
+
+    g1_str= """
+    EXCITATION
+    Ar -> Ar*(11.55eV)
+    1.155000e+1
+    SPECIES: e / Ar
+    PROCESS: E + Ar -> E + Ar*(11.55eV), Excitation
+    PARAM.:  E = 11.55 eV, complete set
+    UPDATED: 2014-02-15 08:27:42
+    COLUMNS: Energy (eV) | Cross section (m2)
+    """
+    
     g2_str="""
     IONIZATION
     Ar -> Ar^+
@@ -128,37 +148,39 @@ def run_bolsig(args, run_convergence=False):
     UPDATED: 2010-10-01 07:49:50
     COLUMNS: Energy (eV) | Cross section (m2)
     """
-    ev_max = 1e4
+    ev_max     = 1e4
+    num_cs_pts = 512
 
     for i, cc in enumerate(args.collisions):
         if "g0" in str(cc):
             prefix_line = g0_str
             g           = collisions.eAr_G0(cross_section=cc)
-            #ev1         = g._energy
-            ev1         = np.logspace(np.log10(g._energy[0] + 1e-3), np.log10(ev_max), 800, base=10)
+            ev1         = g._energy
             tcs         = g.total_cross_section(ev1)
-
-            # ev1         = np.append(ev1, ev_max)
-            # tcs         = np.append(tcs, tcs[-1])
             
-            cs_data=np.concatenate((ev1,tcs),axis=0)
-            cs_data=cs_data.reshape((2,-1))
-            cs_data=np.transpose(cs_data)
-
+        elif "g1" in str(cc):
+            prefix_line = g1_str
+            g           = collisions.eAr_G1(cross_section=cc)
+            
+            ev1         = g._energy
+            tcs         = g.total_cross_section(ev1)
+            
         elif "g2" in str(cc):
             prefix_line = g2_str
             g           = collisions.eAr_G2(cross_section=cc)
-            #ev1         = g._energy 
-            ev1         = np.logspace(np.log10(g._energy[0]), np.log10(ev_max), 800, base=10)
+            ev1         = g._energy
             tcs         = g.total_cross_section(ev1)
 
-            # ev1         = np.append(ev1, ev_max)
-            # tcs         = np.append(tcs, tcs[-1])
+        if g._cs_interp_type == collisions.CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT :
+            ev1         = np.append(np.array([ev1[0]]), np.logspace(np.log2(ev1[1]), np.log2(ev1[-1]), num_cs_pts-1, base=2))
+            tcs         = g.total_cross_section(ev1)
+        else:
+            ev1         = g._energy
+            tcs         = g._total_cs
 
-            cs_data=np.concatenate((ev1,tcs),axis=0)
-            cs_data=cs_data.reshape((2,-1))
-            cs_data=np.transpose(cs_data)
-            
+        cs_data=np.concatenate((ev1,tcs),axis=0)
+        cs_data=cs_data.reshape((2,-1))
+        cs_data=np.transpose(cs_data)
         f_mode="a"
         if i==0:
             f_mode="w"

@@ -1018,7 +1018,7 @@ class bte_0d3v():
         
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':tgrid}
 
-    def compute_QoIs(self, hh, tgrid):
+    def compute_QoIs(self, hh, tgrid, effective_mobility=True):
 
         args = self._args
         mw   = self._mw
@@ -1048,7 +1048,11 @@ class bte_0d3v():
         mm  = np.dot(hh, self._mass_op) * mw(0) * vth**3
         mu  = np.dot(hh, self._temp_op) * mw(0) * vth**5 * (0.5 * collisions.MASS_ELECTRON * eavg_to_K / mm ) * 1.5 / collisions.TEMP_K_1EV
 
-        M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( e_field_t / collisions.AR_NEUTRAL_N))))
+        if effective_mobility:
+            M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( e_field_t / collisions.AR_NEUTRAL_N))))
+        else:
+            M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( 1 / collisions.AR_NEUTRAL_N))))
+        
         D   = np.dot(hh[:, 0::num_sh], self._diffusion_op) * (c_gamma / 3.)
         
         rr  = list()

@@ -79,7 +79,7 @@ class Collisions(abc.ABC):
         self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear', bounds_error=False,fill_value=(self._total_cs[0],self._total_cs[-1]))
 
         if self._cs_interp_type == CollisionInterpolationType.USE_BSPLINE_PROJECTION:
-            sp_order        = 8
+            sp_order        = 3
             num_p           = 128
             k_domain        = (np_data[0][0], np_data[0][-1]) 
             k_vec           = basis.BSpline.logspace_knots(k_domain, num_p, sp_order, 0.5 *(np_data[0][1] + np_data[0][0]) , base=2)
@@ -119,15 +119,15 @@ class Collisions(abc.ABC):
 
             
         import matplotlib.pyplot as plt
-        fig=plt.figure(figsize=(8,8), dpi=300)
-        plt.loglog(np_data[0], np_data[1],'r-*',label=r"tabulated")
-        plt.loglog(np_data[0], self.total_cross_section(np_data[0]), 'b--^', label=r"interpolated")
+        fig=plt.figure(figsize=(20,20), dpi=300)
+        plt.loglog(np_data[0], np_data[1],'r-*',label=r"tabulated"                               ,linewidth=1, markersize=0.5)
+        plt.loglog(np_data[0], self.total_cross_section(np_data[0]),'b--^', label=r"interpolated",linewidth=1, markersize=0.5)
         
         plt.legend()
         plt.grid(visible=True)
         plt.xlabel(r"energy (eV)")
         plt.ylabel(r"cross section ($m^2$)")
-        plt.savefig("col_%s.png"%(self._col_name))
+        plt.savefig("col_%s.svg"%(self._col_name))
         plt.close()
 
         return
@@ -221,7 +221,7 @@ class Collisions(abc.ABC):
             bb    =  self._bb
             num_p =  bb._num_p 
             Vq = np.array([bb.Pn(p)(energy, 0) for p in range(num_p)]).reshape((num_p, len(energy)))
-            return np.dot(self._sigma_k, Vq)
+            return np.abs(np.dot(self._sigma_k, Vq))
         elif self._cs_interp_type == CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT:
             return Collisions.synthetic_tcs(energy,self._col_name)  
         else:

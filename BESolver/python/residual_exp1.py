@@ -106,13 +106,13 @@ for run_id in range(len(run_params)):
     
     x         = np.array(r_data["bolsig_energy"])
     y         = np.array(r_data["bolsig_mobility"])
-    b_mu      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind)
+    b_mu      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind, bounds_error=False, fill_value=0.0)
 
     y         = np.array(r_data["bolsig_g0"])
-    b_g0      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind)
+    b_g0      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind, bounds_error=False, fill_value=0.0)
 
     y         = np.array(r_data["bolsig_g2"])
-    b_g2      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind)
+    b_g2      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind, bounds_error=False, fill_value=0.0)
 
 
     bte_solver = bte_0d3v.bte_0d3v(args)
@@ -180,7 +180,7 @@ for run_id in range(len(run_params)):
         #ts_sol2      = bte_solver.time_harmonic_efield_with_series_ss_solves(args.efield_period, args.efield_period/128, num_time_samples = 128)
 
         
-        ts_qoi_all[i]    = bte_solver.compute_QoIs(ts_sol1["sol"], ts_sol1["tgrid"])
+        ts_qoi_all[i]    = bte_solver.compute_QoIs(ts_sol1["sol"], ts_sol1["tgrid"], effective_mobility=False)
         
         ts_ss_all[i]         = ts_sol1
         ss_sol               = dict()
@@ -188,7 +188,7 @@ for run_id in range(len(run_params)):
         ss_sol["diffusion"]  = np.zeros_like(ts_qoi_all[i]["energy"])
 
         c_gamma              = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
-        ss_sol["mobility"]   = b_mu(ss_sol["energy"]) 
+        ss_sol["mobility"]   = b_mu(ss_sol["energy"]) * E_field * np.cos(np.pi * 2 * ts_sol1["tgrid"] / args.efield_period)
         ss_sol["rates"]      = [b_g0(ss_sol["energy"]), b_g2(ss_sol["energy"])]
         ts_qoi_all_ss[i]     = ss_sol
         #ts_ss_all_ss [i] = ts_sol2
@@ -198,33 +198,60 @@ for run_id in range(len(run_params)):
         args.ion_deg = ion_deg
 
         if args.store_csv == 1 :
-            fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_dt%.2E.csv"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, dt)
-            sol_data = np.zeros((len(ts_sol1["tgrid"]),  2 * (len(args.collisions) + 3) - 1))
+            # fname    = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_dt%.2E.csv"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, dt)
+            # sol_data = np.zeros((len(ts_sol1["tgrid"]),  2 * (len(args.collisions) + 3) - 1))
             
-            sol_data[:,0] = ts_sol1["tgrid"]
-            sol_data[:,1] = ts_qoi_all[i]["energy"]
-            sol_data[:,2] = ts_qoi_all[i]["mobility"]
-            rr            = ts_qoi_all[i]["rates"]
+            # sol_data[:,0] = ts_sol1["tgrid"]
+            # sol_data[:,1] = ts_qoi_all[i]["energy"]
+            # sol_data[:,2] = ts_qoi_all[i]["mobility"]
+            # rr            = ts_qoi_all[i]["rates"]
 
-            for col_idx, col in enumerate(args.collisions):
-                sol_data[:,3 + col_idx] = rr[col_idx]
+            # for col_idx, col in enumerate(args.collisions):
+            #     sol_data[:,3 + col_idx] = rr[col_idx]
             
-            sol_data[:, 5] = ts_qoi_all_ss[i]["energy"]
-            sol_data[:, 6] = ts_qoi_all_ss[i]["mobility"]
-            rr             = ts_qoi_all_ss[i]["rates"]
+            # sol_data[:, 5] = ts_qoi_all_ss[i]["energy"]
+            # sol_data[:, 6] = ts_qoi_all_ss[i]["mobility"]
+            # rr             = ts_qoi_all_ss[i]["rates"]
 
-            for col_idx, col in enumerate(args.collisions):
-                sol_data[:,7 + col_idx] = rr[col_idx]
+            # for col_idx, col in enumerate(args.collisions):
+            #     sol_data[:,7 + col_idx] = rr[col_idx]
             
-            header_str = "time\tenergy\tmobility\t"
-            for col_idx, col in enumerate(args.collisions):
-                header_str+=str(col)+"\t"
+            # header_str = "time\tenergy\tmobility\t"
+            # for col_idx, col in enumerate(args.collisions):
+            #     header_str+=str(col)+"\t"
 
-            header_str += "energy_inp\tmobility_inp\t"
-            for col_idx, col in enumerate(args.collisions):
-                header_str+=str(col)+"_inp\t"
+            # header_str += "energy_inp\tmobility_inp\t"
+            # for col_idx, col in enumerate(args.collisions):
+            #     header_str+=str(col)+"_inp\t"
             
-            np.savetxt(fname, sol_data, delimiter='\t',header=header_str,comments='')
+            # np.savetxt(fname, sol_data, delimiter='\t',header=header_str,comments='')
+
+            normL2 = lambda f1, f2, x : np.sqrt(np.trapz((f1 - f2)**2, x) / np.trapz(f2**2 , x))
+            fname = "%s_lmax%d_Tg%.2E_Ep%.2E.csv"%(args.out_fname, spec_sp._sph_harm_lm[-1][0], args.Tg, args.efield_period)
+            with open("%s_qois.csv"%fname, 'a', encoding='UTF8') as f:
+                writer = csv.writer(f,delimiter='\t')
+                if run_id == 0 and i==0:
+                    header = ["E/N(Td)", "E(V/m)", "ion_deg", "dt", "T", "Nr", "energy_L2", "mobility_L2"]
+                    for col_idx, col in enumerate(args.collisions):
+                        header.append(str(col)+"_L2")
+                
+                    writer.writerow(header)
+
+                mu_L2 = normL2(np.abs(ts_qoi_all_ss[i]["energy"]   ) , np.abs(ts_qoi_all[i]["energy"]  ) , ts_sol1["tgrid"])
+                M_L2  = normL2(np.abs(ts_qoi_all_ss[i]["mobility"] ) , np.abs(ts_qoi_all[i]["mobility"]) , ts_sol1["tgrid"])
+                data = [args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.E_field, args.ion_deg, dt, args.T_END, args.sweep_values[i], mu_L2, M_L2]
+
+                rr_ss         = ts_qoi_all_ss[i]["rates"]
+                rr            = ts_qoi_all[i]["rates"]
+
+                for col_idx, col in enumerate(args.collisions):
+                    rr_L2 = normL2(np.abs(rr_ss[col_idx]), np.abs(rr[col_idx]), ts_sol1["tgrid"])
+                    data.append(rr_L2)
+
+                writer.writerow(data)
+
+
+
     
     if (1):
         maxwellian   = bte_solver._mw
@@ -233,7 +260,7 @@ for run_id in range(len(run_params)):
         num_plt_cols = 4
         num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
 
-        fig       = plt.figure(figsize=(num_plt_cols * 6 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
+        fig       = plt.figure(figsize=(num_plt_cols * 10 + 0.5*(num_plt_cols-1), num_plt_rows * 6 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
 
         # #f0
         # plt.subplot(num_plt_rows, num_plt_cols,  1)
@@ -318,7 +345,7 @@ for run_id in range(len(run_params)):
         
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
 
-        plt.savefig("rs_" + "_".join(args.collisions) + "_E%.2E"%args.E_field + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")
+        plt.savefig("rs_" + "_".join(args.collisions) + "_E%.2E"%(args.E_field/collisions.AR_NEUTRAL_N/1e-21) + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+ "Ep%.2E"%(args.efield_period) +".svg")
 
         plt.close()
 

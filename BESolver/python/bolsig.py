@@ -171,8 +171,8 @@ def run_bolsig(args, run_convergence=False):
             ev1         = g._energy
             tcs         = g.total_cross_section(ev1)
 
-        if g._cs_interp_type == collisions.CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT :
-            ev1         = np.append(np.array([ev1[0]]), np.logspace(np.log2(ev1[1]), np.log2(ev1[-1]), num_cs_pts-1, base=2))
+        if g._cs_interp_type == collisions.CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT:
+            ev1         = np.append(np.array([ev1[0]]), np.logspace(np.log2(ev1[0]+1e-3), np.log2(ev1[-1]), num_cs_pts-1, base=2))
             tcs         = g.total_cross_section(ev1)
         else:
             ev1         = g._energy

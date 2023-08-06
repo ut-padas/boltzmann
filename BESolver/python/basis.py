@@ -605,7 +605,7 @@ class BSpline(Basis):
         
         num_k          = np.sum(np.array([(2*sp_order + (_num_p[i] -(sp_order+1)) + 2) for i in range(num_d)])) - (num_d-1)*(sp_order+1)
         assert len(t) == num_k , "knot length of %d does not match with spline order %d"%(len(t),sp_order)
-        return t, dg_domains, _num_p
+        return t, len(dg_domains), _num_p
 
     @staticmethod
     def uniform_dg_knots_1(k_domain, num_p, sp_order, dg_pts):

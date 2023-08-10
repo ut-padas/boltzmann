@@ -3,5 +3,8 @@
 - First implementation
 
 # Todo
-0D3V Petrov-Galerkin, electron-neutral elastic collision using low-order Hermite polynomials  
-Python implementation
+* Single GPU
+  * Solve for series of batched 0d Boltzmann on a single GPU (steady & transient cases)
+* Extend Single GPU version to Multi-GPU and Parla Integration
+* Finally we can move to spatial coupling if we decided to do so. 
+

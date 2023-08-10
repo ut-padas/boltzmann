@@ -60,6 +60,7 @@ parser.add_argument("-sweep_values", "--sweep_values"             , help="Values
 parser.add_argument("-sweep_param", "--sweep_param"               , help="Parameter to sweep: Nr, ev, bscale, E, radial_poly", type=str, default="Nr")
 parser.add_argument("-dg", "--use_dg"                             , help="enable dg splines", type=int, default=0)
 parser.add_argument("-Tg", "--Tg"                                 , help="Gas temperature (K)" , type=float, default=1e-12)
+parser.add_argument("-n0", "--n0"                                 , help="heavy density (1/m^3)" , type=float, default=3.22e22)
 parser.add_argument("-ion_deg", "--ion_deg"                       , help="Ionization degree"   , type=float, nargs='+', default=[1e-1])
 parser.add_argument("-store_eedf", "--store_eedf"                 , help="store EEDF"          , type=int, default=0)
 parser.add_argument("-store_csv", "--store_csv"                   , help="store csv format of QoI comparisons", type=int, default=0)
@@ -71,7 +72,7 @@ parser.add_argument("-bolsig_grid_pts", "--bolsig_grid_pts"       , help="grid p
 
 args                = parser.parse_args()
 EbyN_Td             = np.logspace(np.log10(args.EbyN[0]), np.log10(args.EbyN[1]), int(args.EbyN[2]), base=10)
-e_values            = EbyN_Td * collisions.AR_NEUTRAL_N * 1e-21
+e_values            = EbyN_Td * args.n0 * 1e-21
 ion_deg_values      = np.array(args.ion_deg)
 
 SAVE_EEDF    = args.store_eedf
@@ -230,7 +231,7 @@ for run_id in range(len(run_params)):
                 l2_f0     = normL2(np.abs(radial[i, 0]), np.abs(bolsig_f0), ev) #np.linalg.norm(np.abs(radial[i, 0])-np.abs(bolsig_f0))/np.linalg.norm(np.abs(bolsig_f0))
                 l2_f1     = normL2(np.abs(radial[i, 1]), np.abs(bolsig_f1), ev) #np.linalg.norm(np.abs(radial[i, 1])-np.abs(bolsig_f1))/np.linalg.norm(np.abs(bolsig_f1))
 
-                data = [args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.E_field, args.sweep_values[i], mu[i], D[i], M[i], bolsig_mu, bolsig_D, bolsig_M, l2_f0, l2_f1, args.Tg, args.ion_deg, solver_data[i]["atol"], solver_data[i]["rtol"]]
+                data = [args.E_field/args.n0/1e-21, args.E_field, args.sweep_values[i], mu[i], D[i], M[i], bolsig_mu, bolsig_D, bolsig_M, l2_f0, l2_f1, args.Tg, args.ion_deg, solver_data[i]["atol"], solver_data[i]["rtol"]]
                 for col_idx , _ in enumerate(args.collisions):
                     data.append(rates[col_idx][i])
                     data.append(bolsig_rates[col_idx])
@@ -402,9 +403,9 @@ for run_id in range(len(run_params)):
                     plt.grid(visible=True)
                 
 
-        fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
+        fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/args.n0/1e-21, args.ion_deg, args.Tg, args.n0))
         # plt.show()
-        effective_efield = args.E_field/collisions.AR_NEUTRAL_N/1e-21
+        effective_efield = args.E_field/args.n0/1e-21
         if len(spec_sp._basis_p._dg_idx)==2:
             if args.steady_state == 1 : 
                 plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".svg")

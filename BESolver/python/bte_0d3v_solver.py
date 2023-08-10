@@ -76,13 +76,9 @@ class bte_0d3v():
 
         """parameters for the problem"""
         self._args = args
-
-        collisions.AR_NEUTRAL_N   = 3.22e22
-        collisions.MAXWELLIAN_N   = 1
-        collisions.AR_IONIZED_N   = collisions.AR_NEUTRAL_N 
-        collisions.AR_TEMP_K      = args.Tg
-
-
+        self._n0   = args.n0
+        self._tgK  = args.Tg
+        
         self._collision_names     = dict()
         for  col_idx, col in enumerate(args.collisions):
             self._collision_names[col]=col
@@ -232,19 +228,19 @@ class bte_0d3v():
             print("collision %d included %s"%(col_idx, col))
 
             if "g0NoLoss" == col:
-                FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
+                FOp       = FOp + self._n0 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g0ConstNoLoss" == col:
-                FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
+                FOp       = FOp + self._n0 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g0" in col:
-                FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
+                FOp       = FOp + self._n0 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g1" in col:
-                FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
+                FOp       = FOp + self._n0 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
                 sigma_m  += g.total_cross_section(gx_ev)
             elif "g2" in col:
-                FOp       = FOp + collisions.AR_NEUTRAL_N * collOp.assemble_mat(g, maxwellian, vth)
+                FOp       = FOp + self._n0 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
                 sigma_m  += g.total_cross_section(gx_ev)
             else:
                 print("%s unknown collision"%(col))
@@ -406,11 +402,11 @@ class bte_0d3v():
         Mmat      = Mmat[0::num_sh, 0::num_sh]
 
         u         = mass_op 
-        sigma_m   = sigma_m * np.sqrt(gx_ev) * c_gamma * collisions.AR_NEUTRAL_N
+        sigma_m   = sigma_m * np.sqrt(gx_ev) * c_gamma * self._n0
         u         = u[0::num_sh]
         
         # g         = collisions.eAr_G2(cross_section=col)
-        # Wmat      = collisions.AR_NEUTRAL_N * self._collision_op.assemble_mat(g, mw, vth)[0::num_sh, 0::num_sh]
+        # Wmat      = self._n0 * self._collision_op.assemble_mat(g, mw, vth)[0::num_sh, 0::num_sh]
 
         g_rate  = np.matmul(u.reshape(1,-1), np.matmul(Minv, FOp))
         # g_rate2 = np.matmul(u.reshape(1,-1), np.matmul(Minv, FOp))
@@ -419,7 +415,7 @@ class bte_0d3v():
         #     if "g2" in col:
         #         g  = collisions.eAr_G2(cross_section=col)
         #         g.reset_scattering_direction_sp_mat()
-        #         g_rate1 += collisions.AR_NEUTRAL_N *  bte_utils.growth_rates_op(spec_sp, [g], mw, vth) * np.sqrt(4 * np.pi)
+        #         g_rate1 += self._n0 *  bte_utils.growth_rates_op(spec_sp, [g], mw, vth) * np.sqrt(4 * np.pi)
 
         # print(g_rate1)
         # print(g_rate)
@@ -564,14 +560,14 @@ class bte_0d3v():
         if args.ee_collisions == 1:
             cc_op   = self._cc_op
             def res_func(x):
-                gamma_a     = collisions.AR_NEUTRAL_N * ion_deg * collOp.gamma_a(np.dot(qA,x), mw, vth, collisions.AR_NEUTRAL_N, ion_deg,eff_rr_op)
+                gamma_a     = self._n0 * ion_deg * collOp.gamma_a(np.dot(qA,x), mw, vth, self._n0, ion_deg,eff_rr_op)
                 y           = np.dot(QT, np.dot(Cmat_p_Emat  + gamma_a * np.dot(cc_op,x), x)) - np.dot(Wmat,x) * np.dot(QT,x)
                 return y
             
             cc_op_l1 = cc_op
             cc_op_l2 = np.swapaxes(cc_op,1,2)
             def jac_func(x):
-                gamma_a     = collisions.AR_NEUTRAL_N * ion_deg * collOp.gamma_a(np.dot(qA,x), mw, vth, collisions.AR_NEUTRAL_N, ion_deg, eff_rr_op)
+                gamma_a     = self._n0 * ion_deg * collOp.gamma_a(np.dot(qA,x), mw, vth, self._n0, ion_deg, eff_rr_op)
                 Lmat        = np.dot(QT, Cmat_p_Emat + gamma_a * np.dot(cc_op_l1,x) + gamma_a * np.dot(cc_op_l2,x)) - np.dot(Wmat,x) * QT
                 Lmat        = np.dot(Lmat, Q)
                 return Lmat 
@@ -624,14 +620,14 @@ class bte_0d3v():
 
         gg_list         = self._coll_list
         f1              = u / np.dot(u, u)
-        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * collisions.AR_NEUTRAL_N
+        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * self._n0
 
         # g_rate  = np.zeros(FOp.shape[0])
         # for col_idx, col in enumerate(collisions_included):
         # if "g2" in col:
         #     g  = collisions.eAr_G2(cross_section=col)
         #     g.reset_scattering_direction_sp_mat()
-        #     g_rate[0::num_sh] += collisions.AR_NEUTRAL_N *  BEUtils.reaction_rates_op(spec_sp, [g], maxwellian, vth)
+        #     g_rate[0::num_sh] += self._n0 *  BEUtils.reaction_rates_op(spec_sp, [g], maxwellian, vth)
         # Wmat[0::num_sh] = np.dot(u[0::num_sh], np.dot(Minv[0::num_sh, 0::num_sh], Cmat[0::num_sh, 0::num_sh]))
         # Wmat[1::num_sh] = 0.0
 
@@ -736,7 +732,7 @@ class bte_0d3v():
         t_step     = 0
 
         gg_list         = self._coll_list
-        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * collisions.AR_NEUTRAL_N
+        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * self._n0
 
         f1      = u / np.dot(u, u)
         fb_prev = np.dot(R,h_prev)
@@ -760,8 +756,8 @@ class bte_0d3v():
                     solution_vector[sample_idx,:] = h_pde
                     sample_idx+=1
 
-                gamma_a     = collOp.gamma_a(h_prev, mw, vth, collisions.AR_NEUTRAL_N, ion_deg, eff_rr_op)
-                cc_f        = gamma_a * collisions.AR_NEUTRAL_N * ion_deg
+                gamma_a     = collOp.gamma_a(h_prev, mw, vth, self._n0, ion_deg, eff_rr_op)
+                cc_f        = gamma_a * self._n0 * ion_deg
                 #Lmat        = Cmat_p_Emat +  cc_f * np.dot(cc_op1,h_prev) + cc_f * np.dot(cc_op2,h_prev)
                 #Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat, Q)) 
                 #rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
@@ -903,7 +899,7 @@ class bte_0d3v():
         t_step     = 0
 
         gg_list         = self._coll_list
-        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * collisions.AR_NEUTRAL_N
+        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * self._n0
 
         f1      = u / np.dot(u, u)
         fb_prev = np.dot(R,h_prev)
@@ -937,8 +933,8 @@ class bte_0d3v():
                     solution_vector[sample_idx,:] = h_pde
                     sample_idx+=1
 
-                gamma_a     = collOp.gamma_a(h_prev, mw, vth, collisions.AR_NEUTRAL_N, ion_deg, eff_rr_op)
-                cc_f        = gamma_a * collisions.AR_NEUTRAL_N * ion_deg
+                gamma_a     = collOp.gamma_a(h_prev, mw, vth, self._n0, ion_deg, eff_rr_op)
+                cc_f        = gamma_a * self._n0 * ion_deg
                 #Lmat        = Cmat_p_Emat +  cc_f * np.dot(cc_op1,h_prev) + cc_f * np.dot(cc_op2,h_prev)
                 #Pmat        = Imat_r - dt * np.dot(QT, np.dot(Lmat, Q)) 
                 #rhs_vec     = dt * np.dot(np.dot(QT, Cmat_p_Emat + cc_f * np.dot(cc_op,h_prev)), h_prev) - dt * np.dot(np.dot(Wmat, h_prev) * QT, h_prev)
@@ -1049,9 +1045,9 @@ class bte_0d3v():
         mu  = np.dot(hh, self._temp_op) * mw(0) * vth**5 * (0.5 * collisions.MASS_ELECTRON * eavg_to_K / mm ) * 1.5 / collisions.TEMP_K_1EV
 
         if effective_mobility:
-            M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( e_field_t / collisions.AR_NEUTRAL_N))))
+            M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( e_field_t / self._n0))))
         else:
-            M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( 1 / collisions.AR_NEUTRAL_N))))
+            M   = np.dot(np.sqrt(3) * hh[:, 1::num_sh], self._mobility_op)  * (-(c_gamma / (3 * ( 1 / self._n0))))
         
         D   = np.dot(hh[:, 0::num_sh], self._diffusion_op) * (c_gamma / 3.)
         

@@ -329,8 +329,8 @@ class BSpline(Basis):
             self._dg_idx    = [0, num_p-1]
 
         if verbose == True:
-            print("num_p \n ", self._ele_p)
-            print("dg node indices\n", self._dg_idx)
+            print("num_p \n ", self._ele_p, flush=True)
+            print("dg node indices\n", self._dg_idx, flush=True)
         #print("knots vector\n", self._t)
         #print("knots vector (unique)\n", self._t_unique)
         # print(self._t)
@@ -629,8 +629,8 @@ class BSpline(Basis):
         #     _num_p[-2]-=2*sp_order
         #     _num_p[-1]+=2*sp_order
 
-        print("domains : ", dg_domains)
-        print("nr: ", _num_p)
+        #print("domains : ", dg_domains)
+        #print("nr: ", _num_p)
         assert (_num_p>0).all(), "invalide radial polynomial partition"
         
         t = BSpline.uniform_knots(dg_domains[0], _num_p[0], sp_order)

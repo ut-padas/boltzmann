@@ -8,7 +8,6 @@ import collisions
 import scipy
 import scipy.constants
 import numpy as np
-import parameters as params
 import time
 #import quadpy
 import utils as BEUtils
@@ -39,12 +38,7 @@ class CollisionOpSP():
         
         self._spec              = spec_sp
         self._r_basis_type      = spec_sp.get_radial_basis_type()
-        # self._NUM_Q_VR          = params.BEVelocitySpace.NUM_Q_VR
-        # self._NUM_Q_VT          = params.BEVelocitySpace.NUM_Q_VT
-        # self._NUM_Q_VP          = params.BEVelocitySpace.NUM_Q_VP
-        # self._NUM_Q_CHI         = params.BEVelocitySpace.NUM_Q_CHI
-        # self._NUM_Q_PHI         = params.BEVelocitySpace.NUM_Q_PHI
-        
+
         self._num_p               = spec_sp._p +1
         self._num_sh              = len(spec_sp._sph_harm_lm)
         self._sph_harm_lm         = spec_sp._sph_harm_lm  
@@ -79,12 +73,8 @@ class CollisionOpSP():
         self._NUM_Q_VR = self._spec._num_q_radial
         return 
 
-    def _LOp_eulerian_radial_only(self, collision, maxwellian, vth):
+    def _LOp_eulerian_radial_only(self, collision, maxwellian, vth, tgK):
         V_TH          = vth     
-        ELE_VOLT      = collisions.ELECTRON_VOLT
-        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
-        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
-        
         g             = collision
         spec_sp       = self._spec
         num_p         = spec_sp._p+1
@@ -108,7 +98,7 @@ class CollisionOpSP():
                     c_mu     = 2 * collisions.MASS_R_EARGON 
                     v_scale  = np.sqrt(1- c_mu)
                     v_post   = gx_e * v_scale
-                    kappa    = (scipy.constants.Boltzmann * collisions.AR_TEMP_K * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
+                    kappa    = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
 
                     tmp_q0   = np.zeros((num_p,num_p))
                     tmp_q1   = np.zeros((num_p,num_p))
@@ -198,7 +188,7 @@ class CollisionOpSP():
 
                     c_mu     = 2 * collisions.MASS_R_EARGON 
                     v_scale  = np.sqrt(1- c_mu)
-                    kappa    = (scipy.constants.Boltzmann * collisions.AR_TEMP_K * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
+                    kappa    = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
 
                     tmp_q0   = np.zeros((num_p,num_p))
                     tmp_q1   = np.zeros((num_p,num_p))
@@ -407,8 +397,8 @@ class CollisionOpSP():
         else:
             raise NotImplementedError
 
-    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3)):
-        Lij = self._LOp_eulerian_radial_only(collision,maxwellian,vth)
+    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3), tgK=0.0):
+        Lij = self._LOp_eulerian_radial_only(collision,maxwellian, vth, tgK)
         return Lij
 
     def coulomb_collision_mat(self, alpha, ionization_degree, n0, fb, mw, vth, sigma_m, full_assembly=True):

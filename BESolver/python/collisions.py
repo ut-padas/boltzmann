@@ -44,13 +44,9 @@ ELECTRON_CHARGE_MASS_RATIO = ELECTRON_CHARGE/MASS_ELECTRON
 BOLTZMANN_CONST     = scipy.constants.Boltzmann
 TEMP_K_1EV          = ELECTRON_VOLT/BOLTZMANN_CONST
 MAXWELLIAN_TEMP_K   = TEMP_K_1EV
-AR_TEMP_K           = TEMP_K_1EV
-AR_NEUTRAL_N        = 3.22e22 # 1/m^3
-AR_IONIZED_N        = 1.00e0
-MAXWELLIAN_N        = 1.00e0 # 1/m^3
 ELECTRON_THEMAL_VEL = electron_thermal_velocity(MAXWELLIAN_TEMP_K) 
 #http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node6.html
-PLASMA_FREQUENCY  = np.sqrt(MAXWELLIAN_N * (scipy.constants.elementary_charge**2) / (scipy.constants.epsilon_0  * scipy.constants.electron_mass))
+PLASMA_FREQUENCY  = np.sqrt(1 * (scipy.constants.elementary_charge**2) / (scipy.constants.epsilon_0  * scipy.constants.electron_mass))
 
 class CollisionInterpolationType():
     USE_PICEWICE_LINEAR_INTERPOLATION = 0
@@ -118,17 +114,17 @@ class Collisions(abc.ABC):
             self._bb      = bb  
 
             
-        import matplotlib.pyplot as plt
-        fig=plt.figure(figsize=(20,20), dpi=300)
-        plt.loglog(np_data[0], np_data[1],'r-*',label=r"tabulated"                               ,linewidth=1, markersize=0.5)
-        plt.loglog(np_data[0], self.total_cross_section(np_data[0]),'b--^', label=r"interpolated",linewidth=1, markersize=0.5)
+        # import matplotlib.pyplot as plt
+        # fig=plt.figure(figsize=(20,20), dpi=300)
+        # plt.loglog(np_data[0], np_data[1],'r-*',label=r"tabulated"                               ,linewidth=1, markersize=0.5)
+        # plt.loglog(np_data[0], self.total_cross_section(np_data[0]),'b--^', label=r"interpolated",linewidth=1, markersize=0.5)
         
-        plt.legend()
-        plt.grid(visible=True)
-        plt.xlabel(r"energy (eV)")
-        plt.ylabel(r"cross section ($m^2$)")
-        plt.savefig("col_%s.svg"%(self._col_name))
-        plt.close()
+        # plt.legend()
+        # plt.grid(visible=True)
+        # plt.xlabel(r"energy (eV)")
+        # plt.ylabel(r"cross section ($m^2$)")
+        # plt.savefig("col_%s.svg"%(self._col_name))
+        # plt.close()
 
         return
 

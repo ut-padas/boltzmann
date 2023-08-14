@@ -39,6 +39,9 @@ class bte_0d3v_batched():
         
         self._c_gamma        = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
         
+        self._par_bte_params  = [None] * self._par_nvgrids
+        self._par_ev_range    = [None] * self._par_nvgrids
+        
         self._op_col_en       = [None] * self._par_nvgrids
         self._op_col_gT       = [None] * self._par_nvgrids
         self._op_col_ee       = [None] * self._par_nvgrids
@@ -120,17 +123,17 @@ class bte_0d3v_batched():
                 self._op_spec_sp[idx]  = spec_sp
                 
                 ## -- below we compute the all the operators for 0d3v bte solve
-                
-                self._op_mass_mat[idx] = spec_sp.compute_mass_matrix()
-                mmat_inv               = spec_sp.inverse_mass_mat(Mmat = self._op_mass_mat[idx])
-                gx, gw                 = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
-                sigma_m                = np.zeros(len(gx))
-                c_gamma                = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
-                gx_ev                  = (gx * vth / c_gamma)**2
+                self._par_ev_range[idx] = ev_range  
+                self._op_mass_mat[idx]  = spec_sp.compute_mass_matrix()
+                mmat_inv                = spec_sp.inverse_mass_mat(Mmat = self._op_mass_mat[idx])
+                gx, gw                  = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+                sigma_m                 = np.zeros(len(gx))
+                c_gamma                 = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+                gx_ev                   = (gx * vth / c_gamma)**2
 
-                FOp                    = 0
-                sigma_m                = 0
-                FOp_g                  = 0
+                FOp                     = 0
+                sigma_m                 = 0
+                FOp_g                   = 0
         
                 for col_idx, col in enumerate(collision_model):
                     g = self._coll_list[col_idx]
@@ -168,6 +171,12 @@ class bte_0d3v_batched():
                 
                 self._op_mobility[idx]  = bte_utils.mobility_op(spec_sp, maxwellian, vth)
                 self._op_diffusion[idx] = bte_utils.diffusion_op(spec_sp, self._coll_list, maxwellian, vth)
+                
+                rr_op  = [None] * len(self._coll_list)
+                for col_idx, g in enumerate(self._coll_list):
+                    rr_op[col_idx] = bte_utils.reaction_rates_op(spec_sp, [g], maxwellian, vth)
+                    
+                self._op_rate[idx] = rr_op
                 
                 num_p  = spec_sp._p + 1
                 num_sh = len(lm)
@@ -232,40 +241,13 @@ class bte_0d3v_batched():
         
         return
     
-    def host_to_device_setup(self, *args):
-        
-        dev_id = args[0]
-        # ib     = args[1]
-        # ie     = args[2]
-        
-        op_list  = [self._op_advection, self._op_col_en, self._op_col_gT, self._op_col_ee,  self._op_qmat,  self._op_mass]
-        
-        with cp.cuda.Device(dev_id):
-            for idx in range(self._par_nvgrids):
-                for op in op_list :
-                    op[idx]=cp.asarray(op[idx])
-            
-        return
-    
-    def device_to_host_setup(self, *args):
-        dev_id = args[0]
-        # ib     = args[1]
-        # ie     = args[2]
-        op_list  = [self._op_advection, self._op_col_en, self._op_col_gT, self._op_col_ee,  self._op_qmat,  self._op_mass]
-        with cp.cuda.Device(dev_id):
-            for idx in range(self._par_nvgrids):
-                for op in op_list :
-                    op[idx]=cp.asnumpy(op[idx])
-            
-        return
-    
     def initialize(self, grid_idx, n_pts, init_type = "maxwellian"):
         """
         Initialize the grid to Maxwell-Boltzmann distribution
         """
+        spec_sp     = self._op_spec_sp[grid_idx]
         mmat        = self._op_mass_mat[grid_idx]
         mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
-        spec_sp     = self._op_spec_sp[grid_idx]
         vth         = self._par_vth[grid_idx]
         mw          = bte_utils.get_maxwellian_3d(vth, 1)
 
@@ -285,7 +267,7 @@ class bte_0d3v_batched():
         
         m0 = np.dot(mass_op,h_init) 
         t0 = np.dot(temp_op,h_init) * vth**2 /m0
-        print("--initial data mass = %.8E temp (eV) = %.8E"%(m0, t0))
+        print("grid idx = %d -- initial data mass = %.8E temp (eV) = %.8E"%(grid_idx, m0, t0))
         f0 = np.zeros((len(h_init), n_pts))
         
         for i in range(n_pts):
@@ -293,19 +275,75 @@ class bte_0d3v_batched():
         
         return f0
     
-    def steady_state_solve(self, f0 : np.array, n0 : np.array, ne : np.array, ni : np.array, ef : np.array, Tg : np.array, grid_idx: int, rtol, atol, max_iter):
+    def set_boltzmann_parameters(self, grid_idx: int, n0 : np.array, ne : np.array, ni : np.array, ef : np.array, Tg : np.array):
+        self._par_bte_params[grid_idx] = {"n0": n0, "ne": ne, "ni": ne, "ef" : ef, "Tg": Tg}
         
-        n_pts        = n0.shape[0]
+    def host_to_device_setup(self, *args):
+        dev_id = args[0]
+        with cp.cuda.Device(dev_id):
+            for idx in range(self._par_nvgrids):
+                self._op_mass_mat[idx]  = cp.asarray(self._op_mass_mat[idx])
+                self._op_advection[idx] = cp.asarray(self._op_advection[idx])
+                self._op_col_en[idx]    = cp.asarray(self._op_col_en[idx])
+                self._op_col_gT[idx]    = cp.asarray(self._op_col_gT[idx])
+                #self._op_col_ee[idx]   = cp.asarray(self._op_col_ee[idx])
+                self._op_qmat[idx]      = cp.asarray(self._op_qmat[idx])
+                self._op_rmat[idx]      = cp.asarray(self._op_rmat[idx])
+                self._op_mass[idx]      = cp.asarray(self._op_mass[idx])
+                self._op_temp[idx]      = cp.asarray(self._op_temp[idx])
+                self._op_mobility[idx]  = cp.asarray(self._op_mobility[idx])
+                self._op_diffusion[idx] = cp.asarray(self._op_diffusion[idx])
+                self._op_diag_dg[idx]   = cp.asarray(self._op_diag_dg[idx])
+                
+                for k, v in self._par_bte_params[idx].items():
+                    self._par_bte_params[idx][k] = cp.asarray(v)
+                
+                for col_idx, col in enumerate(self._coll_list):
+                    self._op_rate[idx][col_idx] = cp.asarray(self._op_rate[idx][col_idx])
+                
+        return
+    
+    def device_to_host_setup(self, *args):
+        dev_id = args[0]
+
+        with cp.cuda.Device(dev_id):
+            for idx in range(self._par_nvgrids):
+                self._op_mass_mat[idx]  = cp.asnumpy(self._op_mass_mat[idx])
+                self._op_advection[idx] = cp.asnumpy(self._op_advection[idx])
+                self._op_col_en[idx]    = cp.asnumpy(self._op_col_en[idx])
+                self._op_col_gT[idx]    = cp.asnumpy(self._op_col_gT[idx])
+                
+                #self._op_col_ee[idx]   = cp.asnumpy(self._op_col_ee[idx])
+                self._op_qmat[idx]      = cp.asnumpy(self._op_qmat[idx])
+                self._op_rmat[idx]      = cp.asnumpy(self._op_rmat[idx])
+                self._op_mass[idx]      = cp.asnumpy(self._op_mass[idx])
+                self._op_temp[idx]      = cp.asnumpy(self._op_temp[idx])
+                self._op_mobility[idx]  = cp.asnumpy(self._op_mobility[idx])
+                self._op_diffusion[idx] = cp.asnumpy(self._op_diffusion[idx])
+                self._op_diag_dg[idx]   = cp.asnumpy(self._op_diag_dg[idx])
+                
+                for k, v in self._par_bte_params[idx].items():
+                    self._par_bte_params[idx][k] = cp.asnumpy(v)
+                    
+                for col_idx, col in enumerate(self._coll_list):
+                    self._op_rate[idx][col_idx] = cp.asnumpy(self._op_rate[idx][col_idx])
+        return
+    
+    def steady_state_solve(self,grid_idx : int, f0 : np.array, rtol, atol, max_iter):
+        
+        n_pts        = f0.shape[1]
         
         eps_0        = scipy.constants.epsilon_0
         me           = scipy.constants.electron_mass
         qe           = scipy.constants.e
         
-        f0           = cp.asarray(f0)
-        n0           = cp.asarray(n0)
-        ne           = cp.asarray(ne)
-        ef           = cp.asarray(ef)
-        Tg           = cp.asarray(Tg)
+        xp           = cp.get_array_module(f0)
+        
+        n0           = self._par_bte_params[grid_idx]["n0"]
+        ne           = self._par_bte_params[grid_idx]["ne"]
+        ni           = self._par_bte_params[grid_idx]["ni"]
+        Tg           = self._par_bte_params[grid_idx]["Tg"]
+        ef           = self._par_bte_params[grid_idx]["ef"]
         
         vth          = self._par_vth[grid_idx]
         mw           = bte_utils.get_maxwellian_3d(vth, 1)
@@ -314,7 +352,7 @@ class bte_0d3v_batched():
 
         Qmat         = self._op_qmat[grid_idx]
         Rmat         = self._op_rmat[grid_idx]
-        QTmat        = cp.transpose(self._op_qmat[grid_idx])
+        QTmat        = xp.transpose(self._op_qmat[grid_idx])
         
         c_en         = self._op_col_en[grid_idx]
         c_gT         = self._op_col_gT[grid_idx]
@@ -322,56 +360,69 @@ class bte_0d3v_batched():
         adv_mat      = self._op_advection[grid_idx]
         qA           = self._op_diag_dg[grid_idx]
         
-        cc_op_l1     = c_ee
-        cc_op_l2     = cp.swapaxes(c_ee,1,2)
+        #cc_op_l1     = c_ee
+        #cc_op_l2     = xp.swapaxes(c_ee,1,2)
         
         mm_op        = self._op_mass[grid_idx] * mw(0) * vth**3
         u            = mm_op
-        u            = cp.dot(cp.transpose(mm_op),qA)
+        u            = xp.dot(xp.transpose(mm_op),qA)
         
-        Wmat         = cp.dot(u, c_en)
+        Wmat         = xp.dot(u, c_en)
         
         
         def gamma_a(fb):
-            m0           = mw(0) *  cp.dot(Mop, fb) * vth**3 
-            kT           = mw(0) * (cp.dot(Top, fb) / m0) * vth**5 * scipy.constants.Boltzmann 
-            kT           = cp.abs(kT).reshape((-1,))
+            m0           = mw(0) *  xp.dot(Mop, fb) * vth**3 
+            kT           = mw(0) * (xp.dot(Top, fb) / m0) * vth**5 * scipy.constants.Boltzmann 
+            kT           = xp.abs(kT).reshape((-1,))
         
-            c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne)))
-            gamma_a      = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
+            c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * xp.sqrt(ne)))
+            gamma_a      = (xp.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
             #print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ion_deg * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
             return gamma_a
         
         def res_func(x):
-            Cen_p_Emat_x  = n0 * cp.dot(c_en,x) + n0 * Tg * cp.dot(c_gT, x) + ef * cp.dot(adv_mat, x)
-            y             = cp.dot(QTmat, Cen_p_Emat_x)   - n0 * cp.dot(Wmat, x) *  cp.dot(QTmat, x)
+            Cen_p_Emat_x  = n0 * (xp.dot(c_en,x) +  Tg * xp.dot(c_gT, x))  + ef * xp.dot(adv_mat, x)
+            y             = xp.dot(QTmat, Cen_p_Emat_x)   - n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
             return y
         
         def jac_func(x):
-            Lmat = cp.outer(cp.dot(QTmat, cp.dot(c_en, Qmat)), n0) + cp.outer(cp.dot(QTmat, cp.dot(c_gT, Qmat)), Tg * n0) + cp.outer(cp.dot(QTmat, cp.dot(adv_mat, Qmat)), ef) - cp.outer(cp.eye(QTmat.shape[0]), n0 * cp.dot(Wmat, x))
-            return Lmat 
+            Lmat = xp.outer(xp.dot(QTmat, xp.dot(c_en, Qmat)), n0) + xp.outer(xp.dot(QTmat, xp.dot(c_gT, Qmat)), Tg * n0) + xp.outer(xp.dot(QTmat, xp.dot(adv_mat, Qmat)), ef) - xp.outer(xp.eye(QTmat.shape[0]), n0 * xp.dot(Wmat, x))
+            return Lmat.reshape((QTmat.shape[0], QTmat.shape[0] , n_pts)) 
         
         
-        abs_error       = 1.0
-        rel_error       = 1.0 
+        abs_error       = np.ones(n_pts)
+        rel_error       = np.ones(n_pts) 
         iteration_steps = 0        
 
-        fb_prev  = cp.dot(Rmat, f0)
-        f1p      = u / np.dot(u, u)
-        h_prev   = f1p + np.dot(Qmat,fb_prev)
-
-        while ((rel_error> rtol and abs_error > atol) and iteration_steps < max_iter):
+        fb_prev  = xp.dot(Rmat, f0)
+        f1       = u / xp.dot(u, u)
+        f1p      = xp.zeros((len(f1), n_pts))
+        
+        for ii in range(n_pts):
+            f1p[:,ii] = f1
+            
+        h_prev   = f1p + xp.dot(Qmat,fb_prev)
+        
+        pp_mat   = xp.zeros((QTmat.shape[0], n_pts))        
+        
+        while ((abs_error > atol).any() and (rel_error > rtol).any() and iteration_steps < max_iter):
             Lmat      =   jac_func(h_prev)
             rhs_vec   =  -res_func(h_prev)
-            abs_error =  cp.linalg.norm(rhs_vec, axis=0)
-                        
-            p         = cp.linalg.lstsq(Lmat, rhs_vec, rcond=1e-16 /np.linalg.cond(Lmat))[0]
-            p         = cp.dot(Qmat,p)
+            abs_error =  xp.linalg.norm(rhs_vec, axis=0)
+            
+            for ii in range(n_pts):
+                #pp_mat[:,ii]  = xp.linalg.lstsq(Lmat[:,:,ii], rhs_vec[:,ii], rcond=1e-16 /xp.linalg.cond(Lmat[:,:,ii]))[0]
+                #pp_mat[:,ii]  = xp.linalg.lstsq(Lmat[:,:,ii], rhs_vec[:,ii], rcond=1e-40)[0]
+                pp_mat[:,ii]   = xp.linalg.solve(Lmat[:,:,ii], rhs_vec[:,ii])
+                
+            p         = xp.dot(Qmat,pp_mat)
+            #print(p)
+            #print(p.shape)
 
             alpha  = 1e0
             is_diverged = False
 
-            while (cp.linalg.norm(res_func(h_prev + alpha * p), axis=0)  >  abs_error):
+            while ((xp.linalg.norm(res_func(h_prev + alpha * p), axis=0)  >  abs_error).any()):
                 alpha*=0.5
                 if alpha < 1e-30:
                     is_diverged = True
@@ -384,23 +435,96 @@ class bte_0d3v_batched():
             h_curr      = h_prev + alpha * p
             
             if iteration_steps % 10 == 0:
-                rel_error = cp.linalg.norm(h_prev-h_curr, axis=0)/cp.linalg.norm(h_curr, axis=0)
-                print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(abs_error, rel_error, np.dot(u, h_prev)))
+                rel_error = xp.linalg.norm(h_prev-h_curr, axis=0)/xp.linalg.norm(h_curr, axis=0)
+                print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
             
             #fb_prev      = np.dot(Rmat,h_curr)
             h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
             iteration_steps+=1
 
-        print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))
-        h_curr = cp.dot(qA, h_curr)
-        h_curr = cp.asnumpy(h_curr)    
-        
-        print(h_curr)        
-        return    
+        print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        h_curr = xp.dot(qA, h_curr)
+        h_curr = self.normalized_distribution(grid_idx, h_curr)
+        qoi    = self.compute_QoIs(grid_idx, h_curr)
+        return h_curr, qoi
             
-            
+    def compute_QoIs(self, grid_idx,  ff, effective_mobility=True):
+        args     = self._args
+        spec_sp  = self._op_spec_sp[grid_idx]
+        vth      = self._par_vth[grid_idx]
+        mw       = bte_utils.get_maxwellian_3d(vth, 1)
         
+        n0       = self._par_bte_params[grid_idx]["n0"]
+        ne       = self._par_bte_params[grid_idx]["ne"]
+        ni       = self._par_bte_params[grid_idx]["ni"]
+        Tg       = self._par_bte_params[grid_idx]["Tg"]
+        ef       = self._par_bte_params[grid_idx]["ef"]
+        
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+        
+        c_gamma   = self._c_gamma
+        eavg_to_K = (2/(3*scipy.constants.Boltzmann))
+
+        #print(tgrid/1e-5)
+        #print(Ef(tgrid))
+        
+        xp  = cp.get_array_module(ff) 
+
+        mm  = xp.dot(self._op_mass[grid_idx], ff) * mw(0) * vth**3
+        mu  = xp.dot(self._op_temp[grid_idx], ff) * mw(0) * vth**5  / mm
+
+        if effective_mobility:
+            M   = xp.dot(self._op_mobility[grid_idx], xp.sqrt(3) * ff[1::num_sh, :])  * (-(c_gamma / (3 * ( ef / n0))))
+        else:
+            M   = xp.dot(self._op_mobility[grid_idx], xp.sqrt(3) * ff[1::num_sh, :])  * (-(c_gamma / (3 * ( 1 / n0))))
+        
+        D   = xp.dot(self._op_diffusion[grid_idx],  ff[0::num_sh,:]) * (c_gamma / 3.)
+        
+        rr  = list()
+        for col_idx, g in enumerate(self._coll_list):
+            reaction_rate = xp.dot(self._op_rate[grid_idx][col_idx], ff[0::num_sh, :])
+            rr.append(reaction_rate)
+            
+        rr = xp.array(rr)
+        return {"energy":mu, "mobility":M, "diffusion": D, "rates": rr}            
+
+    def normalized_distribution(self, grid_idx: int, ff):
+        c_gamma      = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
+        spec_sp      = self._op_spec_sp[grid_idx]
+        vth          = self._par_vth[grid_idx]
+        mass_op      = self._op_mass[grid_idx]
     
+        num_p        = spec_sp._p +1
+        num_sh       = len(spec_sp._sph_harm_lm)
+        xp           = cp.get_array_module(ff)
+    
+        mm_fac       = spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * xp.pi
+        scale        = xp.dot(mass_op / mm_fac, ff) * (2 * (vth/c_gamma)**3)
+        #scale         = np.dot(f_vec,mm_op) * maxwellian(0) * vth**3
+        return ff/scale
+        
+    def compute_radial_components(self, grid_idx : int, ev: np.array, ff):
+        ff_cpu = ff
+        if cp.get_array_module(ff)==cp:
+            ff_cpu = cp.asnumpy(ff)
+            
+        ff_cpu   = np.transpose(ff_cpu)
+        vth      = self._par_vth[grid_idx]
+        spec_sp  = self._op_spec_sp[grid_idx]
+        
+        vr       = np.sqrt(ev) * self._c_gamma / vth
+        num_p    = spec_sp._p +1 
+        num_sh   = len(spec_sp._sph_harm_lm)
+        n_pts    = ff.shape[1]
+        
+        output   = np.zeros((n_pts, num_sh, len(vr)))
+        Vqr      = spec_sp.Vq_r(vr,0,1)
+        
+        for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                output[:, l_idx, :] = np.dot(ff_cpu[:,l_idx::num_sh], Vqr)
+
+        return output
     
 
 

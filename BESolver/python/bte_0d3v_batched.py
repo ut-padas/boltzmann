@@ -24,12 +24,46 @@ from multiprocessing.pool import ThreadPool as WorkerPool
 
 import cupy as cp
 import cupyx
+import enum
+from os import environ
+from profile_t import profile_t
 
+class pp(enum.IntEnum):
+    ALL           = 0
+    SETUP         = 1
+    C_CS_SETUP    = 2
+    C_EN_SETUP    = 3
+    C_EE_SETUP    = 4
+    ADV_SETUP     = 5
+    INIT_COND     = 6
+    SOLVE         = 7
+    RHS_EVAL      = 8
+    JAC_EVAL      = 9
+    JAC_LA_SOL    = 10
+    H2D           = 11
+    D2H           = 12
+    LAST          = 13
 
+profile_tt  = [None] * int(pp.LAST)
+profile_nn  = ["all","setup", "e-n c_op", "e-e c_op", "adv op", "initialize", "solve", "rhs", "jac", "jac_solve", "H2D", "D2H", "last"]
+for i in range(pp.LAST):
+    profile_tt[i] = profile_t(profile_nn[i])
+
+def set_os_envthreads(threads):
+    N_THREADS = str(threads)
+    environ['OMP_NUM_THREADS'] = N_THREADS
+    environ['OPENBLAS_NUM_THREADS'] = N_THREADS
+    environ['MKL_NUM_THREADS'] = N_THREADS
+    environ['VECLIB_MAXIMUM_THREADS'] = N_THREADS
+    environ['NUMEXPR_NUM_THREADS'] = N_THREADS
 
 class bte_0d3v_batched():
     
     def __init__(self, args, Te: np.array, nr: np.array, lm: list, n_vspace_grids : int, collision_model: list) -> None:
+        
+        #set_os_envthreads(1)
+        
+        profile_tt[pp.SETUP].start()
         
         self._par_ap_Te      = Te
         self._par_nr         = nr
@@ -63,6 +97,8 @@ class bte_0d3v_batched():
         
         self._par_dof        = np.array([(self._par_nr[i]+1) * len(lm) for i in range(self._par_nvgrids)] , dtype=np.int32)
         
+        profile_tt[pp.C_CS_SETUP].start()
+        
         self._coll_list      = list()
         for col_idx, col in enumerate(collision_model):
             if "g0NoLoss" == col:
@@ -85,7 +121,7 @@ class bte_0d3v_batched():
                 sys.exit(0)
 
             self._coll_list.append(g)
-        
+            
         self._par_vth        = collisions.electron_thermal_velocity(self._par_ap_Te)
         
         sig_pts   =  list()
@@ -94,11 +130,12 @@ class bte_0d3v_batched():
             if g._reaction_threshold >0:
                 sig_pts.append(g._reaction_threshold)
         
+        profile_tt[pp.C_CS_SETUP].stop()
         
         def assemble_operators(thread_id):
             
-            ib        = (thread_id * self._par_nvgrids ) // args.threads
-            ie        = ((thread_id + 1)* self._par_nvgrids) // args.threads
+            ib        = 0#(thread_id * self._par_nvgrids ) // args.threads
+            ie        = 1#((thread_id + 1)* self._par_nvgrids) // args.threads
             
             
             for idx in range(ib,ie):
@@ -108,13 +145,15 @@ class bte_0d3v_batched():
                 dg_nodes               = np.sqrt(np.array(sig_pts)) * self._c_gamma / vth
                 ev_range               = ((0 * vth /self._c_gamma)**2, (6 * vth /self._c_gamma)**2)
                 k_domain               = (np.sqrt(ev_range[0]) * self._c_gamma / vth, np.sqrt(ev_range[1]) * self._c_gamma / vth)
-                use_ee                 = 0
+                use_ee                 = args.ee_collisions
                 use_dg                 = 1
                 
                 if use_ee==1:
                     use_dg=0
                 else:
-                    use_dg=1
+                    use_dg=0
+                
+                print("grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain)
                 
                 bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose)
                 spec_sp                = sp.SpectralExpansionSpherical(self._par_nr[idx], bb, self._par_lm)
@@ -134,7 +173,9 @@ class bte_0d3v_batched():
                 FOp                     = 0
                 sigma_m                 = 0
                 FOp_g                   = 0
-        
+
+                profile_tt[pp.C_EN_SETUP].start()
+                
                 for col_idx, col in enumerate(collision_model):
                     g = self._coll_list[col_idx]
                     g.reset_scattering_direction_sp_mat()
@@ -143,26 +184,28 @@ class bte_0d3v_batched():
                         print("collision %d included %s"%(col_idx, col))
 
                     if "g0NoLoss" == col:
-                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0)
-                        FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth)
+                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
+                        FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=args.threads)
                         sigma_m  += g.total_cross_section(gx_ev)
                     elif "g0ConstNoLoss" == col:
-                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0)
-                        FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth)
+                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
+                        FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=args.threads)
                         sigma_m  += g.total_cross_section(gx_ev)
                     elif "g0" in col:
-                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0)
-                        FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth)
+                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
+                        FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=args.threads)
                         sigma_m  += g.total_cross_section(gx_ev)
                     elif "g1" in col:
-                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0)
+                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
                         sigma_m  += g.total_cross_section(gx_ev)
                     elif "g2" in col:
-                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0)
+                        FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
                         sigma_m  += g.total_cross_section(gx_ev)
                     else:
                         print("%s unknown collision"%(col))
                         sys.exit(0)
+                
+                profile_tt[pp.C_EN_SETUP].stop()
 
                 self._op_sigma_m[idx] = sigma_m
                 
@@ -181,6 +224,8 @@ class bte_0d3v_batched():
                 num_p  = spec_sp._p + 1
                 num_sh = len(lm)
                 
+                profile_tt[pp.ADV_SETUP].start()
+                
                 if use_dg == 1 : 
                     adv_mat, eA, qA = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
                     qA              = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
@@ -188,16 +233,16 @@ class bte_0d3v_batched():
                     # cg advection
                     adv_mat         = spec_sp.compute_advection_matix()
                     qA              = np.eye(adv_mat.shape[0])
-                    
+                
+                profile_tt[pp.ADV_SETUP].stop()    
+                
                 self._op_diag_dg[idx]   = qA
                 FOp                     = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
                 FOp_g                   = np.matmul(np.transpose(qA), np.matmul(FOp_g, qA))
                 
-                
                 self._op_advection[idx] = np.dot(mmat_inv, adv_mat) * (1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
                 self._op_col_en[idx]    = np.dot(mmat_inv, FOp)
                 self._op_col_gT[idx]    = np.dot(mmat_inv, FOp_g)
-                
                 
                 mm_op   = self._op_mass[idx] * maxwellian(0) * vth**3
                 u       = mm_op
@@ -219,32 +264,49 @@ class bte_0d3v_batched():
                 self._op_rmat[idx] = Rmat
                 
                 if(use_ee == 1):
-                    hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv)
-                    cc_op_a, cc_op_b     = collision_op.coulomb_collision_op_assembly(maxwellian, vth)
+                    print("e-e collision assembly begin")
+                    profile_tt[pp.C_EE_SETUP].start()
                     
-                    cc_op                = np.dot(cc_op_a, hl_op) + np.dot(cc_op_b, gl_op)
-                    cc_op                = np.dot(cc_op,qA)
-                    cc_op                = np.dot(np.swapaxes(cc_op,1,2),qA)
-                    cc_op                = np.swapaxes(cc_op,1,2)
-                    cc_op                = np.dot(np.transpose(qA), cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
-                    cc_op                = np.dot(mmat_inv, cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
+                    hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=args.threads)
+                    cc_op_a, cc_op_b     = collision_op.coulomb_collision_op_assembly(maxwellian, vth, mp_pool_sz=args.threads)
                     
+                    xp                   = cp
+                    
+                    hl_op                = xp.asarray(hl_op)
+                    gl_op                = xp.asarray(gl_op) 
+                    cc_op_a              = xp.asarray(cc_op_a)
+                    cc_op_b              = xp.asarray(cc_op_b)
+                    qA                   = xp.asarray(qA)
+                    mmat_inv             = xp.asarray(mmat_inv)
+                    
+                    cc_op                = xp.dot(cc_op_a, hl_op) + xp.dot(cc_op_b, gl_op)
+                    cc_op                = xp.dot(cc_op,qA)
+                    cc_op                = xp.dot(xp.swapaxes(cc_op,1,2),qA)
+                    cc_op                = xp.swapaxes(cc_op,1,2)
+                    cc_op                = xp.dot(xp.transpose(qA), cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
+                    cc_op                = xp.dot(mmat_inv, cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
+                    cc_op                = xp.asnumpy(cc_op)
                     self._op_col_ee[idx] = cc_op
-                
-                
+                    
+                    xp._default_memory_pool.free_all_blocks()
+                    profile_tt[pp.C_EE_SETUP].stop()
+                    print("e-e collision assembly end")
+                    
             return
         
-        pool = WorkerPool(self._args.threads)    
-        pool.map(assemble_operators, [i for i in range(self._args.threads)])
-        pool.close()
-        pool.join()
-        
+        assemble_operators(0)
+        # pool = WorkerPool(self._args.threads)    
+        # pool.map(assemble_operators, [i for i in range(self._args.threads)])
+        # pool.close()
+        # pool.join()
+        profile_tt[pp.SETUP].stop()
         return
     
     def initialize(self, grid_idx, n_pts, init_type = "maxwellian"):
         """
         Initialize the grid to Maxwell-Boltzmann distribution
         """
+        profile_tt[pp.INIT_COND].start()
         spec_sp     = self._op_spec_sp[grid_idx]
         mmat        = self._op_mass_mat[grid_idx]
         mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
@@ -272,13 +334,15 @@ class bte_0d3v_batched():
         
         for i in range(n_pts):
             f0[:,i] = h_init
-        
+            
+        profile_tt[pp.INIT_COND].stop()
         return f0
     
     def set_boltzmann_parameters(self, grid_idx: int, n0 : np.array, ne : np.array, ni : np.array, ef : np.array, Tg : np.array):
         self._par_bte_params[grid_idx] = {"n0": n0, "ne": ne, "ni": ne, "ef" : ef, "Tg": Tg}
         
     def host_to_device_setup(self, *args):
+        profile_tt[pp.H2D].start()
         dev_id = args[0]
         with cp.cuda.Device(dev_id):
             for idx in range(self._par_nvgrids):
@@ -286,7 +350,6 @@ class bte_0d3v_batched():
                 self._op_advection[idx] = cp.asarray(self._op_advection[idx])
                 self._op_col_en[idx]    = cp.asarray(self._op_col_en[idx])
                 self._op_col_gT[idx]    = cp.asarray(self._op_col_gT[idx])
-                #self._op_col_ee[idx]   = cp.asarray(self._op_col_ee[idx])
                 self._op_qmat[idx]      = cp.asarray(self._op_qmat[idx])
                 self._op_rmat[idx]      = cp.asarray(self._op_rmat[idx])
                 self._op_mass[idx]      = cp.asarray(self._op_mass[idx])
@@ -300,20 +363,24 @@ class bte_0d3v_batched():
                 
                 for col_idx, col in enumerate(self._coll_list):
                     self._op_rate[idx][col_idx] = cp.asarray(self._op_rate[idx][col_idx])
-                
+                    
+        if self._args.ee_collisions==1:
+            with cp.cuda.Device(dev_id):
+                for idx in range(self._par_nvgrids):
+                    self._op_col_ee[idx]   = cp.asarray(self._op_col_ee[idx])
+                    
+        profile_tt[pp.H2D].stop()
         return
     
     def device_to_host_setup(self, *args):
+        profile_tt[pp.D2H].start()
         dev_id = args[0]
-
         with cp.cuda.Device(dev_id):
             for idx in range(self._par_nvgrids):
                 self._op_mass_mat[idx]  = cp.asnumpy(self._op_mass_mat[idx])
                 self._op_advection[idx] = cp.asnumpy(self._op_advection[idx])
                 self._op_col_en[idx]    = cp.asnumpy(self._op_col_en[idx])
                 self._op_col_gT[idx]    = cp.asnumpy(self._op_col_gT[idx])
-                
-                #self._op_col_ee[idx]   = cp.asnumpy(self._op_col_ee[idx])
                 self._op_qmat[idx]      = cp.asnumpy(self._op_qmat[idx])
                 self._op_rmat[idx]      = cp.asnumpy(self._op_rmat[idx])
                 self._op_mass[idx]      = cp.asnumpy(self._op_mass[idx])
@@ -327,17 +394,30 @@ class bte_0d3v_batched():
                     
                 for col_idx, col in enumerate(self._coll_list):
                     self._op_rate[idx][col_idx] = cp.asnumpy(self._op_rate[idx][col_idx])
+                    
+        if self._args.ee_collisions==1:
+            with cp.cuda.Device(dev_id):
+                for idx in range(self._par_nvgrids):
+                    self._op_col_ee[idx]   = cp.asnumpy(self._op_col_ee[idx])
+
+        profile_tt[pp.D2H].stop()
         return
     
-    def steady_state_solve(self,grid_idx : int, f0 : np.array, rtol, atol, max_iter):
+    def steady_state_solve(self, grid_idx : int, f0 : np.array, rtol, atol, max_iter):
         
+        xp           = cp#cp.get_array_module(f0)
+        xp.cuda.runtime.deviceSynchronize()
+        
+        profile_tt[pp.SOLVE].start()
+        
+        args         = self._args
         n_pts        = f0.shape[1]
-        
         eps_0        = scipy.constants.epsilon_0
         me           = scipy.constants.electron_mass
         qe           = scipy.constants.e
         
-        xp           = cp.get_array_module(f0)
+        num_streams  = 8
+        gpu_streams  = [xp.cuda.Stream() for i in range(num_streams)]
         
         n0           = self._par_bte_params[grid_idx]["n0"]
         ne           = self._par_bte_params[grid_idx]["ne"]
@@ -360,34 +440,104 @@ class bte_0d3v_batched():
         adv_mat      = self._op_advection[grid_idx]
         qA           = self._op_diag_dg[grid_idx]
         
-        #cc_op_l1     = c_ee
-        #cc_op_l2     = xp.swapaxes(c_ee,1,2)
-        
         mm_op        = self._op_mass[grid_idx] * mw(0) * vth**3
         u            = mm_op
         u            = xp.dot(xp.transpose(mm_op),qA)
         
         Wmat         = xp.dot(u, c_en)
         
-        
-        def gamma_a(fb):
-            m0           = mw(0) *  xp.dot(Mop, fb) * vth**3 
-            kT           = mw(0) * (xp.dot(Top, fb) / m0) * vth**5 * scipy.constants.Boltzmann 
-            kT           = xp.abs(kT).reshape((-1,))
-        
-            c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * xp.sqrt(ne)))
-            gamma_a      = (xp.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
-            #print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ion_deg * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
-            return gamma_a
-        
-        def res_func(x):
-            Cen_p_Emat_x  = n0 * (xp.dot(c_en,x) +  Tg * xp.dot(c_gT, x))  + ef * xp.dot(adv_mat, x)
-            y             = xp.dot(QTmat, Cen_p_Emat_x)   - n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
-            return y
-        
-        def jac_func(x):
-            Lmat = xp.outer(xp.dot(QTmat, xp.dot(c_en, Qmat)), n0) + xp.outer(xp.dot(QTmat, xp.dot(c_gT, Qmat)), Tg * n0) + xp.outer(xp.dot(QTmat, xp.dot(adv_mat, Qmat)), ef) - xp.outer(xp.eye(QTmat.shape[0]), n0 * xp.dot(Wmat, x))
-            return Lmat.reshape((QTmat.shape[0], QTmat.shape[0] , n_pts)) 
+        if args.ee_collisions==1:
+            cc_op_l1     = c_ee
+            cc_op_l2     = xp.swapaxes(c_ee,1,2)
+            
+            def gamma_a(fb):
+                m0           = mw(0) *  xp.dot(Mop, fb) * vth**3 
+                kT           = mw(0) * (xp.dot(Top, fb) / m0) * vth**5 * scipy.constants.Boltzmann 
+                kT           = xp.abs(kT).reshape((-1,))
+            
+                c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * xp.sqrt(ne)))
+                gamma_a      = (xp.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
+                #print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ion_deg * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
+                return gamma_a
+            
+            QT_Cen     = xp.dot(QTmat, c_en)
+            QT_Cgt     = xp.dot(QTmat, c_gT)
+            QT_A       = xp.dot(QTmat, adv_mat)
+            
+            def res_func(x):
+                profile_tt[pp.RHS_EVAL].start()
+                ga            = ne * gamma_a(x)
+                y             = n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) ) + ef * xp.dot(QT_A,x) - n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
+                c_ee_x        = xp.dot(c_ee, x) 
+                for ii in range(n_pts):
+                    with (gpu_streams[ii % (num_streams)]):
+                        y[:,ii] += ga[ii] * xp.dot(QTmat, xp.dot(c_ee_x[:,:,ii], x[:,ii]))
+                
+                for i in range(num_streams):
+                    gpu_streams[i].synchronize()
+                    
+                xp.cuda.runtime.deviceSynchronize()
+                profile_tt[pp.RHS_EVAL].stop()
+                return y
+            
+            QT_Cen_Q     = xp.dot(QTmat, xp.dot(c_en, Qmat))
+            QT_Cgt_Q     = xp.dot(QTmat, xp.dot(c_gT, Qmat))
+            QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
+            Imat         = xp.eye(QTmat.shape[0])
+            Lmat         = xp.empty((QTmat.shape[0], QTmat.shape[0], n_pts))
+                
+            
+            def jac_func(x):
+                profile_tt[pp.JAC_EVAL].start()
+                ga           = ne * gamma_a(x)
+                cc1_x_p_cc2x = xp.dot(cc_op_l1, x) + xp.dot(cc_op_l2, x)
+                mu           = n0 * xp.dot(Wmat, x)
+                
+                for ii in range(n_pts):
+                    with (gpu_streams[ii % (num_streams)]):
+                        Lmat[:,:,ii] = n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q +  ga[ii] * xp.dot(QTmat, xp.dot(cc1_x_p_cc2x[:,:,ii], Qmat)) - Imat * mu[ii]
+                        
+                    
+                for i in range(num_streams):
+                    gpu_streams[i].synchronize()
+                
+                xp.cuda.runtime.deviceSynchronize()
+                profile_tt[pp.JAC_EVAL].stop()
+                return Lmat
+                    
+        else:
+            
+            QT_Cen     = xp.dot(QTmat, c_en)
+            QT_Cgt     = xp.dot(QTmat, c_gT)
+            QT_A       = xp.dot(QTmat, adv_mat)
+            
+            
+            def res_func(x):
+                profile_tt[pp.RHS_EVAL].start()
+                y             = n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) ) + ef * xp.dot(QT_A,x) - n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
+                xp.cuda.runtime.deviceSynchronize()
+                profile_tt[pp.RHS_EVAL].stop()
+                return y
+
+            QT_Cen_Q     = xp.dot(QTmat, xp.dot(c_en, Qmat))
+            QT_Cgt_Q     = xp.dot(QTmat, xp.dot(c_gT, Qmat))
+            QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
+            Imat         = xp.eye(QTmat.shape[0])
+            Lmat         = xp.empty((QTmat.shape[0], QTmat.shape[0], n_pts))
+            
+            def jac_func(x):
+                profile_tt[pp.JAC_EVAL].start()
+                mu           = n0 * xp.dot(Wmat, x)
+                for ii in range(n_pts):
+                    with (gpu_streams[ii % (num_streams)]):
+                        Lmat[:,:,ii] = n0[ii] * (QT_Cen_Q  + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q - Imat * mu[ii]
+                        
+                for i in range(num_streams):
+                    gpu_streams[i].synchronize()
+                
+                xp.cuda.runtime.deviceSynchronize()
+                profile_tt[pp.JAC_EVAL].stop()
+                return Lmat
         
         
         abs_error       = np.ones(n_pts)
@@ -411,22 +561,27 @@ class bte_0d3v_batched():
             abs_error =  xp.linalg.norm(rhs_vec, axis=0)
             
             for ii in range(n_pts):
-                #pp_mat[:,ii]  = xp.linalg.lstsq(Lmat[:,:,ii], rhs_vec[:,ii], rcond=1e-16 /xp.linalg.cond(Lmat[:,:,ii]))[0]
-                #pp_mat[:,ii]  = xp.linalg.lstsq(Lmat[:,:,ii], rhs_vec[:,ii], rcond=1e-40)[0]
-                pp_mat[:,ii]   = xp.linalg.solve(Lmat[:,:,ii], rhs_vec[:,ii])
+                with (gpu_streams[ii % (num_streams)]):
+                    assert gpu_streams[ii % (num_streams)] == xp.cuda.get_current_stream()
+                    pp_mat[:,ii]   = xp.linalg.solve(Lmat[:,:,ii], rhs_vec[:,ii])
                 
+            for i in range(num_streams):
+                gpu_streams[i].synchronize()
+            
             p         = xp.dot(Qmat,pp_mat)
-            #print(p)
-            #print(p.shape)
 
-            alpha  = 1e0
+            alpha  = xp.ones(n_pts)
             is_diverged = False
-
-            while ((xp.linalg.norm(res_func(h_prev + alpha * p), axis=0)  >  abs_error).any()):
-                alpha*=0.5
-                if alpha < 1e-30:
+            rf_new = xp.linalg.norm(res_func(h_prev + alpha * p), axis=0)
+            while ((rf_new  >  abs_error).any()):
+                rc = rf_new  >  abs_error
+                alpha[rc]*=0.5
+                if (alpha < 1e-16).all():
                     is_diverged = True
                     break
+                
+                rf_new = xp.linalg.norm(res_func(h_prev + alpha * p), axis=0)
+                
             
             if(is_diverged):
                 print("Iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
@@ -446,6 +601,7 @@ class bte_0d3v_batched():
         h_curr = xp.dot(qA, h_curr)
         h_curr = self.normalized_distribution(grid_idx, h_curr)
         qoi    = self.compute_QoIs(grid_idx, h_curr)
+        profile_tt[pp.SOLVE].stop()
         return h_curr, qoi
             
     def compute_QoIs(self, grid_idx,  ff, effective_mobility=True):
@@ -526,5 +682,11 @@ class bte_0d3v_batched():
 
         return output
     
-
-
+    def profile_stats(self):
+        print("--setup\t %.4Es"%(profile_tt[pp.SETUP].seconds))
+        print("   |electon-X \t %.4Es"%(profile_tt[pp.C_EN_SETUP].seconds))
+        print("   |coulombic \t %.4Es"%(profile_tt[pp.C_EE_SETUP].seconds))
+        print("   |advection \t %.4Es"%(profile_tt[pp.ADV_SETUP].seconds))
+        print("--solve \t %.4Es"%(profile_tt[pp.SOLVE].seconds))
+        print("   |rhs \t %.4Es"%(profile_tt[pp.RHS_EVAL].seconds))
+        print("   |jacobian \t %.4Es"%(profile_tt[pp.JAC_EVAL].seconds))

@@ -15,6 +15,7 @@ import scipy.integrate
 import scipy.sparse
 import sym_cc
 import sympy
+from multiprocess import Pool
 
 class CollissionOp(abc.ABC):
 
@@ -73,7 +74,7 @@ class CollisionOpSP():
         self._NUM_Q_VR = self._spec._num_q_radial
         return 
 
-    def _LOp_eulerian_radial_only(self, collision, maxwellian, vth, tgK):
+    def _LOp_eulerian_radial_only(self, collision, maxwellian, vth, tgK, mp_pool_sz):
         V_TH          = vth     
         g             = collision
         spec_sp       = self._spec
@@ -99,11 +100,8 @@ class CollisionOpSP():
                     v_scale  = np.sqrt(1- c_mu)
                     v_post   = gx_e * v_scale
                     kappa    = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
-
-                    tmp_q0   = np.zeros((num_p,num_p))
-                    tmp_q1   = np.zeros((num_p,num_p))
-
-                    for k in range(num_p):
+                    
+                    def t1(p, k):
                         k_min  = k_vec[k]
                         k_max  = k_vec[k + sp_order + 1]
                         qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
@@ -115,12 +113,44 @@ class CollisionOpSP():
 
                         phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
                         dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
+                        
+                        psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
+                        psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
+                        q0           = np.dot(gmw, V_TH  * gmx**3 * t_cs * phi_k * (psi_pp-psi_pm)  - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
+                        q1           = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+                        
+                        return (p, k, q0, q1)
+                        
+                    with Pool(mp_pool_sz) as process_pool:
+                        result = process_pool.starmap(t1,[(p,k) for p in range(num_p) for k in range(num_p)])
+                    
+                    tmp_q0   = np.zeros((num_p,num_p))
+                    tmp_q1   = np.zeros((num_p,num_p))
+                    
+                    for r in result:
+                        tmp_q0[r[0], r[1]] = r[2]
+                        tmp_q1[r[0], r[1]] = r[3]
 
-                        for p in range(num_p):
-                            psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
-                            psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
-                            tmp_q0[p,k]  = np.dot(gmw, V_TH  * gmx**3 * t_cs * phi_k * (psi_pp-psi_pm)  - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
-                            tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+                    # tmp_q0   = np.zeros((num_p,num_p))
+                    # tmp_q1   = np.zeros((num_p,num_p))
+                    # for k in range(num_p):
+                    #     k_min  = k_vec[k]
+                    #     k_max  = k_vec[k + sp_order + 1]
+                    #     qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+
+                    #     gmx    = gx_e[qx_idx] 
+                    #     gmw    = gw_e[qx_idx]
+                    #     vp     = v_post[qx_idx]
+                    #     t_cs   = total_cs[qx_idx]
+
+                    #     phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
+                    #     dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
+
+                    #     for p in range(num_p):
+                    #         psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
+                    #         psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
+                    #         tmp_q0[p,k]  = np.dot(gmw, V_TH  * gmx**3 * t_cs * phi_k * (psi_pp-psi_pm)  - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
+                    #         tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
 
                     for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
                         if q==0:
@@ -145,27 +175,55 @@ class CollisionOpSP():
                     total_cs         = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
                     v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
 
+                    def t1(p, k):
+                        k_min   = k_vec[k]
+                        k_max   = k_vec[k + sp_order + 1]
+                        qx_idx  = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                    
+                        gmx     = gx_e[qx_idx] 
+                        gmw     = gw_e[qx_idx]
+                        vp      = v_post[qx_idx]
+                        t_cs    = total_cs[qx_idx] 
+
+                        phi_k   = spec_sp.basis_eval_radial(gmx, k, 0)
+
+                        psi_pp  = spec_sp.basis_eval_radial(vp , p, 0)
+                        psi_pm  = spec_sp.basis_eval_radial(gmx, p, 0)
+                        q0      = np.dot(gmw,  V_TH * gmx**3 * t_cs * phi_k * (energy_split * psi_pp - psi_pm))
+                        q1      = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+                        
+                        return (p, k, q0, q1)
+                        
+                    with Pool(mp_pool_sz) as process_pool:
+                        result = process_pool.starmap(t1,[(p,k) for p in range(num_p) for k in range(num_p)])
                     
                     tmp_q0   = np.zeros((num_p,num_p))
                     tmp_q1   = np.zeros((num_p,num_p))
+                    
+                    for r in result:
+                        tmp_q0[r[0], r[1]] = r[2]
+                        tmp_q1[r[0], r[1]] = r[3]
+                    
+                    # tmp_q0   = np.zeros((num_p,num_p))
+                    # tmp_q1   = np.zeros((num_p,num_p))
 
-                    for k in range(num_p):
-                        k_min  = k_vec[k]
-                        k_max  = k_vec[k + sp_order + 1]
-                        qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                    # for k in range(num_p):
+                    #     k_min  = k_vec[k]
+                    #     k_max  = k_vec[k + sp_order + 1]
+                    #     qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
                         
-                        gmx    = gx_e[qx_idx] 
-                        gmw    = gw_e[qx_idx]
-                        vp     = v_post[qx_idx]
-                        t_cs   = total_cs[qx_idx] 
+                    #     gmx    = gx_e[qx_idx] 
+                    #     gmw    = gw_e[qx_idx]
+                    #     vp     = v_post[qx_idx]
+                    #     t_cs   = total_cs[qx_idx] 
 
-                        phi_k  = spec_sp.basis_eval_radial(gmx, k, 0)
+                    #     phi_k  = spec_sp.basis_eval_radial(gmx, k, 0)
 
-                        for p in range(num_p):
-                            psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
-                            psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
-                            tmp_q0[p,k]  = np.dot(gmw,  V_TH * gmx**3 * t_cs * phi_k * (energy_split * psi_pp - psi_pm))
-                            tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
+                    #     for p in range(num_p):
+                    #         psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
+                    #         psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
+                    #         tmp_q0[p,k]  = np.dot(gmw,  V_TH * gmx**3 * t_cs * phi_k * (energy_split * psi_pp - psi_pm))
+                    #         tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
 
                     for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
                         if q==0:
@@ -397,7 +455,7 @@ class CollisionOpSP():
         else:
             raise NotImplementedError
 
-    def electron_gas_temperature(self, collision, maxwellian, vth):
+    def electron_gas_temperature(self, collision, maxwellian, vth, mp_pool_sz=4):
         V_TH          = vth     
         g             = collision
         spec_sp       = self._spec
@@ -425,23 +483,42 @@ class CollisionOpSP():
                 v_scale      = np.sqrt(1- c_mu)
                 v_post       = gx_e * v_scale
                 kappa        = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
+                
+                def t1(p,k):
+                    k_min    = k_vec[k]
+                    k_max    = k_vec[k + sp_order + 1]
+                    qx_idx   = np.logical_and(gx_e >= k_min, gx_e <= k_max)
 
-                tmp_q0   = np.zeros((num_p,num_p))
-                #tmp_q1   = np.zeros((num_p,num_p))
-
-                for k in range(num_p):
-                    k_min  = k_vec[k]
-                    k_max  = k_vec[k + sp_order + 1]
-                    qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-
-                    gmx    = gx_e[qx_idx] 
-                    gmw    = gw_e[qx_idx]
-                    t_cs   = total_cs[qx_idx]
+                    gmx      = gx_e[qx_idx] 
+                    gmw      = gw_e[qx_idx]
+                    t_cs     = total_cs[qx_idx]
 
                     dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
+                    q0       = np.dot(gmw, - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
+                    
+                    return (p,k, q0)
+                
+                tmp_q0     = np.zeros((num_p,num_p))
+                with Pool(mp_pool_sz) as process_pool:
+                    result = process_pool.starmap(t1,[(p,k) for p in range(num_p) for k in range(num_p)])
+                    
+                for r in result:
+                    tmp_q0[r[0], r[1]] = r[2]
+                
+                # tmp_q0   = np.zeros((num_p,num_p))
+                # for k in range(num_p):
+                #     k_min  = k_vec[k]
+                #     k_max  = k_vec[k + sp_order + 1]
+                #     qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
 
-                    for p in range(num_p):
-                        tmp_q0[p,k]  = np.dot(gmw, - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
+                #     gmx    = gx_e[qx_idx] 
+                #     gmw    = gw_e[qx_idx]
+                #     t_cs   = total_cs[qx_idx]
+
+                #     dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
+
+                #     for p in range(num_p):
+                #         tmp_q0[p,k]  = np.dot(gmw, - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
                         
                 for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
                     if q==0:
@@ -530,10 +607,59 @@ class CollisionOpSP():
         else:
             raise NotImplementedError
     
-    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3), tgK=0.0):
-        Lij = self._LOp_eulerian_radial_only(collision,maxwellian, vth, tgK)
+    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3), tgK=0.0, mp_pool_sz=4):
+        Lij = self._LOp_eulerian_radial_only(collision,maxwellian, vth, tgK, mp_pool_sz)
         return Lij
 
+    def rosenbluth_potentials(self, hl_op, gl_op, fb, mw, vth):
+        
+        spec_sp  :sp.SpectralExpansionSpherical     = self._spec
+        num_p         = spec_sp._p+1
+        sph_lm        = spec_sp._sph_harm_lm
+        num_sh        = len(spec_sp._sph_harm_lm)
+        sp_order      = spec_sp._basis_p._sp_order
+
+        gmx, gmw = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+        hl = np.zeros(num_p * num_sh)
+        gl = np.zeros(num_p * num_sh)
+
+        hl = np.dot(hl_op, fb)
+        gl = np.dot(gl_op, fb)
+
+        # for lm_idx, lm in enumerate(sph_lm):
+        #     hl[lm_idx::num_sh] = np.dot(hl_op[lm_idx] ,fb[lm_idx::num_sh]) 
+        #     gl[lm_idx::num_sh] = np.dot(gl_op[lm_idx] ,fb[lm_idx::num_sh]) 
+
+        # p20_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p2)
+        # p40_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p4) 
+        # q10_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._q1) 
+        # q30_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._q3)
+
+        # p31_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p3)
+        # p51_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p5)
+        # q01_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._q0)
+
+        # Vqr = spec_sp.Vq_r(gmx, 0, 1)
+
+        # import matplotlib.pyplot as plt
+        # # hl_0 = np.dot(np.transpose(Vqr),hl[0::num_sh])
+        # # plt.plot(gmx, hl_0/(4*np.pi), label="new h0")
+        # # plt.plot(gmx, (2) * (p20_a/gmx + q10_a), label="old h0")
+
+        # # hl_1 = np.dot(np.transpose(Vqr),hl[1::num_sh])
+        # # plt.plot(gmx, hl_1/(4*np.pi), label="new h1")
+        # # plt.plot(gmx, (2) * (p31_a/gmx**2/3 + q01_a * gmx/3), label="old h1")
+
+        # gl_0 = np.dot(np.transpose(Vqr),gl[0::num_sh])
+        # plt.plot(gmx, gl_0, label="new g0")
+        # plt.plot(gmx, gmx * p20_a + q30_a + (1/gmx/3) * p40_a + gmx**2 * q10_a/3, label="olg g0")
+
+        # plt.legend()
+        # plt.show()
+        # plt.close()
+
+        return hl, gl
+    
     def coulomb_collision_mat(self, alpha, ionization_degree, n0, fb, mw, vth, sigma_m, full_assembly=True):
         """
         compute the weak form of the coulomb collision operator based on fokker-plank equation
@@ -544,11 +670,6 @@ class CollisionOpSP():
             - assumes azimuthal symmetry
         """
 
-        V_TH          = vth
-        ELE_VOLT      = collisions.ELECTRON_VOLT
-        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
-        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
-        
         spec_sp  :sp.SpectralExpansionSpherical     = self._spec
         num_p         = spec_sp._p+1
         num_sh        = len(spec_sp._sph_harm_lm)
@@ -661,11 +782,34 @@ class CollisionOpSP():
         
         return cc_collision * gamma_a
 
-    def compute_rosenbluth_potentials_op(self, mw, vth, m_ab, Minv):
-        V_TH          = vth
-        ELE_VOLT      = collisions.ELECTRON_VOLT
-        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
-        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
+    def gamma_a(self, fb, mw, vth, n0, ion_deg, eff_rr_op):
+        spec_sp  :sp.SpectralExpansionSpherical     = self._spec
+        num_p         = spec_sp._p+1
+        sph_lm        = spec_sp._sph_harm_lm
+        num_sh        = len(spec_sp._sph_harm_lm)
+
+        ne           = n0 * ion_deg 
+        eps_0        = scipy.constants.epsilon_0
+        me           = scipy.constants.electron_mass
+        qe           = scipy.constants.e
+        m0           = mw(0) * np.dot(fb,self._mass_op) * vth**3 
+        kT           = mw(0) * (np.dot(fb, self._temp_op) * vth**5 * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0) 
+        kT           = np.abs(kT)
+        
+        M            = 0.0
+        # wp           = np.sqrt((qe**2 * ne) / (eps_0 * me))
+        # M            = (np.sqrt(6)/(2 * wp)) * np.dot(eff_rr_op,fb[0::num_sh])
+        
+        c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne)))
+        c_lambda     = (c_lambda + M) / (1+M)
+
+        gamma_a      = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
+        
+        #print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ion_deg * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
+
+        return gamma_a
+    
+    def compute_rosenbluth_potentials_op(self, mw, vth, m_ab, Minv, mp_pool_sz=4):
         
         spec_sp  :sp.SpectralExpansionSpherical     = self._spec
         num_p         = spec_sp._p+1
@@ -713,6 +857,7 @@ class CollisionOpSP():
             qq_re_weights1 = qq_re1[1]
             
             pm       = np.zeros((num_p, len(gmx)))
+            
             for i in range(num_p):
                 a_idx = np.where(k_vec[i] <= gmx)[0]
                 b_idx = np.where(gmx <= k_vec[i + sp_order + 1])[0]
@@ -813,110 +958,45 @@ class CollisionOpSP():
             hl_v[lm_idx, : , :] = np.transpose(m1) 
             gl_v[lm_idx, : , :] = np.transpose(m2)
 
-
         # hl_op = hl_v
         # gl_op = gl_v
         hl_op = np.zeros((num_p * num_sh, num_p * num_sh))
         gl_op = np.zeros((num_p * num_sh, num_p * num_sh))
-
-        for lm_idx, lm in enumerate(sph_lm):
-            for p in range(num_p):
-                bp  = spec_sp.basis_eval_radial(gmx, p, 0)
-                for k in range(num_p):
-                    hl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = np.dot(gmx**2 * bp * hl_v[lm_idx, : , k], gmw)
-                    gl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = np.dot(gmx**2 * bp * gl_v[lm_idx, : , k], gmw)
+        
+        def t1(lm_idx, p, k):
+            bp   = spec_sp.basis_eval_radial(gmx, p, 0)
+            hl   = np.dot(gmx**2 * bp * hl_v[lm_idx, : , k], gmw)
+            gl   = np.dot(gmx**2 * bp * gl_v[lm_idx, : , k], gmw)
+            
+            return (lm_idx, p, k, hl, gl)
+        
+        with Pool(mp_pool_sz) as process_pool:
+            result = process_pool.starmap(t1, [(lm_idx, p, k) for lm_idx, lm in enumerate(sph_lm) for p in range(num_p) for k in range(num_p)])
+            
+        for r in result:
+            lm_idx = r[0]
+            p      = r[1]
+            k      = r[2]
+            
+            hl     = r[3]
+            gl     = r[4]
+            
+            hl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = hl
+            gl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = gl
+            
+            
+        # for lm_idx, lm in enumerate(sph_lm):
+        #     for p in range(num_p):
+        #         bp  = spec_sp.basis_eval_radial(gmx, p, 0)
+        #         for k in range(num_p):
+        #             hl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = np.dot(gmx**2 * bp * hl_v[lm_idx, : , k], gmw)
+        #             gl_op[p * num_sh + lm_idx, k * num_sh + lm_idx] = np.dot(gmx**2 * bp * gl_v[lm_idx, : , k], gmw)
                 
         hl_op = np.dot(Minv, hl_op)
         gl_op = np.dot(Minv, gl_op)
-            
         return hl_op, gl_op
 
-    def gamma_a(self, fb, mw, vth, n0, ion_deg, eff_rr_op):
-        spec_sp  :sp.SpectralExpansionSpherical     = self._spec
-        num_p         = spec_sp._p+1
-        sph_lm        = spec_sp._sph_harm_lm
-        num_sh        = len(spec_sp._sph_harm_lm)
-
-        ne           = n0 * ion_deg 
-        eps_0        = scipy.constants.epsilon_0
-        me           = scipy.constants.electron_mass
-        qe           = scipy.constants.e
-        m0           = mw(0) * np.dot(fb,self._mass_op) * vth**3 
-        kT           = mw(0) * (np.dot(fb, self._temp_op) * vth**5 * 0.5 * scipy.constants.electron_mass * (2./ 3) / m0) 
-        kT           = np.abs(kT)
-        
-        M            = 0.0
-        # wp           = np.sqrt((qe**2 * ne) / (eps_0 * me))
-        # M            = (np.sqrt(6)/(2 * wp)) * np.dot(eff_rr_op,fb[0::num_sh])
-        
-        c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * np.sqrt(ne)))
-        c_lambda     = (c_lambda + M) / (1+M)
-
-        gamma_a      = (np.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
-        
-        #print("mass=%.8E\t Coulomb logarithm %.8E \t gamma_a %.8E \t gamma_a * ne %.8E  \t kT=%.8E temp(ev)=%.8E temp (K)=%.8E " %(m0, np.log(c_lambda) , gamma_a, n0 * ion_deg * gamma_a, kT, kT/scipy.constants.electron_volt, kT/scipy.constants.Boltzmann))
-
-        return gamma_a
-
-    def rosenbluth_potentials(self, hl_op, gl_op, fb, mw, vth):
-        
-        ELE_VOLT      = collisions.ELECTRON_VOLT
-        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
-        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
-        
-        spec_sp  :sp.SpectralExpansionSpherical     = self._spec
-        num_p         = spec_sp._p+1
-        sph_lm        = spec_sp._sph_harm_lm
-        num_sh        = len(spec_sp._sph_harm_lm)
-        sp_order      = spec_sp._basis_p._sp_order
-
-        gmx, gmw = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
-        hl = np.zeros(num_p * num_sh)
-        gl = np.zeros(num_p * num_sh)
-
-        hl = np.dot(hl_op, fb)
-        gl = np.dot(gl_op, fb)
-
-        # for lm_idx, lm in enumerate(sph_lm):
-        #     hl[lm_idx::num_sh] = np.dot(hl_op[lm_idx] ,fb[lm_idx::num_sh]) 
-        #     gl[lm_idx::num_sh] = np.dot(gl_op[lm_idx] ,fb[lm_idx::num_sh]) 
-
-        # p20_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p2)
-        # p40_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._p4) 
-        # q10_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._q1) 
-        # q30_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[0::num_sh], self._q3)
-
-        # p31_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p3)
-        # p51_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._p5)
-        # q01_a      = (np.sqrt(4 * np.pi / (2 * 0 + 1))) * 4*np.pi * np.dot(fb[1::num_sh], self._q0)
-
-        # Vqr = spec_sp.Vq_r(gmx, 0, 1)
-
-        # import matplotlib.pyplot as plt
-        # # hl_0 = np.dot(np.transpose(Vqr),hl[0::num_sh])
-        # # plt.plot(gmx, hl_0/(4*np.pi), label="new h0")
-        # # plt.plot(gmx, (2) * (p20_a/gmx + q10_a), label="old h0")
-
-        # # hl_1 = np.dot(np.transpose(Vqr),hl[1::num_sh])
-        # # plt.plot(gmx, hl_1/(4*np.pi), label="new h1")
-        # # plt.plot(gmx, (2) * (p31_a/gmx**2/3 + q01_a * gmx/3), label="old h1")
-
-        # gl_0 = np.dot(np.transpose(Vqr),gl[0::num_sh])
-        # plt.plot(gmx, gl_0, label="new g0")
-        # plt.plot(gmx, gmx * p20_a + q30_a + (1/gmx/3) * p40_a + gmx**2 * q10_a/3, label="olg g0")
-
-        # plt.legend()
-        # plt.show()
-        # plt.close()
-
-        return hl, gl
-        
-    def coulomb_collision_op_assembly(self, mw, vth, gen_code=False):
-        V_TH          = vth
-        ELE_VOLT      = collisions.ELECTRON_VOLT
-        MAXWELLIAN_N  = collisions.MAXWELLIAN_N
-        AR_NEUTRAL_N  = collisions.AR_NEUTRAL_N
-
+    def coulomb_collision_op_assembly(self, mw, vth, gen_code=False, mp_pool_sz=4):
         spec_sp  :sp.SpectralExpansionSpherical     = self._spec
         num_p         = spec_sp._p+1
         sph_lm        = spec_sp._sph_harm_lm
@@ -952,66 +1032,116 @@ class CollisionOpSP():
         lmax           = sph_lm[-1][0]
 
         import cc_terms
+        def t1(p,k,r):
+            k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
+            k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
+    
+            qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
+            gmx    = gmx_a[qx_idx] 
+            gmw    = gmw_a[qx_idx] 
+
+            B_p_vr       =  B(gmx, p)
+            DB_p_dvr     = DB(gmx, p, 1)
+            DB_p_dvr_dvr = DB(gmx, p, 2)
+
+            B_k_vr       =  B(gmx, k)
+            DB_k_dvr     = DB(gmx, k, 1)
+            DB_k_dvr_dvr = DB(gmx, k, 2)
+
+            B_r_vr       =  B(gmx, r)
+            DB_r_dvr     = DB(gmx, r, 1)
+            DB_r_dvr_dvr = DB(gmx, r, 2)
+            
+            
+            ca = list()
+            cb = list()
+            
+            for idx in cc_terms.Ia_nz:
+                if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+                    continue
+                a  = np.dot(gmw, cc_terms.Ia(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr))
+                
+                ca.append((idx[0], idx[1], idx[2], a))
+                
+            for idx in cc_terms.Ib_nz:
+                if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+                    continue    
+                b  = np.dot(gmw, cc_terms.Ib(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr))
+                cb.append((idx[0], idx[1], idx[2], b))
+            
+            return (p, k, r, ca, cb)
         
-        for p in range(num_p):
-            for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
-                for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+        with Pool(mp_pool_sz) as process_pool:
+            result = process_pool.starmap(t1,[(p, k, r) for p in range(num_p) for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))) for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3)))] )
+        
+        # for idx in range(len(result)):
+        #     p  = result[idx][0]
+        #     k  = result[idx][1]
+        #     r  = result[idx][2]
+            
+        #     ca = result[idx][3]
+        #     cb = result[idx][4]
+        #     print(idx)
+        #     for (idx0, idx1, idx2, val) in ca:
+        #         cc_mat_a[p * num_sh +  idx0, k * num_sh + idx1, r * num_sh +  idx2] = val
+                
+        #     for (idx0, idx1, idx2, val) in cb:
+        #         cc_mat_b[p * num_sh +  idx0, k * num_sh + idx1, r * num_sh +  idx2] = val
+        
+        
+        from multiprocessing.pool import ThreadPool
+        def t2(idx):
+            p  = result[idx][0]
+            k  = result[idx][1]
+            r  = result[idx][2]
+            
+            ca = result[idx][3]
+            cb = result[idx][4]
+            
+            for (idx0, idx1, idx2, val) in ca:
+                cc_mat_a[p * num_sh +  idx0, k * num_sh + idx1, r * num_sh +  idx2] = val
+                
+            for (idx0, idx1, idx2, val) in cb:
+                cc_mat_b[p * num_sh +  idx0, k * num_sh + idx1, r * num_sh +  idx2] = val
+        
+        pool = ThreadPool(mp_pool_sz)    
+        pool.map(t2, [i for i in range(len(result))])
+        pool.close()
+        pool.join()
+                
+        # for p in range(num_p):
+        #     for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
+        #         for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
                     
-                    k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
-                    k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
+        #             k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
+        #             k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
             
-                    qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
-                    gmx    = gmx_a[qx_idx] 
-                    gmw    = gmw_a[qx_idx] 
+        #             qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
+        #             gmx    = gmx_a[qx_idx] 
+        #             gmw    = gmw_a[qx_idx] 
 
-                    B_p_vr       =  B(gmx, p)
-                    DB_p_dvr     = DB(gmx, p, 1)
-                    DB_p_dvr_dvr = DB(gmx, p, 2)
+        #             B_p_vr       =  B(gmx, p)
+        #             DB_p_dvr     = DB(gmx, p, 1)
+        #             DB_p_dvr_dvr = DB(gmx, p, 2)
 
-                    B_k_vr       =  B(gmx, k)
-                    DB_k_dvr     = DB(gmx, k, 1)
-                    DB_k_dvr_dvr = DB(gmx, k, 2)
+        #             B_k_vr       =  B(gmx, k)
+        #             DB_k_dvr     = DB(gmx, k, 1)
+        #             DB_k_dvr_dvr = DB(gmx, k, 2)
 
-                    B_r_vr       =  B(gmx, r)
-                    DB_r_dvr     = DB(gmx, r, 1)
-                    DB_r_dvr_dvr = DB(gmx, r, 2)
+        #             B_r_vr       =  B(gmx, r)
+        #             DB_r_dvr     = DB(gmx, r, 1)
+        #             DB_r_dvr_dvr = DB(gmx, r, 2)
             
-                    for idx in cc_terms.Ia_nz:
-                        if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
-                            continue
-            
-                        cc_mat_a[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ia(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr)) 
-
-        for p in range(num_p):
-            for k in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
-                for r in range(max(0, p - (sp_order+3) ), min(num_p, p + (sp_order+3))):
-
-                    k_min  = min(min(k_vec[p], k_vec[k]), k_vec[r])
-                    k_max  = max(k_vec[r + sp_order + 1] , max(k_vec[p + sp_order + 1], k_vec[k + sp_order + 1]))
-            
-                    qx_idx = np.logical_and(gmx_a >= k_min, gmx_a <= k_max)
-                    gmx    = gmx_a[qx_idx] 
-                    gmw    = gmw_a[qx_idx] 
-
-                    B_p_vr       =  B(gmx, p)
-                    DB_p_dvr     = DB(gmx, p, 1)
-                    DB_p_dvr_dvr = DB(gmx, p, 2)
-
-                    B_k_vr       =  B(gmx, k)
-                    DB_k_dvr     = DB(gmx, k, 1)
-                    DB_k_dvr_dvr = DB(gmx, k, 2)
-
-                    B_r_vr               =  B(gmx, r)
-                    DB_r_dvr             = DB(gmx, r, 1)
-                    DB_r_dvr_dvr         = DB(gmx, r, 2)
+        #             for idx in cc_terms.Ia_nz:
+        #                 if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+        #                     continue
+        #                 cc_mat_a[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ia(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr))
                     
-                    for idx in cc_terms.Ib_nz:
+        #             for idx in cc_terms.Ib_nz:
+        #                 if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
+        #                     continue
+        #                 cc_mat_b[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ib(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr))
                         
-                        if idx[0] > lmax or idx[1] > lmax or idx[2] > lmax:
-                            continue
-                    
-                        cc_mat_b[p * num_sh +  idx[0], k * num_sh + idx[1], r * num_sh +  idx[2]] = np.dot(gmw, cc_terms.Ib(B, DB, gmx, p, k, r, idx[0], idx[1], idx[2], B_p_vr, B_k_vr, B_r_vr, DB_p_dvr, DB_k_dvr, DB_r_dvr, DB_p_dvr_dvr, DB_k_dvr_dvr, DB_r_dvr_dvr)) 
-        
 
         return cc_mat_a, cc_mat_b
 

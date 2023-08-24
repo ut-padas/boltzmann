@@ -38,7 +38,7 @@ def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol 
         rhs_vec   = -res_func(h_prev)
         abs_error = np.linalg.norm(rhs_vec)
 
-        p       = np.linalg.lstsq(Lmat, rhs_vec, rcond=1e-16 /np.linalg.cond(Lmat))[0]
+        p      = np.linalg.solve(Lmat, rhs_vec) #np.linalg.lstsq(Lmat, rhs_vec, rcond=1e-16 /np.linalg.cond(Lmat))[0]
         p      = np.dot(Qmat,p)
 
         alpha  = 1e0

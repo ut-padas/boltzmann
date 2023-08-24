@@ -699,7 +699,6 @@ class Collisions(abc.ABC):
             x1 =       11.71
             return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
 
-        
     @abc.abstractmethod
     def get_cross_section_scaling():
         pass

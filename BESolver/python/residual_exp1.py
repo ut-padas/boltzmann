@@ -56,6 +56,7 @@ parser.add_argument("-sp_order", "--sp_order"                     , help="b-spli
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-EbyN", "--EbyN"                             , help="Effective electric field in Td", type=float, nargs='+', default=1)
 parser.add_argument("-E", "--E_field"                             , help="Electric field in V/m", type=float, default=100)
+parser.add_argument("-efield_freq", "--efield_freq"               , help="Oscillation freq in Hz", type=float, default=0.0)
 parser.add_argument("-efield_period", "--efield_period"           , help="Oscillation period in seconds", type=float, default=0.0)
 parser.add_argument("-num_tsamples", "--num_tsamples"             , help="number of samples to the time to collect QoIs", type=int, default=500)
 parser.add_argument("-steady", "--steady_state"                   , help="Steady state or transient", type=int, default=1)
@@ -75,7 +76,7 @@ parser.add_argument("-bolsig_grid_pts", "--bolsig_grid_pts"       , help="grid p
 
 args                = parser.parse_args()
 EbyN_Td             = np.logspace(np.log10(args.EbyN[0]), np.log10(args.EbyN[1]), int(args.EbyN[2]), base=10)
-e_values            = EbyN_Td * collisions.AR_NEUTRAL_N * 1e-21
+e_values            = EbyN_Td * args.n0 * 1e-21
 ion_deg_values      = np.array(args.ion_deg)
 
 if not args.ee_collisions:
@@ -87,6 +88,11 @@ run_params          = [(e_values[i], ion_deg_values[j]) for i in range(len(e_val
 for run_id in range(len(run_params)):
     args.E_field = run_params[run_id][0]
     args.ion_deg = run_params[run_id][1]
+    
+    if args.efield_freq !=0.0:
+        args.efield_period = 1/args.efield_freq
+    elif args.efield_period !=0.0:
+        args.efield_freq = 1/args.efield_period
 
     if args.ion_deg == 0:
         args.ee_collisions = 0
@@ -114,6 +120,9 @@ for run_id in range(len(run_params)):
 
     y         = np.array(r_data["bolsig_g2"])
     b_g2      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind, bounds_error=False, fill_value=0.0)
+    
+    y         = np.array(r_data["E(V/m)"])
+    b_Ef      = scipy.interpolate.interp1d(x,y,kind = interpolation_kind, bounds_error=False, fill_value=0.0)
 
 
     bte_solver = bte_0d3v.bte_0d3v(args)
@@ -180,8 +189,8 @@ for run_id in range(len(run_params)):
         ts_sol1     = bte_solver.transient_solver_time_harmonic_efield(args.T_END, dt , num_time_samples=args.num_tsamples, h_init = h_init)
         #ts_sol2      = bte_solver.time_harmonic_efield_with_series_ss_solves(args.efield_period, args.efield_period/128, num_time_samples = 128)
 
-        
-        ts_qoi_all[i]    = bte_solver.compute_QoIs(ts_sol1["sol"], ts_sol1["tgrid"], effective_mobility=False)
+        ts_qoi_all[i]        = bte_solver.compute_QoIs(ts_sol1["sol"], ts_sol1["tgrid"], effective_mobility=False)
+        ts_qoi_all[i]["ef"]  = E_field * np.cos(np.pi * 2 * ts_sol1["tgrid"] / args.efield_period)
         
         ts_ss_all[i]         = ts_sol1
         ss_sol               = dict()
@@ -191,6 +200,7 @@ for run_id in range(len(run_params)):
         c_gamma              = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
         ss_sol["mobility"]   = b_mu(ss_sol["energy"]) * E_field * np.cos(np.pi * 2 * ts_sol1["tgrid"] / args.efield_period)
         ss_sol["rates"]      = [b_g0(ss_sol["energy"]), b_g2(ss_sol["energy"])]
+        ss_sol["ef"]         = b_Ef(ss_sol["energy"])
         ts_qoi_all_ss[i]     = ss_sol
         #ts_ss_all_ss [i] = ts_sol2
 
@@ -240,7 +250,7 @@ for run_id in range(len(run_params)):
 
                 mu_L2 = normL2(np.abs(ts_qoi_all_ss[i]["energy"]   ) , np.abs(ts_qoi_all[i]["energy"]  ) , ts_sol1["tgrid"])
                 M_L2  = normL2(np.abs(ts_qoi_all_ss[i]["mobility"] ) , np.abs(ts_qoi_all[i]["mobility"]) , ts_sol1["tgrid"])
-                data = [args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.E_field, args.ion_deg, dt, args.T_END, args.sweep_values[i], mu_L2, M_L2]
+                data = [args.E_field/args.n0/1e-21, args.E_field, args.ion_deg, dt, args.T_END, args.sweep_values[i], mu_L2, M_L2]
 
                 rr_ss         = ts_qoi_all_ss[i]["rates"]
                 rr            = ts_qoi_all[i]["rates"]
@@ -311,9 +321,9 @@ for run_id in range(len(run_params)):
             dt       = args.T_DT / (1<<(1 * i ))
 
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
-            plt.semilogy(tgrid1,  qois1["energy"], '-', label ="transient"   , color=color)
-            plt.semilogy(tgrid2,  qois2["energy"], '--*b', label="steady-state", markersize=1)
-            plt.ylabel(r"energy (ev)")
+            plt.plot(tgrid1,  qois1["ef"], '-', label ="transient"   , color=color)
+            plt.plot(tgrid2,  qois2["ef"], '--*b', label="steady-state", markersize=1)
+            plt.ylabel(r"E (V/m)")
             plt.xlabel(r"time (s)")
             plt.title("Nr = %d dt =%.4E"%(value, dt))
             plt.grid(visible=True)
@@ -344,9 +354,9 @@ for run_id in range(len(run_params)):
         
             plt_idx+= 2 + len(args.collisions)
         
-        fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/collisions.AR_NEUTRAL_N/1e-21, args.ion_deg, args.Tg, collisions.AR_NEUTRAL_N))
+        fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/args.n0/1e-21, args.ion_deg, args.Tg, args.n0))
 
-        plt.savefig("rs_" + "_".join(args.collisions) + "_E%.2E"%(args.E_field/collisions.AR_NEUTRAL_N/1e-21) + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+ "Ep%.2E"%(args.efield_period) +".svg")
+        plt.savefig("rs_" + "_".join(args.collisions) + "_E%.2E"%(args.E_field/args.n0/1e-21) + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+ "Ep%.2E"%(args.efield_period) +".svg")
 
         plt.close()
 

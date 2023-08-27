@@ -403,20 +403,14 @@ class bte_0d3v_batched():
         profile_tt[pp.D2H].stop()
         return
     
-    def steady_state_solve(self, grid_idx : int, f0 : np.array, rtol, atol, max_iter):
-        
-        xp           = cp#cp.get_array_module(f0)
-        xp.cuda.runtime.deviceSynchronize()
-        
-        profile_tt[pp.SOLVE].start()
+    def get_rhs_and_jacobian(self, grid_idx: int, n_pts:int, num_streams=8):
         
         args         = self._args
-        n_pts        = f0.shape[1]
+        xp           = cp
         eps_0        = scipy.constants.epsilon_0
         me           = scipy.constants.electron_mass
         qe           = scipy.constants.e
         
-        num_streams  = 8
         gpu_streams  = [xp.cuda.Stream() for i in range(num_streams)]
         
         n0           = self._par_bte_params[grid_idx]["n0"]
@@ -464,30 +458,81 @@ class bte_0d3v_batched():
             QT_Cgt     = xp.dot(QTmat, c_gT)
             QT_A       = xp.dot(QTmat, adv_mat)
             
+            res_ga     = xp.empty((n_pts))
+            res_a1     = xp.empty((QTmat.shape[0], n_pts))
+            res_a2     = xp.empty((QTmat.shape[0], n_pts))
+            res_a3     = xp.empty((QTmat.shape[0], n_pts))
+            res_a4     = xp.empty((QTmat.shape[0], n_pts))
+            
+            res_mu     = xp.empty((n_pts))
+            c_ee_x     = xp.empty((QTmat.shape[1], QTmat.shape[1], n_pts))
+            c_ee_xx    = xp.empty((n_pts, QTmat.shape[1]))
+            
+            vdof       = QTmat.shape[1]
+            
             def res_func(x):
+                xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].start()
-                ga            = ne * gamma_a(x)
-                y             = n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) ) + ef * xp.dot(QT_A,x) - n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
-                c_ee_x        = xp.dot(c_ee, x) 
+                xp.multiply(ne, gamma_a(x), res_ga)
+                xp.dot(QT_Cen , x , res_a1)
+                xp.dot(QT_Cgt , x , res_a2)
+                xp.dot(QT_A   , x , res_a3)
+                xp.dot(Wmat   , x , res_mu)
+                xp.dot(QTmat  , x , res_a4)
+                
+                @cp.fuse()
+                def kern1():
+                    return n0 * ( res_a1 + Tg * res_a2 ) + ef * res_a3 - n0 * res_mu *  res_a4
+                
+                y1 = kern1()
+                #y             = n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) ) + ef * xp.dot(QT_A,x) - n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
+                
+                xp.dot(c_ee, x, c_ee_x)
+                t1 = xp.swapaxes(c_ee_x, 0, 2)
+                t1 = xp.swapaxes(t1, 1, 2)
+                t2 = xp.transpose(x)
+                #t3 = xp.transpose(y1)
                 for ii in range(n_pts):
                     with (gpu_streams[ii % (num_streams)]):
-                        y[:,ii] += ga[ii] * xp.dot(QTmat, xp.dot(c_ee_x[:,:,ii], x[:,ii]))
-                
+                        xp.dot(t1[ii, :, :], t2[ii,:], c_ee_xx[ii, :])
+                        #t3[ii,:] += res_ga[ii] * xp.dot(QTmat, xp.dot(t1[ii,:,:], t2[ii,:])) 
+                        
+                        
                 for i in range(num_streams):
                     gpu_streams[i].synchronize()
                     
+                xp.dot(QTmat, xp.transpose(c_ee_xx), res_a2)
+                xp.multiply(res_a2, res_ga, res_a3)
+                
+                y1 = y1 + res_a3
+                #y1=xp.transpose(t3)
+                    
                 xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].stop()
-                return y
+                return y1
             
             QT_Cen_Q     = xp.dot(QTmat, xp.dot(c_en, Qmat))
             QT_Cgt_Q     = xp.dot(QTmat, xp.dot(c_gT, Qmat))
             QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
             Imat         = xp.eye(QTmat.shape[0])
             Lmat         = xp.empty((QTmat.shape[0], QTmat.shape[0], n_pts))
+            Lmat_pre     = xp.empty((QTmat.shape[0], QTmat.shape[0], n_pts))
+            
+            for ii in range(n_pts):
+                with (gpu_streams[ii % (num_streams)]):
+                    @cp.fuse()
+                    def kern1():
+                        return n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q 
                 
+                    Lmat_pre[:,:, ii] = kern1()
+            
+            for i in range(num_streams):
+                gpu_streams[i].synchronize()
+            
+            xp.cuda.runtime.deviceSynchronize()
             
             def jac_func(x):
+                xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.JAC_EVAL].start()
                 ga           = ne * gamma_a(x)
                 cc1_x_p_cc2x = xp.dot(cc_op_l1, x) + xp.dot(cc_op_l2, x)
@@ -495,7 +540,13 @@ class bte_0d3v_batched():
                 
                 for ii in range(n_pts):
                     with (gpu_streams[ii % (num_streams)]):
-                        Lmat[:,:,ii] = n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q +  ga[ii] * xp.dot(QTmat, xp.dot(cc1_x_p_cc2x[:,:,ii], Qmat)) - Imat * mu[ii]
+                        a1 = xp.dot(QTmat, xp.dot(cc1_x_p_cc2x[:,:,ii], Qmat))
+                        @cp.fuse()
+                        def kern1():
+                            return Lmat_pre[:,:,ii] +  ga[ii] * a1 - Imat * mu[ii]
+                        
+                        Lmat[:,:,ii]  = kern1()
+                        #Lmat[:,:,ii] = n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q +  ga[ii] * xp.dot(QTmat, xp.dot(cc1_x_p_cc2x[:,:,ii], Qmat)) - Imat * mu[ii]
                         
                     
                 for i in range(num_streams):
@@ -538,7 +589,87 @@ class bte_0d3v_batched():
                 xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.JAC_EVAL].stop()
                 return Lmat
+            
+        return res_func, jac_func
+    
+    def rhs_and_jac_flops(self):
+        args = self._args
+        if args.ee_collisions==1:
+            def res_flops(n, p):
+                m0 = p * (2 * n -1) * 2 + p                                     # ne * gamma_a(x)
+                m1 = (n-1) * p * (2 * n -1)                                     # xp.dot(QT_Cen,x)
+                m2 = (n-1) * p * (2 * n -1) + (n-1) * p                         # Tg * xp.dot(QT_Cgt, x)
+                m3 = (n-1) * p * 2                                              # n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) )
+                m4 = (n-1) * p * (2 * n -1) + (n-1) * p                         # ef * xp.dot(QT_A,x)
+                m5 = p * (2 * n -1) + p + (n-1) * p * (2 * n - 1)  + (n-1) * p  # n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
+                m6 = n * n * p * (2 * n -1)                                     # c_ee_x  = xp.dot(c_ee, x) 
+                m7 = p * (n * (2 * n -1) + (n-1) * (2 * n - 1)  + (n-1))        # ga[ii] * xp.dot(QTmat, xp.dot(c_ee_x[:,:,ii], x[:,ii]))
+                return m0 + m1 + m2 + m3 + m4 + m5 + m6 + m7
+            
+            def jac_flops(n,p):
+                m0 = p * (2 * n -1) * 2 + p # ne * gamma_a(x)
+                m1 = n * n * p * (2 * n - 1) * 2 + n * n * p #cc1_x_p_cc2x = xp.dot(cc_op_l1, x) + xp.dot(cc_op_l2, x)
+                m2 = p * (2 *n -1) + p # mu           = n0 * xp.dot(Wmat, x)
+                m3 = p * ((n-1) * (n-1) * 6)  # n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q +
+                m4 = p * ( 2 * n * (n-1) * (2 * n -1)  + (n-1) * (n-1))  # ga[ii] * xp.dot(QTmat, xp.dot(cc1_x_p_cc2x[:,:,ii], Qmat))
+                m5 = p * (n-1) * (n-1) # Imat * mu[ii]
+                return m0 + m1 + m2 + m3 + m4 + m5
+        else:
+            def res_flops(n, p):
+                m1 = (n-1) * p * (2 * n -1) # xp.dot(QT_Cen,x)
+                m2 = (n-1) * p * (2 * n -1) + (n-1) * p # Tg * xp.dot(QT_Cgt, x)
+                m3 = (n-1) * p # n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) )
+                m4 = (n-1) * p * (2 * n -1) + (n-1) * p   # ef * xp.dot(QT_A,x)
+                m5 = p * (2 * n -1) + p + (n-1) * p * (2 * n - 1) + (n-1) * p # n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
+                return m1 + m2 + m3 + m4 + m5
+            
+            def jac_flops(n,p):
+                m2 = p * (2 *n -1) + p # mu           = n0 * xp.dot(Wmat, x)
+                m3 = p * ((n-1) * (n-1) * 6)  # n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q +
+                m5 = p * (n-1) * (n-1) # Imat * mu[ii]
+                return m2 + m3 + m5
         
+        return res_flops, jac_flops
+            
+        
+    def steady_state_solve(self, grid_idx : int, f0 : np.array, rtol, atol, max_iter):
+        
+        xp           = cp#cp.get_array_module(f0)
+        xp.cuda.runtime.deviceSynchronize()
+        
+        profile_tt[pp.SOLVE].start()
+        
+        n_pts        = f0.shape[1]
+        n0           = self._par_bte_params[grid_idx]["n0"]
+        ne           = self._par_bte_params[grid_idx]["ne"]
+        ni           = self._par_bte_params[grid_idx]["ni"]
+        Tg           = self._par_bte_params[grid_idx]["Tg"]
+        ef           = self._par_bte_params[grid_idx]["ef"]
+        
+        vth          = self._par_vth[grid_idx]
+        mw           = bte_utils.get_maxwellian_3d(vth, 1)
+        Mop          = self._op_mass[grid_idx].reshape((1,-1))
+        Top          = self._op_temp[grid_idx].reshape((1,-1)) * collisions.TEMP_K_1EV
+
+        Qmat         = self._op_qmat[grid_idx]
+        Rmat         = self._op_rmat[grid_idx]
+        QTmat        = xp.transpose(self._op_qmat[grid_idx])
+        
+        c_en         = self._op_col_en[grid_idx]
+        c_gT         = self._op_col_gT[grid_idx]
+        c_ee         = self._op_col_ee[grid_idx]
+        adv_mat      = self._op_advection[grid_idx]
+        qA           = self._op_diag_dg[grid_idx]
+        
+        mm_op        = self._op_mass[grid_idx] * mw(0) * vth**3
+        u            = mm_op
+        u            = xp.dot(xp.transpose(mm_op),qA)
+        Wmat         = xp.dot(u, c_en)
+        
+        num_streams  = 2
+        gpu_streams  = [xp.cuda.Stream() for i in range(num_streams)]
+        
+        res_func, jac_func = self.get_rhs_and_jacobian(grid_idx, n_pts, num_streams)
         
         abs_error       = np.ones(n_pts)
         rel_error       = np.ones(n_pts) 
@@ -683,10 +814,23 @@ class bte_0d3v_batched():
         return output
     
     def profile_stats(self):
+        args = self._args
+        res_flops, jac_flops = self.rhs_and_jac_flops()
+        n                    = (args.l_max + 1) * (args.Nr + 1) 
+        p                    = args.n_pts
+        
+        
         print("--setup\t %.4Es"%(profile_tt[pp.SETUP].seconds))
         print("   |electon-X \t %.4Es"%(profile_tt[pp.C_EN_SETUP].seconds))
         print("   |coulombic \t %.4Es"%(profile_tt[pp.C_EE_SETUP].seconds))
         print("   |advection \t %.4Es"%(profile_tt[pp.ADV_SETUP].seconds))
         print("--solve \t %.4Es"%(profile_tt[pp.SOLVE].seconds))
         print("   |rhs \t %.4Es"%(profile_tt[pp.RHS_EVAL].seconds))
+        
+        t1      = profile_tt[pp.RHS_EVAL].seconds/profile_tt[pp.RHS_EVAL].iter
+        flops   = res_flops(n, p) / t1
+        print("   |rhs/call \t %.4Es flops = %.4E"%(t1, flops))
+        t1      = profile_tt[pp.JAC_EVAL].seconds/profile_tt[pp.JAC_EVAL].iter
+        flops   = res_flops(n, p) / t1
         print("   |jacobian \t %.4Es"%(profile_tt[pp.JAC_EVAL].seconds))
+        print("   |jacobian/call \t %.4Es flops = %.4E"%(t1, flops))

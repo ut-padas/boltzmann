@@ -22,6 +22,7 @@ from   bte_0d3v_batched import bte_0d3v_batched
 import cupy as cp
 import matplotlib.pyplot as plt
 import csv
+import sys
 
 
 plt.rcParams.update({
@@ -45,6 +46,9 @@ parser.add_argument("-max_iter", "--max_iter"                     , help="max nu
 parser.add_argument("-Tg", "--Tg"                                 , help="gas temperature (K)" , type=float, default=0.0)
 parser.add_argument("-n0", "--n0"                                 , help="heavy density (1/m^3)" , type=float, default=3.22e22)
 parser.add_argument("-Nr", "--Nr"                                 , help="radial refinement", type=int, default=128)
+parser.add_argument("-profile", "--profile"                       , help="profile", type=int, default=0)
+parser.add_argument("-warm_up", "--warm_up"                       , help="warm up", type=int, default=5)
+parser.add_argument("-runs", "--runs"                             , help="runs "  , type=int, default=10)
 parser.add_argument("-n_pts", "--n_pts"                           , help="number of points for batched solver", type=int, default=10)
 parser.add_argument("-store_eedf", "--store_eedf"                 , help="store EEDF"          , type=int, default=0)
 parser.add_argument("-store_csv", "--store_csv"                   , help="store csv format of QoI comparisons", type=int, default=1)
@@ -78,6 +82,21 @@ f0         = bte_solver.initialize(0, n_pts,"maxwellian")
 bte_solver.set_boltzmann_parameters(0, n0, ne, ni, ef, Tg)
 bte_solver.host_to_device_setup(0)
 f0       = cp.asarray(f0)
+
+if args.profile==1:
+    res_func, jac_func = bte_solver.get_rhs_and_jacobian(0, f0.shape[1], 16)
+    for i in range(args.warm_up):
+        a=res_func(f0)
+        b=jac_func(f0)
+    
+    bte_solver.profile_reset()
+    for i in range(args.runs):
+        a=res_func(f0)
+        b=jac_func(f0)
+    
+    bte_solver.profile_stats()
+    sys.exit(0)
+
 ff , qoi = bte_solver.steady_state_solve(0, f0, 1e-15, 1e-10, args.max_iter)
 ev       = np.linspace(1e-3, bte_solver._par_ev_range[0][1], 500)
 ff_r     = bte_solver.compute_radial_components(0, ev, ff)

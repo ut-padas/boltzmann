@@ -6,7 +6,7 @@ import numpy as np
 import scipy.constants 
 import argparse
 import matplotlib.pyplot as plt
-
+import sys
 class params():
   """
   simple class to hold 1d glow discharge parameters
@@ -33,6 +33,7 @@ class params():
     
     # non-dimensionalized transport coefficients
     
+    self.n0    /=self.np0
     self.De    *= self.tau/self.L**2 
     self.mu_e  *= self.V0 * self.tau/self.L**2 
     self.Di    *= self.tau/self.L**2 
@@ -40,12 +41,13 @@ class params():
     self.ks    *= self.tau/self.L
     
     self.Teb   = 0.5                       # eV
-    self.Hi    = 15.76                     # eV
+    self.Hi    = 15.76                 # eV
+    #self.qe    = 0.0
     self.gamma = 0.01
     self.alpha = self.np0 * self.L**2 * self.qe / self.eps0 / self.V0
     
-    self.ki    = lambda Te : 1.235e-12 * np.exp(-18.687 / Te) # m^{-3} s^{-1}
-    self.ki_Te = lambda Te : 1.235e-12 * np.exp(-18.687 / Te) * (18.687/Te**2)
+    self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / Te)   
+    self.ki_Te = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / Te)  * (18.687/Te**2)  
     
 class Glow1D():
     def __init__(self, args) -> None:
@@ -123,8 +125,8 @@ class Glow1D():
       Uin     = xp.ones((self.Np, self.Nv))
       
       if type==0:
-        Uin[:, ele_idx] = 1e-3
-        Uin[:, ion_idx] = 1e-3 
+        Uin[:, ele_idx] = 1e-4
+        Uin[:, ion_idx] = 1e-4 
         Uin[:, Te_idx]  = self.param.Teb
         
         self.mu[:, ele_idx] = self.param.mu_e
@@ -195,14 +197,12 @@ class Glow1D():
       
       for sp_idx in range(self.Ns):
         FUin[:,sp_idx] = ki * self.param.n0 * ne - fluxJ_x[:,sp_idx]
-        
+      
       Je      = fluxJ[:,ele_idx]
       qe      = -(1.5) * De * ne * Te_x + (2.5) * Te * Je
       qe_x    = xp.dot(self.Dp, qe)
       
-      
-      FUin[1:-1,Te_idx]   = -(2./(3 * ne[1:-1])) * qe_x[1:-1] - (2 * scipy.constants.e / (3 * ne[1:-1])) * (Je[1:-1] * E[1:-1]) - (2/3) * self.param.Hi * ki[1:-1] * self.param.n0 - (Te[1:-1]/ne[1:-1]) * (FUin[1:-1,ele_idx])
-      
+      FUin[1:-1,Te_idx]   = -(2./(3 * ne[1:-1])) * qe_x[1:-1] - (2 * self.param.qe / (3 * ne[1:-1])) * (Je[1:-1] * E[1:-1]) - (2/3) * self.param.Hi * ki[1:-1] * self.param.n0 - (Te[1:-1]/ne[1:-1]) * (FUin[1:-1,ele_idx])
       return FUin  
     
     def rhs_jacobian(self, Uin: np.array, time, dt):
@@ -231,67 +231,102 @@ class Glow1D():
       Nv      = self.Nv
       
       Imat    = xp.eye(Np)
-      ki      = self.param.ki(Te)  
+      Imat[0,0] = Imat[-1,-1] = 0
+
+      phi_ni =  np.linalg.solve(self.LpD, -self.param.alpha*Imat)
+      phi_ne = -phi_ni
+      
+      Imat[0,0] = Imat[-1,-1] = 1.0
+      
+      E_ni    = -xp.dot(self.Dp, phi_ni)
+      E_ne    = -xp.dot(self.Dp, phi_ne)
+      
+      ki      = self.param.ki(Te)
+      ki_Te   = self.param.ki_Te(Te)  
       
       phi     = self.solve_poisson(ne, ni, time)
       E       = -xp.dot(self.Dp, phi)
       
-      Rne_ne  = ki * self.param.n0 * Imat - self.Zp[ele_idx] * xp.dot(self.Dp, mu_e * E) * Imat -self.Zp[ele_idx] * mu_e * E * self.Dp + De * self.Lp + xp.dot(self.Dp, De) * self.Dp
-      Rne_ni  = xp.zeros((self.Np, self.Np))
-      Rne_Te  = self.param.ki_Te(Te) * self.param.n0 * ne * Imat 
+      ne_x     = xp.dot(self.Dp, ne)
+      ni_x     = xp.dot(self.Dp, ni)
       
-      Rne_ne[0,0]   = -self.param.ks
-      Rne_ne[-1,-1] = self.param.ks
+      Js_nk    = xp.zeros((self.Ns, self.Ns, self.Np, self.Np))
       
-      Rne_ni[0  , 0]   = -self.param.gamma * self.mu[0,ion_idx] * E[0]
-      Rne_ni[-1 , -1]  = -self.param.gamma * self.mu[-1,ion_idx] * E[-1]
+      for i in range(self.Ns):
+        if i == ele_idx:
+          Js_nk[i,i] = self.Zp[i] * self.mu[:,i] * (E * Imat + Uin[:,i] * E_ne) - self.D[:,i] * self.Dp
+        elif i == ion_idx:
+          Js_nk[i,i] = self.Zp[i] * self.mu[:,i] * (E * Imat + Uin[:,i] * E_ni) - self.D[:,i] * self.Dp
+        else:
+          Js_nk[i,i] = self.Zp[i] * self.mu[:,i] * (E * Imat) - self.D[:,i] * self.Dp
+          
+      Js_nk[ele_idx, ion_idx] = self.Zp[ele_idx] * self.mu[:,ele_idx] * Uin[:,ele_idx] * E_ni 
+      Js_nk[ion_idx, ele_idx] = self.Zp[ion_idx] * self.mu[:,ion_idx] * Uin[:,ion_idx] * E_ne
       
-      Rne_Te[0,0]      = 0
-      Rne_Te[-1,-1]    = 0
       
-      Rni_ni         = - self.Zp[ion_idx] * xp.dot(self.Dp, mu_i * E) * Imat -self.Zp[ion_idx] * mu_i * E * self.Dp + Di * self.Lp + xp.dot(self.Dp, Di) * self.Dp
-      Rni_ne         = ki * self.param.n0 * Imat
-      Rni_Te         = self.param.ki_Te(Te) * self.param.n0 * ne * Imat 
+      Je_ne        = Js_nk[ele_idx,ele_idx]
+      Je_ne[0,0]   = -self.param.ks - self.param.gamma * mu_i[0]   * ni[0]   * E_ne[0 , 0]
+      Je_ne[0,1:]  = -self.param.gamma * mu_i[0]   * ni[0]   * E_ne[0 , 1:]
       
-      Rni_ni[0 , 0]  = self.Zp[ion_idx] * mu_i[0] * E[0]
-      Rni_ni[-1,-1]  = self.Zp[ion_idx] * mu_i[-1] * E[-1]
+      Je_ne[-1,-1] =  self.param.ks - self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1,-1]  
+      Je_ne[-1,1:] = -self.param.gamma * mu_i[-1]   * ni[-1] * E_ne[-1 , 1:]
       
-      Rni_ne[0 , 0]  = 0
-      Rni_ne[-1,-1]  = 0
+      Je_ni        = Js_nk[ele_idx,ion_idx]
+      Je_ni[0,0]   = - self.param.gamma * mu_i[0]   * (ni[0]   * E_ni[0 , 0] + E[0])
+      Je_ni[0,1:]  = - self.param.gamma * mu_i[0]   * (ni[0]   * E_ni[0 , 1:])
+          
+      Je_ni[-1,-1] = - self.param.gamma * mu_i[-1]  * (ni[-1]  * E_ni[-1 ,-1] + E[-1])
+      Je_ni[-1,1:] = - self.param.gamma * mu_i[-1]  * (ni[-1]  * E_ni[-1 , 1:]) 
       
-      Rni_Te[0,0]    = 0
-      Rni_Te[-1,-1]  = 0
       
-      ne_x       = xp.dot(self.Dp, ne)
-      fluxJe     = self.Zp[ele_idx] * mu_e * ne * E - De * ne_x
-      fluxJe[0 ] = -self.param.ks * ne[0]   - self.param.gamma * mu_i[0 ] * ni[0]  * E[0]
-      fluxJe[-1] = self.param.ks  * ne[-1]  - self.param.gamma * mu_i[-1] * ni[-1] * E[-1]
+      Ji_ni        = Js_nk[ion_idx, ion_idx]
+      Ji_ni[0,0]   = mu_i[0]  * (ni[0]  * E_ni[0,0]   + E[0])
+      Ji_ni[0,1:]  = mu_i[0]  * (ni[0]  * E_ni[0,1:])
       
-      fluxJe_x = xp.dot(self.Dp, fluxJe)
+      Ji_ni[-1,-1] = mu_i[-1] * (ni[-1] * E_ni[-1,-1] + E[-1])
+      Ji_ni[-1,1:] = mu_i[-1] * (ni[-1] * E_ni[-1,1:])
+      
+      Ji_ne        = Js_nk[ion_idx, ele_idx]
+      Ji_ne[0,:]   = mu_i[0]  * ni[0]  * E_ne[0 , :]
+      Ji_ne[-1,:]  = mu_i[-1] * ni[-1] * E_ne[-1, :]
+      
+      Je_x_ne = xp.dot(self.Dp, Je_ne)
+      Je_x_ni = xp.dot(self.Dp, Je_ni)
+      
+      Ji_x_ni = xp.dot(self.Dp, Ji_ni)
+      Ji_x_ne = xp.dot(self.Dp, Ji_ne)
+      
+      Rne_ne  = ki * self.param.n0 * Imat - Je_x_ne
+      Rne_ni  = -Je_x_ni
+      Rne_Te  = ki_Te * self.param.n0 * ne * Imat 
+      
+      Rni_ni  = -Ji_x_ni
+      Rni_ne  = ki * self.param.n0 * Imat -Ji_x_ne
+      Rni_Te  = ki_Te * self.param.n0 * ne * Imat 
+      
+      Je      = self.Zp[ele_idx] * mu_e * ne * E - De * ne_x
+      Je[0 ]  = -self.param.ks * ne[0]   - self.param.gamma * mu_i[0 ] * ni[0]  * E[0]
+      Je[-1]  = self.param.ks  * ne[-1]  - self.param.gamma * mu_i[-1] * ni[-1] * E[-1]
+      
+      Je_x     = xp.dot(self.Dp, Je)
       Te_x     = xp.dot(self.Dp, Te)
       ki       = self.param.ki(Te)  
       
-      Rne      = ki * self.param.n0 * ne - fluxJe_x
-      Je       = fluxJe
-      
-      Je_x_ne  = self.Zp[ele_idx] * xp.dot(self.Dp, mu_e * E) * Imat + self.Zp[ele_idx] * mu_e * E * self.Dp - De * self.Lp -xp.dot(self.Dp, De) * self.Dp
-      Je_x_ne[0,0]   = -self.param.ks
-      Je_x_ne[-1,-1] = self.param.ks
+      Rne      = ki * self.param.n0 * ne - Je_x
       
       qe      = -(1.5) * De * ne * Te_x + (2.5) * Te * Je
       qe_x    = xp.dot(self.Dp, qe)
       
-      qe_x_Te = (-1.5 * De * ne * self.Lp -1.5 * xp.dot(self.Dp, De * ne) * self.Dp + 2.5 * Je * self.Dp + 2.5 * xp.dot(self.Dp, Je) *Imat )
-      
-      qe_x_ne = -1.5 * xp.dot(self.Lp, Te) * De * Imat - 1.5 * xp.dot(self.Dp, Te) * (De * self.Dp + Imat * xp.dot(self.Dp, De)) + 2.5 * xp.dot(self.Dp, Te) * (self.Zp[ele_idx] * mu_e * E * Imat - De * self.Dp) + 2.5 * Te * Je_x_ne
+      qe_x_ne = -1.5 * xp.dot(self.Lp, Te) * De * Imat -1.5 * xp.dot(self.Dp, Te) * (De * self.Dp + Imat * xp.dot(self.Dp, De)) + 2.5 * xp.dot(self.Dp, Te) * Je_ne + 2.5 * Te * Je_x_ne
+      qe_x_Te = -1.5 * De * ne * self.Lp - 1.5 * xp.dot(self.Dp, De * ne) * self.Dp + 2.5 * Je * self.Dp + 2.5 * Je_x * Imat
       
       
       JeE_ne       = self.Zp[ele_idx] * mu_e * E**2 * Imat - De * E * self.Dp
-      JeE_ne[0,0]  = -self.param.ks * E[0]
-      JeE_ne[-1,1] = self.param.ks  * E[-1]
+      JeE_ne[0,0]  = -self.param.ks * E[0]  * self.Dp[0,0]
+      JeE_ne[-1,1] = self.param.ks  * E[-1] * self.Dp[-1,-1]
       
-      RTe_Te  = (-2/3/ne) * qe_x_Te  -(2/3) * self.param.Hi * self.param.n0 * self.param.ki_Te(Te) * Imat - (Rne/ne) * Imat - (Te/ne) * Rne_Te
-      RTe_ne  = (-2/3/ne) * qe_x_ne + qe_x * (2/3/ne**2) * Imat -(2/3/ne) * scipy.constants.e * JeE_ne + Je * E * (2 * scipy.constants.e/3/ne**2) - (Te/ne) * Rne_ne + (Te * Rne/ne**2) * Imat
+      RTe_Te  = (-2/3/ne) * qe_x_Te  -(2/3) * self.param.Hi * self.param.n0 * ki_Te * Imat - (Rne/ne) * Imat - (Te/ne) * Rne_Te
+      RTe_ne  = (-2/3/ne) * qe_x_ne + qe_x * (2/3/ne**2) * Imat -(2/3) * (self.param.qe/ne) * JeE_ne + (2/3)* (Je * E) * (self.param.qe/ne**2) - (Te/ne) * Rne_ne + (Te * Rne/ne**2) * Imat
       
       RTe_Te[0  , :] = 0
       RTe_Te[-1 , :] = 0
@@ -308,7 +343,7 @@ class Glow1D():
       jac[ion_idx :: self.Nv , Te_idx  :: self.Nv] = Rni_Te
       
       jac[Te_idx :: self.Nv , Te_idx  :: self.Nv]  = RTe_Te
-      jac[Te_idx :: self.Nv , ele_idx :: self.Nv]  = RTe_ne
+      jac[Te_idx :: self.Nv , ele_idx :: self.Nv]  = RTe_ne 
       
       
       return jac
@@ -325,13 +360,27 @@ class Glow1D():
       # perturb each component of Uin to form finite differenc approx
       for j in range(0, self.Np):
         for i in range(0, self.Nv):
-          dU = max(xp.sqrt(xp.finfo(np.float64).eps)*xp.absolute(Uin[j,i]), xp.sqrt(xp.finfo(xp.float64).eps))
+          dU = max(xp.finfo(np.float64).eps*xp.absolute(Uin[j,i]), xp.finfo(xp.float64).eps)
           Up = np.copy(Uin)
           Up[j,i] +=dU
           rp = self.rhs(Up, time, dt).reshape((-1))
           jac[j * self.Nv + i , :] = (rp - r0)/dU  
       
-       #print(jac)
+      #  #print(jac)
+      # R_Te = xp.zeros((self.Np, self.Np))
+      # for j in range(0, self.Np):
+      #   dU      = max(xp.sqrt(xp.finfo(np.float64).eps)*xp.absolute(Uin[j,2]), xp.sqrt(xp.finfo(xp.float64).eps))
+      #   Up      = np.copy(Uin)
+      #   Up[j,2] +=dU
+      #   rp = self.rhs(Up, time, dt).reshape((-1))
+        
+      #   w=(rp - r0)/dU  
+      #   R_Te[j,:] = w[2::self.Nv]
+      
+      # jac[2::self.Nv, 2::self.Nv] = R_Te
+      
+      
+      
       return jac
       
     def solve_poisson(self, ne, ni,time):
@@ -353,8 +402,9 @@ class Glow1D():
     def solve(self, Uin, ts_type):
       xp = self.xp_module
       if ts_type == "RK2":
-        dt              = self.args.cfl * xp.min(self.xp[1:] - self.xp[0:-1])
-        tT              = (1/self.param.f) * self.args.cycles
+        dx              = xp.min(self.xp[1:] - self.xp[0:-1])
+        dt              = self.args.cfl * dx
+        tT              = 1.0 * self.args.cycles
         steps           = max(1,int(tT/dt))
         u               = xp.copy(Uin)
         
@@ -373,9 +423,10 @@ class Glow1D():
 
         return u
       elif ts_type == "RK4":
-        dt              = self.args.cfl * xp.min(self.xp[1:] - self.xp[0:-1])
-        tT              = (1/self.param.f) * self.args.cycles
-        steps           = int(tT/dt)
+        dx              = xp.min(self.xp[1:] - self.xp[0:-1])
+        dt              = self.args.cfl * dx
+        tT              = 1.0 * self.args.cycles
+        steps           = max(1,int(tT/dt))
         u               = xp.copy(Uin)
         tt              = 0
         
@@ -394,23 +445,70 @@ class Glow1D():
           tt+=dt
         return u 
       elif ts_type == "BE":
-        dt              = self.args.cfl * xp.min(self.xp[1:] - self.xp[0:-1])
-        tT              = (1/self.param.f) * self.args.cycles
-        steps           = max(int(tT/dt),1)
+        dx              = xp.min(self.xp[1:] - self.xp[0:-1])
+        dt              = self.args.cfl * dx
+        tT              = self.args.cycles
+        steps           = max(1,int(tT/dt))
         u               = xp.copy(Uin)
+        Imat            = xp.eye(u.shape[0] * u.shape[1])
+        rtol            = self.args.rtol
+        atol            = self.args.atol
+        iter_max        = self.args.max_iter
         
-        print(tT, dt, steps)
+        print("++++ Using backward Euler ++++")
+        print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
+        
+        # jac= self.rhs_jacobian(u, 0, dt)
+        # jac1= self.rhs_jacobian_FD(u, 0, dt)
+        # print("jac")
+        # print(jac[0::self.Nv, 0::self.Nv])
+        # print("FD jac")
+        # print(jac1[0::self.Nv, 0::self.Nv])
+        # sys.exit(-1)
+        
+        def residual(u, du, time, dt):
+          return du - dt * self.rhs(u + du, time + dt, dt)
+        
+        def jacobian(u, time, dt):
+          return Imat - dt * self.rhs_jacobian(u, time, dt)
         
         tt              = 0
         Imat            = xp.eye(self.Np * self.Nv)
         for ts_idx in range(steps):
-          if ts_idx % 1000 == 0:
-            print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+          du       = xp.zeros_like(u)
+          r0       = residual(u, du, tt, dt).reshape(-1)  
+          jac      = jacobian(u, tt, dt)
+          norm_r0  = xp.linalg.norm(r0)
           
-          r0  = dt * self.rhs(u,tt,dt).reshape(-1)  
+          norm_rr  = norm_r0 = np.linalg.norm(r0)
+          count    = 0
+          
+          
+          converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
+          while( not converged and (count < iter_max) ):
+            rr       = residual(u, du, tt, dt).reshape(-1)
+            norm_rr  = xp.linalg.norm(rr)
+            du       += xp.linalg.solve(jac, -rr).reshape((self.Np, self.Nv))
+            count += 1
+            if count%1000==0:
+              print("{0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
+            converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
+          
+          if ts_idx % 10 == 0:
+            print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+            print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
+            
+          if (not converged):
+            # if non-convergence encountered, save state and die
+            print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
+            print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
+            sys.exit(-1)
+            
           #print(self.rhs_jacobian(u, tt, dt))
-          jac = Imat - dt * self.rhs_jacobian(u, tt, dt)
-          du  = np.linalg.solve(jac,r0).reshape((self.Np, self.Nv))
+          #jac = Imat - dt * self.rhs_jacobian(u, tt, dt)
+          #print("cond = ",np.linalg.cond(jac))
+          #du  = np.linalg.solve(jac,r0).reshape((self.Np, self.Nv))
+          #print(du[:,self.Te_idx])
           u   = u + du
           tt+=dt
         return u  
@@ -461,8 +559,11 @@ parser.add_argument("-Ns", "--Ns"                       , help="number of specie
 parser.add_argument("-NT", "--NT"                       , help="number of temperatures" , type=int, default=1)
 parser.add_argument("-Np", "--Np"                       , help="number of collocation points" , type=int, default=100)
 parser.add_argument("-cfl", "--cfl"                     , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
-parser.add_argument("-cycles", "--cycles"               , help="number of cycles to run" , type=int, default=10)
-parser.add_argument("-ts_mode", "--ts_mode"             , help="ts mode" , type=str, default="RK4")
+parser.add_argument("-cycles", "--cycles"               , help="number of cycles to run" , type=float, default=10)
+parser.add_argument("-ts_mode", "--ts_mode"             , help="ts mode" , type=str, default="BE")
+parser.add_argument("-atol", "--atol"                   , help="abs. tolerance" , type=float, default=1e-6)
+parser.add_argument("-rtol", "--rtol"                   , help="rel. tolerance" , type=float, default=1e-6)
+parser.add_argument("-max_iter", "--max_iter"           , help="max iterations for Newton solver" , type=int, default=1000)
 
 args = parser.parse_args()
 glow_1d = Glow1D(args)
@@ -479,12 +580,8 @@ glow_1d = Glow1D(args)
 # plt.grid(visible=True)
 # plt.legend()
 # plt.show()
-
-
-
 u       = glow_1d.initialize()
 v       = glow_1d.solve(u, ts_type=args.ts_mode)
-print(v)
 glow_1d.plot(v)
 
 

@@ -7,52 +7,12 @@ import scipy.constants
 import argparse
 import matplotlib.pyplot as plt
 import sys
-class params():
-  """
-  simple class to hold 1d glow discharge parameters
-  """
-  def __init__(self) -> None:
-    xp         = np
-    
-    self.L     = 0.5 * 2.54e-2             # m 
-    self.V0    = 100                       # V
-    self.f     = 13.56e6                   # Hz
-    self.tau   = (1/self.f)                # s
-    self.qe    = scipy.constants.e         # C
-    self.eps0  = scipy.constants.epsilon_0 # eps_0 
-    
-    self.n0    = 3.22e22                   #m^{-3}
-    self.np0   = 8e16                      #"nominal" electron density [1/m^3]
-    
-    # raw transport coefficients 
-    self.De    = (3.86e22) * 1e2 / self.n0 #m^{2}s^{-1}
-    self.mu_e  = (9.66e21) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1} 
-    self.Di    = (2.07e18) * 1e2 / self.n0 #m^{2} s^{-1}
-    self.mu_i  = (4.65e19) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1}
-    self.ks    = 1.19e5                    # m s^{-1}
-    
-    # non-dimensionalized transport coefficients
-    
-    self.n0    /=self.np0
-    self.De    *= self.tau/self.L**2 
-    self.mu_e  *= self.V0 * self.tau/self.L**2 
-    self.Di    *= self.tau/self.L**2 
-    self.mu_i  *= self.V0 * self.tau/self.L**2 
-    self.ks    *= self.tau/self.L
-    
-    self.Teb   = 0.5                       # eV
-    self.Hi    = 15.76                 # eV
-    #self.qe    = 0.0
-    self.gamma = 0.01
-    self.alpha = self.np0 * self.L**2 * self.qe / self.eps0 / self.V0
-    
-    self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / Te)   
-    self.ki_Te = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / Te)  * (18.687/Te**2)  
-    
-class Glow1D():
+import glow1d_utils
+
+class glow1d_fluid():
     def __init__(self, args) -> None:
       self.args  = args
-      self.param = params()
+      self.param = glow1d_utils.parameters()
       
       self.Ns = self.args.Ns                   # Number of species
       self.NT = self.args.NT                   # Number of temperatures
@@ -125,8 +85,8 @@ class Glow1D():
       Uin     = xp.ones((self.Np, self.Nv))
       
       if type==0:
-        Uin[:, ele_idx] = 1e-4
-        Uin[:, ion_idx] = 1e-4 
+        Uin[:, ele_idx] = 1e-4#1e-1
+        Uin[:, ion_idx] = 1e-4#1e-1 
         Uin[:, Te_idx]  = self.param.Teb
         
         self.mu[:, ele_idx] = self.param.mu_e
@@ -139,7 +99,6 @@ class Glow1D():
         raise NotImplementedError
       
       return Uin
-    
       
     def rhs(self, Uin : np.array, time, dt):
       """Evaluates the residual.
@@ -202,7 +161,7 @@ class Glow1D():
       qe      = -(1.5) * De * ne * Te_x + (2.5) * Te * Je
       qe_x    = xp.dot(self.Dp, qe)
       
-      FUin[1:-1,Te_idx]   = -(2./(3 * ne[1:-1])) * qe_x[1:-1] - (2 * self.param.qe / (3 * ne[1:-1])) * (Je[1:-1] * E[1:-1]) - (2/3) * self.param.Hi * ki[1:-1] * self.param.n0 - (Te[1:-1]/ne[1:-1]) * (FUin[1:-1,ele_idx])
+      FUin[1:-1,Te_idx]   = -(2./(3 * ne[1:-1])) * qe_x[1:-1] - (2 / (3 * ne[1:-1])) * (Je[1:-1] * E[1:-1]) - (2/3) * self.param.Hi * ki[1:-1] * self.param.n0 - (Te[1:-1]/ne[1:-1]) * (FUin[1:-1,ele_idx])
       return FUin  
     
     def rhs_jacobian(self, Uin: np.array, time, dt):
@@ -315,21 +274,31 @@ class Glow1D():
       Rne      = ki * self.param.n0 * ne - Je_x
       
       qe      = -(1.5) * De * ne * Te_x + (2.5) * Te * Je
+      qe_ne   = -(1.5) * De * Te_x * Imat + 2.5 * Te * Je_ne
+      qe_Te   = -(1.5) * De * ne * self.Dp + 2.5 * Je * Imat
+      
       qe_x    = xp.dot(self.Dp, qe)
+      qe_x_ne = xp.dot(self.Dp, qe_ne)
+      qe_x_Te = xp.dot(self.Dp, qe_Te)
       
-      qe_x_ne = -1.5 * xp.dot(self.Lp, Te) * De * Imat -1.5 * xp.dot(self.Dp, Te) * (De * self.Dp + Imat * xp.dot(self.Dp, De)) + 2.5 * xp.dot(self.Dp, Te) * Je_ne + 2.5 * Te * Je_x_ne
-      qe_x_Te = -1.5 * De * ne * self.Lp - 1.5 * xp.dot(self.Dp, De * ne) * self.Dp + 2.5 * Je * self.Dp + 2.5 * Je_x * Imat
+      # qe_x_ne = -1.5 * xp.dot(self.Lp, Te) * De * Imat -1.5 * xp.dot(self.Dp, Te) * (De * self.Dp + Imat * xp.dot(self.Dp, De)) + 2.5 * xp.dot(self.Dp, Te) * Je_ne + 2.5 * Te * Je_x_ne
+      # qe_x_Te = -1.5 * De * ne * self.Lp - 1.5 * xp.dot(self.Dp, De * ne) * self.Dp + 2.5 * Je * self.Dp + 2.5 * Je_x * Imat
+      #JeE_ne       = self.Zp[ele_idx] * mu_e * E**2 * Imat - De * E * self.Dp
+      #JeE_ne[0,0]  = -self.param.ks * E[0]  * self.Dp[0,0]
+      #JeE_ne[-1,1] = self.param.ks  * E[-1] * self.Dp[-1,-1]
+      JeE_ne        = Je * E_ne + E * Je_ne
       
-      
-      JeE_ne       = self.Zp[ele_idx] * mu_e * E**2 * Imat - De * E * self.Dp
-      JeE_ne[0,0]  = -self.param.ks * E[0]  * self.Dp[0,0]
-      JeE_ne[-1,1] = self.param.ks  * E[-1] * self.Dp[-1,-1]
-      
-      RTe_Te  = (-2/3/ne) * qe_x_Te  -(2/3) * self.param.Hi * self.param.n0 * ki_Te * Imat - (Rne/ne) * Imat - (Te/ne) * Rne_Te
-      RTe_ne  = (-2/3/ne) * qe_x_ne + qe_x * (2/3/ne**2) * Imat -(2/3) * (self.param.qe/ne) * JeE_ne + (2/3)* (Je * E) * (self.param.qe/ne**2) - (Te/ne) * Rne_ne + (Te * Rne/ne**2) * Imat
+      RTe_Te  = (-2/3/ne) * qe_x_Te  -(2 /3) * self.param.Hi * self.param.n0 * ki_Te * Imat - (Rne/ne) * Imat - (Te/ne) * Rne_Te
+      RTe_ne  = (-2/3/ne) * qe_x_ne + qe_x * (2/3/ne**2) * Imat -(2/3) * (1/ne) * JeE_ne + (2/3)* (Je * E) * (1/ne**2) - (Te/ne) * Rne_ne + (Te * Rne/ne**2) * Imat
       
       RTe_Te[0  , :] = 0
       RTe_Te[-1 , :] = 0
+      
+      RTe_Te[:  , 0]  = 0
+      RTe_Te[:  , -1] = 0
+      
+      RTe_ne[0  , :] = 0
+      RTe_ne[-1 , :] = 0
       
       RTe_ne[0  , :] = 0
       RTe_ne[-1 , :] = 0
@@ -466,49 +435,30 @@ class Glow1D():
         # print(jac1[0::self.Nv, 0::self.Nv])
         # sys.exit(-1)
         
-        def residual(u, du, time, dt):
-          return du - dt * self.rhs(u + du, time + dt, dt)
-        
-        def jacobian(u, time, dt):
-          return Imat - dt * self.rhs_jacobian(u, time, dt)
-        
         tt              = 0
         Imat            = xp.eye(self.Np * self.Nv)
         for ts_idx in range(steps):
-          du       = xp.zeros_like(u)
-          r0       = residual(u, du, tt, dt).reshape(-1)  
-          jac      = jacobian(u, tt, dt)
-          norm_r0  = xp.linalg.norm(r0)
+          du  = xp.zeros_like(u)
+          def residual(du):
+            return du - dt * self.rhs(u + du, tt + dt, dt)
+        
+          def jacobian(du):
+            return Imat - dt * self.rhs_jacobian(u, tt, dt)
           
-          norm_rr  = norm_r0 = np.linalg.norm(r0)
-          count    = 0
+          ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
           
-          
-          converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
-          while( not converged and (count < iter_max) ):
-            rr       = residual(u, du, tt, dt).reshape(-1)
-            norm_rr  = xp.linalg.norm(rr)
-            du       += xp.linalg.solve(jac, -rr).reshape((self.Np, self.Nv))
-            count += 1
-            if count%1000==0:
-              print("{0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
-            converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
-          
-          if ts_idx % 10 == 0:
+          if ns_info["status"]==False:
             print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-            print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
-            
-          if (not converged):
-            # if non-convergence encountered, save state and die
-            print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
             print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
-            sys.exit(-1)
-            
-          #print(self.rhs_jacobian(u, tt, dt))
-          #jac = Imat - dt * self.rhs_jacobian(u, tt, dt)
-          #print("cond = ",np.linalg.cond(jac))
-          #du  = np.linalg.solve(jac,r0).reshape((self.Np, self.Nv))
-          #print(du[:,self.Te_idx])
+            print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+            return u
+          
+          du = ns_info["x"]
+          
+          if ts_idx % 100 == 0:
+            print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+            print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+          
           u   = u + du
           tt+=dt
         return u  
@@ -517,43 +467,50 @@ class Glow1D():
         raise NotImplementedError
       
     def plot(self, Uin):
-      fig= plt.figure(figsize=(18,4), dpi=300)
+      fig= plt.figure(figsize=(18,8), dpi=300)
       
       ne = np.abs(Uin[:, self.ele_idx])
       ni = np.abs(Uin[:, self.ion_idx])
       Te = np.abs(Uin[:, self.Te_idx])
       
-      plt.subplot(1, 4, 1)
+      plt.subplot(2, 3, 1)
       plt.plot(self.xp, self.param.np0 * ne, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$n_e (m^{-3})$")
       plt.grid(visible=True)
       
-      plt.subplot(1, 4, 2)
+      plt.subplot(2, 3, 2)
       plt.plot(self.xp, self.param.np0 * ni, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$n_i (m^{-3})$")
       plt.grid(visible=True)
       
-      plt.subplot(1, 4, 3)
+      plt.subplot(2, 3, 3)
       plt.plot(self.xp, Te, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$T_e (eV)$")
       plt.grid(visible=True)
       
       
-      plt.subplot(1, 4, 4)
-      phi = self.param.V0 * self.solve_poisson(Uin[:,0], Uin[:,1], 0) / self.param.L**2
-      E = -np.dot(self.Dp, phi)
-      plt.plot(self.xp, E, 'b')
+      plt.subplot(2, 3, 4)
+      phi = self.solve_poisson(Uin[:,0], Uin[:,1], 0)
+      E   = -np.dot(self.Dp, phi)
+      plt.plot(self.xp, E * ((self.param.V0 / self.param.L)), 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$E (V/m)$")
+      plt.grid(visible=True)
+      
+      plt.subplot(2, 3, 5)
+      plt.plot(self.xp, phi * (((self.param.V0))), 'b')
+      plt.xlabel(r"x/L")
+      plt.ylabel(r"$\phi (V)$")
       plt.grid(visible=True)
       
       plt.tight_layout()
       
       fig.savefig("1d_glow.png")
-            
+    
+    
 parser = argparse.ArgumentParser()
 parser.add_argument("-Ns", "--Ns"                       , help="number of species"      , type=int, default=2)
 parser.add_argument("-NT", "--NT"                       , help="number of temperatures" , type=int, default=1)
@@ -565,23 +522,11 @@ parser.add_argument("-atol", "--atol"                   , help="abs. tolerance" 
 parser.add_argument("-rtol", "--rtol"                   , help="rel. tolerance" , type=float, default=1e-6)
 parser.add_argument("-max_iter", "--max_iter"           , help="max iterations for Newton solver" , type=int, default=1000)
 
-args = parser.parse_args()
-glow_1d = Glow1D(args)
+args      = parser.parse_args()
+glow_1d   = glow1d_fluid(args)
 
-# x = glow_1d.xp
-# f = x**3 + np.sin(x)
-# f_x  = np.dot(glow_1d.Dp, f)
-# f_xx = np.dot(glow_1d.Dp, np.dot(glow_1d.Dp, f))
- 
-# plt.plot(x, f_x   , label="Dx f")
-# plt.plot(x, f_xx   , label="Dxx f")
-# plt.plot(x, 3 * x**2 + np.cos(x) , label="f'")
-# plt.plot(x, 6 * x**1 - np.sin(x) , label="f''")
-# plt.grid(visible=True)
-# plt.legend()
-# plt.show()
-u       = glow_1d.initialize()
-v       = glow_1d.solve(u, ts_type=args.ts_mode)
+u         = glow_1d.initialize()
+v         = glow_1d.solve(u, ts_type=args.ts_mode)
 glow_1d.plot(v)
 
 

@@ -85,10 +85,18 @@ class glow1d_fluid():
       Uin     = xp.ones((self.Np, self.Nv))
       
       if type==0:
-        Uin[:, ele_idx] = 1e-4#1e-1
-        Uin[:, ion_idx] = 1e-4#1e-1 
-        Uin[:, Te_idx]  = self.param.Teb
+        if args.restore==1:
+          print("~~~restoring solver from %s.npy"%(args.fname))
+          Uin = xp.load("%s.npy"%(args.fname))
+        else:
+          xx = self.param.L * (self.xp + 1)
+          Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+          Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+          Uin[:, Te_idx]  = 0.5
         
+        Uin[0, Te_idx]  = self.param.Teb
+        Uin[-1, Te_idx] = self.param.Teb
+                
         self.mu[:, ele_idx] = self.param.mu_e
         self.mu[:, ion_idx] = self.param.mu_i
         
@@ -139,13 +147,15 @@ class glow1d_fluid():
       
       
       Us_x    = xp.dot(self.Dp, Uin[: , 0:self.Ns])
-      
       fluxJ    = xp.empty((self.Np, self.Ns))
       for sp_idx in range(self.Ns):
         fluxJ[:, sp_idx] = self.Zp[sp_idx] * self.mu[: , sp_idx] * Uin[: , sp_idx] * E - self.D[: , sp_idx] * Us_x[:, sp_idx]
-        
-      fluxJ[0 , ion_idx] = self.mu[0 , ion_idx] * ni[0]  * E[0]
-      fluxJ[-1, ion_idx] = self.mu[-1, ion_idx] * ni[-1] * E[-1]
+      
+      # fluxJ[:, ele_idx]  = - mu_e * ne * E - De * xp.dot(self.Dp, ne)
+      # fluxJ[:, ion_idx]  =   mu_i * ni * E - Di * xp.dot(self.Dp, ni)
+      
+      fluxJ[0 , ion_idx] = self.mu[0 , ion_idx] * ni[0]  * E[0] 
+      fluxJ[-1, ion_idx] = self.mu[-1, ion_idx] * ni[-1] * E[-1] 
         
       fluxJ[0 , ele_idx] = -self.param.ks * ne[0]   - self.param.gamma * fluxJ[0 , ion_idx]
       fluxJ[-1, ele_idx] = self.param.ks  * ne[-1]  - self.param.gamma * fluxJ[-1, ion_idx]
@@ -161,7 +171,10 @@ class glow1d_fluid():
       qe      = -(1.5) * De * ne * Te_x + (2.5) * Te * Je
       qe_x    = xp.dot(self.Dp, qe)
       
-      FUin[1:-1,Te_idx]   = -(2./(3 * ne[1:-1])) * qe_x[1:-1] - (2 / (3 * ne[1:-1])) * (Je[1:-1] * E[1:-1]) - (2/3) * self.param.Hi * ki[1:-1] * self.param.n0 - (Te[1:-1]/ne[1:-1]) * (FUin[1:-1,ele_idx])
+      FUin[:  , Te_idx]   = -(2./(3 * ne)) * qe_x - (2 / (3 * ne)) * (Je * E) - (2/3) * self.param.Hi * ki * self.param.n0 - (Te/ne) * (FUin[:,ele_idx])
+      FUin[0  , Te_idx]   = 0
+      FUin[-1 , Te_idx]   = 0
+      
       return FUin  
     
     def rhs_jacobian(self, Uin: np.array, time, dt):
@@ -225,10 +238,10 @@ class glow1d_fluid():
       
       Je_ne        = Js_nk[ele_idx,ele_idx]
       Je_ne[0,0]   = -self.param.ks - self.param.gamma * mu_i[0]   * ni[0]   * E_ne[0 , 0]
-      Je_ne[0,1:]  = -self.param.gamma * mu_i[0]   * ni[0]   * E_ne[0 , 1:]
+      Je_ne[0,1:]  = - self.param.gamma * mu_i[0]   * ni[0]   * E_ne[0 , 1:]
       
-      Je_ne[-1,-1] =  self.param.ks - self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1,-1]  
-      Je_ne[-1,1:] = -self.param.gamma * mu_i[-1]   * ni[-1] * E_ne[-1 , 1:]
+      Je_ne[-1,-1] = self.param.ks  -self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1 , -1]  
+      Je_ne[-1,1:] = -self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1 , 1:]
       
       Je_ni        = Js_nk[ele_idx,ion_idx]
       Je_ni[0,0]   = - self.param.gamma * mu_i[0]   * (ni[0]   * E_ni[0 , 0] + E[0])
@@ -275,10 +288,12 @@ class glow1d_fluid():
       
       qe      = -(1.5) * De * ne * Te_x + (2.5) * Te * Je
       qe_ne   = -(1.5) * De * Te_x * Imat + 2.5 * Te * Je_ne
+      qe_ni   = 2.5 * Te * Je_ni
       qe_Te   = -(1.5) * De * ne * self.Dp + 2.5 * Je * Imat
       
       qe_x    = xp.dot(self.Dp, qe)
       qe_x_ne = xp.dot(self.Dp, qe_ne)
+      qe_x_ni = xp.dot(self.Dp, qe_ni)
       qe_x_Te = xp.dot(self.Dp, qe_Te)
       
       # qe_x_ne = -1.5 * xp.dot(self.Lp, Te) * De * Imat -1.5 * xp.dot(self.Dp, Te) * (De * self.Dp + Imat * xp.dot(self.Dp, De)) + 2.5 * xp.dot(self.Dp, Te) * Je_ne + 2.5 * Te * Je_x_ne
@@ -287,33 +302,33 @@ class glow1d_fluid():
       #JeE_ne[0,0]  = -self.param.ks * E[0]  * self.Dp[0,0]
       #JeE_ne[-1,1] = self.param.ks  * E[-1] * self.Dp[-1,-1]
       JeE_ne        = Je * E_ne + E * Je_ne
+      JeE_ni        = Je * E_ni + E * Je_ni
       
       RTe_Te  = (-2/3/ne) * qe_x_Te  -(2 /3) * self.param.Hi * self.param.n0 * ki_Te * Imat - (Rne/ne) * Imat - (Te/ne) * Rne_Te
       RTe_ne  = (-2/3/ne) * qe_x_ne + qe_x * (2/3/ne**2) * Imat -(2/3) * (1/ne) * JeE_ne + (2/3)* (Je * E) * (1/ne**2) - (Te/ne) * Rne_ne + (Te * Rne/ne**2) * Imat
+      RTe_ni  = (-2/3/ne) * qe_x_ni  -(2/3/ne) * JeE_ni - (Te/ne) * Rne_ni
+      
       
       RTe_Te[0  , :] = 0
       RTe_Te[-1 , :] = 0
       
-      RTe_Te[:  , 0]  = 0
-      RTe_Te[:  , -1] = 0
-      
       RTe_ne[0  , :] = 0
       RTe_ne[-1 , :] = 0
       
-      RTe_ne[0  , :] = 0
-      RTe_ne[-1 , :] = 0
+      RTe_ni[0  , :] = 0
+      RTe_ni[-1 , :] = 0
       
       jac[ele_idx :: self.Nv , ele_idx :: self.Nv] = Rne_ne
       jac[ele_idx :: self.Nv , ion_idx :: self.Nv] = Rne_ni
       jac[ele_idx :: self.Nv , Te_idx  :: self.Nv] = Rne_Te
       
-      jac[ion_idx :: self.Nv , ion_idx :: self.Nv] = Rni_ni
       jac[ion_idx :: self.Nv , ele_idx :: self.Nv] = Rni_ne
+      jac[ion_idx :: self.Nv , ion_idx :: self.Nv] = Rni_ni
       jac[ion_idx :: self.Nv , Te_idx  :: self.Nv] = Rni_Te
       
-      jac[Te_idx :: self.Nv , Te_idx  :: self.Nv]  = RTe_Te
       jac[Te_idx :: self.Nv , ele_idx :: self.Nv]  = RTe_ne 
-      
+      jac[Te_idx :: self.Nv , ion_idx :: self.Nv]  = RTe_ni
+      jac[Te_idx :: self.Nv , Te_idx  :: self.Nv]  = RTe_Te
       
       return jac
       
@@ -415,8 +430,11 @@ class glow1d_fluid():
         return u 
       elif ts_type == "BE":
         dx              = xp.min(self.xp[1:] - self.xp[0:-1])
-        dt              = self.args.cfl * dx
+        dt              = 1.0/xp.ceil(1.0 / (self.args.cfl * dx))
         tT              = self.args.cycles
+        
+        io_freq         = int(1/dt)
+        
         steps           = max(1,int(tT/dt))
         u               = xp.copy(Uin)
         Imat            = xp.eye(u.shape[0] * u.shape[1])
@@ -437,10 +455,11 @@ class glow1d_fluid():
         
         tt              = 0
         Imat            = xp.eye(self.Np * self.Nv)
-        for ts_idx in range(steps):
+        u0              = xp.copy(u)
+        for ts_idx in range(steps+1):
           du  = xp.zeros_like(u)
           def residual(du):
-            return du - dt * self.rhs(u + du, tt + dt, dt)
+            return du - dt * self.rhs(u + du, tt + dt, dt) 
         
           def jacobian(du):
             return Imat - dt * self.rhs_jacobian(u, tt, dt)
@@ -451,15 +470,23 @@ class glow1d_fluid():
             print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
             print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
             print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
-            return u
+            return u0
           
           du = ns_info["x"]
+          u  = u + du
           
-          if ts_idx % 100 == 0:
+          if ts_idx % io_freq == 0:
+            u1 = xp.copy(u)
             print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
             print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+            a1 = xp.linalg.norm(u1-u0)
+            a2 = a1/ xp.linalg.norm(u0)
+            print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
+            u0=u1
+            
           
-          u   = u + du
+          # if ts_idx % 1 == 0:
+          #   print("ne : ", u[0,0], u[-1,0], " ni, ", u[-1,1], u[-1,1])
           tt+=dt
         return u  
       
@@ -517,17 +544,20 @@ parser.add_argument("-NT", "--NT"                       , help="number of temper
 parser.add_argument("-Np", "--Np"                       , help="number of collocation points" , type=int, default=100)
 parser.add_argument("-cfl", "--cfl"                     , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
 parser.add_argument("-cycles", "--cycles"               , help="number of cycles to run" , type=float, default=10)
-parser.add_argument("-ts_mode", "--ts_mode"             , help="ts mode" , type=str, default="BE")
+parser.add_argument("-ts_type", "--ts_type"             , help="ts mode" , type=str, default="BE")
 parser.add_argument("-atol", "--atol"                   , help="abs. tolerance" , type=float, default=1e-6)
 parser.add_argument("-rtol", "--rtol"                   , help="rel. tolerance" , type=float, default=1e-6)
+parser.add_argument("-fname", "--fname"                 , help="file name to store the solution" , type=str, default="1d_glow")
+parser.add_argument("-restore", "--restore"             , help="restore the solver" , type=int, default=0)
 parser.add_argument("-max_iter", "--max_iter"           , help="max iterations for Newton solver" , type=int, default=1000)
 
 args      = parser.parse_args()
 glow_1d   = glow1d_fluid(args)
 
 u         = glow_1d.initialize()
-v         = glow_1d.solve(u, ts_type=args.ts_mode)
+v         = glow_1d.solve(u, ts_type=args.ts_type)
 glow_1d.plot(v)
+np.save("%s.npy"%(args.fname), v)
 
 
 

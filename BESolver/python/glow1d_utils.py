@@ -9,11 +9,12 @@ class parameters():
     xp         = np
     
     self.L     = 0.5 * 2.54e-2             # m 
-    self.V0    = 100                       # V
-    self.f     = 13.6e6                    # Hz
+    self.V0    = 100                        # V
+    self.f     = 13.56e6                    # Hz
     self.tau   = (1/self.f)                # s
     self.qe    = scipy.constants.e         # C
     self.eps0  = scipy.constants.epsilon_0 # eps_0 
+    self.kB    = scipy.constants.Boltzmann # J/K
     
     self.n0    = 3.22e22                   #m^{-3}
     self.np0   = 8e16                      #"nominal" electron density [1/m^3]
@@ -31,19 +32,23 @@ class parameters():
     self.De    *= (self.tau/(self.L**2))
     self.Di    *= (self.tau/(self.L**2))
     
-    self.mu_e  *= (self.V0 * self.tau/(self.L**2))
+    self.mu_e  *= (self.V0 * self.tau/(self.L**2)) 
     self.mu_i  *= (self.V0 * self.tau/(self.L**2))
     
-    self.Teb   = 0.5                       # eV
-    self.Hi    = 15.76                     # eV
+    self.Teb   = 0.5                                # eV
+    self.Hi    = 15.76                              # eV
     self.ks    *= (self.tau/self.L)
     
     self.Tg    = 0.0
     self.gamma = 0.01
     self.alpha = self.np0 * self.L**2 * self.qe / (self.eps0 * self.V0)
     
-    self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))   
-    self.ki_Te = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))  * (18.687/np.abs(Te)**2)  
+    # self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))   
+    # self.ki_Te = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))  * (18.687/np.abs(Te)**2)
+    
+    self.ki     = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))   
+    self.ki_nTe = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (18.687 * ne / nTe**2)  
+    self.ki_ne  = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (-18.687 / nTe)  
     
 
 def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
@@ -53,10 +58,11 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   
   ns_info  = dict()
   alpha    = 1.0e0
-  while(alpha > 1e-14):
+  while(alpha > 1e-8):
     x        = x0
     count    = 0
-    r0       = residual(x).reshape(-1)  
+    r0       = residual(x).reshape(-1)
+    
     norm_r0  = xp.linalg.norm(r0)
     norm_rr  = norm_r0 = np.linalg.norm(r0)
     converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
@@ -67,16 +73,12 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
       x        = x  + alpha * xp.dot(jac_inv, -rr).reshape(x.shape)
       
       count   += 1
-      
       #if count%1000==0:
       #print("{0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0), "alpha ", alpha)
-      
       converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
     
-    #print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
-      
     if (not converged):
-      alpha *= 0.5
+      alpha *= 0.25
       #print(alpha)
       
     else:

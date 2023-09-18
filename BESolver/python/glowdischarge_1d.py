@@ -635,8 +635,9 @@ class glow1d_fluid():
             print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
             u0=u1
             
-            if(int(tt)%50==0):
+            if(self.args.checkpoint==1 and int(tt)%250==0):
               self.plot(u-du, tt)
+              xp.save("%s_%04d.npy"%(self.args.fname, int(tt)), u-du)
             
           tt+=dt
         print("time = %.10E step=%d/%d"%(tt, ts_idx, steps))
@@ -704,6 +705,7 @@ parser.add_argument("-atol", "--atol"                   , help="abs. tolerance" 
 parser.add_argument("-rtol", "--rtol"                   , help="rel. tolerance" , type=float, default=1e-6)
 parser.add_argument("-fname", "--fname"                 , help="file name to store the solution" , type=str, default="1d_glow")
 parser.add_argument("-restore", "--restore"             , help="restore the solver" , type=int, default=0)
+parser.add_argument("-checkpoint", "--checkpoint"       , help="store the checkpoints every 250 cycles" , type=int, default=1)
 parser.add_argument("-max_iter", "--max_iter"           , help="max iterations for Newton solver" , type=int, default=1000)
 
 args      = parser.parse_args()

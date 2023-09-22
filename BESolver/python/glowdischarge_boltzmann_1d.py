@@ -30,16 +30,19 @@ class glow1d_boltzmann():
       self.NT  = self.args.NT                   # Number of temperatures
       self.Nv  = self.args.Ns + self.args.NT    # Total number of 'state' variables
       
-      self.Nr  = self.args.Nr + 1            # e-boltzmann number of radial dof  
-      self.Nvt = self.args.Nvt               # e-boltzmann number of ordinates
-
-      self.deg = self.args.Np-1  # degree of Chebyshev polys we use
-      self.Np  = self.args.Np    # Number of points used to define state in space
-      self.Nc  = self.args.Np-2  # number of collocation pts (Np-2 b/c BCs)
+      self.Nr    = self.args.Nr + 1               # e-boltzmann number of radial dof  
+      self.Nvt   = self.args.Nvt                  # e-boltzmann number of ordinates
+      self.dof_v = self.Nr * self.Nvt
+      
+      self.deg = self.args.Np-1                 # degree of Chebyshev polys we use
+      self.Np  = self.args.Np                   # Number of points used to define state in space
+      self.Nc  = self.args.Np-2                 # number of collocation pts (Np-2 b/c BCs)
       
       self.ele_idx = 0
       self.ion_idx = 1
       self.Te_idx  = self.Ns
+      
+      self.dof_vx = self.Np * self.dof_v
       
       self.fluid_idx = [self.ion_idx]
       
@@ -97,6 +100,21 @@ class glow1d_boltzmann():
       self.LpD = np.identity(self.Np)
       self.LpD[1:-1,:] = self.Lp[1:-1,:]
       
+      self.LpD_inv     = np.linalg.solve(self.LpD, np.eye(self.Np)) 
+      
+      
+      Imat      = np.eye(self.Np)
+      Imat[0,0] = Imat[-1,-1] = 0
+
+      self.phi_ni =  np.linalg.solve(self.LpD, -self.param.alpha*Imat)
+      self.phi_ne = -self.phi_ni
+      
+      self.E_ni    = -np.dot(self.Dp, self.phi_ni)
+      self.E_ne    = -np.dot(self.Dp, self.phi_ne)
+      
+      Imat[0,0] = Imat[-1,-1] = 1.0
+      self.I_Np = Imat
+      
       # setting up the Boltzmann grid params
       
       self.qe            = scipy.constants.e
@@ -107,8 +125,8 @@ class glow1d_boltzmann():
       self.Nvt           = self.args.Nvt
       self.xp_vt         = basis.Legendre().Gauss_Pn(self.Nvt)[0]
       self.xp_vt         = np.arccos(self.xp_vt)
-      self.xp_vt_l       = np.array([i * self.Nvt + j for i in range(self.Nr) for j in list(np.where(self.xp_vt <=np.pi/2)[0])])
-      self.xp_vt_r       = np.array([i * self.Nvt + j for i in range(self.Nr) for j in list(np.where(self.xp_vt >np.pi/2)[0])])
+      self.xp_vt_l       = np.array([i * self.Nvt + j for i in range(self.Nr) for j in list(np.where(self.xp_vt <= 0.5 * np.pi)[0])])
+      self.xp_vt_r       = np.array([i * self.Nvt + j for i in range(self.Nr) for j in list(np.where(self.xp_vt > 0.5 * np.pi)[0])])
       
       self.bs_Te         = args.Te 
       self.bs_nr         = args.Nr
@@ -127,6 +145,10 @@ class glow1d_boltzmann():
       self.op_sigma_m    = None
       self.op_mm         = None
       self.op_inv_mm     = None
+      
+      self.op_mm_full    = None
+      self.op_inv_mm_full= None
+      
       self.op_mass       = None
       self.op_temp       = None
       self.op_diffusion  = None
@@ -137,11 +159,14 @@ class glow1d_boltzmann():
       self.op_psh2o      = None
       
       self.bs_coll_list  = list()
-      self.xp_module   = np
+      self.xp_module     = np
       
-      self.initialize_bs()
+      self.weak_bc_ni    = True
+      self.weak_bc_bte   = False
+      
+      self.initialize_boltzmann()
     
-    def initialize_bs(self):
+    def initialize_boltzmann(self):
       
       for col_idx, col in enumerate(self.args.collisions):
           if "g0NoLoss" == col:
@@ -231,12 +256,14 @@ class glow1d_boltzmann():
       inv_mm_mat              = inv_mm_mat[0::num_sh, 0::num_sh]
       
       I_Nvt                   = np.eye(self.Nvt)
-      self.op_mm              = np.zeros((num_p * num_vt, num_p * num_vt))
-      self.op_inv_mm          = np.zeros((num_p * num_vt, num_p * num_vt))
+      # at the moment no need to store the mass-mat itself, what we need is the inverse of mass matrix. 
+      #self.op_mm_full        = np.zeros((num_p * num_vt, num_p * num_vt))
+      self.op_inv_mm_full     = np.zeros((num_p * num_vt, num_p * num_vt))
+      self.op_inv_mm          = inv_mm_mat
       
       for vt_idx in range(num_vt):
-        self.op_mm[vt_idx :: num_vt, vt_idx::num_vt] = mm_mat
-        self.op_inv_mm[vt_idx :: num_vt, vt_idx::num_vt] = inv_mm_mat
+        #self.op_mm_full[vt_idx :: num_vt, vt_idx::num_vt] = mm_mat
+        self.op_inv_mm_full[vt_idx :: num_vt, vt_idx::num_vt] = inv_mm_mat
       
       gx, gw                  = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
       sigma_m                 = np.zeros(len(gx))
@@ -319,7 +346,7 @@ class glow1d_boltzmann():
       self.op_sigma_m   = sigma_m
       
       self.op_mass      = bte_utils.mass_op(spec_sp, 1) #* maxwellian(0) * vth**3
-      self.op_temp      = bte_utils.temp_op(spec_sp, 1) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
+      self.op_temp      = bte_utils.temp_op(spec_sp, 1) * (vth**2) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
       
       # note non-dimentionalized electron mobility and diffusion,  ## not used at the moment, but needs to check.          
       self.op_mobility  = bte_utils.mobility_op(spec_sp, maxwellian, vth) * self.param.V0 * self.param.tau/self.param.L**2
@@ -358,18 +385,24 @@ class glow1d_boltzmann():
           FOp                       = psh2o_C_po2sh(FOp)
           FOp_g                     = psh2o_C_po2sh(FOp_g)
           
-          adv_x                     = vth * compute_spatial_advection_op()
-          adv_mat_x                 = np.zeros((num_p * num_vt, num_p * num_vt))
+          adv_x                     = np.dot(self.op_inv_mm,  vth * compute_spatial_advection_op())
+          adv_x_d, adv_x_q          = np.linalg.eig(adv_x)
+          self.op_adv_x_d           = adv_x_d
+          self.op_adv_x_q           = adv_x_q
+          self.op_adv_x_qinv        = np.linalg.inv(adv_x_q)
+          #print(self.op_adv_x_d)
+          #plt.plot(self.op_adv_x_d)
+          #plt.show()
+          #print("x-space advection diagonalization rel error = %.8E"%(np.linalg.norm(np.dot(self.op_adv_x_d * self.op_adv_x_q, self.op_adv_x_qinv) - adv_x)/np.linalg.norm(adv_x)))
+          # adv_mat_x                 = np.zeros((num_p * num_vt, num_p * num_vt))
+          # for vt_idx in range(num_vt):
+          #   adv_mat_x[vt_idx::num_vt, vt_idx :: num_vt] = adv_x * np.cos(self.xp_vt[vt_idx])
           
-          for vt_idx in range(num_vt):
-            adv_mat_x[vt_idx::num_vt, vt_idx :: num_vt] = adv_x * np.cos(self.xp_vt[vt_idx])
+          FOp                       = np.dot(self.op_inv_mm_full, FOp)
+          FOp_g                     = np.dot(self.op_inv_mm_full, FOp_g)
+          adv_mat_v                 = np.dot(self.op_inv_mm_full, adv_mat_v)
           
-          FOp                       = np.dot(self.op_inv_mm, FOp)
-          FOp_g                     = np.dot(self.op_inv_mm, FOp_g)
-          adv_mat_x                 = np.dot(self.op_inv_mm, adv_mat_x)
-          adv_mat_v                 = np.dot(self.op_inv_mm, adv_mat_v)
-          
-          self.op_adv_x             = adv_mat_x
+          self.op_adv_x             = adv_x
           self.op_adv_v             = adv_mat_v
           self.op_col_en            = FOp
           self.op_col_gT            = FOp_g
@@ -409,9 +442,15 @@ class glow1d_boltzmann():
       Vin     = xp.zeros((self.Nr * self.Nvt, self.Np))
       
       if type==0:
-        Uin[:, ele_idx] = 1e-4
-        Uin[:, ion_idx] = 1e-4
-        Uin[:, Te_idx]  = self.param.Teb
+        if self.args.restore==1:
+          print("~~~restoring solver from %s.npy"%(args.fname))
+          Uin = xp.load("%s_u.npy"%(args.fname))
+          Vin = xp.load("%s_v.npy"%(args.fname))
+        else:
+          xx = self.param.L * (self.xp + 1)
+          Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+          Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+          Uin[:, Te_idx]  = self.param.Teb
         
         self.mu[:, ele_idx] = self.param.mu_e
         self.D[: , ele_idx] = self.param.De
@@ -426,12 +465,13 @@ class glow1d_boltzmann():
         mw          = bte_utils.get_maxwellian_3d(vth, 1)
 
         mass_op     = self.op_mass
-        # temp_op     = self._op_temp[grid_idx]
+        temp_op     = self.op_temp
 
         v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
         hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
         h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=mmat_inv)
-        #print(xp.dot(mass_op, h_init))
+        m0      = xp.dot(mass_op, h_init)
+        print("boltzmann initial conditions, mass and temperature (eV)", m0, xp.dot(temp_op, h_init)/m0)
         
         h_init  = xp.dot(self.op_psh2o, h_init)
         
@@ -461,7 +501,7 @@ class glow1d_boltzmann():
         r     = - self.param.alpha * (ni-ne)
         r[0]  = 0.0
         r[-1] = xp.sin(2 * xp.pi * time) #+ self.params.verticalShift
-        return xp.linalg.solve(self.LpD, r)
+        return xp.dot(self.LpD_inv, r)
     
     def push(self, Uin, Vin, time, dt):
       """
@@ -478,25 +518,19 @@ class glow1d_boltzmann():
       
       Vin_lm                   = xp.dot(self.op_po2sh, Vin)
       Uin[:, ele_idx]          = xp.dot(self.op_mass[0::num_sh], Vin_lm[0::num_sh,:])
-      self.r_rates[:, ion_idx] = xp.dot(self.op_rate[1], Vin_lm[0::num_sh,:])
+      Uin[:, Te_idx]           = xp.dot(self.op_temp[0::num_sh], Vin_lm[0::num_sh,:])/Uin[:,ele_idx]
+      self.r_rates[:, ion_idx] = xp.abs(xp.dot(self.op_rate[1], Vin_lm[0::num_sh,:]))
       
-      if ((self.r_rates[:, ion_idx]<0).any()):
-        print(self.r_rates[:, ion_idx])
-        
-
-      
-      #print(Uin[:, ele_idx])
-      #print(self.r_rates[:, ion_idx])
       return
     
-    def fetch(self, Uin, Vin, time, dt):
+    def pull(self, Uin, Vin, time, dt):
       xp      = self.xp_module
       ele_idx = self.ele_idx
       ion_idx = self.ion_idx
       
-      phi     = self.solve_poisson(Uin[:,ele_idx], Uin[:, ion_idx], time)
-      E       = -xp.dot(self.Dp, phi)
-      self.bs_E = E
+      phi       = self.solve_poisson(Uin[:,ele_idx], Uin[:, ion_idx], time)
+      E         = -xp.dot(self.Dp, phi)
+      self.bs_E = E * self.param.V0 / self.param.L
       return
     
     def rhs_fluid(self, Uin : np.array, time, dt):
@@ -540,15 +574,24 @@ class glow1d_boltzmann():
       
       for idx, sp_idx  in enumerate(self.fluid_idx):
         fluxJ[:, idx] = self.Zp[sp_idx] * self.mu[: , sp_idx] * Uin[: , sp_idx] * E - self.D[: , sp_idx] * Us_x[:, idx]
-        
-      fluxJ[0 , 0] = self.mu[0 , ion_idx] * ni[0]  * E[0]
-      fluxJ[-1, 0] = self.mu[-1, ion_idx] * ni[-1] * E[-1]
+      
+      assert self.fluid_idx[0] == ion_idx
+      
+      if self.weak_bc_ni:  
+        fluxJ[0 , 0] = self.mu[0 , ion_idx] * ni[0]  * E[0]
+        fluxJ[-1, 0] = self.mu[-1, ion_idx] * ni[-1] * E[-1]
       
       fluxJ_x      = xp.dot(self.Dp, fluxJ)
       FUin[:,0]    = ki * self.param.n0 * ne - fluxJ_x[:,0]
-      #print("rhs fluid, ", fluxJ.shape, fluxJ_x.shape, ki.shape, FUin.shape, (FUin.reshape(-1)).shape)  
-      return FUin  
-    
+      
+      strong_bc    = xp.zeros((2,self.Nv))
+      if self.args.ts_type=="BE":
+        if not self.weak_bc_ni:
+          strong_bc[0,  ion_idx] = (fluxJ[0 , 0] - self.mu[0 , ion_idx] * ni[0]  * E[0] )
+          strong_bc[-1, ion_idx] = (fluxJ[-1, 0] - self.mu[-1, ion_idx] * ni[-1] * E[-1] )
+              
+      return FUin, strong_bc
+      
     def rhs_fluid_jacobian(self, Uin : np.array, time, dt):
       xp  = self.xp_module
       dof = self.Nv * self.Np
@@ -573,14 +616,14 @@ class glow1d_boltzmann():
       Np      = self.Np
       Nv      = self.Nv
       
-      Imat    = xp.eye(Np)
-      Imat[0,0] = Imat[-1,-1] = 0
-
-      phi_ni =  np.linalg.solve(self.LpD, -self.param.alpha*Imat)
+      phi_ni  = self.phi_ni
+      #phi_ne  = self.phi_ni
       
-      Imat[0,0] = Imat[-1,-1] = 1.0
+      E_ni    = self.E_ni
+      #E_ne    = self.E_ne
       
-      E_ni    = -xp.dot(self.Dp, phi_ni)
+      Imat    = self.I_Np 
+      
       phi     = self.solve_poisson(ne, ni, time)
       E       = -xp.dot(self.Dp, phi)
       
@@ -593,95 +636,70 @@ class glow1d_boltzmann():
         else:
           Js_nk[idx] = self.Zp[i] * self.mu[:,i] * (E * Imat) - self.D[:,i] * self.Dp
           
-      
+      assert self.fluid_idx[0] == ion_idx
       Ji_ni        = Js_nk[0]
-      Ji_ni[0,0]   = mu_i[0]  * (ni[0]  * E_ni[0,0]   + E[0])
-      Ji_ni[0,1:]  = mu_i[0]  * (ni[0]  * E_ni[0,1:])
-      
-      Ji_ni[-1,-1] = mu_i[-1] * (ni[-1] * E_ni[-1,-1] + E[-1])
-      Ji_ni[-1,1:] = mu_i[-1] * (ni[-1] * E_ni[-1,1:])
+      if self.weak_bc_ni:
+        Ji_ni[0 ,:] = mu_i[0]  * (ni[0]  * E_ni[0 ,:] + E[0]  * Imat[0 ,:])
+        Ji_ni[-1,:] = mu_i[-1] * (ni[-1] * E_ni[-1,:] + E[-1] * Imat[-1,:])
       
       Ji_x_ni = xp.dot(self.Dp, Ji_ni)
       
-      
       Rni_ni  = -Ji_x_ni
-      # jac[ele_idx :: self.Nv , ele_idx :: self.Nv] = Rne_ne
-      # jac[ele_idx :: self.Nv , ion_idx :: self.Nv] = Rne_ni
-      # jac[ele_idx :: self.Nv , Te_idx  :: self.Nv] = Rne_Te
       
-      # jac[ion_idx :: self.Nv , ion_idx :: self.Nv] = Rni_ni
-      # jac[ion_idx :: self.Nv , ele_idx :: self.Nv] = Rni_ne
-      # jac[ion_idx :: self.Nv , Te_idx  :: self.Nv] = Rni_Te
+      jac_bc = xp.zeros((2, self.Nv, self.Np * nf_vars))
+      if self.args.ts_type=="BE":
+        if not self.weak_bc_ni:
+          jac_bc[0, ion_idx , 0::nf_vars]  = Ji_ni[0  ,:] - (mu_i[0]  * (ni[0]  * E_ni[0   , :] + E[0]  * ni[0]  * Imat[0 ,:]))
+          jac_bc[1, ion_idx , 0::nf_vars]  = Ji_ni[-1 ,:] - (mu_i[-1] * (ni[-1] * E_ni[-1  , :] + E[-1] * ni[-1] * Imat[-1,:]))
       
-      # jac[Te_idx :: self.Nv , Te_idx  :: self.Nv]  = RTe_Te
-      # jac[Te_idx :: self.Nv , ele_idx :: self.Nv]  = RTe_ne 
-      return Rni_ni
+      return Rni_ni, jac_bc
+    
+    def step_bte_x(self, Vin, time, dt):
+      "perform the bte x-advection analytically"
+      xp        = self.xp_module
       
-    def rhs_boltzmann(self, Vin: np.array, time, dt):
+      Vin       = Vin.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+      Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((self.Nr, self.Nvt, self.Np))
+      
+      Vin_adv_x = xp.empty_like(Vin)
+      for i in range(self.Nr):
+        for j in range(self.Nvt):
+          Vin_adv_x[i,j] = xp.dot(self.bte_x_shift[i,j], Vin[i,j])
+          
+      Vin_adv_x  = Vin_adv_x.reshape((self.Nr, self.Nvt *  self.Np))
+      Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((self.Nr , self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+      
+      return Vin_adv_x
+      
+    def rhs_bte_v(self, Vin: np.array, time, dt):
       """
       compute the rhs for the 1d2v boltzmann equation.
       Uin : (Np, Ns)
       Vin : (num_p * num_vt, Np) # boltzmann rhs vector
       """
-      xp    = self.xp_module
-      # VinT  = xp.transpose(Vin)
-      # Vin_x = xp.transpose(xp.dot(self.Dp, VinT))
-      Vin_x   = xp.dot(Vin, self.DpT)
-      E       = self.bs_E
+      xp        = self.xp_module
+      E         = self.bs_E
+      FVin      = self.param.tau * self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, Vin) + self.param.Tg * xp.dot(self.op_col_gT, Vin))  + E * self.param.tau * xp.dot(self.op_adv_v, Vin)
+      strong_bc = None
       
-      FVin    = self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, Vin) + self.param.Tg * xp.dot(self.op_col_gT, Vin))  + E * xp.dot(self.op_adv_v, Vin) - xp.dot(self.op_adv_x, Vin_x)
-      # print(self.xp_vt_l)
-      # print(self.xp_vt_r)
-      FVin[self.xp_vt_l,  0] = 0.0
-      FVin[self.xp_vt_r, -1] = 0.0
-      return FVin
+      return FVin, strong_bc
       
-    def rhs_boltzmann_jacobian(self, Vin: np.array, time, dt):
+    def rhs_bte_v_jacobian(self, Vin: np.array, time, dt):
       
       xp      = self.xp_module
       ele_idx = self.ele_idx
       ion_idx = self.ion_idx
       
-      I_Np      = xp.eye(self.Np)
-      I_Np[0,0] = I_Np[-1,-1] = 0
-      
-      phi_ne  = -np.linalg.solve(self.LpD, -self.param.alpha*I_Np)
-      E_ne    = -xp.dot(self.Dp, phi_ne)
-      
       E       = self.bs_E
-      ne_f    = xp.dot(self.op_mass, self.op_po2sh)
-      
-      num_p   = self.op_spec_sp._p + 1
-      num_sh  = len(self.op_spec_sp._sph_harm_lm)
-      num_vt  = self.Nvt
-      Np      = self.Np
-      jac     = xp.zeros((num_p * num_vt * Np, num_p * num_vt * Np))
-      
-      adv_v_Vin = xp.dot(self.op_adv_v, Vin)
-      Imat_v    = xp.eye(num_p * num_vt)
+      jac     = xp.zeros((self.Np, self.dof_v, self.dof_v))
       
       for i in range(self.Np):
-        jac[i::Np, i::Np] = self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) + E[i] * self.op_adv_v
+        jac[i,:] = self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) + E[i] * self.param.tau * self.op_adv_v
       
-      # for i in range(self.Np):
-      #   for j in range(self.Np):
-      #     jac[i::Np, j::Np]+= adv_v_Vin[:,i] * E_ne[i,j] * Imat_v #- self.op_adv_x * self.Dp[i,j]
-      
-      for i in range(self.Np):
-        for j in range(self.Np):
-          jac[i::Np, j::Np]+= -self.op_adv_x * self.Dp[i,j]
-      
-      jac[self.xp_vt_l * self.Np + 0          , :] = 0
-      jac[self.xp_vt_r * self.Np + self.Np-1  , :] = 0
-      
-      # jac[:  , self.xp_vt_l * self.Np + 0        ] = 0
-      # jac[:  , self.xp_vt_r * self.Np + self.Np-1] = 0
-      
-      
-        
-      return jac
+      jac_bc = None
+      return jac, jac_bc
 
-    def step_fluid(self, Uin, time, dt, verbose=0):
+    def step_fluid(self, u, du, time, dt, verbose=0):
       
       xp      = self.xp_module
       ts_type = self.args.ts_type
@@ -704,14 +722,30 @@ class glow1d_boltzmann():
         iter_max        = self.args.max_iter
         
         Imat            = xp.eye(self.Np)
+        
+        assert self.fluid_idx[0] == self.ion_idx
     
         def residual(du):
-          return du - dt * self.rhs_fluid(Uin + du, time + dt, dt)
+          u1       = u + du
+          rhs, bc  = self.rhs_fluid(u1, time + dt, dt) 
+          res      = du - dt * rhs
+          
+          if not self.weak_bc_ni: 
+              res[0  , 0] = bc[0  , self.ion_idx]
+              res[-1 , 0] = bc[-1 , self.ion_idx]
+          
+          return res
         
         def jacobian(du):
-          return Imat - dt * self.rhs_fluid_jacobian(Uin, time, dt)
+          rhs_j, j_bc = self.rhs_fluid_jacobian(u, time, dt)
+          jac         = Imat - dt * rhs_j
+          
+          if not self.weak_bc_ni:              
+            jac[0 * len(self.fluid_idx) + 0, :]             = j_bc[0, self.ion_idx, :]
+            jac[(self.Np-1) * len(self.fluid_idx)   + 0, :] = j_bc[1, self.ion_idx, :]
+          
+          return jac
         
-        du = xp.zeros_like(Uin[:,self.fluid_idx])
         ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max, xp)
         du = ns_info["x"]
         
@@ -723,41 +757,51 @@ class glow1d_boltzmann():
           print("Fluid step non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
           print("time = %.2E "%(time))
           print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
-          return Uin
+          return u
         
-        return Uin + du
+        return u + du
       
-    def step_boltzmann(self, Uin, time, dt, verbose=0):
+    def step_boltzmann(self, u, du, time, dt, verbose=0):
       xp      = self.xp_module
       ts_type = self.args.ts_type
       
-      rhs     = self.rhs_boltzmann
+      time    = time
+      dt      = dt
+      
+      rhs     = self.rhs_bte_v
       
       if ts_type == "RK2":
-        k1 = dt * rhs(Uin, time, dt)
-        k2 = dt * rhs(Uin + 0.5 * k1, time + 0.5 * dt, dt)
-        return Uin + k2
+        k1 = dt * rhs(u, time, dt)
+        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)
+        return u + k2
       elif ts_type == "RK4":
-        k1 = dt * rhs(Uin           , time           , dt)
-        k2 = dt * rhs(Uin + 0.5 * k1, time + 0.5 * dt, dt)
-        k3 = dt * rhs(Uin + 0.5 * k2, time + 0.5 * dt, dt)
-        k4 = dt * rhs(Uin +  k3     , time + dt      , dt)
-        return Uin + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
+        k1 = dt * rhs(u           , time           , dt)
+        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)
+        k3 = dt * rhs(u + 0.5 * k2, time + 0.5 * dt, dt)
+        k4 = dt * rhs(u +  k3     , time + dt      , dt)
+        return u + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
       elif ts_type == "BE":
         rtol            = self.args.rtol
         atol            = self.args.atol
         iter_max        = self.args.max_iter
         
-        Imat            = xp.eye(self.Nr * self.Nvt * self.Np)
+        Imat1           = xp.eye(self.Nr * self.Nvt)
+        Imat            = xp.empty((self.Np, self.Nr * self.Nvt, self.Nr * self.Nvt))
+        for i in range(self.Np):
+          Imat[i,:,:]   = Imat1[:,:]
     
         def residual(du):
-          return du - dt * self.rhs_boltzmann(Uin + du, time + dt, dt)
+          rhs, bc = self.rhs_bte_v(u + du, time + dt, dt)
+          res     = du - dt * rhs
+          
+          return res
         
         def jacobian(du):
-          return Imat - dt * self.rhs_boltzmann_jacobian(Uin, time, dt)
+          rhs_j , bc_j = self.rhs_bte_v_jacobian(u, time, dt)
+          jac          = Imat - dt * rhs_j
+          return jac
         
-        du = xp.zeros_like(Uin)
-        ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max, xp)
+        ns_info = glow1d_utils.newton_solver_batched(du, self.Np, residual, jacobian, atol, rtol, iter_max, xp)
         du = ns_info["x"]
         
         if(verbose==1):
@@ -768,33 +812,59 @@ class glow1d_boltzmann():
           print("Boltzmann step non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
           print("time = %.2E "%(time))
           print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
-          return Uin
+          return u
         
-        return Uin + du
+        return u + du
       
     def solve(self, Uin, Vin):
-      xp = self.xp_module
-      
-      dx              = xp.min(self.xp[1:] - self.xp[0:-1])
-      dt              = self.args.cfl * dx
+      xp              = self.xp_module
+      dt              = self.args.cfl 
       tT              = self.args.cycles
       tt              = 0
       steps           = max(1,int(tT/dt))
       
+      print("++++ Using backward Euler ++++")
+      print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
+      
       u = xp.copy(Uin)
       v = xp.copy(Vin)
       
+      du = xp.zeros_like(u)
+      dv = xp.zeros_like(v)
+      
       io_freq = 1
+      
+      # setting the Chebyshev operators for x-space advection for the analytical solution.
+      self.bte_x_shift = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
+      for i in range(self.Nr):
+        for j in range(self.Nvt):
+          xx = self.xp - self.op_adv_x_d[i] * np.cos(self.xp_vt[j]) * dt * self.param.tau
+          self.bte_x_shift[i,j :, : ]     = np.polynomial.chebyshev.chebvander(xx, self.deg)
+          # bdy condition 
+          self.bte_x_shift[i,j, xx<-1, :] = 0.0 
+          self.bte_x_shift[i,j, xx> 1, :] = 0.0 
+          
+          self.bte_x_shift[i,j :, : ] = xp.dot(self.bte_x_shift[i,j], self.V0pinv)
+          
+          
+      # plt.plot(self.xp, xp.dot(self.op_mass,xp.dot(self.op_po2sh, v)),label="0")
+      # v1 = self.step_bte_x(v,  0, 0)
+      # v1 = self.step_bte_x(v1, 0, 0)
+      # plt.plot(self.xp, xp.dot(self.op_mass, xp.dot(self.op_po2sh, v1)),label="1")
+      # plt.grid()
+      # plt.legend()
+      # plt.show()
       
       for ts_idx in range(steps):
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
           
         self.push(u, v, tt, dt)
-        u = self.step_fluid(u, tt, dt, int(ts_idx % io_freq == 0))
-        self.fetch(u, v, tt + dt, dt)
-        self.bs_E *= self.param.V0 / self.param.L #xp.ones(self.Np) * 100
-        v          = self.step_boltzmann(v, tt, dt, int(ts_idx % io_freq == 0))
+        u = self.step_fluid(u, du, tt, dt, int(ts_idx % io_freq == 0))
+        self.pull(u, v, tt + dt, dt)
+        
+        v          = self.step_bte_x(v, tt, dt)
+        v          = self.step_boltzmann(v, dv, tt, dt, int(ts_idx % io_freq == 0))
         tt+= dt
       
       return u, v
@@ -826,17 +896,15 @@ class glow1d_boltzmann():
       
       
       plt.subplot(2, 3, 4)
-      phi = self.param.V0 * self.solve_poisson(Uin[:,0], Uin[:,1], 0) / self.param.L**2
+      phi = self.solve_poisson(Uin[:,0], Uin[:,1], 0) 
       E = -np.dot(self.Dp, phi)
-      plt.plot(self.xp, E, 'b')
+      plt.plot(self.xp, E * self.param.V0/self.param.L, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$E (V/m)$")
       plt.grid(visible=True)
       
       plt.subplot(2, 3, 5)
-      phi = self.param.V0 * self.solve_poisson(Uin[:,0], Uin[:,1], 0) / self.param.L**2
-      #E = -np.dot(self.Dp, phi)
-      plt.plot(self.xp, phi, 'b')
+      plt.plot(self.xp, phi * self.param.V0, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$\phi (V)$")
       plt.grid(visible=True)
@@ -865,8 +933,8 @@ parser.add_argument("-Np", "--Np"                                 , help="number
 parser.add_argument("-cfl", "--cfl"                               , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
 parser.add_argument("-cycles", "--cycles"                         , help="number of cycles to run" , type=float, default=10)
 parser.add_argument("-ts_type", "--ts_type"                       , help="ts mode" , type=str, default="BE")
-parser.add_argument("-atol", "--atol"                             , help="abs. tolerance" , type=float, default=1e-6)
-parser.add_argument("-rtol", "--rtol"                             , help="rel. tolerance" , type=float, default=1e-6)
+parser.add_argument("-atol", "--atol"                             , help="abs. tolerance" , type=float, default=1e-10)
+parser.add_argument("-rtol", "--rtol"                             , help="rel. tolerance" , type=float, default=1e-10)
 parser.add_argument("-max_iter", "--max_iter"                     , help="max iterations for Newton solver" , type=int, default=1000)
 
 parser.add_argument("-profile", "--profile"                       , help="profile", type=int, default=0)
@@ -877,16 +945,20 @@ parser.add_argument("-store_csv", "--store_csv"                   , help="store 
 parser.add_argument("-plot_data", "--plot_data"                   , help="plot data", type=int, default=1)
 parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable electron-electron collisions", type=float, default=0)
 parser.add_argument("-verbose", "--verbose"                       , help="verbose with debug information", type=int, default=0)
-
+parser.add_argument("-restore", "--restore"                       , help="restore the solver" , type=int, default=0)
+parser.add_argument("-fname", "--fname"                 , help="file name to store the solution" , type=str, default="1d_glow")
 
 args = parser.parse_args()
 glow_1d = glow1d_boltzmann(args)
 u, v    = glow_1d.initialize()
 uu,vv   = glow_1d.solve(u, v)
 
-
+glow_1d.push(uu, vv, 0, 0)
 #v       = glow_1d.solve(u, ts_type=args.ts_mode)
-# glow_1d.plot(v)
+glow_1d.plot(uu)
+
+np.save("%s_u.npy"%(args.fname), uu)
+np.save("%s_v.npy"%(args.fname), vv)
 
 
 

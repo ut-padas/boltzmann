@@ -595,7 +595,7 @@ class glow1d_fluid():
               res[0  , self.Te_idx]  = bc[0  , self.Te_idx]
               res[-1 , self.Te_idx]  = bc[-1 , self.Te_idx]
               
-            return res
+            return res.reshape(-1)
         
           def jacobian(du):
             rhs_j, j_bc = self.rhs_jacobian(u, tt, dt)

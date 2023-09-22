@@ -61,14 +61,14 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   while(alpha > 1e-8):
     x        = x0
     count    = 0
-    r0       = residual(x).reshape(-1)
+    r0       = residual(x)
     
     norm_r0  = xp.linalg.norm(r0)
     norm_rr  = norm_r0 = np.linalg.norm(r0)
     converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
     
     while( not converged and (count < iter_max) ):
-      rr       = residual(x).reshape(-1)
+      rr       = residual(x)
       norm_rr  = xp.linalg.norm(rr)
       x        = x  + alpha * xp.dot(jac_inv, -rr).reshape(x.shape)
       
@@ -89,9 +89,7 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
     # solver failed !!!
     print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
     print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
-    print(rr.reshape(x.shape)[:,0])
-    print(rr.reshape(x.shape)[:,1])
-    print(rr.reshape(x.shape)[:,2])
+    print(rr.reshape(x.shape))
     ns_info["status"] = converged
     ns_info["x"]      = x
     ns_info["atol"]   = norm_rr
@@ -104,6 +102,66 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   ns_info["x"]      = x
   ns_info["atol"]   = norm_rr
   ns_info["rtol"]   = norm_rr/norm_r0
+  ns_info["alpha"]  = alpha
+  ns_info["iter"]   = count
+  return ns_info
+
+def newton_solver_batched(x, n_pts, residual, jacobian, atol, rtol, iter_max, xp=np):
+  jac      = jacobian(x)
+  assert jac.shape[0] == n_pts
+  jac_inv  = np.zeros_like(jac)
+  
+  for i in range(n_pts):
+    jac_inv[i] = xp.linalg.inv(jac[i])
+  
+  ns_info  = dict()
+  alpha    = xp.ones(n_pts)
+  while((alpha > 1e-10).any()):
+      count     = 0
+      r0        = residual(x)
+      norm_rr   = norm_r0 = np.linalg.norm(r0, axis=0)
+      converged = ((norm_rr/norm_r0 < rtol).all() or (norm_rr < atol).all())
+      
+      while( not converged and (count < iter_max) ):
+          rr       = residual(x)
+          norm_rr  = xp.linalg.norm(rr, axis=0)
+          converged = ((norm_rr/norm_r0 < rtol).all() or (norm_rr < atol).all())
+          
+          for i in range(n_pts):
+            x[:,i] = x[:,i] + alpha[i] * xp.dot(jac_inv[i], -rr[:,i])
+          
+          count   += 1
+          #if count%1000==0:
+          #print("{0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0), "alpha ", alpha)
+          
+      if (not converged):
+          alpha *= 0.25
+          #print(alpha)
+      else:
+          #print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
+          break
+  
+  if (not converged):
+      # solver failed !!!
+      print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, xp.max(norm_rr), xp.max(norm_rr/norm_r0)))
+      print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
+      #print(rr)
+      print(alpha)
+      print(norm_r0)
+      print(norm_rr)
+      print(norm_rr/norm_r0)
+      ns_info["status"] = converged
+      ns_info["x"]      = x
+      ns_info["atol"]   = xp.max(norm_rr)
+      ns_info["rtol"]   = xp.max(norm_rr/norm_r0)
+      ns_info["alpha"]  = alpha
+      ns_info["iter"]   = count
+      return ns_info
+  
+  ns_info["status"] = converged
+  ns_info["x"]      = x
+  ns_info["atol"]   = xp.max(norm_rr)
+  ns_info["rtol"]   = xp.max(norm_rr/norm_r0)
   ns_info["alpha"]  = alpha
   ns_info["iter"]   = count
   return ns_info

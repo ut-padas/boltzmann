@@ -67,11 +67,11 @@ n_grids     = 1
 n_pts       = args.n_pts
 Te          = np.ones(n_grids) * 8e-1 * collisions.TEMP_K_1EV
 
-ef          = np.linspace(0.001  , 1, n_pts) * 100
+ef          = np.linspace(0.001  , 1, n_pts) * 1000
 n0          = np.linspace(0.5  , 1, n_pts) * 3.22e22
 ne          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
 ni          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
-Tg          = np.linspace(0.01  , 1, n_pts) * 13000#0.5 * collisions.TEMP_K_1EV
+Tg          = np.linspace(0.1  , 1, n_pts) * 13000#0.5 * collisions.TEMP_K_1EV
 
 # ef          = np.ones(n_pts) * 96.6
 # n0          = np.ones(n_pts) * 3.22e22
@@ -145,14 +145,14 @@ if plot_data:
         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
         for ii in range(0, n_pts, n_pts_step):
             fr = np.abs(ff_r[ii, lm_idx, :])
-            valid_idx = fr>1e-11
+            valid_idx = fr>0
             plt.semilogy(ev[valid_idx], fr[valid_idx], label="Tg=%.2E[K], E=%.2E[V/m], n0=%.2E[1/m^3], ne=%.2E[1/m^3]"%(Tg[ii], ef[ii], n0[ii], ne[ii]))
         
         plt.xlabel(r"energy (eV)")
         plt.ylabel(r"$f_%d$"%(lm[0]))
         plt.grid(visible=True)
         if lm_idx==0:
-            plt.legend(prop={'size': 6})
+            plt.legend(prop={'size': 8})
             
         plt_idx +=1
     

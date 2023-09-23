@@ -164,6 +164,9 @@ class glow1d_boltzmann():
       self.weak_bc_ni    = True
       self.weak_bc_bte   = False
       
+      
+      self.vth_fac       = 8
+      
       self.initialize_boltzmann()
     
     def initialize_boltzmann(self):
@@ -201,7 +204,7 @@ class glow1d_boltzmann():
       maxwellian             = bte_utils.get_maxwellian_3d(vth, 1.0)
       
       dg_nodes               = np.sqrt(np.array(sig_pts)) * self.c_gamma / vth
-      ev_range               = ((0 * vth /self.c_gamma)**2, (6 * vth /self.c_gamma)**2)
+      ev_range               = ((0 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       k_domain               = (np.sqrt(ev_range[0]) * self.c_gamma / vth, np.sqrt(ev_range[1]) * self.c_gamma / vth)
       use_ee                 = args.ee_collisions
       use_dg                 = 1
@@ -264,6 +267,10 @@ class glow1d_boltzmann():
       for vt_idx in range(num_vt):
         #self.op_mm_full[vt_idx :: num_vt, vt_idx::num_vt] = mm_mat
         self.op_inv_mm_full[vt_idx :: num_vt, vt_idx::num_vt] = inv_mm_mat
+        # for i in range(self.Nr):
+        #   for j in range(self.Nr):
+        #     self.op_inv_mm_full[i * num_vt + vt_idx, j* num_vt + vt_idx] = inv_mm_mat[i,j]
+          
       
       gx, gw                  = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
       sigma_m                 = np.zeros(len(gx))
@@ -354,7 +361,7 @@ class glow1d_boltzmann():
           
       rr_op  = [None] * len(self.bs_coll_list)
       for col_idx, g in enumerate(self.bs_coll_list):
-          rr_op[col_idx] = bte_utils.reaction_rates_op(spec_sp, [g], maxwellian, vth) * self.param.tau * self.param.np0 # note : non-dimensionalized reaction rates 
+          rr_op[col_idx] = bte_utils.reaction_rates_op(spec_sp, [g], maxwellian, vth) 
           
       self.op_rate      = rr_op
           
@@ -471,16 +478,34 @@ class glow1d_boltzmann():
         hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
         h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=mmat_inv)
         m0      = xp.dot(mass_op, h_init)
+        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+          if lm[0]>0:
+            h_init[lm_idx::len(spec_sp._sph_harm_lm)]=0.0
+        
+        h_init = h_init/m0
         print("boltzmann initial conditions, mass and temperature (eV)", m0, xp.dot(temp_op, h_init)/m0)
         
+        #print(h_init)
         h_init  = xp.dot(self.op_psh2o, h_init)
         
         for i in range(self.Np):
           Vin[:,i] = h_init
-          
+        
+        #print("Vin \n", Vin)
         # scale functions to have ne, at initial timestep
         Vin = Vin * Uin[:,ele_idx]
         #print(Vin.shape)
+        # ne = Uin[:,ele_idx]
+        # print(ne)
+        # Vin_lm = xp.dot(self.op_po2sh, Vin)
+        # print(np.dot(self.op_mass, Vin_lm))
+        # Vin_lm = Vin_lm/ne
+        # print(Vin_lm)
+        
+        Vin_lm = self.bte_eedf_normalization(xp.dot(self.op_po2sh, Vin))
+        #print(Vin_lm)
+        #print(xp.dot(self.op_rate[1] , Vin_lm[0::2]))
+        
           
       else:
         raise NotImplementedError
@@ -503,6 +528,17 @@ class glow1d_boltzmann():
         r[-1] = xp.sin(2 * xp.pi * time) #+ self.params.verticalShift
         return xp.dot(self.LpD_inv, r)
     
+    def bte_eedf_normalization(self, Vin_lm):
+      # normalization of the distribution function before computing the reaction rates
+      mm_fac                   = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
+      mm_op                    = self.op_mass
+      c_gamma                  = self.c_gamma
+      vth                      = self.bs_vth
+      
+      scale                    = np.dot(mm_op / mm_fac, Vin_lm) * (2 * (vth/c_gamma)**3).reshape(-1)
+      return Vin_lm / scale
+    
+    
     def push(self, Uin, Vin, time, dt):
       """
       boltzmann to fluid push
@@ -519,7 +555,9 @@ class glow1d_boltzmann():
       Vin_lm                   = xp.dot(self.op_po2sh, Vin)
       Uin[:, ele_idx]          = xp.dot(self.op_mass[0::num_sh], Vin_lm[0::num_sh,:])
       Uin[:, Te_idx]           = xp.dot(self.op_temp[0::num_sh], Vin_lm[0::num_sh,:])/Uin[:,ele_idx]
-      self.r_rates[:, ion_idx] = xp.abs(xp.dot(self.op_rate[1], Vin_lm[0::num_sh,:]))
+      
+      Vin_lm1                  = self.bte_eedf_normalization(Vin_lm)
+      self.r_rates[:, ion_idx] = xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]) * self.param.np0 * self.param.tau
       
       return
     
@@ -530,7 +568,7 @@ class glow1d_boltzmann():
       
       phi       = self.solve_poisson(Uin[:,ele_idx], Uin[:, ion_idx], time)
       E         = -xp.dot(self.Dp, phi)
-      self.bs_E = E * self.param.V0 / self.param.L
+      self.bs_E = (E  * self.param.V0 / self.param.L)
       return
     
     def rhs_fluid(self, Uin : np.array, time, dt):
@@ -679,7 +717,7 @@ class glow1d_boltzmann():
       """
       xp        = self.xp_module
       E         = self.bs_E
-      FVin      = self.param.tau * self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, Vin) + self.param.Tg * xp.dot(self.op_col_gT, Vin))  + E * self.param.tau * xp.dot(self.op_adv_v, Vin)
+      FVin      = self.param.tau * (self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, Vin) + self.param.Tg * xp.dot(self.op_col_gT, Vin))  + E * xp.dot(self.op_adv_v, Vin))
       strong_bc = None
       
       return FVin, strong_bc
@@ -694,7 +732,7 @@ class glow1d_boltzmann():
       jac     = xp.zeros((self.Np, self.dof_v, self.dof_v))
       
       for i in range(self.Np):
-        jac[i,:] = self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) + E[i] * self.param.tau * self.op_adv_v
+        jac[i,:] = self.param.tau * (self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) + E[i] * self.op_adv_v)
       
       jac_bc = None
       return jac, jac_bc
@@ -801,7 +839,7 @@ class glow1d_boltzmann():
           jac          = Imat - dt * rhs_j
           return jac
         
-        ns_info = glow1d_utils.newton_solver_batched(du, self.Np, residual, jacobian, atol, rtol, iter_max, xp)
+        ns_info = glow1d_utils.newton_solver_batched(du, self.Np, residual, jacobian, atol, rtol, iter_max, self.args.threads, xp)
         du = ns_info["x"]
         
         if(verbose==1):
@@ -832,7 +870,7 @@ class glow1d_boltzmann():
       du = xp.zeros_like(u)
       dv = xp.zeros_like(v)
       
-      io_freq = 1
+      io_freq  = int(1/dt)
       
       # setting the Chebyshev operators for x-space advection for the analytical solution.
       self.bte_x_shift = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
@@ -840,12 +878,15 @@ class glow1d_boltzmann():
         for j in range(self.Nvt):
           xx = self.xp - self.op_adv_x_d[i] * np.cos(self.xp_vt[j]) * dt * self.param.tau
           self.bte_x_shift[i,j :, : ]     = np.polynomial.chebyshev.chebvander(xx, self.deg)
-          # bdy condition 
-          self.bte_x_shift[i,j, xx<-1, :] = 0.0 
-          self.bte_x_shift[i,j, xx> 1, :] = 0.0 
+          self.bte_x_shift[i,j :, : ]     = xp.dot(self.bte_x_shift[i,j], self.V0pinv)
           
-          self.bte_x_shift[i,j :, : ] = xp.dot(self.bte_x_shift[i,j], self.V0pinv)
-          
+          if (xx<-1).any()==True:
+            assert((xx>1).all()==False)
+            self.bte_x_shift[i,j, xx<-1, :] = 0.0 
+            
+          if (xx>1).any()==True:
+            assert((xx<-1).all()==False)
+            self.bte_x_shift[i,j, xx> 1, :] = 0.0 
           
       # plt.plot(self.xp, xp.dot(self.op_mass,xp.dot(self.op_po2sh, v)),label="0")
       # v1 = self.step_bte_x(v,  0, 0)
@@ -854,64 +895,142 @@ class glow1d_boltzmann():
       # plt.grid()
       # plt.legend()
       # plt.show()
-      
+      self.push(u, v, tt, dt)
       for ts_idx in range(steps):
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-          
-        self.push(u, v, tt, dt)
+          self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx), tt)
+        
         u = self.step_fluid(u, du, tt, dt, int(ts_idx % io_freq == 0))
-        self.pull(u, v, tt + dt, dt)
+        self.pull(u, v, tt, dt)
         
         v          = self.step_bte_x(v, tt, dt)
         v          = self.step_boltzmann(v, dv, tt, dt, int(ts_idx % io_freq == 0))
+        self.push(u, v, tt + dt, dt)
         tt+= dt
-      
+        
+        
       return u, v
+    
+    def compute_radial_components(self, ev: np.array, ff):
+        ff_cpu = ff
+        
+        assert self.xp_module == np
+            
+        ff_cpu   = np.transpose(ff_cpu)
+        vth      = self.bs_vth
+        spec_sp  = self.op_spec_sp
+        
+        vr       = np.sqrt(ev) * self.c_gamma/ vth
+        num_p    = spec_sp._p +1 
+        num_sh   = len(spec_sp._sph_harm_lm)
+        n_pts    = ff.shape[1]
+        
+        output   = np.zeros((n_pts, num_sh, len(vr)))
+        Vqr      = spec_sp.Vq_r(vr,0,1)
+        
+        for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                output[:, l_idx, :] = np.dot(ff_cpu[:,l_idx::num_sh], Vqr)
+
+        return output
+    
+    
+    def plot(self, Uin, Vin, fname, time):
+      xp = self.xp_module
+      fig= plt.figure(figsize=(24,10), dpi=300)
+      self.push(Uin, Vin, time, self.args.cfl)
       
-    def plot(self, Uin):
-      fig= plt.figure(figsize=(18,8), dpi=300)
+      # print(Uin[:,0] , Uin[:,1])
+      # print(Uin[:,0] - Uin[:,1])
       
-      ne = np.abs(Uin[:, self.ele_idx])
-      ni = np.abs(Uin[:, self.ion_idx])
-      Te = np.abs(Uin[:, self.Te_idx])
+      ne = Uin[:, self.ele_idx]
+      ni = Uin[:, self.ion_idx]
+      Te = Uin[:, self.Te_idx]
       
-      plt.subplot(2, 3, 1)
+      plt.subplot(2, 4, 1)
       plt.plot(self.xp, self.param.np0 * ne, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$n_e (m^{-3})$")
       plt.grid(visible=True)
       
-      plt.subplot(2, 3, 2)
+      plt.subplot(2, 4, 2)
       plt.plot(self.xp, self.param.np0 * ni, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$n_i (m^{-3})$")
       plt.grid(visible=True)
       
-      plt.subplot(2, 3, 3)
+      plt.subplot(2, 4, 3)
       plt.plot(self.xp, Te, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$T_e (eV)$")
       plt.grid(visible=True)
       
-      
-      plt.subplot(2, 3, 4)
-      phi = self.solve_poisson(Uin[:,0], Uin[:,1], 0) 
+      plt.subplot(2, 4, 4)
+      phi = self.solve_poisson(Uin[:,0], Uin[:,1], time) 
       E = -np.dot(self.Dp, phi)
       plt.plot(self.xp, E * self.param.V0/self.param.L, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$E (V/m)$")
       plt.grid(visible=True)
       
-      plt.subplot(2, 3, 5)
+      plt.subplot(2, 4, 5)
       plt.plot(self.xp, phi * self.param.V0, 'b')
       plt.xlabel(r"x/L")
       plt.ylabel(r"$\phi (V)$")
       plt.grid(visible=True)
       
-      plt.tight_layout()
       
-      fig.savefig("1d_glow.png")
+      num_p   = self.op_spec_sp._p + 1
+      num_sh  = len(self.op_spec_sp._sph_harm_lm)
+      
+      Vin_lm  = xp.dot(self.op_po2sh, Vin)
+      
+      plt.subplot(2, 4, 6)
+      Vin_lm1 = self.bte_eedf_normalization(Vin_lm)
+      r_elastic    = xp.abs(xp.dot(self.op_rate[0], Vin_lm1[0::num_sh,:]))
+      r_ionization = xp.abs(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
+      
+      #print(r_elastic, r_ionization)
+      #plt.plot(self.xp, r_elastic    , 'b', label="elastic")
+      plt.plot(self.xp, r_ionization , 'r', label="ionization")
+      plt.xlabel(r"x/L")
+      plt.ylabel(r"rate coefficients ($m^3 s^{-1}$)")
+      plt.grid(visible=True)
+      
+      
+      vth       = self.bs_vth
+      ev_range  = ((1e-4 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_grid   = np.linspace(ev_range[0], ev_range[1], 500)
+      
+      ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
+      
+      pts = 3
+      plt.subplot(2, 4, 7)
+      for i in range(pts):
+        plt.semilogy(ev_grid, np.abs(ff_v[i][0]), label="x=%.4f"%(self.xp[i]))
+      for i in range(pts):
+        plt.semilogy(ev_grid, np.abs(ff_v[-1-i][0]) , label="x=%.4f"%(self.xp[-1-i]))
+      plt.xlabel(r"energy (eV)")
+      plt.ylabel(r"abs(f0) $eV^{-3/2}$")
+      plt.legend()
+      plt.grid(visible=True)
+      
+      
+      plt.subplot(2, 4, 8)
+      for i in range(pts):
+        plt.semilogy(ev_grid, np.abs(ff_v[i][1])    , label="x=%.4f"%(self.xp[i]))
+      for i in range(pts):
+        plt.semilogy(ev_grid, np.abs(ff_v[-1-i][1]) , label="x=%.4f"%(self.xp[-1-i]))
+      plt.xlabel(r"energy (eV)")
+      plt.ylabel(r"abs(f1) $eV^{-3/2}$")
+      plt.legend()
+      plt.grid(visible=True)
+      
+      
+      plt.tight_layout()
+      plt.suptitle("time = %.4E T"%(time))
+      fig.savefig(fname)
+      plt.close()
     
     
 parser = argparse.ArgumentParser()
@@ -923,7 +1042,7 @@ parser.add_argument("-sp_order", "--sp_order"                     , help="b-spli
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-steady", "--steady_state"                   , help="steady state or transient", type=int, default=1)
 #parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=300)
-parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)"  , type=float, default=2.0)
+parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)"  , type=float, default=0.5)
 parser.add_argument("-Tg", "--Tg"                                 , help="approximate gas temperature (eV)"       , type=float, default=0.0)
 parser.add_argument("-Nr", "--Nr"                                 , help="radial refinement"  , type=int, default=128)
 parser.add_argument("-Nvt", "--Nvt"                               , help="number of ordinates", type=int, default=3)
@@ -955,7 +1074,7 @@ uu,vv   = glow_1d.solve(u, v)
 
 glow_1d.push(uu, vv, 0, 0)
 #v       = glow_1d.solve(u, ts_type=args.ts_mode)
-glow_1d.plot(uu)
+glow_1d.plot(uu,vv,"1d2v_glow_bte.png", args.cycles)
 
 np.save("%s_u.npy"%(args.fname), uu)
 np.save("%s_v.npy"%(args.fname), vv)

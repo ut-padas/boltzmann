@@ -205,7 +205,7 @@ class glow1d_fluid():
         
       Te      = nTe/ne
       fluxJ_x = xp.dot(self.Dp, fluxJ)
-      ki      = self.param.ki(nTe, ne)  
+      ki      = self.param.ki(nTe, ne)
       
       for sp_idx in range(self.Ns):
         FUin[:,sp_idx] = ki * self.param.n0 * ne - fluxJ_x[:,sp_idx]

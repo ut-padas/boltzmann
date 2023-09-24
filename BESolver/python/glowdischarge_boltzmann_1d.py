@@ -432,30 +432,26 @@ class glow1d_boltzmann():
       self.op_col_en            = FOp
       self.op_col_gT            = FOp_g
           
-      # if(use_ee == 1):
-      #     print("e-e collision assembly begin")
+      if(use_ee == 1):
+          print("e-e collision assembly begin")
           
-      #     hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=args.threads)
-      #     cc_op_a, cc_op_b     = collision_op.coulomb_collision_op_assembly(maxwellian, vth, mp_pool_sz=args.threads)
+          hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=args.threads)
+          cc_op_a, cc_op_b     = collision_op.coulomb_collision_op_assembly(maxwellian, vth, mp_pool_sz=args.threads)
           
-      #     xp                   = self.xp_module
-      #     hl_op                = xp.asarray(hl_op)
-      #     gl_op                = xp.asarray(gl_op) 
-      #     cc_op_a              = xp.asarray(cc_op_a)
-      #     cc_op_b              = xp.asarray(cc_op_b)
-      #     qA                   = xp.asarray(qA)
-      #     mmat_inv             = xp.asarray(mmat_inv)
+          xp                   = self.xp_module
+          qA                   = self.op_diag_dg
+          mmat_inv             = self.op_inv_mm_full
           
-      #     cc_op                = xp.dot(cc_op_a, hl_op) + xp.dot(cc_op_b, gl_op)
-      #     cc_op                = xp.dot(cc_op,qA)
-      #     cc_op                = xp.dot(xp.swapaxes(cc_op,1,2),qA)
-      #     cc_op                = xp.swapaxes(cc_op,1,2)
-      #     cc_op                = xp.dot(xp.transpose(qA), cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
-      #     cc_op                = xp.dot(mmat_inv, cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
-      #     cc_op                = xp.asnumpy(cc_op)
-      #     self.op_col_ee[idx] = cc_op
+          cc_op                = xp.dot(cc_op_a, hl_op) + xp.dot(cc_op_b, gl_op)
+          cc_op                = xp.dot(cc_op,qA)
+          cc_op                = xp.dot(xp.swapaxes(cc_op,1,2),qA)
+          cc_op                = xp.swapaxes(cc_op,1,2)
+          cc_op                = xp.dot(xp.transpose(qA), cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
+          cc_op                = xp.dot(mmat_inv, cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
           
-      #     print("e-e collision assembly end")
+          self.op_col_ee       = cc_op
+          
+          print("e-e collision assembly end")
       
     def initialize(self,type=0):
       
@@ -764,15 +760,15 @@ class glow1d_boltzmann():
       rhs     = self.rhs_fluid 
       
       if ts_type == "RK2":
-        k1 = dt * rhs(Uin, time, dt)
-        k2 = dt * rhs(Uin + 0.5 * k1, time + 0.5 * dt, dt)
-        return Uin + k2
+        k1 = dt * rhs(u, time, dt)[0]
+        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)[0]
+        return u + k2
       elif ts_type == "RK4":
-        k1 = dt * rhs(Uin           , time           , dt)
-        k2 = dt * rhs(Uin + 0.5 * k1, time + 0.5 * dt, dt)
-        k3 = dt * rhs(Uin + 0.5 * k2, time + 0.5 * dt, dt)
-        k4 = dt * rhs(Uin +  k3     , time + dt      , dt)
-        return Uin + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
+        k1 = dt * rhs(u           , time           , dt)[0]
+        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)[0]
+        k3 = dt * rhs(u + 0.5 * k2, time + 0.5 * dt, dt)[0]
+        k4 = dt * rhs(u +  k3     , time + dt      , dt)[0]
+        return u + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
       elif ts_type == "BE":
         rtol            = self.args.rtol
         atol            = self.args.atol
@@ -828,14 +824,14 @@ class glow1d_boltzmann():
       rhs     = self.rhs_bte_v
       
       if ts_type == "RK2":
-        k1 = dt * rhs(u, time, dt)
-        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)
+        k1 = dt * rhs(u, time, dt)[0]
+        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)[0]
         return u + k2
       elif ts_type == "RK4":
-        k1 = dt * rhs(u           , time           , dt)
-        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)
-        k3 = dt * rhs(u + 0.5 * k2, time + 0.5 * dt, dt)
-        k4 = dt * rhs(u +  k3     , time + dt      , dt)
+        k1 = dt * rhs(u           , time           , dt)[0]
+        k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)[0]
+        k3 = dt * rhs(u + 0.5 * k2, time + 0.5 * dt, dt)[0]
+        k4 = dt * rhs(u +  k3     , time + dt      , dt)[0]
         return u + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
       elif ts_type == "BE":
         rtol            = self.args.rtol

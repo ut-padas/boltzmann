@@ -8,10 +8,22 @@ import argparse
 import matplotlib.pyplot as plt
 import sys
 import glow1d_utils
+import os
 
 class glow1d_fluid():
     def __init__(self, args) -> None:
       self.args  = args
+      
+      dir            = args.dir
+      if os.path.exists(dir):
+        print("run directory exists, data will be overwritten")
+        #sys.exit(0)
+      else:
+        os.makedirs(dir)
+        print("directory %s created"%(dir))
+      
+      args.fname=str(dir)+"/"+args.fname
+      
       self.param = glow1d_utils.parameters()
       
       self.Ns = self.args.Ns                   # Number of species
@@ -615,6 +627,11 @@ class glow1d_fluid():
             
             return jac
           
+          if(self.args.checkpoint==1 and (ts_idx % io_freq)==0):
+              print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+              self.plot(u, tt, "%s_%04d.png"%(args.fname, ts_idx))
+              xp.save("%s_%04d.npy"%(self.args.fname, ts_idx), u)
+          
           ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
           
           if ns_info["status"]==False:
@@ -635,10 +652,6 @@ class glow1d_fluid():
             print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
             u0=u1
             
-            if(self.args.checkpoint==1 and int(tt)%250==0):
-              self.plot(u-du, tt)
-              xp.save("%s_%04d.npy"%(self.args.fname, int(tt)), u-du)
-            
           tt+=dt
         print("time = %.10E step=%d/%d"%(tt, ts_idx, steps))
         return u  
@@ -646,12 +659,14 @@ class glow1d_fluid():
       else:
         raise NotImplementedError
       
-    def plot(self, Uin, time):
+    def plot(self, Uin, time, fname):
+      fig       = plt.figure(figsize=(18,8), dpi=300)
+      
       ne = Uin[:, self.ele_idx]
       ni = Uin[:, self.ion_idx]
       Te = Uin[:, self.Te_idx]/ne
       
-      label_str = "T=%d cycles"%(time)
+      label_str = "T=%.4f cycles"%(time)
       
       plt.subplot(2, 3, 1)
       plt.plot(self.xp, self.param.np0 * ne, label=label_str)
@@ -675,7 +690,7 @@ class glow1d_fluid():
       
       
       plt.subplot(2, 3, 4)
-      phi = self.solve_poisson(Uin[:,0], Uin[:,1], 0)
+      phi = self.solve_poisson(Uin[:,0], Uin[:,1], time)
       E   = -np.dot(self.Dp, phi)
       
       plt.plot(self.xp, E * ((self.param.V0 / self.param.L)), label=label_str)
@@ -690,6 +705,11 @@ class glow1d_fluid():
       plt.ylabel(r"$\phi (V)$")
       plt.legend()
       plt.grid(visible=True)
+      
+      plt.suptitle("T=%.4f cycles"%(time))
+      
+      plt.tight_layout()
+      fig.savefig("%s"%(fname))
       
       
     
@@ -707,18 +727,13 @@ parser.add_argument("-fname", "--fname"                 , help="file name to sto
 parser.add_argument("-restore", "--restore"             , help="restore the solver" , type=int, default=0)
 parser.add_argument("-checkpoint", "--checkpoint"       , help="store the checkpoints every 250 cycles" , type=int, default=1)
 parser.add_argument("-max_iter", "--max_iter"           , help="max iterations for Newton solver" , type=int, default=1000)
+parser.add_argument("-dir"  , "--dir"                   , help="file name to store the solution" , type=str, default="glow1d_dir")
 
 args      = parser.parse_args()
 glow_1d   = glow1d_fluid(args)
 
 u         = glow_1d.initialize()
-
-fig       = plt.figure(figsize=(18,8), dpi=300)
 v         = glow_1d.solve(u, ts_type=args.ts_type)
-
-plt.tight_layout()
-fig.savefig("%s.png"%(args.fname))
-np.save("%s.npy"%(args.fname), v)
 
 
 

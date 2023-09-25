@@ -917,7 +917,8 @@ class glow1d_boltzmann():
       dg_qmat  = self.op_diag_dg
       dg_qmatT = xp.transpose(self.op_diag_dg)
       
-      self.push(u, v, tt, dt)
+      self.push(u, v, tt, dt) # bte to fluid
+      self.pull(u, v, tt, dt) # fluid to bte
       for ts_idx in range(steps):
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
@@ -927,10 +928,11 @@ class glow1d_boltzmann():
           np.save("%s_%04d_u.npy"%(args.fname, ts_idx), u)
           np.save("%s_%04d_v.npy"%(args.fname, ts_idx), v)
         
+        v   = self.step_bte_x(v, tt, dt)
+        self.push(u, v, tt, dt)         # bte to fluid
+        
         u = self.step_fluid(u, du, tt, dt, int(ts_idx % io_freq == 0))
         self.pull(u, v, tt, dt)
-        
-        v          = self.step_bte_x(v, tt, dt)
         
         # ordinates to spherical projection
         v_lm       = xp.dot(self.op_po2sh,v)

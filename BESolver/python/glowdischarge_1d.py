@@ -710,6 +710,7 @@ class glow1d_fluid():
       
       plt.tight_layout()
       fig.savefig("%s"%(fname))
+      plt.close()
       
       
     

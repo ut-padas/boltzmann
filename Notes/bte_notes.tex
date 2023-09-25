@@ -993,9 +993,102 @@ $P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,
 %\end{align*}
 %\textbf{Note}: Due to the orthogonality structure in the radial advection coordinate diagonals will always be zero, with a banded matrix with width of equal to 1. 
 \clearpage
-\section{1d-space Boltzmann equation}
-\label{sec:1d_bte}
+\section{1D glow discharge problem}
+\label{sec:1d_glow}
+\textbf{Objective}: Establish differences between macroscopic fluid model with closure models for kinetic coefficients vs. fully coupled Boltzmann solver for electron kinetics for the 1d glow discharge problem. 
+%in correspondence with the fully coupled 1D2V electron kinetic coefficients determined by the electron-Boltzmann solver.
 
+\subsection{Macroscopic model}
+Here we summarize the macroscopic model for the 1D glow discharge problem. 
+\begin{align*}
+	&\partial_t{n_{s}} + \nabla \cdot \vect{J_{s}} = k_s \of{T_e} n_0 n_e \\
+	&\partial_t \of{\frac{3}{2} n_e k T_e} = -\nabla \cdot \vect{q_e} - e \vect{J_e} \cdot \vect{E} - H_ik_i n_0 n_e\\
+	& \Delta V = -\frac{\alpha e}{\epsilon_0 V_0} (n_i-n_e)
+\end{align*} where 
+\begin{align*}
+	&\vect{J_{s}} = Z_{s} \mu_{s} n_{s} \vect{E} -D_{s} \nabla n_{s} \\
+	&\vect{q_e} 	= -\frac{3 k D_e n_e}{2} \nabla T_e + \frac{5}{2} k T_e \vect{J_e} 
+	&k_i\of{T_e}     	    = 1.235 \times 10^{-13} \exp (-18.687 / T_{e})  \\
+\end{align*} we write the boundary conditions, 
+\begin{align*}
+	&J_i = \mu_i n_i E \text{ , } J_e = -k_s n_e - \gamma J_i \text{ , } T_{ev} = T_{eb} \text{ , } V = \sin\of{2\pi f t} \text{ at } x=0\\
+	&J_i  = \mu_i n_i E \text{ , } J_e = k_s n_e - \gamma J_i \text{ , } T_{ev} = T_{eb} \text{ , } V = 0 \text{ at } x=L
+\end{align*} where, $k_s = 1.19 \times 10^{5} ms^{-1}$ denotes the electron recombination coefficient, and $\gamma=0.01$ denotes the secondary electron emission coefficient (i.e., source term for the electron generation). In the above $\alpha$ denotes normalization constant for species densities (i.e., $\alpha = 3.22e22 m^{-3}$) and $V_0$ denotes the peak of voltage. We use SI units except for the temperature we use $\text{eV}$.
+
+\textbf{Discretization}: Let $D_x $, $LpD$ be the 1D discretized derivative operators, corresponding $\partial_x$ and $\Delta$ with Dirichlet boundary conditions. We assume spatially inhomogeneous transport coefficients. Following derivatives are important to assemble the RHS Jacobian. 
+\begin{align*}
+	&\partial_{n_k} J_s = Z_s \mu_s \of{n_s \partial_{n_k}E + E \partial_{n_k}n_s} -Ds D_x  \partial_{n_k}n_s \\
+	&\partial_{n_i} V   = LpD^{-1} \frac{\alpha e}{\epsilon_0 V_0} I_{D} \text{ and } \partial_{n_e} V   = -\partial_{n_i} V\\
+	&\partial_{n_e} q_e = -\frac{3D_e}{2} D_x T_{ev} I + \frac{5 T_{ev}}{2} \partial_{ne} J_e \\
+	&\partial_{T_{ev}} q_e = -\frac{3D_e n_e}{2} D_x + \frac{5}{2} J_e I  \\
+	&\partial_{n_k} \of{J_e E} = J_e \partial_{n_k} E + E \partial_{n_k} J_e \\
+\end{align*} With the above quantities we can easily assemble the RHS Jacobian for the system with fully implicit backward Euler time integration scheme (i.e., without operator splitting).
+
+\subsection{1D glow discharge with the electron Boltzmann}
+We rewrite the 1D glow discharge model, with electron Boltzmann equation as below. 
+\begin{align*}
+	&\partial_t n_s + \nabla \cdot \vect{J_s} = k_s n_0 ne \text{ where } \vect{J_s} = Z_{s} \mu_{s} n_{s} \vect{E} -D_{s} \nabla n_{s}\\
+	& \Delta V = -\frac{\alpha e}{\epsilon_0 V_0} (n_i-n_e) \\
+	& \partial_t f + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{e}{m_e} \vect{E} \cdot \nabla_{v} f = n_0 C_{en}f + \Gamma(n_0, T_{ev}, n_i) C_{ee} (f, f) 
+\end{align*} In the above $f: (t, x, v, \vtheta) \mapsto \mathcal{R}^+$ is the electron distribution function. For the 1D glow discharge problem the boundary conditions are given below. 
+\begin{align*}
+	\vect{J_s}(x=0) = \mu_s n_s \vect{E} \text{ and } \vect{J_s}(x=L) = \mu_s n_s \vect{E} \\
+	V(x=0) = \sin(2\pi f t) \text{ and } V(x=L) = 0 \\
+	f(t, x=0, v, \vtheta \leq \frac{\pi}{2}) = 0 \text{ and } f(t, x=L, v, \vtheta > \frac{\pi}{2}) = 0
+\end{align*}
+\textbf{Discretization of $f$}: The electron distribution function $f(t, x, v, \vtheta)$ is discretized as follows. 
+\begin{itemize}
+	\item $x$ (i.e., physical space) we use collocation method
+	\item $v$ (i.e., radial speed) we use B-Splines with Galerkin approach
+	\item $\vtheta$ (i.e., polar angle $\vtheta$ v-space) we use method of ordinates
+	\item For collision operator and v-space advection we use B-splines + spherical harmonics with Galerkin approach
+\end{itemize} 
+\begin{align*}
+	&f(t, x, v, \vtheta) = \sum_{k} f_{k}(t,x,\vtheta) S_k\of{\bar{v}} \text{ where } \bar{v} = \frac{v}{v_{th}} \\
+\end{align*} with $v_{th}$ is the thermal velocity to normalize the radial speed coefficient.
+\par \textbf{Spatial advection term}: The Galerkin projection of the spatial advection term can be written as, 
+\begin{align*}
+	v\cos\of{\vtheta} \partial_x f &= v\cos\of{\vtheta} \sum_{k} \partial_x\of{f_{k}(t,x,\vtheta)} S_k\of{\bar{v}}\\
+	\myint_{R} v^3 S_p(\bar{v}) \cos\of{\vtheta} \partial_x f \diff{v} &=\cos\of{\vtheta} A D_x f \text{ where } A_{pk} = {v_{th}}^4 \myint_{R} \bar{v}^3 S_p(\bar{v}) S_k(\bar{v}) \diff{\bar{v}} \\
+	M_{pk} &= {v_{th}}^3\myint_{R} \bar{v}^2 S_p(\bar{v}) S_k(\bar{v}) \diff{\bar{v}} \text{ be the mass matrix}
+\end{align*} The discretized 1D2V Boltzmann equation can be written as follows. 
+\begin{align}
+	\of{I_{N_{\vtheta}} \otimes M  } \partial_{t} \vect{f} &= \nonumber\\&P_{so}\of{n_0 C_{en} + \Gamma(n_0, T_{ev}, n_i) C_{ee} (\cdot, \cdot) + \frac{e E}{m_e} A_v} P_{os} \vect{f} \nonumber \\ &- \of{I_{N_{\vtheta}} \otimes \cos\of{\vtheta_j} A D_x  } \vect{f} \label{eq:1d2v_bte}
+\end{align} Where $A_v$ denotes the advection operator in v-space, $P_{os}$ denotes the ordinates to spherical harmonic basis projection and $P_{so}$ denotes the spherical to ordinates projection operator. Note that all the v-space operators (i.e., advection, electron-heavy and electron-electron) are discretized using B-spline + spherical harmonic basis with standard Galerkin approach as described previously.
+
+Let $N_p, N_r, N_\vtheta$ and $N_{l}$ be the degrees of freedom used for the space, number of B-splines, number of ordinates, and number of $l$-modes (for v-space operator discretization) used for the discretized $f$ respectively. 
+
+\textbf{Approach I}: Fully implicit integration for the 1D2V scheme, will require dense Jacobian with size $\mathcal{O}(N_r^2 N_\vtheta^2 N_p^2)$ with direct LU factored solve with $\mathcal{O}(N_r^6 N_\vtheta^6 N_p^6)$. One approach might be to use iterative scheme with preconditioning for fast convergence. 
+
+\textbf{Approach II}: Use operator splitting for equation \eqref{eq:1d2v_bte}. The following operator splitting scheme is used for the 1D2V Boltzmann equation. 
+\begin{algorithm}[!tbhp]
+	\caption{Overview for 1D glow discharge with Boltzmann \label{alg:1dglow_bte_op}}
+	\begin{algorithmic}[0]
+		\Require $n_s(t,x), \vect{f}(t,x)$ and $\Delta t$
+		\Ensure $n_s(t + \Delta t, x), \vect{f}(t + \Delta t, x)$ 
+		\State $f(t + \Delta t) \leftarrow \text{advection\_x} (\vect{f}(t))$
+		\State $n_e(t, x), k_i(t, x) \leftarrow \text{boltzmann\_to\_fluid}(\vect{f}(t,x))$ 
+		\State $n_s(t + \Delta t), E(t+\Delta t) \leftarrow \text{fluid\_solve}(n_s, n_e, k_i, t = t, dt=\Delta t)$
+		\State $f(t + \Delta t) \leftarrow \text{boltzmann\_v\_solve} (E(t + \Delta t), f(t + \Delta t)) $
+		\State \Return $n_s(t + \Delta t, x), \vect{f}(t + \Delta t, x)$ 
+	\end{algorithmic}
+\end{algorithm}
+\begin{align}
+	&\partial_t \vect{f} + \cos\of{\vtheta} M^{-1} A \partial_x \vect{f} = 0 \label{eq:1d2v_x_adv} \\
+	&\partial_t \vect{f} =\of{I_{N_{\vtheta}} \otimes M  }^{-1} P_{so}\of{n_0 C_{en} + \Gamma(n_0, T_{ev}, n_i) C_{ee} (\cdot, \cdot) + \frac{e E}{m_e} A_v} P_{os} \vect{f} \label{eq:1d2v_v_space1}
+\end{align} or equivalently with matrix absorbed discretized operators, 
+\begin{align}
+	&\partial_t \vect{g} & = \of{n_0 C_{en} + \Gamma(n_0, T_{ev}, n_i) C_{ee} (\cdot, \cdot) + \frac{e E}{m_e} A_v} \vect{g} \text{ where } \vect{g} = P_{os} \vect{f} \text{ and } \vect{f} = P_{so} \vect{g} \label{eq:1d2v_v_space2}
+\end{align} For simplicity, we write mass matrix absorbed operators (e.g., $A \equiv M^{-1} A$) unless otherwise specified. Equation \eqref{eq:1d2v_x_adv} is solved analytically, with $A=Q_A \Lambda_A Q_A^{-1}$ diagonalized $A$. Let $\vect{h} = Q_{A}^{-1}\vect{f}$ then we can write the analytical solution as \eqref{eq:bte_x_adv_q1}.
+\begin{align}
+	\vect{h}(t,\vect{x},\vect{\vtheta}) = \vect{h_0}(\vect{x} - \Lambda\cos(\vect{\vtheta}) t, \vect{\vtheta}) \label{eq:bte_x_adv_q1}
+\end{align} Equation \eqref{eq:1d2v_v_space2} solved with fully implicit solver with Newton's method. 
+The overall operator splitting scheme is summarized in Algorithm \ref{alg:1dglow_bte_op}.
+
+
+
+\newpage
+\subsection{Old notes on 1D glow discharge}
 We can write the Boltzmann equation in full 7d case as below. 
 \begin{align*}
 \partial_t f + \vect{v}\cdot \nabla_{\vect{x}} f -\frac{q}{m} \vect{E} \cdot \nabla_{\vect{v}} f = C[f]

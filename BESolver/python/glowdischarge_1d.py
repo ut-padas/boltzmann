@@ -629,8 +629,8 @@ class glow1d_fluid():
           
           if(self.args.checkpoint==1 and (ts_idx % io_freq)==0):
               print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-              self.plot(u, tt, "%s_%04d.png"%(args.fname, ts_idx))
-              xp.save("%s_%04d.npy"%(self.args.fname, ts_idx), u)
+              self.plot(u, tt, "%s_%04d.png"%(args.fname, ts_idx//io_freq))
+              xp.save("%s_%04d.npy"%(self.args.fname, ts_idx//io_freq), u)
           
           ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
           

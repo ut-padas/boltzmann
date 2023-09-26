@@ -15,13 +15,6 @@ import scipy.special
 #import quadpy
 import math
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.size": 12,
-    #"ytick.major.size": 3,
-    #"font.family": "Helvetica",
-    #"lines.linewidth":2.0
-})
 
 # some parameters related to splines. 
 XLBSPLINE_NUM_Q_PTS_PER_KNOT   = 3

@@ -7,7 +7,6 @@ import scipy.constants
 import argparse
 import matplotlib.pyplot as plt
 import sys
-import boltzmann_op
 import glow1d_utils
 import basis
 import collisions
@@ -777,9 +776,11 @@ class glow1d_boltzmann():
         Imat            = xp.eye(self.Np)
         
         assert self.fluid_idx[0] == self.ion_idx
-    
+        u1  = xp.zeros_like(u)
         def residual(du):
-          u1       = u + du
+          u1[:,:]                =  u[:,:]
+          u1[:, self.fluid_idx] += du
+          
           rhs, bc  = self.rhs_fluid(u1, time + dt, dt) 
           res      = du - dt * rhs
           
@@ -799,8 +800,9 @@ class glow1d_boltzmann():
           
           return jac
         
-        ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max, xp)
-        du = ns_info["x"]
+        ns_info  = glow1d_utils.newton_solver(du[:,self.fluid_idx], residual, jacobian, atol, rtol, iter_max, xp)
+        du_fluid = ns_info["x"]
+        
         
         if(verbose==1):
           print("Fluid step time = %.2E "%(time))
@@ -812,7 +814,9 @@ class glow1d_boltzmann():
           print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
           return u
         
-        return u + du
+        u1[:,:] = u[:,:]
+        u1[:,self.fluid_idx] += du_fluid
+        return u1
       
     def step_boltzmann(self, u, du, time, dt, verbose=0):
       xp      = self.xp_module
@@ -924,9 +928,9 @@ class glow1d_boltzmann():
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
           
         if (ts_idx % io_freq == 0):
-          self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx), tt)
-          np.save("%s_%04d_u.npy"%(args.fname, ts_idx), u)
-          np.save("%s_%04d_v.npy"%(args.fname, ts_idx), v)
+          self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt)
+          np.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
+          np.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
         
         v   = self.step_bte_x(v, tt, dt)
         self.push(u, v, tt, dt)         # bte to fluid
@@ -980,7 +984,7 @@ class glow1d_boltzmann():
     
     def plot(self, Uin, Vin, fname, time):
       xp = self.xp_module
-      fig= plt.figure(figsize=(24,10), dpi=300)
+      fig= plt.figure(figsize=(26,10), dpi=300)
       self.push(Uin, Vin, time, self.args.cfl)
       
       # print(Uin[:,0] , Uin[:,1])
@@ -1075,7 +1079,7 @@ class glow1d_boltzmann():
       
       
       plt.tight_layout()
-      plt.suptitle("time = %.4E T"%(time))
+      plt.suptitle("T=%.4f cycles"%(time))
       fig.savefig(fname)
       plt.close()
     

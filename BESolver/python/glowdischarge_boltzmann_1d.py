@@ -173,11 +173,12 @@ class glow1d_boltzmann():
       self.bs_coll_list  = list()
       self.xp_module     = np
       
-      self.weak_bc_ni    = True
+      self.weak_bc_ni    = False
       self.weak_bc_bte   = False
       
       
-      self.vth_fac       = 8
+      #self.vth_fac       = 100
+      self.ev_lim         = (0,200)
       
       self.initialize_boltzmann()
     
@@ -216,7 +217,7 @@ class glow1d_boltzmann():
       maxwellian             = bte_utils.get_maxwellian_3d(vth, 1.0)
       
       dg_nodes               = np.sqrt(np.array(sig_pts)) * self.c_gamma / vth
-      ev_range               = ((0 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_range               = (self.ev_lim[0], self.ev_lim[1])#((0 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       k_domain               = (np.sqrt(ev_range[0]) * self.c_gamma / vth, np.sqrt(ev_range[1]) * self.c_gamma / vth)
       use_ee                 = args.ee_collisions
       self.bs_use_dg         = 1
@@ -471,6 +472,71 @@ class glow1d_boltzmann():
           Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
           Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
           Uin[:, Te_idx]  = self.param.Teb
+          
+          spec_sp     = self.op_spec_sp
+          mmat        = spec_sp.compute_mass_matrix()
+          mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
+          vth         = self.bs_vth
+          mw          = bte_utils.get_maxwellian_3d(vth, 1)
+
+          mass_op     = self.op_mass
+          temp_op     = self.op_temp
+
+          v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
+          hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+          h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=mmat_inv)
+          m0      = xp.dot(mass_op, h_init)
+          for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            if lm[0]>0:
+              h_init[lm_idx::len(spec_sp._sph_harm_lm)]=0.0
+          
+          h_init = h_init/m0
+          print("boltzmann initial conditions, mass and temperature (eV)", m0, xp.dot(temp_op, h_init)/m0)
+          
+          #print(h_init)
+          h_init    = xp.dot(self.op_psh2o, h_init)
+          h_init_l  = xp.copy(h_init)
+          h_init_r  = xp.copy(h_init)
+          
+          h_init_l[self.xp_vt_l] = 0
+          h_init_r[self.xp_vt_r] = 0
+          
+          h_init_l               = xp.dot(self.op_po2sh,h_init_l)
+          m0                     = xp.dot(mass_op, h_init_l)
+          h_init_l               = h_init_l/m0
+          h_init_l               = xp.dot(self.op_psh2o, h_init_l)
+          h_init_l[self.xp_vt_l] = 0
+          
+          hh                     = xp.dot(self.op_po2sh,h_init_l)
+          m0                     = xp.dot(mass_op, hh)
+          print("x at left bdy, mass and temperature (eV)", m0, xp.dot(temp_op, hh)/m0)
+          
+          
+          h_init_r               = xp.dot(self.op_po2sh,h_init_r)
+          m0                     = xp.dot(mass_op, h_init_r)
+          h_init_r               = h_init_r/m0
+          h_init_r               = xp.dot(self.op_psh2o, h_init_r)
+          h_init_r[self.xp_vt_r] = 0
+          
+          hh                     = xp.dot(self.op_po2sh,h_init_r)
+          m0                     = xp.dot(mass_op, hh)
+          print("x at right bdy, mass and temperature (eV)", m0, xp.dot(temp_op, hh)/m0)
+          
+          for i in range(1, self.Np-1):
+            Vin[:,i] = h_init
+          
+          Vin[:,0]  = h_init_l
+          Vin[:,-1] = h_init_r
+          
+          #print(Vin[self.xp_vt_l,0] )
+          #print(Vin[self.xp_vt_r,-1])
+          #print("Vin \n", Vin)
+          # scale functions to have ne, at initial timestep
+          Vin = Vin * Uin[:,ele_idx]
+          
+          #Vin_lm = self.bte_eedf_normalization(xp.dot(self.op_po2sh, Vin))
+          #print(Vin_lm)
+          #print(xp.dot(self.op_rate[1] , Vin_lm[0::2]))
         
         self.mu[:, ele_idx] = self.param.mu_e
         self.D[: , ele_idx] = self.param.De
@@ -478,52 +544,25 @@ class glow1d_boltzmann():
         self.mu[:, ion_idx] = self.param.mu_i
         self.D[: , ion_idx] = self.param.Di
         
-        spec_sp     = self.op_spec_sp
-        mmat        = spec_sp.compute_mass_matrix()
-        mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
-        vth         = self.bs_vth
-        mw          = bte_utils.get_maxwellian_3d(vth, 1)
-
-        mass_op     = self.op_mass
-        temp_op     = self.op_temp
-
-        v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
-        hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
-        h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=mmat_inv)
-        m0      = xp.dot(mass_op, h_init)
-        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-          if lm[0]>0:
-            h_init[lm_idx::len(spec_sp._sph_harm_lm)]=0.0
-        
-        h_init = h_init/m0
-        print("boltzmann initial conditions, mass and temperature (eV)", m0, xp.dot(temp_op, h_init)/m0)
-        
-        #print(h_init)
-        h_init  = xp.dot(self.op_psh2o, h_init)
-        
-        for i in range(self.Np):
-          Vin[:,i] = h_init
-        
-        #print("Vin \n", Vin)
-        # scale functions to have ne, at initial timestep
-        Vin = Vin * Uin[:,ele_idx]
-        #print(Vin.shape)
-        # ne = Uin[:,ele_idx]
-        # print(ne)
-        # Vin_lm = xp.dot(self.op_po2sh, Vin)
-        # print(np.dot(self.op_mass, Vin_lm))
-        # Vin_lm = Vin_lm/ne
-        # print(Vin_lm)
-        
-        Vin_lm = self.bte_eedf_normalization(xp.dot(self.op_po2sh, Vin))
-        #print(Vin_lm)
-        #print(xp.dot(self.op_rate[1] , Vin_lm[0::2]))
         
           
       else:
         raise NotImplementedError
       
       return Uin, Vin
+    
+    def enforce_bte_x_bc(self, Vin, time, dt):
+      """_summary_
+      Args:
+          Vin (_type_) : distribution function in the ordinates form. 
+          time (_type_): simulation time
+          dt (_type_)  : time-step size
+      """
+      
+      Vin[self.xp_vt_l,  0] = 0
+      Vin[self.xp_vt_r, -1] = 0
+      
+      return 
     
     def solve_poisson(self, ne, ni,time):
         """Solve Gauss' law for the electric potential.
@@ -802,6 +841,8 @@ class glow1d_boltzmann():
         
         ns_info  = glow1d_utils.newton_solver(du[:,self.fluid_idx], residual, jacobian, atol, rtol, iter_max, xp)
         du_fluid = ns_info["x"]
+        #print(du)
+        #print(du_fluid)
         
         
         if(verbose==1):
@@ -812,6 +853,7 @@ class glow1d_boltzmann():
           print("Fluid step non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
           print("time = %.2E "%(time))
           print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+          sys.exit(-1)
           return u
         
         u1[:,:] = u[:,:]
@@ -924,6 +966,8 @@ class glow1d_boltzmann():
       self.push(u, v, tt, dt) # bte to fluid
       self.pull(u, v, tt, dt) # fluid to bte
       for ts_idx in range(steps):
+        du[:,:]=0
+        dv[:,:]=0
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
           
@@ -933,10 +977,13 @@ class glow1d_boltzmann():
           np.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
         
         v   = self.step_bte_x(v, tt, dt)
-        self.push(u, v, tt, dt)         # bte to fluid
+        #print("after bte x left  \n" , v[self.xp_vt_l, 0])
+        #print("after bte x right \n" , v[self.xp_vt_r, -1])
         
-        u = self.step_fluid(u, du, tt, dt, int(ts_idx % io_freq == 0))
-        self.pull(u, v, tt, dt)
+        #m0_l = xp.dot(self.op_mass, xp.dot(self.op_po2sh, v[:,0]))
+        #m0_r = xp.dot(self.op_mass, xp.dot(self.op_po2sh, v[:,-1]))
+        
+        #print("after bte_x mass = ", m0_l, m0_r)
         
         # ordinates to spherical projection
         v_lm       = xp.dot(self.op_po2sh,v)
@@ -954,7 +1001,18 @@ class glow1d_boltzmann():
         # spherical to ordinates projection
         v          = xp.dot(self.op_psh2o,v_lm)
         
-        self.push(u, v, tt + dt, dt)
+        #print("after bte left  \n" , v[self.xp_vt_l, 0])
+        #print("after bte right \n" , v[self.xp_vt_r, -1])
+        #m0_l = xp.dot(self.op_mass, xp.dot(self.op_po2sh, v[:,0]))
+        #m0_r = xp.dot(self.op_mass, xp.dot(self.op_po2sh, v[:,-1]))
+        #print("after bte_v mass = ", m0_l, m0_r)
+        
+        self.push(u, v, tt, dt)         # bte to fluid
+        
+        u = self.step_fluid(u, du, tt, dt, int(ts_idx % io_freq == 0))
+        self.pull(u, v, tt, dt)
+        
+        #self.push(u, v, tt + dt, dt)
         tt+= dt
         
         
@@ -995,15 +1053,17 @@ class glow1d_boltzmann():
       Te = Uin[:, self.Te_idx]
       
       plt.subplot(2, 4, 1)
-      plt.plot(self.xp, self.param.np0 * ne, 'b')
+      plt.plot(self.xp, self.param.np0 * ne, 'b', label=r"$n_e$")
+      plt.plot(self.xp, self.param.np0 * ni, '--r', label=r"$n_i$")
       plt.xlabel(r"x/L")
-      plt.ylabel(r"$n_e (m^{-3})$")
+      plt.ylabel(r"$density (m^{-3})$")
       plt.grid(visible=True)
+      plt.legend()
       
       plt.subplot(2, 4, 2)
-      plt.plot(self.xp, self.param.np0 * ni, 'b')
+      plt.plot(self.xp, self.param.np0 * (ni-ne), 'b')
       plt.xlabel(r"x/L")
-      plt.ylabel(r"$n_i (m^{-3})$")
+      plt.ylabel(r"$(n_i -n_e)(m^{-3})$")
       plt.grid(visible=True)
       
       plt.subplot(2, 4, 3)
@@ -1046,12 +1106,12 @@ class glow1d_boltzmann():
       
       
       vth       = self.bs_vth
-      ev_range  = ((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       ev_grid   = np.linspace(ev_range[0], ev_range[1], 500)
       
       ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
       
-      pts = 3
+      pts = 8
       plt.subplot(2, 4, 7)
       for i in range(pts):
         plt.semilogy(ev_grid, np.abs(ff_v[i][0]),'-', label="x=%.4f"%(self.xp[i]))

@@ -3,8 +3,9 @@ simple class to hold glow discharge parameters
 """
 import numpy as np
 import scipy.constants
-#from multiprocess import Pool
+#from multiprocess import Pool as WorkerPool
 from multiprocessing.pool import ThreadPool as WorkerPool
+import scipy.sparse.linalg as spla
 
 class parameters():
   def __init__(self) -> None:

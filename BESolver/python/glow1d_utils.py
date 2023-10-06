@@ -6,6 +6,10 @@ import scipy.constants
 #from multiprocess import Pool as WorkerPool
 from multiprocessing.pool import ThreadPool as WorkerPool
 import scipy.sparse.linalg as spla
+try:
+  import cupy as cp
+except ImportError:
+  print("Please install CuPy for GPU use")
 
 class parameters():
   def __init__(self) -> None:
@@ -53,7 +57,6 @@ class parameters():
     self.ki_nTe = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (18.687 * ne / nTe**2)  
     self.ki_ne  = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (-18.687 / nTe)  
     
-
 def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   x0       = xp.copy(x)
   jac      = jacobian(x0)
@@ -66,8 +69,7 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
     count    = 0
     r0       = residual(x)
     
-    norm_r0  = xp.linalg.norm(r0)
-    norm_rr  = norm_r0 = np.linalg.norm(r0)
+    norm_rr  = norm_r0 = xp.linalg.norm(r0)
     converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
     
     while( not converged and (count < iter_max) ):
@@ -112,43 +114,33 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
 def newton_solver_batched(x, n_pts, residual, jacobian, atol, rtol, iter_max, num_processes=4, xp=np):
   jac      = jacobian(x)
   assert jac.shape[0] == n_pts
-  jac_inv  = np.zeros_like(jac)
+  jac_inv  = xp.linalg.inv(jac)
   
-  # for i in range(n_pts):
+  # def t1(i):
   #   jac_inv[i] = xp.linalg.inv(jac[i])
-  def t1(i):
-    jac_inv[i] = xp.linalg.inv(jac[i])
-    return
+  #   return
   
-  pool = WorkerPool(num_processes)    
-  pool.map(t1,[i for i in range(n_pts)])
-  pool.close()
-  pool.join()
+  # pool = WorkerPool(num_processes)    
+  # pool.map(t1,[i for i in range(n_pts)])
+  # pool.close()
+  # pool.join()
   
   ns_info  = dict()
   alpha    = xp.ones(n_pts)
   while((alpha > 1e-10).any()):
       count     = 0
       r0        = residual(x)
-      norm_rr   = norm_r0 = np.linalg.norm(r0, axis=0)
+      norm_rr   = norm_r0 = xp.linalg.norm(r0, axis=0)
       converged = ((norm_rr/norm_r0 < rtol).all() or (norm_rr < atol).all())
       
       while( not converged and (count < iter_max) ):
-          rr       = residual(x)
-          norm_rr  = xp.linalg.norm(rr, axis=0)
+          rr        = residual(x)
+          norm_rr   = xp.linalg.norm(rr, axis=0)
           converged = ((norm_rr/norm_r0 < rtol).all() or (norm_rr < atol).all())
           
-          # for i in range(n_pts):
-          #   x[:,i] = x[:,i] + alpha[i] * xp.dot(jac_inv[i], -rr[:,i])
-          def t2(i):
-            x[:,i] = x[:,i] + alpha[i] * xp.dot(jac_inv[i], -rr[:,i])
-            return
-          
-          
-          pool = WorkerPool(num_processes)    
-          pool.map(t2,[i for i in range(n_pts)])
-          pool.close()
-          pool.join()
+          x         = x + alpha * xp.einsum("ijk,ki->ji", jac_inv, -rr)
+          #   for i in range(n_pts):
+          #     x[:,i] = x[:,i] + alpha[i] * xp.dot(jac_inv[i], -rr[:,i])
           
           count   += 1
           #if count%1000==0:

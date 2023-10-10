@@ -22,9 +22,13 @@ CUDA_NUM_DEVICES      = 0
 PROFILE_SOLVERS       = 0
 try:
   import cupy as cp
-  CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
+  #CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
 except ImportError:
   print("Please install CuPy for GPU use")
+  #sys.exit(0)
+except:
+  print("CUDA not configured properly !!!")
+  sys.exit(0)
 
 class glow1d_boltzmann():
     """
@@ -196,7 +200,7 @@ class glow1d_boltzmann():
       self.bs_coll_list  = list()
       self.xp_module     = np
       
-      self.weak_bc_ni    = False
+      self.weak_bc_ni    = True
       self.weak_bc_bte   = False
       
       
@@ -258,7 +262,7 @@ class glow1d_boltzmann():
       
       
       # construct the spectral class 
-      bb                     = basis.BSpline(k_domain, self.args.sp_order, self.bs_nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=self.bs_use_dg, verbose = args.verbose)
+      bb                     = basis.BSpline(k_domain, self.args.sp_order, self.bs_nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=self.bs_use_dg, verbose = args.verbose, extend_domain=True)
       spec_sp                = sp.SpectralExpansionSpherical(self.bs_nr, bb, self.bs_lm)
       spec_sp._num_q_radial  = bb._num_knot_intervals * self.args.spline_qpts
       collision_op           = collOpSp.CollisionOpSP(spec_sp)
@@ -431,7 +435,7 @@ class glow1d_boltzmann():
       FOp                       = psh2o_C_po2sh(FOp)
       FOp_g                     = psh2o_C_po2sh(FOp_g)
       
-      adv_x                     = np.dot(self.op_inv_mm,  vth * compute_spatial_advection_op())
+      adv_x                     = np.dot(self.op_inv_mm,  vth  * (1/self.param.L) * compute_spatial_advection_op())
       adv_x_d, adv_x_q          = np.linalg.eig(adv_x)
       self.op_adv_x_d           = adv_x_d
       self.op_adv_x_q           = adv_x_q
@@ -491,8 +495,8 @@ class glow1d_boltzmann():
       if type==0:
         if self.args.restore==1:
           print("~~~restoring solver from %s.npy"%(args.fname))
-          Uin = xp.load("%s_u.npy"%(args.fname))
-          Vin = xp.load("%s_v.npy"%(args.fname))
+          Uin = xp.load("%s_%04d_u.npy"%(args.fname, args.rs_idx))
+          Vin = xp.load("%s_%04d_v.npy"%(args.fname, args.rs_idx))
         else:
           xx = self.param.L * (self.xp + 1)
           Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
@@ -578,21 +582,52 @@ class glow1d_boltzmann():
       """intialize boltzmann space advection operator"""
       xp = self.xp_module
       assert xp == np
-      # setting the Chebyshev operators for x-space advection for the analytical solution.
       self.bte_x_shift = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
+      
+      # sp_order    = 3
+      # q_per_knot  = 5
+      # bb          = basis.BSpline((self.xp[0], self.xp[-1]), sp_order, self.Np, q_per_knot, sig_pts=[], verbose=True, extend_domain=False)
+      # bgx, bgw    = bb.Gauss_Pn(bb._num_knot_intervals * q_per_knot)
+      
+      # # chebyshev collocation points to B-spline quadrature points interpolation
+      # P1          = np.dot(np.polynomial.chebyshev.chebvander(bgx, self.deg), self.V0pinv)
+      # bb_mm       = bb.mass_mat()
+      # bb_mm_inv   = bte_utils.choloskey_inv(bb_mm)
+      
+      
+      # b_splines   = [bb.Pn(i) for i in range(bb._num_p)] 
+      
+      # def bspline_vander(x):
+      #   Vq_b        = np.empty((bb._num_p, len(x)))
+      #   for i in range(bb._num_p):
+      #     Vq_b[i,:]  = b_splines[i](x, 0)
+
+      #   return Vq_b
+        
+      # Vq_b  = bspline_vander(bgx)
+      
+      # # b-spline projection coefficient matrix
+      # P2          = np.dot(bb_mm_inv, np.dot(Vq_b * bgw, P1))
+      
+      #args.cfl = min(, args.cfl)
+      print("time step recomended for x-advection ", (1/np.max(self.op_adv_x_d))/self.param.tau)
+      
       for i in range(self.Nr):
         for j in range(self.Nvt):
           xx = self.xp - self.op_adv_x_d[i] * np.cos(self.xp_vt[j]) * dt * self.param.tau
+          #self.bte_x_shift[i,j :, : ] = xp.dot(bspline_vander(xx).T, P2)
+          
+          # Chebyshev based interpolation gives ocillations on the domain
           self.bte_x_shift[i,j :, : ]     = np.polynomial.chebyshev.chebvander(xx, self.deg)
           self.bte_x_shift[i,j :, : ]     = xp.dot(self.bte_x_shift[i,j], self.V0pinv)
           
           if (xx<-1).any()==True:
             assert((xx>1).all()==False)
-            self.bte_x_shift[i,j, xx<-1, :] = 0.0 
+            self.bte_x_shift[i,j, xx<=-1,:] = 0.0 
             
           if (xx>1).any()==True:
             assert((xx<-1).all()==False)
-            self.bte_x_shift[i,j, xx> 1, :] = 0.0 
+            self.bte_x_shift[i,j, xx>=1, :] = 0.0 
       
       # v1 = -self.xp**2 + 1.2
       # plt.figure(figsize=(4,4), dpi=300)
@@ -611,6 +646,7 @@ class glow1d_boltzmann():
       
       # plt.legend()
       # plt.grid()
+      # #plt.show()
       # plt.savefig("test.png")
       # plt.close()
       
@@ -914,6 +950,12 @@ class glow1d_boltzmann():
       # for i in range(self.Nr):
       #   for j in range(self.Nvt):
       #     Vin_adv_x[i,j] = xp.dot(self.bte_x_shift[i,j], Vin[i,j])
+      
+      # plt.plot(self.xp, Vin[0,0],'-b')
+      # plt.plot(self.xp, Vin_adv_x[0,0],'--r')
+      # plt.plot(self.xp, Vin_adv_x[-1,0],'--g')
+      # plt.show()
+      # plt.close()
           
       Vin_adv_x  = Vin_adv_x.reshape((self.Nr, self.Nvt *  self.Np))
       Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((self.Nr , self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
@@ -1131,16 +1173,22 @@ class glow1d_boltzmann():
       dv    = xp.zeros_like(v)
       dv_lm = xp.zeros((self.dof_v, self.Np))
       
-      io_freq  = int(1/dt)
+      io_freq  = int(0.5/dt)
       
       dg_qmat  = self.op_diag_dg
       dg_qmatT = xp.transpose(self.op_diag_dg)
       
       self.push(u, v, tt, dt) # bte to fluid
       self.pull(u, v, tt, dt) # fluid to bte
-      for ts_idx in range(steps):
+      ts_idx_b  = 0 
+      if args.restore==1:
+        ts_idx_b = int(args.rs_idx * io_freq)
+        tt       = ts_idx_b * dt
+        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+      for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
+        
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
           
@@ -1183,32 +1231,51 @@ class glow1d_boltzmann():
           Uin (_type_): _description_
           Vin (_type_): _description_
       """
-      
-      xp              = self.xp_module
       dt              = self.args.cfl 
       tT              = self.args.cycles
       tt              = 0
       steps           = max(1,int(tT/dt))
       
+      self.initialize_bte_adv_x(dt)
       print("++++ Using backward Euler ++++")
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       
-      u = xp.copy(Uin)
-      v = xp.copy(Vin)
+      if self.args.use_gpu == 1: 
+        Uin1 = cp.asarray(Uin)
+        Vin1 = cp.asarray(Vin)
+      else:
+        Uin1 = Uin
+        Vin1 = Vin
+      
+      if self.args.use_gpu==1:
+        self.copy_operators_H2D(0)
+        self.xp_module = cp
+      else:
+        self.xp_module = np
+        
+      xp             = self.xp_module
+      
+      u = xp.copy(Uin1)
+      v = xp.copy(Vin1)
       
       du    = xp.zeros_like(u)
       dv    = xp.zeros_like(v)
       dv_lm = xp.zeros((self.dof_v, self.Np))
       
-      io_freq  = int(1/dt)
+      io_freq  = 1000#int(1/dt)
       
-      self.initialize_bte_adv_x(dt)
+      
       
       dg_qmat  = self.op_diag_dg
       dg_qmatT = xp.transpose(self.op_diag_dg)
       
       self.bs_E = xp.zeros_like(self.xp)
-      for ts_idx in range(steps):
+      ts_idx_b  = 0 
+      if args.restore==1:
+        ts_idx_b = int(args.rs_idx * io_freq)
+        tt  = ts_idx_b * dt
+        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+      for ts_idx in range(ts_idx_b,steps):
         du[:,:]=0
         dv[:,:]=0
         
@@ -1233,31 +1300,50 @@ class glow1d_boltzmann():
           Vin (_type_): _description_
       """
       
-      xp              = self.xp_module
       dt              = self.args.cfl 
       tT              = self.args.cycles
       tt              = 0
       steps           = max(1,int(tT/dt))
       
+      self.initialize_bte_adv_x(dt)
       print("++++ Using backward Euler ++++")
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       
-      u = xp.copy(Uin)
-      v = xp.copy(Vin)
+      if self.args.use_gpu == 1: 
+        Uin1 = cp.asarray(Uin)
+        Vin1 = cp.asarray(Vin)
+      else:
+        Uin1 = Uin
+        Vin1 = Vin
+      
+      if self.args.use_gpu==1:
+        self.copy_operators_H2D(0)
+        self.xp_module = cp
+      else:
+        self.xp_module = np
+        
+      xp             = self.xp_module
+      
+      u = xp.copy(Uin1)
+      v = xp.copy(Vin1)
       
       du    = xp.zeros_like(u)
       dv    = xp.zeros_like(v)
       dv_lm = xp.zeros((self.dof_v, self.Np))
       
-      io_freq  = int(1/dt)
-      
-      self.initialize_bte_adv_x(dt)
+      io_freq  = 1000#int(1/dt)
       
       dg_qmat  = self.op_diag_dg
       dg_qmatT = xp.transpose(self.op_diag_dg)
       
       self.bs_E = xp.zeros_like(self.xp)
-      for ts_idx in range(steps):
+      ts_idx_b  = 0
+      if args.restore==1:
+        ts_idx_b = int(args.rs_idx * io_freq)
+        tt       = ts_idx_b * dt
+        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+      
+      for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
         
@@ -1272,7 +1358,7 @@ class glow1d_boltzmann():
         v    = self.step_bte_x(v, tt, dt)
         v_lm = xp.dot(self.op_po2sh, v)
         v1   = xp.dot(self.op_psh2o, v_lm)
-        print(tt, " @ abs = ", xp.linalg.norm(v1-v), "rel = ", (xp.linalg.norm(v1-v)/np.linalg.norm(v)))
+        #print(tt, " @ abs = ", xp.linalg.norm(v1-v), "rel = ", (xp.linalg.norm(v1-v)/np.linalg.norm(v)))
         v    = v1
         tt+= dt
       return u, v
@@ -1309,13 +1395,19 @@ class glow1d_boltzmann():
       dv    = xp.zeros_like(v)
       dv_lm = xp.zeros((self.dof_v, self.Np))
       
-      io_freq  = int(1/dt)
+      io_freq  = int(0.1/dt)
       
       # dg_qmat  = self.op_diag_dg
       # dg_qmatT = xp.transpose(self.op_diag_dg)
       
-      self.bs_E       = xp.ones(len(self.xp)) * 5000
-      for ts_idx in range(steps):
+      self.bs_E       = xp.ones(len(self.xp)) * 500
+      ts_idx_b        = 0
+      if args.restore==1:
+        ts_idx_b = int(args.rs_idx * io_freq)
+        tt       = ts_idx_b * dt
+        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+        
+      for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
         if (ts_idx % io_freq == 0):
@@ -1637,6 +1729,8 @@ parser.add_argument("-plot_data", "--plot_data"                   , help="plot d
 parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable electron-electron collisions", type=float, default=0)
 parser.add_argument("-verbose", "--verbose"                       , help="verbose with debug information", type=int, default=0)
 parser.add_argument("-restore", "--restore"                       , help="restore the solver" , type=int, default=0)
+parser.add_argument("-rs_idx",  "--rs_idx"                        , help="restore file_idx"   , type=int, default=0)
+
 parser.add_argument("-fname", "--fname"                           , help="file name to store the solution" , type=str, default="1d_glow")
 parser.add_argument("-dir"  , "--dir"                             , help="file name to store the solution" , type=str, default="glow1d_dir")
 
@@ -1644,14 +1738,5 @@ args = parser.parse_args()
 glow_1d = glow1d_boltzmann(args)
 u, v    = glow_1d.initialize()
 uu,vv   = glow_1d.solve(u, v)
-uu,vv   = glow_1d.solve_unit_test3(u, v)
-
-#glow_1d.push(uu, vv, 0, 0)
-#v       = glow_1d.solve(u, ts_type=args.ts_mode)
-#glow_1d.plot(uu,vv,"1d2v_glow_bte.png", args.cycles)
-
-#np.save("%s_u.npy"%(args.fname), uu)
-#np.save("%s_v.npy"%(args.fname), vv)
-
-
+#uu,vv   = glow_1d.solve_unit_test3(u, v)
 

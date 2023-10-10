@@ -257,7 +257,7 @@ class Laguerre(Basis):
 
 class BSpline(Basis):
     
-    def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=list(), knots_vec=None, dg_splines=False, verbose=True):
+    def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=list(), knots_vec=None, dg_splines=False, verbose=True, extend_domain=False):
         self._basis_type = BasisType.SPLINES
         self._domain     = k_domain
         self._window     = k_domain
@@ -271,8 +271,10 @@ class BSpline(Basis):
                 else:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots_1(k_domain, num_p, spline_order,sig_pts)
             else:
-                self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
-                #self._t      = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 2 * k_domain[1])
+                if extend_domain==True:
+                    self._t      = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 3 * k_domain[1])
+                else:
+                    self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
                 self._ele    = 1
                 self._ele_p  = num_p
 
@@ -437,7 +439,40 @@ class BSpline(Basis):
         plt.savefig("bspline_basis.png")
         #plt.show()
         plt.close()
+    
+    def mass_mat(self):
+        num_p    = self._num_p
+        k_vec    = self._t
+        dg_idx   = self._dg_idx
+        sp_order = self._sp_order
+    
+        [gx, gw] = self.Gauss_Pn((sp_order + 2) * self._num_knot_intervals)
+        mm=np.zeros((num_p, num_p))
 
+        for e_id in range(0,len(dg_idx),2):
+            ib=dg_idx[e_id]
+            ie=dg_idx[e_id+1]
+
+            xb=k_vec[ib]
+            xe=k_vec[ie+sp_order+1]
+                
+            idx_set     = np.logical_and(gx>=xb, gx <=xe)
+            gx_e , gw_e = gx[idx_set],gw[idx_set]
+
+            for p in range(ib, ie+1):
+                k_min   = k_vec[p]
+                k_max   = k_vec[p + sp_order + 1]
+                qx_idx  = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                gmx     = gx_e[qx_idx]
+                gmw     = gw_e[qx_idx]
+                b_p     = self.Pn(p)(gmx, 0)  
+
+                for k in range(max(ib, p - (sp_order+3) ), min(ie+1, p + (sp_order+3))):
+                    b_k       = self.Pn(k)(gmx, 0) 
+                    mm[p,k] = np.dot(b_p * b_k, gmw)
+
+        return mm
+    
     def fit(self, f):
         num_p    = self._num_p
         sp_order = self._sp_order 
@@ -576,7 +611,7 @@ class BSpline(Basis):
         t          = np.append(t , np.logspace(np.log10(k_domain[1]), np.log10(ext_kdomain), num_p2-sp_order,endpoint=False))
         t          = np.append(t , ext_kdomain * np.ones(sp_order+1))
 
-        print(len(t), num_p+sp_order+1)
+        #print(len(t), num_p+sp_order+1)
         return t
     
     @staticmethod

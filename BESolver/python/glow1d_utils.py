@@ -16,8 +16,8 @@ class parameters():
     xp         = np
     
     self.L     = 0.5 * 2.54e-2             # m 
-    self.V0    = 100                        # V
-    self.f     = 13.56e6                    # Hz
+    self.V0    = 1e2                       # V
+    self.f     = 13.56e6                   # Hz
     self.tau   = (1/self.f)                # s
     self.qe    = scipy.constants.e         # C
     self.eps0  = scipy.constants.epsilon_0 # eps_0 

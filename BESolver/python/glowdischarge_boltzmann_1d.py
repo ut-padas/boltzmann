@@ -1160,7 +1160,7 @@ class glow1d_boltzmann():
         Vin1 = Vin
       
       if self.args.use_gpu==1:
-        self.copy_operators_H2D(0)
+        self.copy_operators_H2D(args.gpu_device_id)
         self.xp_module = cp
       else:
         self.xp_module = np
@@ -1248,7 +1248,7 @@ class glow1d_boltzmann():
         Vin1 = Vin
       
       if self.args.use_gpu==1:
-        self.copy_operators_H2D(0)
+        self.copy_operators_H2D(args.gpu_device_id)
         self.xp_module = cp
       else:
         self.xp_module = np
@@ -1317,7 +1317,7 @@ class glow1d_boltzmann():
         Vin1 = Vin
       
       if self.args.use_gpu==1:
-        self.copy_operators_H2D(0)
+        self.copy_operators_H2D(args.gpu_device_id)
         self.xp_module = cp
       else:
         self.xp_module = np
@@ -1381,7 +1381,7 @@ class glow1d_boltzmann():
         Vin1 = Vin
       
       if self.args.use_gpu==1:
-        self.copy_operators_H2D(0)
+        self.copy_operators_H2D(args.gpu_device_id)
         self.xp_module = cp
       else:
         self.xp_module = np
@@ -1654,7 +1654,7 @@ class glow1d_boltzmann():
       plt.grid(visible=True)
       
       vth       = self.bs_vth
-      ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]-0.1) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       ev_grid   = np.linspace(ev_range[0], ev_range[1], 500)
       
       ff_v      = self.compute_radial_components(ev_grid, asnumpy(Vin_lm1))
@@ -1724,6 +1724,7 @@ parser.add_argument("-warm_up", "--warm_up"                       , help="warm u
 parser.add_argument("-runs", "--runs"                             , help="runs "  , type=int, default=10)
 parser.add_argument("-store_eedf", "--store_eedf"                 , help="store EEDF"          , type=int, default=0)
 parser.add_argument("-use_gpu", "--use_gpu"                       , help="use GPUs"            , type=int, default=0)
+parser.add_argument("-gpu_device_id", "--gpu_device_id"           , help="GPU device id to use", type=int, default=0)
 parser.add_argument("-store_csv", "--store_csv"                   , help="store csv format of QoI comparisons", type=int, default=1)
 parser.add_argument("-plot_data", "--plot_data"                   , help="plot data", type=int, default=1)
 parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable electron-electron collisions", type=float, default=0)
@@ -1737,6 +1738,11 @@ parser.add_argument("-dir"  , "--dir"                             , help="file n
 args = parser.parse_args()
 glow_1d = glow1d_boltzmann(args)
 u, v    = glow_1d.initialize()
+
+if args.use_gpu==1:
+  gpu_device = cp.cuda.Device(args.gpu_device_id)
+  gpu_device.use()
+
 uu,vv   = glow_1d.solve(u, v)
 #uu,vv   = glow_1d.solve_unit_test3(u, v)
 

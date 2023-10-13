@@ -1,3 +1,357 @@
+elif mode==1:
+            """
+            high gradient increasing
+            """
+            x0 = 0.0
+            x1 = 1
+
+            e0 = 1.24e-21
+            e1 = 2.24e-20
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs = m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode==2:
+            """
+            low gradient increasing
+            """
+            x0 = 0.0
+            x1 = 1
+
+            e0 = 1.24e-20
+            e1 = 1.44e-20
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs = m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode == 3:
+            """
+            high gradient decreasing
+            """
+            x0 = 0.0
+            x1 = 4.0
+
+            e0 = 1.44e-20
+            e1 = 0
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs=  m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode == 4:
+            """
+            low gradient decreasing
+            """
+            x0 = 0.0
+            x1 = 5e1
+
+            e0 = 1.44e-20
+            e1 = 0
+            
+            m  = (e1-e0)/(x1-x0)
+            tcs=  m * (ev-x0)  + e0
+            tcs[tcs<0]=0.0
+            return  tcs
+
+        elif mode==5:
+            """
+            high gradient kink
+            """
+            tcs = np.zeros_like(ev)
+
+            x0 = 0.0
+            x1 = 4.0
+            x2 = 5e1
+
+            e0 = 3.24e-20
+            e1 = 1.00e-21
+            e2 = 3.24e-20
+
+            m2= (e2-e1)/(x2-x1)
+            mask = ev >= x1
+            tcs[mask] = e1 + (ev[mask]-x1) * m2
+
+            mask=np.logical_not(mask)
+            m1  = (e1-e0)/(x1-x0)
+            tcs[mask] = e0 + (ev[mask]-x0) * m1
+
+            #tcs[tcs<0]=0
+            return tcs
+
+        elif mode==6:
+            """
+            low gradient kink
+            """
+            tcs = np.zeros_like(ev)
+
+            x0 = 0.0
+            x1 = 4.0
+            x2 = 5e1
+
+            e0 = 3.24e-20
+            e1 = 1.00e-20
+            e2 = 3.24e-20
+
+            m2= (e2-e1)/(x2-x1)
+            mask = ev >= x1
+            tcs[mask] = e1 + (ev[mask]-x1) * m2
+
+            mask=np.logical_not(mask)
+            m1  = (e1-e0)/(x1-x0)
+            tcs[mask] = e0 + (ev[mask]-x0) * m1
+
+            #tcs[tcs<0]=0
+            return tcs
+
+        elif mode==7:
+            """
+            low gradient kink
+            """
+            tcs = np.zeros_like(ev)
+
+            x0 = 0.0
+            x1 = 4.0
+            x2 = 1e2
+
+            e0 = 3.24e-20
+            e1 = 1.00e-20
+            e2 = 3.24e-20
+
+            m2= (e2-e1)/(x2-x1)
+            mask = ev >= x1
+            tcs[mask] = e1 + (ev[mask]-x1) * m2
+
+            mask=np.logical_not(mask)
+            m1  = (e1-e0)/(x1-x0)
+            tcs[mask] = e0 + (ev[mask]-x0) * m1
+
+            #tcs[tcs<0]=0
+            return tcs
+
+        elif mode==8:
+            """
+            quadratic smooth
+            """
+            tcs = np.zeros_like(ev)
+            
+            x0  = 0.2 
+            e0  = 5.20e-26
+            tcs = 3.22e-18 * (ev-x0)**2 -3.22e-24 * (ev-x0)  + e0
+            return tcs
+
+        elif mode==9:
+            """
+            quadratic smooth
+            """
+            tcs = np.zeros_like(ev)
+            
+            x0  = 0.2 
+            e0  = 5.20e-26
+            tcs = 3.22e-21 * (ev-x0)**2 + e0
+            return tcs
+
+        elif mode == 11:
+            """
+            Cross section data from Kevin. 
+            """
+            # Rydberg energy
+            R0 = 13.605693122994  # eV
+            # Bohr radius
+            a0 = 5.29177e-11     # m
+            # electron charge
+            qe = 1.60217662e-19  # C
+            # electron mass
+            me = 9.10938356e-31  # kg
+            # speed of light
+            c0 = 2.99792458e8    # m/s
+            # mc2 in eV
+            mc2 = me * c0 * c0 / qe
+            # hbar = h / 2pi
+            hbar = 6.62607004e-34 / 2.0 / np.pi   # m2 kg / s
+            # static polarizability
+            alpha = 11.08     # a0^3
+            # E (eV) from k^2 (a0^(-2))
+            Efromk2 = hbar * hbar / 2.0 / me / qe / a0 / a0
+            theta = [-1.4173003748675717, 62.56060131992609, -85.20199010031428, 0.7361486757602836, 0.4463721552135573, 1.6509904643360198, 2.001074057955869]
+            def elastic_shifted_MERT(theta,E_input,N=10):
+                NE = len(E_input)
+                E  = E_input#np.copy(E_input)
+
+                A, D, F, E1, t1, t2, t3 = theta
+
+                E *= 0.5*(1.+t1) - 0.5 * (1. - t1) * np.tanh( (E - t2) / t3 )
+
+                k = np.sqrt( E / Efromk2 ) # wavenumber in a0^(-1)
+                crs = np.zeros((NE,))
+
+                #     A, D, F, E1 = theta
+                eta0 = - A * ( 1. + 4. / 3. * alpha * k * k * np.log(k) ) - np.pi / 3. * alpha * k + D * k**2 + F * k**3
+                eta0 = np.arctan(eta0 * k)
+
+                eta1 = np.pi / 15. * alpha * k * ( 1. - np.sqrt(E/E1) )
+                eta1 = np.arctan(eta1 * k)
+
+                crs += np.sin(eta0 - eta1)**2
+
+                for L in range(1,N):
+                    eta0 = np.copy(eta1)
+                    L1 = L+1
+                    eta1 = np.pi * alpha * k / (2.*L1 + 3.) / (2.*L1 + 1.) / (2.*L1 - 1.)
+                    eta1 = np.arctan(eta1 * k)
+
+                    crs += (L + 1.) * np.sin(eta0 - eta1)**2
+
+                return crs * 4. * np.pi / k / k * a0 * a0
+
+            return elastic_shifted_MERT(theta,ev)
+
+        elif mode == "g2step":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            y=np.zeros_like(ev)
+            y[ev>15.76]=5e-21
+            #(2.860000e-20/np.log(90-15.76)) * np.log((ev[ev>15.76]-15.76 + 1))
+            # a= 15.76
+            # b= 1000.76
+
+            # si       = np.logical_and(ev>=a, ev<=b)
+            # x0 = (ev[si]-a)/(b-a)
+            # y[si]    = 2.860000e-17 * (3 * (x0)**2 - 2 * (x0)**3)
+            # y[ev>=b] = 2.860000e-17
+            #y[ev>1000]=0
+            #print(y)
+
+            # y[ev>1e3]=0
+            return  y      
+        
+        elif mode == "g2smoothstep":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            y=np.zeros_like(ev)
+            a= 15.76
+            b= 50.76
+
+            si       = np.logical_and(ev>=a, ev<=b)
+            x0 = (ev[si]-a)/(b-a)
+            y[si]    = 5e-20 * (6 * (x0)**5 - 15 * x0 **4  + 10 * (x0)**3)
+            y[ev>=b] = 5e-20
+            return  y     
+
+        elif mode == "g2Smooth":
+            """
+            G2 cross section data fit with analytical function (ionization)
+            """
+            #ev =     ev+1e-8
+            a = 2.84284159e-22
+            b = 1.02812034e-17
+            c =-1.40391999e-15
+            d = 9.97783291e-14
+            e =-3.82647294e-12
+            f =-5.70400826e+01-0.535743163918511
+
+
+            trans_width = 50
+            z = ((ev+1e-15)-(15.76))/(trans_width)
+            # z = (np.log(ev+1e-15)-np.log(15.76))/np.log(trans_width)
+
+            transition = np.zeros_like(z)
+            gt0 = z>0
+            lt1 = z<1
+            bw01 = np.logical_and(gt0, lt1)
+            transition[np.logical_not(gt0)] = 0
+            transition[np.logical_not(lt1)] = 1
+            transition[bw01] = .5*(1.+np.tanh((2*z[bw01]-1)/np.sqrt((1.-z[bw01])*z[bw01])))
+
+            # print(transition[transition<0])
+            
+            x=ev-f
+            y=a + b* (1/x**1) + c * (1/x**2) + d * (1/x**3) + e * (1/x**4)
+            y = y * transition
+            y[y<=0] = 0
+            
+            # y[ev<=15.76]=0
+            # y[ev>1e3]=0
+            
+            return  y    
+        
+        elif mode == "g2Const":
+
+            return  9.9e-21 * np.ones_like(ev)
+            
+        elif mode == "g0Const" or mode=="g0ConstNoLoss":
+            """
+            G0 cross section data fit with analytical function
+            (constant)
+            """
+            return np.ones_like(ev) * 9.9e-20
+            #ev = ev+1e-8
+            # a0 =    0.008787*0 + 1
+            # b0 =     0.07243
+            # c  =    0.007048*0
+            # d  =      0.9737
+            # a1 =        3.27*0 + 1
+            # b1 =       3.679
+            # x0 =      0.2347
+            # x1 =       11.71
+            # return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
+        elif mode == "g0ConstDecay":
+            """
+            G0 cross section data fit with analytical function
+            (constant + decay)
+            """
+            ev=ev+1e-8
+            a0 =    0.008787*0 + 1
+            b0 =     0.07243
+            c  =    0.007048*1
+            d  =      0.9737
+            a1 =        3.27*0 + 1
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
+        elif mode == "g0ConstBumpDown":
+            """
+            G0 cross section data fit with analytical function
+            (constant + bump down)
+            """
+            ev=ev+1e-8
+            a0 =    0.008787*1 + 0
+            b0 =     0.07243
+            c  =    0.007048*0
+            d  =      0.9737
+            a1 =        3.27*0 + 1
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
+        elif mode == "g0ConstBumpUp":
+            """
+            G0 cross section data fit with analytical function
+            (constant + bump up)
+            """
+            ev=ev+1e-8
+            a0 =    0.008787*0 + 1
+            b0 =     0.07243
+            c  =    0.007048*0
+            d  =      0.9737
+            a1 =        3.27*0.5 + 0
+            b1 =       3.679
+            x0 =      0.2347
+            x1 =       11.71
+            return  9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+
+
+
 9.999999999999999e-11
 Total MPI tasks :  1
 Namespace(NUM_P_RADIAL=4, T_END=1e-06, T_DT=9.999999999999999e-11, out_fname='/scratch/kingspeak/serial/u1011531/dat_1ev_cs_1a', ts_tol=1e-06, collision_mode='g0', electron_volt=1.0, restore=0)

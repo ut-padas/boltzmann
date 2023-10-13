@@ -88,15 +88,15 @@ class CollisionOpSP():
             cc_collision = spec_sp.create_mat()
             c_gamma      = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
 
-            k_vec_uq      = np.unique(k_vec)
-            k_vec_dx      = k_vec_uq[1] - k_vec_uq[0]
+            k_vec_uq     = np.unique(k_vec)
+            k_vec_dx     = k_vec_uq[1] - k_vec_uq[0]
 
             if len(dg_idx) == 2:
                 # continuous basis grid
                 gx_e , gw_e  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
                 if(g._type == collisions.CollisionType.EAR_G0):
                     total_cs = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
-                    c_mu     = 2 * collisions.MASS_R_EARGON 
+                    c_mu     = 2 * g._mByM 
                     v_scale  = np.sqrt(1- c_mu)
                     v_post   = gx_e * v_scale
                     kappa    = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
@@ -130,27 +130,6 @@ class CollisionOpSP():
                     for r in result:
                         tmp_q0[r[0], r[1]] = r[2]
                         tmp_q1[r[0], r[1]] = r[3]
-
-                    # tmp_q0   = np.zeros((num_p,num_p))
-                    # tmp_q1   = np.zeros((num_p,num_p))
-                    # for k in range(num_p):
-                    #     k_min  = k_vec[k]
-                    #     k_max  = k_vec[k + sp_order + 1]
-                    #     qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-
-                    #     gmx    = gx_e[qx_idx] 
-                    #     gmw    = gw_e[qx_idx]
-                    #     vp     = v_post[qx_idx]
-                    #     t_cs   = total_cs[qx_idx]
-
-                    #     phi_k    = spec_sp.basis_eval_radial(gmx, k, 0)
-                    #     dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
-
-                    #     for p in range(num_p):
-                    #         psi_pp       = spec_sp.basis_eval_radial(vp , p, 0)
-                    #         psi_pm       = spec_sp.basis_eval_radial(gmx, p, 0)
-                    #         tmp_q0[p,k]  = np.dot(gmw, V_TH  * gmx**3 * t_cs * phi_k * (psi_pp-psi_pm)  - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
-                    #         tmp_q1[p,k]  = np.dot(gmw, -V_TH * gmx**3 * t_cs * phi_k * psi_pm)
 
                     for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
                         if q==0:
@@ -244,7 +223,7 @@ class CollisionOpSP():
                 dg_q_per_knot = sp_order + 2
                 if(g._type == collisions.CollisionType.EAR_G0):
 
-                    c_mu     = 2 * collisions.MASS_R_EARGON 
+                    c_mu     = 2 * g._mByM 
                     v_scale  = np.sqrt(1- c_mu)
                     kappa    = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
 
@@ -274,8 +253,6 @@ class CollisionOpSP():
                             gw_m   = np.append(gw_m, b0)
                             #print("e_id=%d (%.4E,%.4E) sp_idx pre (%d,%d) dx = (%.6E, %.6E)"%(e_id,xb,xe,ib,ie, xb, xb_eps))
                             
-
-
                         # computing the collision loss term xb to xe domain integration
                         for ii in range(ib, ie + sp_order + 1):
                             if k_vec[ii]< k_vec[ii+1]:
@@ -479,9 +456,9 @@ class CollisionOpSP():
                 # continuous basis grid
                 gx_e , gw_e  = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
                 total_cs     = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
-                c_mu         = 2 * collisions.MASS_R_EARGON 
-                v_scale      = np.sqrt(1- c_mu)
-                v_post       = gx_e * v_scale
+                c_mu         = 2 * g._mByM 
+                #v_scale      = np.sqrt(1- c_mu)
+                #v_post       = gx_e * v_scale
                 kappa        = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
                 
                 def t1(p,k):
@@ -505,21 +482,6 @@ class CollisionOpSP():
                 for r in result:
                     tmp_q0[r[0], r[1]] = r[2]
                 
-                # tmp_q0   = np.zeros((num_p,num_p))
-                # for k in range(num_p):
-                #     k_min  = k_vec[k]
-                #     k_max  = k_vec[k + sp_order + 1]
-                #     qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-
-                #     gmx    = gx_e[qx_idx] 
-                #     gmw    = gw_e[qx_idx]
-                #     t_cs   = total_cs[qx_idx]
-
-                #     dx_phi_k = spec_sp.basis_derivative_eval_radial(gmx, k, 0,1)
-
-                #     for p in range(num_p):
-                #         tmp_q0[p,k]  = np.dot(gmw, - kappa * gmx **3 * t_cs * spec_sp.basis_derivative_eval_radial(gmx, p, 0, 1) * dx_phi_k)
-                        
                 for qs_idx, (q,s) in enumerate(self._sph_harm_lm):
                     if q==0:
                         for p in range(num_p):
@@ -528,7 +490,7 @@ class CollisionOpSP():
         
             else:
                 dg_q_per_knot = sp_order + 2
-                c_mu          = 2 * collisions.MASS_R_EARGON 
+                c_mu          = 2 * g._mByM 
                 v_scale       = np.sqrt(1- c_mu)
                 kappa         = (scipy.constants.Boltzmann * tgK * c_mu * 0.5 / scipy.constants.electron_mass) / V_TH
                 tmp_q0        = np.zeros((num_p,num_p))

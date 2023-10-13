@@ -24,7 +24,6 @@ import matplotlib.pyplot as plt
 import csv
 import sys
 
-
 plt.rcParams.update({
     "text.usetex": False,
     "font.size": 24,
@@ -46,7 +45,8 @@ parser.add_argument("-atol", "--atol"                             , help="absolu
 parser.add_argument("-rtol", "--rtol"                             , help="relative tolerance", type=float, default=1e-10)
 parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=300)
 parser.add_argument("-Tg", "--Tg"                                 , help="gas temperature (K)" , type=float, default=0.0)
-parser.add_argument("-n0", "--n0"                                 , help="heavy density (1/m^3)" , type=float, default=3.22e22)
+parser.add_argument("-n0"    , "--n0"                             , help="heavy density (1/m^3)" , type=float, default=3.22e22)
+parser.add_argument("-ev_max", "--ev_max"                         , help="max energy in the v-space grid" , type=float, default=30)
 parser.add_argument("-Nr", "--Nr"                                 , help="radial refinement", type=int, default=128)
 parser.add_argument("-profile", "--profile"                       , help="profile", type=int, default=0)
 parser.add_argument("-warm_up", "--warm_up"                       , help="warm up", type=int, default=5)
@@ -57,21 +57,22 @@ parser.add_argument("-store_csv", "--store_csv"                   , help="store 
 parser.add_argument("-plot_data", "--plot_data"                   , help="plot data", type=int, default=1)
 parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable electron-electron collisions", type=int, default=0)
 parser.add_argument("-verbose", "--verbose"                       , help="verbose with debug information", type=int, default=0)
+parser.add_argument("-use_gpu", "--use_gpu"                       , help="use gpus for batched solver", type=int, default=1)
 
 parser.add_argument("-cycles", "--cycles"                         , help="number of max cycles to evolve to compute cycle average rates", type=float, default=100)
 parser.add_argument("-dt"    , "--dt"                             , help="1/dt number of denotes the number of steps for cycle", type=float, default=1e-3)
-parser.add_argument("-efF"    , "--efF"                           , help="electric field frequency Hz", type=float, default=13.56e6)
+parser.add_argument("-Efreq" , "--Efreq"                          , help="electric field frequency Hz", type=float, default=13.56e6)
 
 args        = parser.parse_args()
 n_grids     = 1
 n_pts       = args.n_pts
-Te          = np.ones(n_grids) * 8e-1 * collisions.TEMP_K_1EV
+Te          = np.ones(n_grids) * 0.5 * collisions.TEMP_K_1EV
 
-ef          = np.linspace(0.001  , 1, n_pts) * 1000
-n0          = np.linspace(0.5  , 1, n_pts) * 3.22e22
+ef          = np.linspace(0.4  , 1, n_pts) * 400
+n0          = np.linspace(0.99  , 1, n_pts) * 3.22e22
 ne          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
 ni          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
-Tg          = np.linspace(0.1  , 1, n_pts) * 13000#0.5 * collisions.TEMP_K_1EV
+Tg          = np.linspace(0.4  , 1, n_pts) * 1300#0.5 * collisions.TEMP_K_1EV
 
 # ef          = np.ones(n_pts) * 96.6
 # n0          = np.ones(n_pts) * 3.22e22
@@ -86,8 +87,11 @@ bte_solver = bte_0d3v_batched(args,Te, nr, lm_modes, n_grids, args.collisions)
 f0         = bte_solver.initialize(0, n_pts,"maxwellian")
 
 bte_solver.set_boltzmann_parameters(0, n0, ne, ni, ef, Tg, args.solver_type)
-# bte_solver.host_to_device_setup(0)
-# f0       = cp.asarray(f0)
+
+if args.use_gpu==1:
+    dev_id   = 0
+    bte_solver.host_to_device_setup(dev_id)
+    f0       = cp.asarray(f0)
 
 if args.profile==1:
     res_func, jac_func = bte_solver.get_rhs_and_jacobian(0, f0.shape[1], 16)
@@ -106,7 +110,9 @@ if args.profile==1:
 ff , qoi = bte_solver.solve(0, f0, args.atol, args.rtol, args.max_iter, args.solver_type)
 ev       = np.linspace(1e-3, bte_solver._par_ev_range[0][1], 500)
 ff_r     = bte_solver.compute_radial_components(0, ev, ff)
-#bte_solver.device_to_host_setup(0)
+
+if args.use_gpu==1:
+    bte_solver.device_to_host_setup(dev_id)
 
 ff_r     = cp.asnumpy(ff_r)
 for k, v in qoi.items():

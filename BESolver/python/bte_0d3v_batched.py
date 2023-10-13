@@ -741,7 +741,7 @@ class bte_0d3v_batched():
         qA           = self._op_diag_dg[grid_idx]
         
         if (solver_type == "steady-state"):
-            # need to check for fourier modes for the solver. 
+            # need to check for fourier modes for the solver.
             return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
         elif(solver_type=="BE"):
             use_spsolve     = True
@@ -763,41 +763,56 @@ class bte_0d3v_batched():
             a1 = a2 = 1.0
             du              = xp.zeros((Qmat.shape[1],n_pts))
             #print(tt < tT and (a1 > atol or a2 > rtol), tT, tt)
-            while(tt < tT and (a1 > atol or a2 > rtol)):
-                u0 = u
-                for ts_idx in range(int(1/self._args.dt)):
-                    def residual(du):
-                        return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
-           
-                    def jacobian(du):
-                        if use_spsolve==False:
-                            return (Imat - dt * rhs_u(u, tt, dt)).toarray()
-                        else:
-                            return (Imat - dt * rhs_u(u, tt, dt))
-                    
-                    ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
-                    
-                    if ns_info["status"]==False:
-                        print("At time = %.2E "%(tt/tau), end='')
-                        print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
-                        print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
-                        return u0
-
-                    du = ns_info["x"]
-                    u  = u + xp.dot(Qmat, du)
-                    tt += dt
+            
+            steps_per_cycle = int(1/self._args.dt)
+            steps_total     = steps_per_cycle * int(self._args.cycles)
+            
+            u_avg           = 0
+            
+            for ts_idx in range(steps_total):
+                
+                def residual(du):
+                    return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
+        
+                def jacobian(du):
+                    if use_spsolve==False:
+                        return (Imat - dt * rhs_u(u, tt, dt)).toarray()
+                    else:
+                        return (Imat - dt * rhs_u(u, tt, dt))
+                
+                ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
+                
+                if ns_info["status"]==False:
+                    print("At time = %.2E "%(tt/tau), end='')
+                    print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
+                    print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
+                    return u0
+                
+                if ts_idx % steps_per_cycle ==0:
+                    u0          = u
+                    u_avg       = 0
+                
+                du = ns_info["x"]
+                u  = u + xp.dot(Qmat, du)
+                tt += dt
+                
+                if (ts_idx+1) % steps_per_cycle ==0:
+                    u1    = u
+                    u_avg = 0.5 * dt * (u0 + u1)
                     
                     print("time = %.2E "%(tt/tau), end='')
                     print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
                     
-                u1=u
-                print("time = %.8E "%(tt/tau), end='')
-                print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
-                a1 = xp.linalg.norm(u1-u0)
-                a2 = a1/ xp.linalg.norm(u0)
-                print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
-            
-            h_curr = xp.dot(qA, u)
+                    a1 = xp.linalg.norm(u1-u0)
+                    a2 = a1/ xp.linalg.norm(u0)
+                    print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
+                    
+                    if(tt > tT or (a1 < atol or a2 < rtol)):
+                        break
+                else:
+                    u_avg += dt * u
+                    
+            h_curr = xp.dot(qA, u_avg)
             h_curr = self.normalized_distribution(grid_idx, h_curr)
             qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
             return u, qoi

@@ -68,11 +68,11 @@ n_grids     = 1
 n_pts       = args.n_pts
 Te          = np.ones(n_grids) * 0.5 * collisions.TEMP_K_1EV
 
-ef          = np.linspace(0.4  , 1, n_pts) * 400
-n0          = np.linspace(0.99  , 1, n_pts) * 3.22e22
+ef          = np.linspace(0.01 , 1, n_pts) * 1000
+n0          = np.linspace(1    , 1, n_pts) * 3.22e22
 ne          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
 ni          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
-Tg          = np.linspace(0.4  , 1, n_pts) * 1300#0.5 * collisions.TEMP_K_1EV
+Tg          = np.linspace(0.01 , 1, n_pts) * 50000 #0.5 * collisions.TEMP_K_1EV
 
 # ef          = np.ones(n_pts) * 96.6
 # n0          = np.ones(n_pts) * 3.22e22
@@ -145,7 +145,7 @@ if plot_data:
     num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
     fig        = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
     plt_idx    =  1
-    n_pts_step =  1
+    n_pts_step =  4
 
     for lm_idx, lm in enumerate(lm_modes):
         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)

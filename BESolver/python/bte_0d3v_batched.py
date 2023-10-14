@@ -509,7 +509,8 @@ class bte_0d3v_batched():
         if self._args.Efreq==0.0:
             Etx = lambda t : self._par_bte_params[grid_idx]["E"]  
         else:
-            Etx = lambda t : self._par_bte_params[grid_idx]["E"] * xp.sin(2 * xp.pi * t) 
+            tau   = 1/self._args.Efreq
+            Etx = lambda t : self._par_bte_params[grid_idx]["E"] * xp.sin(2 * xp.pi * self._args.Efreq * t) 
             
         if args.ee_collisions==1:
             cc_op_l1     = c_ee
@@ -766,8 +767,8 @@ class bte_0d3v_batched():
             
             steps_per_cycle = int(1/self._args.dt)
             steps_total     = steps_per_cycle * int(self._args.cycles)
-            
             u_avg           = 0
+            v_qoi           = xp.zeros((steps_per_cycle + 1, 3 + len(self._coll_list), n_pts))
             
             for ts_idx in range(steps_total):
                 
@@ -791,14 +792,24 @@ class bte_0d3v_batched():
                 if ts_idx % steps_per_cycle ==0:
                     u0          = u
                     u_avg       = 0
+                    
+                z        = xp.dot(qA, u)
+                z        = self.normalized_distribution(grid_idx, z)
+                qoi      = self.compute_QoIs(grid_idx, z, effective_mobility=False)
+                v_qoi[ts_idx % steps_per_cycle, 0] = qoi["energy"]
+                v_qoi[ts_idx % steps_per_cycle, 1] = qoi["mobility"]
+                v_qoi[ts_idx % steps_per_cycle, 2] = qoi["diffusion"]
+                rates                              = qoi["rates"]
+                for col_idx, g in enumerate(self._coll_list):
+                    v_qoi[ts_idx % steps_per_cycle, 3 + col_idx] = rates[col_idx] 
                 
                 du = ns_info["x"]
                 u  = u + xp.dot(Qmat, du)
                 tt += dt
                 
                 if (ts_idx+1) % steps_per_cycle ==0:
-                    u1    = u
-                    u_avg = 0.5 * dt * (u0 + u1)
+                    u1     = u
+                    u_avg += 0.5 * dt * (u0 + u1)
                     
                     print("time = %.2E "%(tt/tau), end='')
                     print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
@@ -807,14 +818,33 @@ class bte_0d3v_batched():
                     a2 = a1/ xp.linalg.norm(u0)
                     print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
                     
+                    
+                    z            = xp.dot(qA, u)
+                    z            = self.normalized_distribution(grid_idx, z)
+                    qoi          = self.compute_QoIs(grid_idx, z, effective_mobility=False)
+                    v_qoi[-1, 0] = qoi["energy"]
+                    v_qoi[-1, 1] = qoi["mobility"]
+                    v_qoi[-1, 2] = qoi["diffusion"]
+                    rates                              = qoi["rates"]
+                    for col_idx, g in enumerate(self._coll_list):
+                        v_qoi[-1, 3 + col_idx] = rates[col_idx] 
+                    
                     if(tt > tT or (a1 < atol or a2 < rtol)):
                         break
                 else:
                     u_avg += dt * u
                     
+                
+                if ((ts_idx + 1) == steps_total):
+                    break
+                        
             h_curr = xp.dot(qA, u_avg)
             h_curr = self.normalized_distribution(grid_idx, h_curr)
             qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
+            
+            xp.save("%s_avg_qoi.npy"%(self._args.out_fname), v_qoi)
+            xp.save("%s_avg_f.npy"%(self._args.out_fname)  , u_avg)
+            xp.save("%s_f.npy"%(self._args.out_fname)      , u)
             return u, qoi
             
         elif(solver_type=="BE_L"):

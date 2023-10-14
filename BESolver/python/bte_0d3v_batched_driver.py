@@ -45,6 +45,7 @@ parser.add_argument("-atol", "--atol"                             , help="absolu
 parser.add_argument("-rtol", "--rtol"                             , help="relative tolerance", type=float, default=1e-10)
 parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=300)
 parser.add_argument("-Tg", "--Tg"                                 , help="gas temperature (K)" , type=float, default=0.0)
+parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)" , type=float, default=1.0)
 parser.add_argument("-n0"    , "--n0"                             , help="heavy density (1/m^3)" , type=float, default=3.22e22)
 parser.add_argument("-ev_max", "--ev_max"                         , help="max energy in the v-space grid" , type=float, default=30)
 parser.add_argument("-Nr", "--Nr"                                 , help="radial refinement", type=int, default=128)
@@ -66,13 +67,13 @@ parser.add_argument("-Efreq" , "--Efreq"                          , help="electr
 args        = parser.parse_args()
 n_grids     = 1
 n_pts       = args.n_pts
-Te          = np.ones(n_grids) * 0.5 * collisions.TEMP_K_1EV
+Te          = np.ones(n_grids) * args.Te * collisions.TEMP_K_1EV
 
-ef          = np.linspace(0.01 , 1, n_pts) * 1000
+ef          = np.linspace(0.1  , 1, n_pts) * 10000
 n0          = np.linspace(1    , 1, n_pts) * 3.22e22
 ne          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
 ni          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
-Tg          = np.linspace(0.01 , 1, n_pts) * 50000 #0.5 * collisions.TEMP_K_1EV
+Tg          = np.linspace(0.4  , 1, n_pts)  * 15000 #0.5 * collisions.TEMP_K_1EV
 
 # ef          = np.ones(n_pts) * 96.6
 # n0          = np.ones(n_pts) * 3.22e22
@@ -145,7 +146,7 @@ if plot_data:
     num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
     fig        = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
     plt_idx    =  1
-    n_pts_step =  4
+    n_pts_step =  n_pts // 20
 
     for lm_idx, lm in enumerate(lm_modes):
         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)

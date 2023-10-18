@@ -43,7 +43,7 @@ parser.add_argument("-sp_order", "--sp_order"                     , help="b-spli
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-atol", "--atol"                             , help="absolute tolerance", type=float, default=1e-10)
 parser.add_argument("-rtol", "--rtol"                             , help="relative tolerance", type=float, default=1e-10)
-parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=300)
+parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=30)
 parser.add_argument("-Tg", "--Tg"                                 , help="gas temperature (K)" , type=float, default=0.0)
 parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)" , type=float, default=1.0)
 parser.add_argument("-n0"    , "--n0"                             , help="heavy density (1/m^3)" , type=float, default=3.22e22)
@@ -69,11 +69,11 @@ n_grids     = 1
 n_pts       = args.n_pts
 Te          = np.ones(n_grids) * args.Te * collisions.TEMP_K_1EV
 
-ef          = np.linspace(0.1  , 1, n_pts) * 10000
+ef          = np.linspace(1e-3 , 5, n_pts) * 3.22e1
 n0          = np.linspace(1    , 1, n_pts) * 3.22e22
-ne          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
-ni          = np.linspace(1e-8 , 1, n_pts) * 3.22e21
-Tg          = np.linspace(0.4  , 1, n_pts)  * 15000 #0.5 * collisions.TEMP_K_1EV
+ne          = np.linspace(1    , 1, n_pts) * 3.22e20
+ni          = np.linspace(1    , 1, n_pts) * 3.22e20
+Tg          = np.linspace(1    , 1, n_pts) * 30000 #0.5 * collisions.TEMP_K_1EV
 
 # ef          = np.ones(n_pts) * 96.6
 # n0          = np.ones(n_pts) * 3.22e22
@@ -152,14 +152,13 @@ if plot_data:
         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
         for ii in range(0, n_pts, n_pts_step):
             fr = np.abs(ff_r[ii, lm_idx, :])
-            valid_idx = fr>0
-            plt.semilogy(ev[valid_idx], fr[valid_idx], label="Tg=%.2E[K], E=%.2E[V/m], n0=%.2E[1/m^3], ne=%.2E[1/m^3]"%(Tg[ii], ef[ii], n0[ii], ne[ii]))
+            plt.semilogy(ev, fr, label=r"T_g=%.2E [K], E/n_0=%.2E [Td], n_e/n_0 = %.2E "%(Tg[ii], ef[ii]/n0[ii]/1e-21, ne[ii]/n0[ii]))
         
         plt.xlabel(r"energy (eV)")
         plt.ylabel(r"$f_%d$"%(lm[0]))
         plt.grid(visible=True)
         if lm_idx==0:
-            plt.legend(prop={'size': 8})
+            plt.legend(prop={'size': 6})
             
         plt_idx +=1
     

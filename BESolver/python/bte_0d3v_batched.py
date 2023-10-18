@@ -56,37 +56,34 @@ def newton_solver_batched(x, n_pts, residual, jacobian, atol, rtol, iter_max, xp
     jac_inv  = xp.linalg.inv(jac)
   
     ns_info  = dict()
-    alpha    = xp.ones(n_pts)
+    alpha    = 1.0 #xp.ones(n_pts)
+    x0       = x
+    r0       = residual(x0)
+    norm_rr  = norm_r0  = xp.linalg.norm(r0, axis=0)
     
-    while((alpha > 1e-10).any()):
-        count     = 0
-        r0        = residual(x)
-        norm_rr   = norm_r0 = xp.linalg.norm(r0, axis=0)
-        converged = ((norm_rr/norm_r0 < rtol).all() or (norm_rr < atol).all())
+    count        = 0
+    cond1        = (norm_rr/norm_r0) < rtol
+    cond2        = norm_rr < atol
+    converged    = (cond1.all() or cond2.all())
+    
+    while( not converged and (count < iter_max) ):
+        rr        = residual(x)
+        norm_rr   = xp.linalg.norm(rr, axis=0)
         
-        while( not converged and (count < iter_max) ):
-            rr        = residual(x)
-            norm_rr   = xp.linalg.norm(rr, axis=0)
-            converged = ((norm_rr/norm_r0 < rtol).all() or (norm_rr < atol).all())
-            
-            x         = x + alpha * xp.einsum("ijk,ki->ji", jac_inv, -rr)
-            count    += 1
-            
-        if (not converged):
-            alpha *= 0.25
-        else:
-            #print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
-            break
+        cond1     = (norm_rr/norm_r0) < rtol
+        cond2     = norm_rr < atol
+        converged = (cond1.all() or cond2.all())
+        
+        x         = x + alpha * xp.einsum("ijk,ki->ji", jac_inv, -rr)
+        count    += 1
     
     if (not converged):
         # solver failed !!!
         print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, xp.max(norm_rr), xp.max(norm_rr/norm_r0)))
         print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
         #print(rr)
-        print(alpha)
-        print(norm_r0)
-        print(norm_rr)
-        print(norm_rr/norm_r0)
+        print("norm_r0 \n",norm_r0)
+        print("norm_rr \n",norm_rr)
         ns_info["status"] = converged
         ns_info["x"]      = x
         ns_info["atol"]   = xp.max(norm_rr)
@@ -595,7 +592,7 @@ class bte_0d3v_batched():
             QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
             Imat         = xp.eye(QTmat.shape[0])
             
-            Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", Tg, QT_Cgt_Q)
+            Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", n0 * Tg, QT_Cgt_Q)
             
             def jac_func(x, time, dt):
                 if xp==cp:
@@ -744,9 +741,13 @@ class bte_0d3v_batched():
         if (solver_type == "steady-state"):
             # need to check for fourier modes for the solver.
             return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
-        elif(solver_type=="BE"):
+        elif(solver_type== "transient"):
             use_spsolve     = True
-            tau             = 1/(self._args.Efreq)
+            if self._args.Efreq==0:
+                tau             = 1e-7
+            else:
+                tau             = 1/(self._args.Efreq)
+            
             dt              = self._args.dt * tau
             tT              = self._args.cycles * tau
             rhs , rhs_u     = self.get_rhs_and_jacobian(grid_idx, f0.shape[1])
@@ -773,13 +774,12 @@ class bte_0d3v_batched():
             for ts_idx in range(steps_total):
                 
                 def residual(du):
-                    return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
+                    #return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
+                    return du  - 0.5 * dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt) - 0.5 * dt * rhs(u, tt, dt)
         
                 def jacobian(du):
-                    if use_spsolve==False:
-                        return (Imat - dt * rhs_u(u, tt, dt)).toarray()
-                    else:
-                        return (Imat - dt * rhs_u(u, tt, dt))
+                    #return (Imat - dt * rhs_u(u, tt, dt))
+                    return Imat - 0.5 * dt * rhs_u(u, tt, dt)
                 
                 ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
                 

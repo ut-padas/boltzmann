@@ -52,4 +52,4 @@ def read_cross_section_data(file: str):
     #print(cs_dict)
     return cs_dict
 
-CROSS_SECTION_DATA = read_cross_section_data("lxcat_data/eAr_chung.txt")
+CROSS_SECTION_DATA = read_cross_section_data("lxcat_data/eAr_crs.nominal.Biagi_minimal.txt")

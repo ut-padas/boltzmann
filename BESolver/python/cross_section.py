@@ -8,7 +8,7 @@ import typing as tp
 import lxcat_data_parser as ldp
 from scipy import interpolate
 import sys
-
+import os
 def lxcat_cross_section_to_numpy(file : str, column_fields : tp.List[str] )->list:
     try:
         data    = ldp.CrossSectionSet(file)
@@ -52,4 +52,4 @@ def read_cross_section_data(file: str):
     #print(cs_dict)
     return cs_dict
 
-CROSS_SECTION_DATA = read_cross_section_data("lxcat_data/eAr_crs.nominal.Biagi_minimal.txt")
+CROSS_SECTION_DATA = read_cross_section_data(os.path.dirname(os.path.abspath(__file__)) + "/lxcat_data/eAr_crs.nominal.Biagi_minimal.txt")

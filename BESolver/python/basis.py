@@ -273,7 +273,7 @@ class BSpline(Basis):
             else:
                 if extend_domain==True:
                     self._t     = BSpline.uniform_knots((k_domain[0], 1.2 * k_domain[1]), num_p, spline_order) 
-                    #BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 1.2 * k_domain[1])
+                    #self._t      = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 4 * k_domain[1])
                 else:
                     self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
                 self._ele    = 1
@@ -604,12 +604,12 @@ class BSpline(Basis):
         # t          = np.append(t,glx)
         # t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
 
-        num_p1     = 9 * (num_p //10)
+        num_p1     = 8 * (num_p //10)
         num_p2     = num_p -num_p1
 
         t          = (k_domain[0])*np.ones(sp_order)
         t          = np.append(t , np.linspace(k_domain[0] , k_domain[1] , num_p1 , endpoint=False))
-        t          = np.append(t , np.logspace(np.log10(k_domain[1]), np.log10(ext_kdomain), num_p2-sp_order,endpoint=False))
+        t          = np.append(t , np.logspace(np.log2(k_domain[1]), np.log2(ext_kdomain), num_p2-sp_order,base=2,endpoint=False))
         t          = np.append(t , ext_kdomain * np.ones(sp_order+1))
 
         #print(len(t), num_p+sp_order+1)

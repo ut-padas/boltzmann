@@ -204,9 +204,9 @@ class bte_0d3v_batched():
                 else:
                     use_dg=0
                 
-                print("grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain)
-                
                 bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain=True)
+                print("grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1])
+                
                 spec_sp                = sp.SpectralExpansionSpherical(self._par_nr[idx], bb, self._par_lm)
                 spec_sp._num_q_radial  = bb._num_knot_intervals * self._args.spline_qpts
                 collision_op           = collOpSp.CollisionOpSP(spec_sp)

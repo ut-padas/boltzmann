@@ -146,13 +146,13 @@ if plot_data:
     num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
     fig        = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
     plt_idx    =  1
-    n_pts_step =  n_pts // 20
+    n_pts_step =  n_pts // 3
 
     for lm_idx, lm in enumerate(lm_modes):
         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
         for ii in range(0, n_pts, n_pts_step):
             fr = np.abs(ff_r[ii, lm_idx, :])
-            plt.semilogy(ev, fr, label=r"T_g=%.2E [K], E/n_0=%.2E [Td], n_e/n_0 = %.2E "%(Tg[ii], ef[ii]/n0[ii]/1e-21, ne[ii]/n0[ii]))
+            plt.semilogy(ev, fr, label=r"$T_g$=%.2E [K], $E/n_0$=%.2E [Td], $n_e/n_0$ = %.2E "%(Tg[ii], ef[ii]/n0[ii]/1e-21, ne[ii]/n0[ii]))
         
         plt.xlabel(r"energy (eV)")
         plt.ylabel(r"$f_%d$"%(lm[0]))

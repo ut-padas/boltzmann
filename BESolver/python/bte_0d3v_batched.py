@@ -546,7 +546,7 @@ class bte_0d3v_batched():
             QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
             Imat         = xp.eye(QTmat.shape[0])
             
-            Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", Tg, QT_Cgt_Q)
+            Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", n0 * Tg, QT_Cgt_Q)
             
             def jac_func(x, time, dt):
                 if xp==cp:
@@ -742,7 +742,13 @@ class bte_0d3v_batched():
             # need to check for fourier modes for the solver.
             return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
         elif(solver_type== "transient"):
-            use_spsolve     = True
+            
+            freq = self._args.Efreq
+            self._args.Efreq = 0.0
+            
+            f0, _ = self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
+            self._args.Efreq = freq
+            
             if self._args.Efreq==0:
                 tau             = 1e-7
             else:

@@ -89,7 +89,10 @@ for run_id in range(len(run_params)):
 
     if args.ion_deg == 0:
         args.ee_collisions = 0
-        args.use_dg        = 1
+        if args.Tg > 0 
+            args.use_dg        = 0
+        else:
+            args.use_dg        = 1
     else:
         args.ee_collisions = 1
         args.use_dg        = 0

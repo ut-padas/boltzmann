@@ -67,32 +67,41 @@ parser.add_argument("-Efreq" , "--Efreq"                          , help="electr
 args        = parser.parse_args()
 n_grids     = 1
 n_pts       = args.n_pts
-Te          = np.ones(n_grids) * args.Te * collisions.TEMP_K_1EV
 
-ef          = np.linspace(1e-3 , 10, n_pts) * 3.22e1
+Te          = np.ones(n_grids) * args.Te 
+ev_max      = np.ones(n_grids) * args.ev_max
+ef          = np.linspace(1e-10 , 1, n_pts) * 3.22e1
 n0          = np.linspace(1    , 1, n_pts) * 3.22e22
 ne          = np.linspace(1    , 1, n_pts) * 3.22e20
 ni          = np.linspace(1    , 1, n_pts) * 3.22e20
-Tg          = np.linspace(1    , 1, n_pts) * 30000 #0.5 * collisions.TEMP_K_1EV
+Tg          = np.linspace(1    , 1, n_pts) * 5000 #0.5 * collisions.TEMP_K_1EV
 
-# ef          = np.ones(n_pts) * 96.6
-# n0          = np.ones(n_pts) * 3.22e22
-# ne          = np.ones(n_pts) * 3.22e21
-# ni          = np.ones(n_pts) * 3.22e21
-# Tg          = np.ones(n_pts) * 13000#0.5 * collisions.TEMP_K_1EV
+lm_modes    = [[[l,0] for l in range(args.l_max+1)] for i in range(n_grids)]
+nr          = np.ones(n_grids, dtype=np.int32) * args.Nr
 
-lm_modes    = [[l,0] for l in range(args.l_max+1)]
-nr          = np.ones(n_pts, dtype=np.int32) * args.Nr
-
-bte_solver = bte_0d3v_batched(args,Te, nr, lm_modes, n_grids, args.collisions)
+bte_solver = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, args.collisions)
+bte_solver.assemble_operators(0)
 f0         = bte_solver.initialize(0, n_pts,"maxwellian")
+bte_solver.set_boltzmann_parameters(0, n0, ne, ni, Tg, args.solver_type)
 
-bte_solver.set_boltzmann_parameters(0, n0, ne, ni, ef, Tg, args.solver_type)
+if args.Efreq == 0:
+    ef_t = lambda t : ef
+else:
+    ef_t = lambda t : ef * np.sin(2 * np.pi * args.Efreq * t)
 
 if args.use_gpu==1:
     dev_id   = 0
-    bte_solver.host_to_device_setup(dev_id)
+    bte_solver.host_to_device_setup(dev_id, 0)
+    
+    ef_d     = cp.asarray(ef)
+    if args.Efreq == 0:
+        ef_t = lambda t : ef_d
+    else:
+        ef_t = lambda t : ef_d * cp.sin(2 * cp.pi * args.Efreq * t)
+    
     f0       = cp.asarray(f0)
+
+bte_solver.set_efield_function(ef_t)
 
 if args.profile==1:
     res_func, jac_func = bte_solver.get_rhs_and_jacobian(0, f0.shape[1], 16)
@@ -113,7 +122,7 @@ ev       = np.linspace(1e-3, bte_solver._par_ev_range[0][1], 500)
 ff_r     = bte_solver.compute_radial_components(0, ev, ff)
 
 if args.use_gpu==1:
-    bte_solver.device_to_host_setup(dev_id)
+    bte_solver.device_to_host_setup(dev_id,0)
 
 ff_r     = cp.asnumpy(ff_r)
 for k, v in qoi.items():
@@ -140,15 +149,15 @@ if csv_write:
 
 plot_data    = args.plot_data
 if plot_data:
-    num_sh       = len(lm_modes)
+    num_sh       = len(lm_modes[0])
     num_subplots = num_sh 
     num_plt_cols = min(num_sh, 4)
     num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
     fig        = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
     plt_idx    =  1
-    n_pts_step =  n_pts // 6
+    n_pts_step =  1#n_pts // 20
 
-    for lm_idx, lm in enumerate(lm_modes):
+    for lm_idx, lm in enumerate(lm_modes[0]):
         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
         for ii in range(0, n_pts, n_pts_step):
             fr = np.abs(ff_r[ii, lm_idx, :])

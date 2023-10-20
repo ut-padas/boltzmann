@@ -69,7 +69,7 @@ parser.add_argument("-bolsig", "--bolsig_dir"                     , help="Bolsig
 parser.add_argument("-bolsig_precision", "--bolsig_precision"     , help="precision value for bolsig code", type=float, default=1e-11)
 parser.add_argument("-bolsig_convergence", "--bolsig_convergence" , help="convergence value for bolsig code", type=float, default=1e-8)
 parser.add_argument("-bolsig_grid_pts", "--bolsig_grid_pts"       , help="grid points for bolsig code"      , type=int, default=1024)
-
+#python3 collision_driver_spherical_eulerian_dg.py -l_max 1 -c g0 g2 -sp_order 3 -spline_qpts 5 -steady 1 --sweep_values 31 63 127  -EbyN 1e-1 1 5 -Tg 5000 -ion_deg 0
 args                = parser.parse_args()
 EbyN_Td             = np.logspace(np.log10(args.EbyN[0]), np.log10(args.EbyN[1]), int(args.EbyN[2]), base=10)
 e_values            = EbyN_Td * args.n0 * 1e-21
@@ -89,7 +89,7 @@ for run_id in range(len(run_params)):
 
     if args.ion_deg == 0:
         args.ee_collisions = 0
-        if args.Tg > 0 
+        if args.Tg > 0: 
             args.use_dg        = 0
         else:
             args.use_dg        = 1

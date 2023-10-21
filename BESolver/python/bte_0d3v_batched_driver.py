@@ -64,25 +64,36 @@ parser.add_argument("-cycles", "--cycles"                         , help="number
 parser.add_argument("-dt"    , "--dt"                             , help="1/dt number of denotes the number of steps for cycle", type=float, default=1e-3)
 parser.add_argument("-Efreq" , "--Efreq"                          , help="electric field frequency Hz", type=float, default=13.56e6)
 
+#
+# examnple use : 
+# python3 bte_0d3v_batched_driver.py -threads 64 -solver_type steady-state -l_max 1 -sp_order 3 -spline_qpts 10 -n_pts 18 -Efreq 0.0 -dt 1e-4 -plot_data 1 -Nr 63 --ee_collisions 0 -ev_max 15.8 -Te 0.5 -use_gpu 1 -cycles 10 -out_fname batched_bte/bte_0d_batched_ss_r2 -verbose 1 -max_iter 10000 -atol 1e-15 -rtol 1e-12 -c g0 g2
+
 args        = parser.parse_args()
 n_grids     = 1
 n_pts       = args.n_pts
+grid_idx    = 0
 
 Te          = np.ones(n_grids) * args.Te 
 ev_max      = np.ones(n_grids) * args.ev_max
 ef          = np.linspace(1e-10 , 1, n_pts) * 3.22e1
-n0          = np.linspace(1    , 1, n_pts) * 3.22e22
-ne          = np.linspace(1    , 1, n_pts) * 3.22e20
-ni          = np.linspace(1    , 1, n_pts) * 3.22e20
-Tg          = np.linspace(1    , 1, n_pts) * 5000 #0.5 * collisions.TEMP_K_1EV
+n0          = np.linspace(1     , 1, n_pts) * 3.22e22
+ne          = np.linspace(1     , 1, n_pts) * 3.22e20
+ni          = np.linspace(1     , 1, n_pts) * 3.22e20
+Tg          = np.linspace(1     , 1, n_pts) * 5000 #0.5 * collisions.TEMP_K_1EV
 
 lm_modes    = [[[l,0] for l in range(args.l_max+1)] for i in range(n_grids)]
 nr          = np.ones(n_grids, dtype=np.int32) * args.Nr
 
 bte_solver = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, args.collisions)
-bte_solver.assemble_operators(0)
-f0         = bte_solver.initialize(0, n_pts,"maxwellian")
-bte_solver.set_boltzmann_parameters(0, n0, ne, ni, Tg, args.solver_type)
+
+bte_solver.assemble_operators(grid_idx)
+f0         = bte_solver.initialize(grid_idx, n_pts,"maxwellian")
+
+bte_solver.set_boltzmann_parameter(grid_idx, "n0", n0)
+bte_solver.set_boltzmann_parameter(grid_idx, "ne", ne)
+bte_solver.set_boltzmann_parameter(grid_idx, "Tg", Tg)
+bte_solver.set_boltzmann_parameter(grid_idx, "ef", ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "f0", f0)
 
 if args.Efreq == 0:
     ef_t = lambda t : ef
@@ -91,16 +102,13 @@ else:
 
 if args.use_gpu==1:
     dev_id   = 0
-    bte_solver.host_to_device_setup(dev_id, 0)
-    
-    ef_d     = cp.asarray(ef)
+    bte_solver.host_to_device_setup(dev_id, grid_idx)
+    ef_d     = bte_solver.get_boltzmann_parameter(grid_idx, "ef")
     if args.Efreq == 0:
         ef_t = lambda t : ef_d
     else:
         ef_t = lambda t : ef_d * cp.sin(2 * cp.pi * args.Efreq * t)
     
-    f0       = cp.asarray(f0)
-
 bte_solver.set_efield_function(ef_t)
 
 if args.profile==1:
@@ -116,7 +124,7 @@ if args.profile==1:
     
     bte_solver.profile_stats()
     sys.exit(0)
-
+f0       = bte_solver.get_boltzmann_parameter(grid_idx,"f0")
 ff , qoi = bte_solver.solve(0, f0, args.atol, args.rtol, args.max_iter, args.solver_type)
 ev       = np.linspace(1e-3, bte_solver._par_ev_range[0][1], 500)
 ff_r     = bte_solver.compute_radial_components(0, ev, ff)

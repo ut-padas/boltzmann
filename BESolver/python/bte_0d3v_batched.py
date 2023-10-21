@@ -130,7 +130,7 @@ class bte_0d3v_batched():
         
         self._c_gamma        = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
         
-        self._par_bte_params  = [None] * self._par_nvgrids
+        self._par_bte_params  = [dict() for i in range(self._par_nvgrids)] 
         self._op_col_en       = [None] * self._par_nvgrids
         self._op_col_gT       = [None] * self._par_nvgrids
         self._op_col_ee       = [None] * self._par_nvgrids
@@ -392,19 +392,12 @@ class bte_0d3v_batched():
         profile_tt[pp.INIT_COND].stop()
         return f0
     
-    def set_boltzmann_parameters(self, grid_idx: int, n0 : np.array, ne : np.array, ni : np.array, Tg : np.array, solver_type:str):
-        """
-        sets the BTE parameters for each v-space grid
-        n0        : heavy density in [1/m^3]
-        ne        : electron density in [1/m^3]
-        ni        : ion density [1/m^3]
-        ef        : electric field [V/m]
-        ef_period : 
-        Tg        : Gas temperature [K]
-        """
-        
-        xp    = self.xp_module
-        self._par_bte_params[grid_idx] = {"n0": n0, "ne": ne, "ni": ne, "Tg": Tg}
+    def set_boltzmann_parameter(self, grid_idx, key:str, value:np.array):
+        self._par_bte_params[grid_idx][key] = value
+        return
+    
+    def get_boltzmann_parameter(self, grid_idx, key:str):
+        return self._par_bte_params[grid_idx][key]
     
     def set_efield_function(self, ef_t):
         self._par_ef_t = ef_t
@@ -485,7 +478,7 @@ class bte_0d3v_batched():
         
         n0           = self._par_bte_params[grid_idx]["n0"]
         ne           = self._par_bte_params[grid_idx]["ne"]
-        ni           = self._par_bte_params[grid_idx]["ni"]
+        #ni           = self._par_bte_params[grid_idx]["ni"]
         Tg           = self._par_bte_params[grid_idx]["Tg"]
         
         vth          = self._par_vth[grid_idx]
@@ -860,9 +853,9 @@ class bte_0d3v_batched():
         mw       = bte_utils.get_maxwellian_3d(vth, 1)
         
         n0       = self._par_bte_params[grid_idx]["n0"]
-        ne       = self._par_bte_params[grid_idx]["ne"]
-        ni       = self._par_bte_params[grid_idx]["ni"]
-        Tg       = self._par_bte_params[grid_idx]["Tg"]
+        # ne       = self._par_bte_params[grid_idx]["ne"]
+        # ni       = self._par_bte_params[grid_idx]["ni"]
+        # Tg       = self._par_bte_params[grid_idx]["Tg"]
         ef       = self._par_ef_t(0)
         
         num_p   = spec_sp._p + 1

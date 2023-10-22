@@ -836,9 +836,9 @@ class bte_0d3v_batched():
             h_curr = self.normalized_distribution(grid_idx, h_curr)
             qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
             
-            xp.save("%s_avg_qoi.npy"%(self._args.out_fname), v_qoi)
-            xp.save("%s_avg_f.npy"%(self._args.out_fname)  , u_avg)
-            xp.save("%s_f.npy"%(self._args.out_fname)      , u)
+            xp.save("%s_avg_qoi_%04d.npy"%(self._args.out_fname, grid_idx), v_qoi)
+            xp.save("%s_avg_f_%04d.npy"%(self._args.out_fname, grid_idx)  , u_avg)
+            xp.save("%s_f_%04d.npy"%(self._args.out_fname, grid_idx)      , u)
             return u, qoi
             
         elif(solver_type=="BE_L"):

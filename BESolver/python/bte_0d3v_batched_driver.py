@@ -109,7 +109,7 @@ if args.use_gpu==1:
     else:
         ef_t = lambda t : ef_d * cp.sin(2 * cp.pi * args.Efreq * t)
     
-bte_solver.set_efield_function(ef_t)
+bte_solver.set_efield_function(grid_idx, ef_t)
 
 if args.profile==1:
     res_func, jac_func = bte_solver.get_rhs_and_jacobian(0, f0.shape[1], 16)

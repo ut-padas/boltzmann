@@ -131,23 +131,24 @@ class bte_0d3v_batched():
         self._c_gamma        = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
         
         self._par_bte_params  = [dict() for i in range(self._par_nvgrids)] 
-        self._op_col_en       = [None] * self._par_nvgrids
-        self._op_col_gT       = [None] * self._par_nvgrids
-        self._op_col_ee       = [None] * self._par_nvgrids
-        self._op_advection    = [None] * self._par_nvgrids
-        self._op_mass_mat     = [None] * self._par_nvgrids
+        self._op_col_en       = [None for i in range(self._par_nvgrids)]
+        self._op_col_gT       = [None for i in range(self._par_nvgrids)]
+        self._op_col_ee       = [None for i in range(self._par_nvgrids)]
+        self._op_advection    = [None for i in range(self._par_nvgrids)]
+        self._op_mass_mat     = [None for i in range(self._par_nvgrids)]
         
-        self._op_qmat         = [None] * self._par_nvgrids 
-        self._op_rmat         = [None] * self._par_nvgrids 
-        self._op_diag_dg      = [None] * self._par_nvgrids 
-        self._op_sigma_m      = [None] * self._par_nvgrids
+        self._op_qmat         = [None for i in range(self._par_nvgrids)]
+        self._op_rmat         = [None for i in range(self._par_nvgrids)]
+        self._op_diag_dg      = [None for i in range(self._par_nvgrids)]
+        self._op_sigma_m      = [None for i in range(self._par_nvgrids)]
         
-        self._op_mass         = [None] * self._par_nvgrids
-        self._op_temp         = [None] * self._par_nvgrids
-        self._op_diffusion    = [None] * self._par_nvgrids
-        self._op_mobility     = [None] * self._par_nvgrids
-        self._op_rate         = [None] * self._par_nvgrids
-        self._op_spec_sp      = [None] * self._par_nvgrids
+        self._op_mass         = [None for i in range(self._par_nvgrids)]
+        self._op_temp         = [None for i in range(self._par_nvgrids)]
+        self._op_diffusion    = [None for i in range(self._par_nvgrids)]
+        self._op_mobility     = [None for i in range(self._par_nvgrids)]
+        self._op_rate         = [None for i in range(self._par_nvgrids)]
+        self._op_spec_sp      = [None for i in range(self._par_nvgrids)]
+        self._par_ef_t        = [None for i in range(self._par_nvgrids)]
         
         self.xp_module        = np
         self._par_dof         = np.array([(self._par_nr[i]+1) * len(lm) for i in range(self._par_nvgrids)] , dtype=np.int32)
@@ -399,8 +400,8 @@ class bte_0d3v_batched():
     def get_boltzmann_parameter(self, grid_idx, key:str):
         return self._par_bte_params[grid_idx][key]
     
-    def set_efield_function(self, ef_t):
-        self._par_ef_t = ef_t
+    def set_efield_function(self, grid_idx, ef_t):
+        self._par_ef_t[grid_idx] = ef_t
         return 
     
     def host_to_device_setup(self, *args):
@@ -501,7 +502,7 @@ class bte_0d3v_batched():
         u            = xp.dot(xp.transpose(mm_op),qA)
         
         Wmat         = xp.dot(u, c_en)
-        Etx          = self._par_ef_t
+        Etx          = self._par_ef_t[grid_idx]
         
         if args.ee_collisions==1:
             cc_op_l1     = c_ee
@@ -856,7 +857,7 @@ class bte_0d3v_batched():
         # ne       = self._par_bte_params[grid_idx]["ne"]
         # ni       = self._par_bte_params[grid_idx]["ni"]
         # Tg       = self._par_bte_params[grid_idx]["Tg"]
-        ef       = self._par_ef_t(0)
+        ef       = self._par_ef_t[grid_idx](0)
         
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)

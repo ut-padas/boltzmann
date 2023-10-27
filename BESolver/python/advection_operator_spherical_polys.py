@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import os
 
 def sph_harm_norm(l,m):
     if m == 0:
@@ -14,20 +15,20 @@ BM = lambda l,m: (l-abs(m)+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l+1,m)
 AD = lambda l,m: (l+abs(m))*(l+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l-1,m)
 BD = lambda l,m: -l*(l-abs(m)+1.)/(2.*l+1.)*sph_harm_norm(l,m)/sph_harm_norm(l+1,m)
 
-CpsiDphiP_lag = np.load('polynomials/lagpoly_CpsiDphiP.npy')
-CpsiDphiM_lag = np.load('polynomials/lagpoly_CpsiDphiM.npy')
-CphiDpsiP_lag = np.load('polynomials/lagpoly_CphiDpsiP.npy')
-CphiDpsiM_lag = np.load('polynomials/lagpoly_CphiDpsiM.npy')
+CpsiDphiP_lag = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/lagpoly_CpsiDphiP.npy')
+CpsiDphiM_lag = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/lagpoly_CpsiDphiM.npy')
+CphiDpsiP_lag = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/lagpoly_CphiDpsiP.npy')
+CphiDpsiM_lag = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/lagpoly_CphiDpsiM.npy')
 
-CpsiDphiP_max = np.load('polynomials/maxpoly_CpsiDphiP.npy')
-CpsiDphiM_max = np.load('polynomials/maxpoly_CpsiDphiM.npy')
-CphiDpsiP_max = np.load('polynomials/maxpoly_CphiDpsiP.npy')
-CphiDpsiM_max = np.load('polynomials/maxpoly_CphiDpsiM.npy')
+CpsiDphiP_max = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_CpsiDphiP.npy')
+CpsiDphiM_max = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_CpsiDphiM.npy')
+CphiDpsiP_max = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_CphiDpsiP.npy')
+CphiDpsiM_max = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_CphiDpsiM.npy')
 
-CpsiDphiP_max_frac = np.load('polynomials/maxpoly_frac_CpsiDphiP.npy')
-CpsiDphiM_max_frac = np.load('polynomials/maxpoly_frac_CpsiDphiM.npy')
-CphiDpsiP_max_frac = np.load('polynomials/maxpoly_frac_CphiDpsiP.npy')
-CphiDpsiM_max_frac = np.load('polynomials/maxpoly_frac_CphiDpsiM.npy')
+CpsiDphiP_max_frac = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_CpsiDphiP.npy')
+CpsiDphiM_max_frac = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_CpsiDphiM.npy')
+CphiDpsiP_max_frac = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_CphiDpsiP.npy')
+CphiDpsiM_max_frac = np.load(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_CphiDpsiM.npy')
 
 # l = 0
 # k = slice(0,16,1)

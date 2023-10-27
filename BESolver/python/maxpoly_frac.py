@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import gamma
+import os
 
 # Coefficients of Maxwell polynomials up to 20th power
 # organized as [a00, a10, a11, a20, a21, a22, ... ], that is 
@@ -7,11 +8,11 @@ from scipy.special import gamma
 
 maxpoly_nmax    = 299 # max degree allowed
 
-maxpoly_alpha = np.genfromtxt('polynomials/maxpoly_frac_alpha_300_10.5.dat',delimiter=',')
-maxpoly_beta = np.genfromtxt('polynomials/maxpoly_frac_beta_300_10.5.dat',delimiter=',')
-maxpoly_nodes   = np.genfromtxt('polynomials/maxpoly_frac_nodes_300_10.5.dat',delimiter=',')
-maxpoly_weights = np.genfromtxt('polynomials/maxpoly_frac_weights_300_10.5.dat',delimiter=',')
-maxpoly_deriv = np.genfromtxt('polynomials/maxpoly_frac_deriv_300_10.5.dat',delimiter=',')
+maxpoly_alpha   = np.genfromtxt(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_alpha_300_10.5.dat',delimiter=',')
+maxpoly_beta    = np.genfromtxt(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_beta_300_10.5.dat',delimiter=',')
+maxpoly_nodes   = np.genfromtxt(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_nodes_300_10.5.dat',delimiter=',')
+maxpoly_weights = np.genfromtxt(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_weights_300_10.5.dat',delimiter=',')
+maxpoly_deriv   = np.genfromtxt(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_frac_deriv_300_10.5.dat',delimiter=',')
 
 def G2idx(G):
     return int(G+0.5)

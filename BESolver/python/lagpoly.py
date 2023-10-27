@@ -1,9 +1,9 @@
 import numpy as np
 from math import factorial
 import scipy as scipy
-
+import os
 maxpoly_nmax    = 554 # max degree allowed
-maxpoly_data    = np.genfromtxt('polynomials/maxpoly_upto555.dat',delimiter=',')
+maxpoly_data    = np.genfromtxt(os.path.dirname(os.path.abspath(__file__)) + '/polynomials/maxpoly_upto555.dat',delimiter=',')
 maxpoly_nodes   = maxpoly_data[:,0]
 maxpoly_weights = maxpoly_data[:,1]
 

@@ -1,0 +1,504 @@
+\documentclass[mathserif, aspectratio=169]{beamer}
+\usetheme{odenpecos}
+\setbeamertemplate{itemize/enumerate body begin}{\fontsize{8.8}{9}\selectfont}
+\setbeamertemplate{itemize/enumerate subbody begin}{\fontsize{7.5}{8}\selectfont}
+\setbeamertemplate{itemize/enumerate subsubbody begin}{\fontsize{7.5}{8}\selectfont}
+
+% default search path for figures
+\graphicspath{{./../fig/}}
+
+\newcommand{\zapspace}{\topsep=0pt\partopsep=0pt\itemsep=0pt\parskip=0pt}
+
+\usepackage{multicol}
+\usepackage{multirow}
+\usepackage{pict2e}
+%\usepackage{esdiff}
+\usepackage{multimedia}
+\usepackage{verbatim}
+\usepackage{mhchem}
+\usepackage{tikz}
+\usetikzlibrary{arrows}
+\usepackage[percent]{overpic}
+\usepackage[absolute,overlay]{textpos}
+\usepackage{tikz} % Required for flow chart
+\usepackage[caption=false]{subfig}
+
+\newcommand{\overbar}[1]{\mkern 1.5mu\overline{\mkern-1.5mu#1\mkern-1.5mu}\mkern 1.5mu}
+\newcommand{\pp}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\dd}[2]{\frac{d #1}{d #2}}
+\newcommand{\DD}[2]{\frac{D #1}{D #2}}
+\newcommand{\mm}{\mathbf{minmod}}
+\def\etal{{\it et al~}}
+\newcommand{\be}{\begin{eqnarray}}
+	\newcommand{\ee}{\end{eqnarray}}
+\newcommand{\mbb}[1]{\mathbb{#1}} % math blackboard bold
+\newcommand{\mcal}[1]{\mathcal{#1}} % math blackboard bold
+\newcommand{\mbf}[1]{\mathbf{#1}} % math bold face (for vectors)
+\newcommand{\sbf}[1]{\boldsymbol{#1}} % bold face for symbols
+\newcommand{\jump}[1]{\llbracket #1 \rrbracket} % jump operator
+\newcommand{\avg}[1]{\langle #1 \rangle} % average operator
+\newcommand{\rarrow}{\rightarrow}
+\newcommand{\Rarrow}{\Rightarrow}
+\newcommand{\LRarrow}{\Leftrightarrow}
+\newcommand{\vvvert}{|\kern-1pt|\kern-1pt|}
+\newcommand{\enorm}[1]{\vvvert #1 \vvvert}
+\newcommand{\nutil}{\tilde{\nu}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\Cov}{\mathrm{Cov}}
+
+
+\definecolor{MyDarkGreen}{rgb}{0,0.45,0.08}
+\newcommand{\myred}[1]{{\color{red} #1}}
+\newcommand{\myblue}[1]{{\color{blue} #1}}
+\newcommand{\mygreen}[1]{{\color{MyDarkGreen} #1}}
+
+\newcommand{\sa}{\nu_{\mathrm{sa}}}
+\newcommand{\tep}{\tilde{\epsilon}}
+\newcommand{\Ssd}{\mathcal{S}} % source term due to slow derivative
+\newcommand{\ud}{\,\mathrm{d}}
+
+\newcommand{\Mach}[1]{\ensuremath{\mbox{Ma}_{#1}}}
+\newcommand{\Reynolds}{\ensuremath{\mathit{Re}}}
+\newcommand{\DensityRat}{\ensuremath{\mathit{DR}}}
+\newcommand{\BlowRat}{\ensuremath{\mbox{BR}}}
+\newcommand{\VelRat}{\ensuremath{\mathit{VR}}}
+\newcommand{\Tau}{\ensuremath{\mathrm{T}}}
+
+\newcommand{\wall}     {\ensuremath{\mathrm{w}}}   % wall subindex
+\newcommand{\awall}    {\ensuremath{\mathrm{aw}}}  % adiabatic wall subindex
+
+\newcommand{\commentout}[1]{}
+
+\newcommand{\vect}[1]{\boldsymbol{#1}}
+\usepackage{mleftright}
+\newcommand{\of}[1]{\mleft( #1 \mright)}
+\newcommand{\vth}{v_{\textrm{th}}}
+\newcommand{\reals}{\mathbb{R}}
+\newcommand{\myint}{\int\limits}
+\newcommand{\ddt}[1]{\partial_t #1}
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\vr}{v}
+\newcommand{\diff}[1]{\, d#1}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+%\newcommand{\vtheta}{\theta_{\vect{v}}}
+%\newcommand{\vphi}{\varphi_{\vect{v}}}
+%\newcommand{\vr}{v_{r}}
+\newcommand{\vtheta}{{v_{\theta}}}
+\newcommand{\vphi}{v_{\varphi}}
+\newcommand{\vomega}{v_{\omega}}
+\newcommand{\vrunit}{\hat{\vect{v}}_{r}}
+\newcommand{\vthetaunit}{\hat{\vect{v}}_{\theta}}
+\newcommand{\vphiunit}{\hat{\vect{v}}_{\varphi}}
+\DeclareMathOperator{\variance}{Var}
+
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\usepackage{tikz}
+
+\usepackage{tcolorbox}
+\tcbuselibrary{minted,breakable,xparse,skins}
+\definecolor{bg}{gray}{0.95}
+\DeclareTCBListing{mintedbox}{O{}m!O{}}{%
+	breakable=true,
+	listing engine=minted,
+	listing only,
+	minted language=#2,
+	minted style=default,
+	minted options={%
+		linenos,
+		gobble=0,
+		breaklines=true,
+		breakafter=,,
+		fontsize=\small,
+		numbersep=8pt,
+		#1},
+	boxsep=0pt,
+	left skip=0pt,
+	right skip=0pt,
+	left=25pt,
+	right=0pt,
+	top=3pt,
+	bottom=3pt,
+	arc=5pt,
+	leftrule=0pt,
+	rightrule=0pt,
+	bottomrule=2pt,
+	toprule=2pt,
+	colback=bg,
+	colframe=orange!70,
+	enhanced,
+	overlay={%
+		\begin{tcbclipinterior}
+			\fill[orange!20!white] (frame.south west) rectangle ([xshift=20pt]frame.north west);
+	\end{tcbclipinterior}},
+	#3,
+}
+
+\begin{document}
+% disable nav
+\setbeamertemplate{navigation symbols}{}
+
+% ---------------------------------------------------------------
+% Oden/Pecos title page
+
+\hoffset=.16in
+
+\begin{frame}[plain,t]{}
+\makeatletter
+%\vspace*{0.85cm}
+%\vspace*{0.65cm}
+\includegraphics[height=0.9in,trim=50 40 40 0, clip]{PMSc_159_university_formal_horizontal.pdf} \newline
+%\vspace*{0.3cm}
+\begin{columns}[T,onlytextwidth]
+\column{.8\textwidth}
+{\bf \color{burntorange} \fontfamily{bch}\selectfont 
+% -- Set talk title here
+Integration efforts on the electron kinetic solvers with the torch plasma simulator
+%Electron Boltzmann solver integration with the torch plasma simulator
+% --
+}
+\end{columns}
+\vspace*{.15cm}
+\rule{.8\textwidth}{0.6pt} \newline
+
+\vspace*{0.05cm}
+\setstretch{0.65}
+{\fontfamily{phv}\selectfont
+  { \scriptsize
+    % -- define presenter, authors here
+    Milinda Fernando, Kinetic solvers, Parla, and TPS team members \\
+    % --
+  }
+  {\color{burntorange} \tiny
+    % -- define role, meeting event, location, etc
+    PSAAP III Annual Review $\cdot$ November 08-09, 2023
+    %PSAAP TST Meeting $\cdot$ April 24-25, 2023
+    % --
+  }
+}
+
+\vspace*{1cm}
+%\includegraphics[height=0.3in]{figures/pecos_orange1.png}
+\begin{columns}
+\begin{column}{0.8\linewidth}
+\includegraphics[height=0.5in]{oden_pecos_2020_wordmark.png}\\
+{\scriptsize \url{https://pecos.oden.utexas.edu}}
+\end{column}
+
+\begin{column}{0.2\linewidth}
+\includegraphics[height=0.6in]{psaap3-logo.png}
+\end{column}
+\end{columns}
+
+\end{frame}
+\hoffset=0in
+% -- end title slide ---------------------------------------------
+
+%\begin{frame}
+%	\frametitle{Outline}
+%	\begin{itemize}
+%		\item Spatially homogeneous Boltzmann equation, $\partial_t f - \frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f)$
+%		\item Representation of $f$ (i.e., isotropic + anisotropic correction terms), use spherical harmonics for angular directions + experimentation of basis functions in radial direction. 
+%		\begin{itemize}
+%			\item Global approximations with Maxwell and Laguerre polynomials.
+%			\item Local approximations with linear and higher order B-splines
+%		\end{itemize}
+%		\item Collision operator (5d integral form)
+%		\item Simplifications for the collision operator with analytical integration of angular directions (1d integral form). 
+%		\item Equations for the steady-state solution (spatially homogeneous case) 
+%		\item Two-term formulation vs. EEDF formulation with diffusion term. 
+%		\item Verification with Bolsig+ code.  (Both approaches, importance of the diffusion term), PS 2.4
+%		\item Formulation for 1D-space+3D-velocity space Boltzmann equations with some preliminary results for 1d glow discharge problem. 
+%		\item Discuss on single GPU implementation with CuPy, Challenges in 1D+3V formulation (i.e., boundary conditions) and Future work, ES 2.6
+%	\end{itemize}
+%\end{frame}
+
+\begin{frame}
+	\frametitle{Where do we fit ?}
+	\begin{figure}
+		\centering
+		\includegraphics[width=0.9\textwidth]{where_we_fit.png}
+	\end{figure}
+\end{frame}
+
+%\begin{frame}
+%	\frametitle{Outline}
+%\end{frame}
+
+\begin{frame}
+	\frametitle{Boltzmann equation}
+	\begin{itemize}
+		\item \textbf{Objective} : Enable accurate plasma simulations by solving the Boltzmann equation for electron distribution function.
+		\item For a given electric field $\vect{E}$
+		\begin{align}
+			\partial_t f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}f + C_{ee}(f)
+		\end{align}
+		\item $C_{en}$ : electron-heavy collisions (i.e., elastic, ionization)
+		\begin{itemize}
+			\item Use LXCAT cross-section data 
+			\item Linear in $f$
+		\end{itemize} 
+		\item $C_{ee}$ : electron-electron Columbic collisions 
+		\begin{itemize}
+			\item Modeled using Fokker-Plank equation with analytical cross-section
+			\item Nonlinear in $f$
+		\end{itemize}
+		\item With $f$ we can compute electron kinetic coefficients, reaction rates and other QoIs. 
+		%\item $C_{ei}$: electron-ion Columbic can be modeled similarly if needed
+		%		\item Derived the steady state equation
+		%		\begin{align}
+			%			\textcolor{black!70}{\partial_t \hat{f} = -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} \text{ where } \hat{f}(\vect{v},t) = \frac{f(v,t)}{\myint_{R^3} f(\vect{v},t) \diff{\vect{v}}}}\\
+			%			\textcolor{black!70}{\partial_t (\hat{f}) = 0 \ \ \  \Rightarrow} \ \ \  -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} =0  \text{ with } u^T \hat{f}-1=0
+			%		\end{align}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Discretization}
+	\small
+	\begin{itemize}
+		\item Representation of $f\of{\vect{v},t} = \sum_{klm} f_{klm} \underbrace{\phi_k\of{v}}_{\text{B-Spline basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$ 
+		\item Weak formulation
+		$
+		\displaystyle
+		\quad
+		\partial_t f - \frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}}f = C(f)
+		\quad $ \\
+		$
+		\displaystyle
+		\quad
+		\Rightarrow \quad
+		\partial_t \myint_{R^3} f \phi\of{\vect{v}} \ud \vect{v} = 
+		\myint_{R^3} C(f) \phi\of{\vect{v}} \ud \vect{v} + \myint_{R^3} \of{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}} f} \phi(\vect{v}) \ud \vect{v}\text{ , } 
+		\forall \phi(\vect{v})$
+		\item Discretized system $\Rightarrow$
+		$
+		\displaystyle
+		\quad
+		\partial_t f  = C_{en}(f) + C_{ee}(f,f) + E A_v (f)
+		$ where $C_{en}, A_v$ are matrices and $C_{ee}$ is a rank 3 tensor\\
+		\item In spatially homogeneous case (with isotropic scattering) azimuthal symmetry is preserved (i.e., 2 dimensions in v-space)
+		\item Most cases can be resolved with 128 splines in radial direction with 2-spherical modes $\Rightarrow$ 256 DoFs in total
+		%		\item Weak form of the collision operator (5d integral) \\
+		%		$
+		%		\displaystyle
+		%		\quad 
+		%		\myint_{R^3} C_{en} \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
+		%		=
+		%		N \myint_{R^3} \myint_{S^2} 
+		%		v\sigma(v,\vect{\omega})
+		%		f_e\of{\vect{v}_e}
+		%		\left(
+		%		\psi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{\omega}}} 
+		%		- \psi\of{\vect{v}_e} 
+		%		\right)
+		%		\diff{\vect{v}_e} \diff{\vect{\omega}}
+		%		$
+		%		\item Isotropic scattering, azimuthal symmetry, and using spherical harmonics addition (1d integral)\\
+		%		$
+		%		\displaystyle
+		%		\quad 
+		%		C_{en}^{ql} 
+		%		=
+		%		N \myint_{0}^{\infty} 
+		%		v^3\sigma(v)\delta_{ql}
+		%		f_e^{l}\of{v}
+		%		\left(
+		%		\delta_{q0}\psi\of{v_e^\text{post}\of{v}} - \psi\of{v} 
+		%		\right)
+		%		\diff{v} 
+		%		$ 
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Overview: TPS + 0D2V Boltzmann coupling}
+	\begin{figure}
+		\resizebox{0.9\textwidth}{!}{
+			\centering
+			\begin{tikzpicture}[block/.style={draw=black,thick, inner sep=2pt, rounded corners, minimum width=2cm, minimum height=1.2cm, fill=rightfooterorange,font={\small}}, shift=(current page.center)]
+				\begin{scope}[yshift=10cm,xshift=5cm]
+					\draw[lightgray]
+					(current page.north) -- (current page.south)
+					(current page.west)  -- (current page.east);
+					\node[block] (A) at (-9, 3) {torch plasma simulator};
+					\node[block] (B) at (0 , 6) {cross-section data};
+					\node[block] (C) at (0.001 , 3.001) {0D2V-Boltzmann};
+					\node[block] (D) at (0.002 , 0) {electron kinetic coefficients ($T_g, E/n_0, n_e/n_0, E$)};
+					\draw [->,very thick] (B) -- node [text width=3cm, midway, above, align=center,xshift =-0.8cm] {with Maxwellian assumption $f = M_{T_e}(\vect{v})$} (A);\pause
+					\draw [->,very thick] (B) -- node [text width=3cm, midway, above, align=center,xshift = 1.6cm, yshift=-0.5cm] {collision operator assembly} (C);
+					\draw [->,very thick] (C) -- node [text width=3cm, midway, above, align=center, yshift=-0.5cm, xshift=1.2cm] {static E-field assumption} (D);
+					\draw [->,very thick] (D) -- node [text width=3cm, midway, above, align=center,xshift =-1.2cm, yshift=-1.8cm] {$T_e$-based \\ interpolation for rates, kinetic coefficients} (A);\pause
+					\draw [->,very thick,red] (A) to[bend left  = 8] node [text width=3cm, midway, above, align=center,yshift=0cm] {$T_g, E(x,t), n_e, n_0$} (C);
+					\draw [->,very thick,red] (C) to[bend left  = 8] node [text width=3cm, midway, below, align=center,xshift=1.0cm] {rate coefficients, mobility, diffusion} (A);
+				\end{scope}
+		\end{tikzpicture}}
+	\end{figure}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Methodology: TPS + 0D2V Boltzmann}
+	\begin{itemize}
+		\item Goal is to launch independent BTE solves for each spatial point (roughly 256 DoF per grid point)
+		\item Challenges
+		\begin{itemize}
+			\item \textbf{computational cost}: Expensive to launch BTE solves for each spatial DoF 
+			\item \textbf{grid truncation}: $v_{max} = \gamma \sqrt{\epsilon_{max}}$ v-space grid needs to be truncated depending on BTE input parameters
+			\item \textbf{memory footprint}: Infeasible to have independent v-space grid for each spatial point
+		\end{itemize}
+		\item \textbf{p-coarsening}: Launch BTE solve for each TPS mesh cell 
+		\item \textbf{Memory footprint}: Spatial points are clustered based on the approximate electron temperature ($T_e$), number of clusters can be specified by the user. Each cluster of points have the same v-space grid.
+		\item \textbf{Grid truncation} : $T_e$ is also used to determine $v_{max}$
+		\item For the TPS $T_e \approx$  0.02 eV to 0.8 eV
+		
+		
+%		Launch 0D2V BTE solves for each spatial gird point
+%		\item BTE require ~ 256 DoF per grid point
+%		\item One-way coupling
+%		\begin{itemize}
+%			\item Evolve the TPS solution till time-periodic steady-state
+%		\end{itemize}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{0D2V batched BTE solver}
+	\begin{columns}
+		\begin{column}{0.4\textwidth}
+			\includegraphics[width=\columnwidth]{tps_input0.png}
+		\end{column}
+		\begin{column}{0.6\textwidth}
+			For each cluster A
+			\begin{itemize}
+				\item Let $N_A$ be the number of spatial points
+				\item Right-hand-side computation done by stacking BTE DoFs 
+				\begin{align*}
+					\underbrace{C}_{\text{v-space operator for cluster A}} \underbrace{\begin{bmatrix}
+						\vdots & \vdots & \hdots &\vdots\\
+						f_1    & f_2    & \hdots & f_{N_A} \\
+						\vdots & \vdots & \hdots &\vdots
+					\end{bmatrix}}_{\text{batched DoFs for cluster A}}
+				\end{align*}
+				\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
+			\end{itemize}
+			Clusters can be processed independently
+			\begin{itemize}
+				\item \textbf{Parla} is used for parallelization of clusters between GPUs on the same node
+				\item \textbf{MPI} is used for distributed memory parallelism
+			\end{itemize}
+		\end{column}
+	\end{columns}
+
+\end{frame}
+
+\begin{frame}
+	\frametitle{Key software components}
+	\begin{itemize}
+		\item \textbf{Plasma torch simulator (TPS)}: MFEM based discontinuous Galerkin discretization for the torch
+		\begin{itemize}
+			\item CPU, GPU support through MFEM library
+			\item Python interface
+		\end{itemize}
+		\item \textbf{0D-space Boltzmann solver}
+		\begin{itemize}
+			\item Galerkin discretization for the v-space
+			\item Verified with Bolsig+ and PIC-DSMC codes
+			\item Direct steady-state solution and fully-implicit time integrators for transient solutions
+			\item Python implementation
+			\item CPU \& GPU support through \texttt{numpy} and \text{cupy}
+		\end{itemize}
+		\item \textbf{Parla}: Generic framework for task-based parallelism in Python
+			\begin{itemize}
+			\item Ability to handle fine grain tasks
+			\item Support for CPU/GPU tasks with asynchronous kernel execution
+			\item C/C++ based underlying task scheduler
+			\end{itemize}
+	\end{itemize}
+\end{frame}
+
+
+
+
+
+\begin{frame}[fragile]
+\frametitle{Example: TPS + 0D2V Boltzmann coupling}
+\begin{mintedbox}{python}%[break at=.8\textheight]
+import libtps
+from   bte_0d3v_batched import bte_0d3v_batched as BoltzmannSolver
+comm = MPI.COMM_WORLD
+tps = libtps.Tps(comm)
+boltzmann = Boltzmann0D2VBactchedSolver(tps, comm)
+interface = libtps.Tps2Boltzmann(tps)
+it = 0
+while it < max_iters:
+    tps.solveStep()
+    tps.push(interface)
+    boltzmann.fetch(interface)
+    boltzmann.solve()
+    boltzmann.push(interface)
+    tps.fetch(interface)
+    it = it+1
+\end{mintedbox}
+\end{frame}
+
+\begin{frame}
+	\frametitle{TPS + 0D2V Boltzmann weak coupling}
+	\vspace{-0.2in}
+	\begin{enumerate}
+		\item Let $\vect{U}_0$ be the initial state for TPS (3-species, axisymmetric case)
+		\item Evolve TPS solution until time-periodic $\vect{U}_{s}$ solution
+		\item Extract TPS fields from $\vect{U}_s$ and start BTE solve with $E(\vect{x}, t) = E_x \cos(\omega t) + E_y \sin(\omega t)$, with Maxwellian initial conditions ($\vect{f}_0$)
+		\item Evolve BTE solution $\vect{f}_0$ until time-periodic solutions $\vect{f}_s$
+		\item Compute cycle-averaged reaction rates from $\vect{f}_s$ and compare with the rates coefficients used in the TPS code
+	\end{enumerate}
+\pause
+\textbf{Problem setup}
+\begin{columns}
+	\begin{column}{0.35\textwidth}
+
+		\begin{itemize}
+			\item TPS mesh elements 7598
+			\item Number of spatial clusters 4
+			\item DoFs per spatial point 256, i.e.,  2M DoFs total
+			\item Number of timesteps 4000
+			\item Number of GPUs 2 Nvidia A100
+		\end{itemize}		
+	\end{column}
+	\begin{column}{0.7\textwidth}
+		\begin{itemize}
+			\item BTE grid setup time $\approx$ 29.3 s
+			\item Assuming static E-field (direct steady-state solve) $\approx$ 8.07 s
+			\item Cycle-averaged solution with time-integration (2 cycles, 4000 timesteps) $\approx$ 1314.0 s
+		\end{itemize}
+	\end{column}
+\end{columns}
+
+\end{frame}
+
+
+
+\begin{frame}
+	\frametitle{TPS + 0D2V Boltzmann weak coupling}
+	\begin{figure}
+		\centering
+		\includegraphics[width=0.5\textwidth]{initial_boltzmann_rxn_comparison.png}
+	\end{figure}
+\end{frame}
+%\begin{frame}
+%	\frametitle{0D-Space Boltzmann one-way coupling}
+%	
+%\end{frame}
+
+\begin{frame}
+	\frametitle{Future work}
+	\begin{itemize}
+		\item Characterize sensitivity for electron kinetic coefficients to torch stability profiles
+		\item Initial work on the strong coupling, performance improvements for the batched solver
+		\item 1D2V Boltzmann initial developments for the glow discharge problem
+	\end{itemize}
+	\begin{center}
+		Thank You!
+	\end{center}
+\end{frame}
+\end{document}

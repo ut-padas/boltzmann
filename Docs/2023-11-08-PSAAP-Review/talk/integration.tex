@@ -227,38 +227,43 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 %\end{frame}
 
 \begin{frame}
-	\frametitle{Torch plasma simulator (TPS)}
+	\frametitle{Torch plasma simulator}
 	\begin{columns}
 		\begin{column}{0.48\textwidth}
 			\textbf{TPS with LTE}
-			\vspace{0.25in}
+			%\vspace{0.25in}
 			\footnotesize
 			\begin{align*}
-				\partial_t n_i + \nabla_{\vect{x}} \cdot \vect{J_{n_i}}  = k_i n_0 n_i  \text{ in } \Omega_x \times (0,T]\\
-				\partial_t n_0 + \nabla_{\vect{x}} \cdot \vect{J_{n_0}}  = -k_i n_0 n_i \text{ in } \Omega_x \times (0,T]\\
-				\text{conservation of momentum for }  Ar^{+}, Ar  \\
-				\text{ additional equations for } \vect{E}, T_g , \\
+				&\partial_t n_i + \nabla_{\vect{x}} \cdot \vect{J_{n_i}}  = k_i n_0 n_i  \color{gray}{\text{ in } \Omega_x \times (0,T]}\\
+				%\partial_t n_0 + \nabla_{\vect{x}} \cdot \vect{J_{n_0}}  = -k_i n_0 n_i \text{ in } \Omega_x \times (0,T]\\
+				&\text{conservation of mass, momentum} \\
+				&\quad  \text{and energy for } \vect{u}, n_0, T_g \\
+				%\text{conservation of momentum for }  r^{+}, Ar  \\
+				&\text{Maxwell's equations for } \vect{E}
 			\end{align*}
 			\begin{itemize}
-				\item Assumes local thermodynamic equilibrium, (i.e., $T_e = T_g$) and quasi-neutrality (i.e., $n_e=n_i$)
-				\item $k_i \approx M(T_g)$ Assumes, electron EEDF is Maxwellian
+				\item LTE: $T_g=T_e$ %Assumes local thermodynamic equilibrium, (i.e., $T_e = T_g$) and quasi-neutrality (i.e., $n_e=n_i$)
+				\item Quasi-neutrality: $n_e = n_i$ 
+				\item $k_i \approx$ Maxwellian EEDF at $T_g$
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.48\textwidth}
-			\textbf{Fully coupled TPS + Boltzmann}
-			\vspace{0.25in}
+			\textbf{TPS + Boltzmann}
+			%\vspace{0.25in}
 			\footnotesize
 			\begin{align*}
-				&\partial_t n_i + \nabla_{\vect{x}} \cdot \vect{J_{n_i}}  = k_i n_0 n_i  \text{ in } \Omega_x \times (0,T]\\
-				&\partial_t n_0 + \nabla_{\vect{x}} \cdot \vect{J_{n_0}}  = -k_i n_0 n_i \text{ in } \Omega_x \times (0,T] \\
-				&\text{conservation of momentum for }  Ar^{+}, Ar \\
-				&\text{ additional equations for } \vect{E}, T_g \\
-				&\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f, n_0, T_g) \text{ in } \Omega_x \times \mathcal{R}^3 \times (0,T]
+				&\partial_t n_i + \nabla_{\vect{x}} \cdot \vect{J_{n_i}}  = k_i n_0 n_i  \color{gray}{\text{ in } \Omega_x \times (0,T]}\\
+				%\partial_t n_0 + \nabla_{\vect{x}} \cdot \vect{J_{n_0}}  = -k_i n_0 n_i \text{ in } \Omega_x \times (0,T]\\
+				&\text{conservation of mass, momentum} \\
+				&\quad  \text{and energy for } \vect{u}, n_0, T_g \\
+				%\text{conservation of momentum for }  r^{+}, Ar  \\
+				&\text{Maxwell's equations for } \vect{E}\\
+				&\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f, n_0, T_g) \text{ in } \color{gray}{\text{ in } \Omega_x \Omega_v \times (0,T]}
 			\end{align*}
 			\begin{itemize}
 				\item $T_e \sim \int_{\vect{v}} \norm{\vec{v}}^2 \hat{f} \diff{\vect{v}}$
 				\item $k_i = \int_{\vect{v}} \sigma(\norm{\vect{v}}) \hat{f} \diff{\vect{v}}$ where $\hat{f} = \frac{f}{\int_{\vect{v}} f \diff{\vect{v}}}$
-				\item 7D problem
+				%\item 7D problem
 			\end{itemize}
 		\end{column}
 	\end{columns}
@@ -334,62 +339,64 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 \end{frame}
 
 \begin{frame}
-	\frametitle{Current Integration}
+	\frametitle{Current integration}
 	\begin{itemize}
-		\item \textbf{A} : Assume LTE $T_e=T_g$ and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
-		\item \textbf{B} : Batched 0D-Boltzmann solver with static $\vect{E}$ , $k_i^{B} = \mathcal{K}f$ with weak-coupling
-		\item \textbf{C} : Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
-		\item In-terms of accuracy, $\text{\textbf{A}} < \text{\textbf{B}} < \text{\textbf{C}} < \text{Fully coupled TPS + Boltzmann}$
+		\item \textbf{A} : $T_e=T_g$ and $k_i^{A}$ from Maxwellian EEDF %and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
+		\item \textbf{B} : Batched steady-state 0D-Boltzmann, $k_i^{B} = \int_{\vect{v}} \sigma f $ 
+		\item \textbf{C} : Batched transient 0D-Boltzmann, $k_i^{C} = \frac{1}{T} \int_{T} \int_{\vect{v}} \sigma f $ %Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
+		%\item In-terms of accuracy, $\text{\textbf{A}} < \text{\textbf{B}} < \text{\textbf{C}} < \text{Fully coupled TPS + Boltzmann}$
+		\vspace{0.25in}
+		\item Reaction rate errors, for example, $\cfrac{|k_i^{A} n_0 n_i  - k_i^{B} n_0 n_i|}{\norm{k_i^{B} n_0 n_i}_{\infty}}$ %> \epsilon = 10^{-2}$
 	\end{itemize}
 	%We compare \textbf{B} vs. \textbf{A}, \textbf{C} vs. \textbf{A} and \textbf{B} vs. \textbf{C}
 \end{frame}
 
 \begin{frame}
-	\frametitle{A Vs. B}
-	\begin{itemize}
-		\item \textbf{A} : Assume LTE $T_e=T_g$ and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
-		\item \textbf{B} : Batched 0D-Boltzmann solver with static $\vect{E}$ , $k_i^{B} = \mathcal{K}f$ with weak-coupling
-		%\item \textbf{C} : Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
-	\end{itemize}
-
+	\frametitle{Maxwellian Vs. steady-state 0D-Boltzmann}
 	\begin{figure}
 		\begin{center}
-			\hspace{-2.25in}
-			\includegraphics[width=1.3\textwidth]{tps_0d2v_ss.png}
+			\includegraphics[width=1.05\textwidth]{tps_0d2v_ss.png}
 		\end{center}
 	\end{figure}
+	\textbullet~ Relative errors 50\% compared to Maxwellian EEDF
 \end{frame}
 
 \begin{frame}
-	\frametitle{A Vs. C}
-	\begin{itemize}
-		\item \textbf{A} : Assume LTE $T_e=T_g$ and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
-		%\item \textbf{B} : Batched 0D-Boltzmann solver with static $\vect{E}$ , $k_i^{B} = \mathcal{K}f$ with weak-coupling
-		\item \textbf{C} : Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
-	\end{itemize}
+	\frametitle{Maxwellian Vs. transient 0D-Boltzmann}
 	\begin{figure}
 		\begin{center}
-			\hspace{-2.25in}
-			\includegraphics[width=1.3\textwidth]{tps_0d2v_ts.png}
+			%\hspace{-0.6in}
+			\includegraphics[width=1.05\textwidth]{tps_0d2v_ts.png}
 		\end{center}
 	\end{figure}
+	\textbullet~ Relative errors 200\% compared to Maxwellian EEDF
 \end{frame}
 
 \begin{frame}
-	\frametitle{B Vs. C}
-	\begin{itemize}
-		%\item \textbf{A} : Assume LTE $T_e=T_g$ and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
-		\item \textbf{B} : Batched 0D-Boltzmann solver with static $\vect{E}$ , $k_i^{B} = \mathcal{K}f$ with weak-coupling
-		\item \textbf{C} : Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
-	\end{itemize}
+	\frametitle{TPS + 0D-Boltzmann}
+	\vspace{-0.25in}
 	\begin{figure}
-		\begin{center}
-			%\hspace{-2.25in}
-			%\vspace{-0.5in}
-			\includegraphics[width=0.8\textwidth]{tps_0d2v_ts_vs_ss.png}
-		\end{center}
+		\centering
+		\includegraphics[width=0.48\textwidth]{te_vs_tg_tps_bte.png}
+		\includegraphics[width=0.48\textwidth]{rates_tps_bte.png}
 	\end{figure}
 \end{frame}
+
+% \begin{frame}
+% 	\frametitle{steady-state Vs. transient 0D-Boltzmann}
+% 	% \begin{itemize}
+% 	% 	%\item \textbf{A} : Assume LTE $T_e=T_g$ and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
+% 	% 	\item \textbf{B} : Batched 0D-Boltzmann solver with static $\vect{E}$ , $k_i^{B} = \mathcal{K}f$ with weak-coupling
+% 	% 	\item \textbf{C} : Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
+% 	% \end{itemize}
+% 	\begin{figure}
+% 		\begin{center}
+% 			%\hspace{-2.25in}
+% 			%\vspace{-0.5in}
+% 			\includegraphics[width=0.8\textwidth]{tps_0d2v_ts_vs_ss.png}
+% 		\end{center}
+% 	\end{figure}
+% \end{frame}
 
 
 % \begin{frame}
@@ -553,7 +560,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 % \end{frame}
 
 \begin{frame}
-	\frametitle{Key software components}
+	\frametitle{Software integration}
 	\begin{itemize}
 		\item \textbf{Plasma torch simulator (TPS)}: MFEM based discontinuous Galerkin discretization for the torch
 		\begin{itemize}
@@ -562,10 +569,10 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 		\end{itemize}
 		\item \textbf{0D-space Boltzmann solver}
 		\begin{itemize}
-			\item Galerkin discretization for the v-space
+			%\item Galerkin discretization for the v-space
 			\item Verified with Bolsig+ and PIC-DSMC codes
 			\item Direct steady-state solution and fully-implicit time integrators for transient solutions
-			\item Python implementation
+			%\item Python implementation
 			\item CPU \& GPU support through \texttt{numpy} and \texttt{cupy}
 		\end{itemize}
 		\item \textbf{Parla}: Generic framework for task-based parallelism in Python
@@ -575,19 +582,32 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 			\item C/C++ based underlying task scheduler
 			\end{itemize}
 	\end{itemize}
-	Clusters can be processed independently
+	Current integration
 	\begin{itemize}
-		\item \textbf{Parla} is used for parallelization of clusters between GPUs on the same node
-		\item \textbf{MPI} is used for distributed memory parallelism
+		\item TPS + Python + MPI
+		\item TPS + Boltzmann + Python + MPI + Parla
+	\end{itemize}
+	
+	% \begin{itemize}
+	% 	\item \textbf{Parla} is used for parallelization of clusters between GPUs on the same node
+	% 	\item \textbf{MPI} is used for distributed memory parallelism
+	% \end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{TPS + Python + Boltzmann + Parla + MPI}
+	\begin{figure}
+		\centering
+		\includegraphics[width=0.8\textwidth]{software_integration.png}
+	\end{figure}
+	\begin{itemize}
+		\item Information from Boltzmann to TPS is exchanged with interface class
+		\item Parallelization in space via Parla
 	\end{itemize}
 \end{frame}
 
-
-
-
-
 \begin{frame}[fragile]
-\frametitle{Example: TPS + 0D2V Boltzmann coupling}
+\frametitle{Strong coupling: TPS + 0D Boltzmann}
 \begin{mintedbox}{python}%[break at=.8\textheight]
 import libtps
 from   bte_0d3v_batched import bte_0d3v_batched as BoltzmannSolver
@@ -607,42 +627,38 @@ while it < max_iters:
 \end{mintedbox}
 \end{frame}
 
-\begin{frame}
-	\frametitle{TPS + 0D2V Boltzmann weak coupling}
-	\vspace{-0.2in}
-	\begin{enumerate}
-		\item Let $\vect{U}_0$ be the initial state for TPS (3-species, axisymmetric case)
-		\item Evolve TPS solution until time-periodic $\vect{U}_{s}$ solution
-		\item Extract TPS fields from $\vect{U}_s$ and start BTE solve with $E(\vect{x}, t) = E_x \cos(\omega t) + E_y \sin(\omega t)$, with Maxwellian initial conditions ($\vect{f}_0$)
-		\item Evolve BTE solution $\vect{f}_0$ until time-periodic solutions $\vect{f}_s$
-		\item Compute cycle-averaged reaction rates from $\vect{f}_s$ and compare with the rates coefficients used in the TPS code
-	\end{enumerate}
-\pause
-\textbf{Problem setup}
-\begin{columns}
-	\begin{column}{0.35\textwidth}
+% \begin{frame}
+% 	\frametitle{TPS + 0D2V Boltzmann weak coupling}
+% 	\vspace{-0.2in}
+% 	\begin{enumerate}
+% 		\item Let $\vect{U}_0$ be the initial state for TPS (3-species, axisymmetric case)
+% 		\item Evolve TPS solution until time-periodic $\vect{U}_{s}$ solution
+% 		\item Extract TPS fields from $\vect{U}_s$ and start BTE solve with $E(\vect{x}, t) = E_x \cos(\omega t) + E_y \sin(\omega t)$, with Maxwellian initial conditions ($\vect{f}_0$)
+% 		\item Evolve BTE solution $\vect{f}_0$ until time-periodic solutions $\vect{f}_s$
+% 		\item Compute cycle-averaged reaction rates from $\vect{f}_s$ and compare with the rates coefficients used in the TPS code
+% 	\end{enumerate}
+% \pause
+% \textbf{Problem setup}
+% \begin{columns}
+% 	\begin{column}{0.35\textwidth}
 
-		\begin{itemize}
-			\item TPS mesh elements 7598
-			\item Number of spatial clusters 4
-			\item DoFs per spatial point 256, i.e.,  2M DoFs total
-			\item Number of timesteps 4000
-			\item Number of GPUs 2 Nvidia A100
-		\end{itemize}		
-	\end{column}
-	\begin{column}{0.7\textwidth}
-		\begin{itemize}
-			\item BTE grid setup time $\approx$ 29.3 s
-			\item Assuming static E-field (direct steady-state solve) $\approx$ 8.07 s
-			\item Cycle-averaged solution with time-integration (2 cycles, 4000 timesteps) $\approx$ 1314.0 s
-		\end{itemize}
-	\end{column}
-\end{columns}
-
-\end{frame}
-
-
-
+% 		\begin{itemize}
+% 			\item TPS mesh elements 7598
+% 			\item Number of spatial clusters 4
+% 			\item DoFs per spatial point 256, i.e.,  2M DoFs total
+% 			\item Number of timesteps 4000
+% 			\item Number of GPUs 2 Nvidia A100
+% 		\end{itemize}		
+% 	\end{column}
+% 	\begin{column}{0.7\textwidth}
+% 		\begin{itemize}
+% 			\item BTE grid setup time $\approx$ 29.3 s
+% 			\item Assuming static E-field (direct steady-state solve) $\approx$ 8.07 s
+% 			\item Cycle-averaged solution with time-integration (2 cycles, 4000 timesteps) $\approx$ 1314.0 s
+% 		\end{itemize}
+% 	\end{column}
+% \end{columns}
+% \end{frame}
 % \begin{frame}
 % 	\frametitle{TPS + 0D2V Boltzmann weak coupling}
 % 	\begin{figure}
@@ -665,12 +681,20 @@ while it < max_iters:
 %\end{frame}
 
 \begin{frame}
-	\frametitle{Future work}
+	\frametitle{Conclusions \& Future work}
+	Conclusions
+	\begin{itemize}
+		\item Solver with TPS + Boltzmann + Parla + MPI 
+		\item Observe significant errors between Maxwellian EEDF vs. 0D-Boltzmann for electrons
+	\end{itemize}
+	\vspace{0.125in}
+	Ongoing Work
 	\begin{itemize}
 		\item Characterize sensitivity for electron kinetic coefficients to torch stability profiles
-		\item Initial work on the strong coupling, performance improvements for the batched solver
-		\item 1D2V Boltzmann initial developments for the glow discharge problem
+		\item HPC \& performance for TPS + Boltzmann
+		\item 1D2V Boltzmann setup for glow discharge
 	\end{itemize}
+	\pause
 	\begin{center}
 		Thank You!
 	\end{center}

@@ -168,7 +168,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 {\fontfamily{phv}\selectfont
   { \scriptsize
     % -- define presenter, authors here
-    Milinda Fernando, Kinetic solvers, Parla, and TPS team members \\
+    \textbf{Milinda Fernando}, Kinetic solvers, Parla, and TPS team members \\
     % --
   }
   {\color{burntorange} \tiny
@@ -231,7 +231,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 	\frametitle{Torch plasma simulator}
 	\begin{columns}
 		\begin{column}{0.48\textwidth}
-			\textbf{TPS with LTE}
+			\textbf{TPS}
 			%\vspace{0.25in}
 			\footnotesize
 			\begin{align*}
@@ -243,7 +243,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 				&\text{Maxwell's equations for } \vect{E}
 			\end{align*}
 			\begin{itemize}
-				\item LTE: $T_g=T_e$ %Assumes local thermodynamic equilibrium, (i.e., $T_e = T_g$) and quasi-neutrality (i.e., $n_e=n_i$)
+				\item $T_g=T_e$ %Assumes local thermodynamic equilibrium, (i.e., $T_e = T_g$) and quasi-neutrality (i.e., $n_e=n_i$)
 				\item Quasi-neutrality: $n_e = n_i$ 
 				\item $k_i \approx$ Maxwellian EEDF at $T_g$
 			\end{itemize}
@@ -263,6 +263,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 			\end{align*}
 			\begin{itemize}
 				\item $T_e \sim \int_{\vect{v}} \norm{\vec{v}}^2 \hat{f} \diff{\vect{v}}$
+				\item Quasi-neutrality: $n_e = n_i$ 
 				\item $k_i = \int_{\vect{v}} \sigma(\norm{\vect{v}}) \hat{f} \diff{\vect{v}}$ where $\hat{f} = \frac{f}{\int_{\vect{v}} f \diff{\vect{v}}}$
 				%\item 7D problem
 			\end{itemize}
@@ -280,7 +281,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 	\vspace{0.2in}
 	\begin{columns}
 		\begin{column}{0.48\textwidth}
-			\textbf{Strong coupling (2-way)}\\
+			\textbf{Two-way coupling}\\
 			\begin{figure}
 				\resizebox{0.9\textwidth}{!}{
 					\centering
@@ -303,7 +304,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 			\end{figure}
 		\end{column}
 		\begin{column}{0.48\textwidth}
-			\textbf{Weak coupling (1-way)}\\
+			\textbf{One-way coupling}\\
 			\begin{figure}
 				\resizebox{0.9\textwidth}{!}{
 					\centering
@@ -332,52 +333,58 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 			\end{figure}
 		\end{column}
 	\end{columns}
-	Current integration
 	\begin{itemize}
-		\item Focus on weak coupling to evaluate modeling errors
-		\item Take, $n_0, T_g, n_i, \vect{E}$ from TPS code, and compare $k_i\approx$ Maxwellian EEDF to more generic electron model (i.e., Boltzmann equation) 
+		\item Completed 1-way integration
 	\end{itemize}
+	% Current integration
+	% \begin{itemize}
+	% 	\item Focus on weak coupling to evaluate modeling errors
+	% 	\item Take, $n_0, T_g, n_i, \vect{E}$ from TPS code, and compare $k_i\approx$ Maxwellian EEDF to more generic electron model (i.e., Boltzmann equation) 
+	% \end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Current integration}
+	\frametitle{Comparison between different models}
 	\begin{itemize}
-		\item \textbf{A} : $T_e=T_g$ and $k_i^{A}$ from Maxwellian EEDF %and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
-		\item \textbf{B} : Batched steady-state 0D-Boltzmann, $k_i^{B} = \int_{\vect{v}} \sigma f $ 
-		\item \textbf{C} : Batched transient 0D-Boltzmann, $k_i^{C} = \frac{1}{T} \int_{T} \int_{\vect{v}} \sigma f $ %Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
+		\item \textbf{Maxwellian} : $T_e=T_g$ and $k_i^{A} = \int_{\vect{v}} \sigma f^{\text{Maxwellian}} $  (currently used in TPS code)%from Maxwellian EEDF %and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
+		\item \textbf{Static E-field} : Batched \textcolor{orange}{steady-state} 0D-Boltzmann, $k_i^{B} = \int_{\vect{v}} \sigma f^{B} $ 
+		\item \textbf{Oscillatory E-field} : Batched \textcolor{orange}{transient} 0D-Boltzmann, $k_i^{C} = \frac{1}{T} \int_{T} \int_{\vect{v}} \sigma f^{C} $ %Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
 		%\item In-terms of accuracy, $\text{\textbf{A}} < \text{\textbf{B}} < \text{\textbf{C}} < \text{Fully coupled TPS + Boltzmann}$
 		\vspace{0.25in}
-		\item Reaction rate errors, for example, $\cfrac{|k_i^{A} n_0 n_i  - k_i^{B} n_0 n_i|}{\norm{k_i^{B} n_0 n_i}_{\infty}}$ %> \epsilon = 10^{-2}$
+		\item Reaction rate errors, for example, $\cfrac{|k_i^{A} n_0 n_i  - k_i^{B} n_0 n_i|}{\norm{k_i^{A} n_0 n_i}_{\infty}}$ %> \epsilon = 10^{-2}$
 	\end{itemize}
 	%We compare \textbf{B} vs. \textbf{A}, \textbf{C} vs. \textbf{A} and \textbf{B} vs. \textbf{C}
 \end{frame}
 
 \begin{frame}
 	\frametitle{TPS + 0D-Boltzmann}
-	\vspace{-0.25in}
+	\vspace{-0.4in}
 	\begin{figure}
 		\centering
 		\includegraphics[width=0.48\textwidth]{te_vs_tg_tps_bte.png}
 		\includegraphics[width=0.48\textwidth]{rates_tps_bte.png}
 	\end{figure}
+	\begin{itemize}
+		\item Static E-field leads higher $T_e$ and $k_i$ compared to oscillatory E-field with cycle averaged QoIs. 
+	\end{itemize}
 \end{frame}
 
-\begin{frame}
-	\frametitle{Maxwellian vs. steady-state 0D-Boltzmann}
-	\begin{figure}
-		\begin{center}
-			\includegraphics[width=1.05\textwidth]{tps_0d2v_ss.png}
-		\end{center}
-	\end{figure}
-	\textbullet~ Relative errors for $k_i n_0 n_i$ 50\% compared to Maxwellian EEDF
-\end{frame}
+% \begin{frame}
+% 	\frametitle{Maxwellian vs. steady-state 0D-Boltzmann}
+% 	\begin{figure}
+% 		\begin{center}
+% 			\includegraphics[width=1.05\textwidth]{tps_0d2v_ss.png}
+% 		\end{center}
+% 	\end{figure}
+% 	\textbullet~ Relative errors for $k_i n_0 n_i$ 50\% compared to Maxwellian EEDF
+% \end{frame}
 
 \begin{frame}
-	\frametitle{Maxwellian vs. transient 0D-Boltzmann}
+	\frametitle{Transient 0D-Boltzmann vs. Maxwellian}
 	\begin{figure}
 		\begin{center}
 			%\hspace{-0.6in}
-			\includegraphics[width=1.05\textwidth]{tps_0d2v_ts.png}
+			\includegraphics[width=1.05\textwidth]{tps_0d2v_ts1.png}
 		\end{center}
 	\end{figure}
 	\textbullet~ Relative errors for $k_i n_0 n_i$ 200\% compared to Maxwellian EEDF
@@ -401,172 +408,49 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 % \end{frame}
 
 
-% \begin{frame}
-% 	\frametitle{Boltzmann equation}
-% 	\begin{itemize}
-% 		\item \textbf{Objective} : Enable accurate plasma simulations by solving the Boltzmann equation for electron distribution function.
-% 		\item For a given electric field $\vect{E}$
-% 		\begin{align}
-% 			\partial_t f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}f + C_{ee}(f)
-% 		\end{align}
-% 		\item $C_{en}$ : electron-heavy collisions (i.e., elastic, ionization)
-% 		\begin{itemize}
-% 			\item Use LXCAT cross-section data 
-% 			\item Linear in $f$
-% 		\end{itemize} 
-% 		\item $C_{ee}$ : electron-electron Columbic collisions 
-% 		\begin{itemize}
-% 			\item Modeled using Fokker-Plank equation with analytical cross-section
-% 			\item Nonlinear in $f$
-% 		\end{itemize}
-% 		\item With $f$ we can compute electron kinetic coefficients, reaction rates and other QoIs. 
-% 		%\item $C_{ei}$: electron-ion Columbic can be modeled similarly if needed
-% 		%		\item Derived the steady state equation
-% 		%		\begin{align}
-% 			%			\textcolor{black!70}{\partial_t \hat{f} = -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} \text{ where } \hat{f}(\vect{v},t) = \frac{f(v,t)}{\myint_{R^3} f(\vect{v},t) \diff{\vect{v}}}}\\
-% 			%			\textcolor{black!70}{\partial_t (\hat{f}) = 0 \ \ \  \Rightarrow} \ \ \  -(u^T C \hat{f}) \hat{f} + (C+E)\hat{f} =0  \text{ with } u^T \hat{f}-1=0
-% 			%		\end{align}
-% 	\end{itemize}
-% \end{frame}
-
-% \begin{frame}
-% 	\frametitle{Discretization}
-% 	\small
-% 	\begin{itemize}
-% 		\item Representation of $f\of{\vect{v},t} = \sum_{klm} f_{klm} \underbrace{\phi_k\of{v}}_{\text{B-Spline basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$ 
-% %		\item Weak formulation
-% %		$
-% %		\displaystyle
-% %		\quad
-% %		\partial_t f - \frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}}f = C(f)
-% %		\quad $ \\
-% %		$
-% %		\displaystyle
-% %		\quad
-% %		\Rightarrow \quad
-% %		\partial_t \myint_{R^3} f \phi\of{\vect{v}} \ud \vect{v} = 
-% %		\myint_{R^3} C(f) \phi\of{\vect{v}} \ud \vect{v} + \myint_{R^3} \of{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v}} f} \phi(\vect{v}) \ud \vect{v}\text{ , } 
-% %		\forall \phi(\vect{v})$
-% 		\item Discretized system $\Rightarrow$
-% 		$
-% 		\displaystyle
-% 		\quad
-% 		\partial_t f  = C_{en}f + C_{ee}(f,f) + E A_v f
-% 		$ where $C_{en}, A_v$ are matrices and $C_{ee}$ is a rank 3 tensor\\
-% 		%\item In spatially homogeneous case (with isotropic scattering) azimuthal symmetry is preserved (i.e., 2 dimensions in v-space)
-% 		\item Most cases can be resolved with 128 splines in radial direction with 2-spherical modes $\Rightarrow$ 256 DoFs in total
-% 		%		\item Weak form of the collision operator (5d integral) \\
-% 		%		$
-% 		%		\displaystyle
-% 		%		\quad 
-% 		%		\myint_{R^3} C_{en} \phi\of{\vect{v}_e} \diff{\vect{v}_e} 
-% 		%		=
-% 		%		N \myint_{R^3} \myint_{S^2} 
-% 		%		v\sigma(v,\vect{\omega})
-% 		%		f_e\of{\vect{v}_e}
-% 		%		\left(
-% 		%		\psi\of{\vect{v}_e^\text{post}\of{\vect{v}_e, \vect{\omega}}} 
-% 		%		- \psi\of{\vect{v}_e} 
-% 		%		\right)
-% 		%		\diff{\vect{v}_e} \diff{\vect{\omega}}
-% 		%		$
-% 		%		\item Isotropic scattering, azimuthal symmetry, and using spherical harmonics addition (1d integral)\\
-% 		%		$
-% 		%		\displaystyle
-% 		%		\quad 
-% 		%		C_{en}^{ql} 
-% 		%		=
-% 		%		N \myint_{0}^{\infty} 
-% 		%		v^3\sigma(v)\delta_{ql}
-% 		%		f_e^{l}\of{v}
-% 		%		\left(
-% 		%		\delta_{q0}\psi\of{v_e^\text{post}\of{v}} - \psi\of{v} 
-% 		%		\right)
-% 		%		\diff{v} 
-% 		%		$ 
-% 	\end{itemize}
-% \end{frame}
-
-% \begin{frame}
-% 	\frametitle{Overview: TPS + 0D2V Boltzmann coupling}
-% 	\begin{figure}
-% 		\resizebox{0.9\textwidth}{!}{
-% 			\centering
-% 			\begin{tikzpicture}[block/.style={draw=black,thick, inner sep=2pt, rounded corners, minimum width=2cm, minimum height=1.2cm, fill=rightfooterorange,font={\small}}, shift=(current page.center)]
-% 				\begin{scope}[yshift=10cm,xshift=5cm]
-% 					\draw[lightgray]
-% 					(current page.north) -- (current page.south)
-% 					(current page.west)  -- (current page.east);
-% 					\node[block] (A) at (-9, 3) {torch plasma simulator};
-% 					\node[block] (B) at (0 , 6) {cross-section data};
-% 					\node[block] (C) at (0.001 , 3.001) {0D2V-Boltzmann};
-% 					\node[block] (D) at (0.002 , 0) {electron kinetic coefficients ($T_g, E/n_0, n_e/n_0, E$)};
-% 					\draw [->,very thick] (B) -- node [text width=3cm, midway, above, align=center,xshift =-0.8cm] {with Maxwellian assumption $f = M_{T_e}(\vect{v})$} (A);\pause
-% 					\draw [->,very thick] (B) -- node [text width=3cm, midway, above, align=center,xshift = 1.6cm, yshift=-0.5cm] {collision operator assembly} (C);
-% 					\draw [->,very thick] (C) -- node [text width=3cm, midway, above, align=center, yshift=-0.5cm, xshift=1.2cm] {static E-field assumption} (D);
-% 					\draw [->,very thick] (D) -- node [text width=3cm, midway, above, align=center,xshift =-1.2cm, yshift=-1.8cm] {$T_e$-based \\ interpolation for rates, kinetic coefficients} (A);\pause
-% 					\draw [->,very thick,red] (A) to[bend left  = 8] node [text width=3cm, midway, above, align=center,yshift=0cm] {$T_g, E(x,t), n_e, n_0$} (C);
-% 					\draw [->,very thick,red] (C) to[bend left  = 8] node [text width=3cm, midway, below, align=center,xshift=1.0cm] {rate coefficients, mobility, diffusion} (A);
-% 				\end{scope}
-% 		\end{tikzpicture}}
-% 	\end{figure}
-% \end{frame}
-
-% \begin{frame}
-% 	\frametitle{Methodology: TPS + 0D2V Boltzmann}
-% 	\begin{itemize}
-% 		\item Launch independent BTE solves for each spatial point roughly 256 DoF per grid point
-% 		\item Challenges
-% 		\begin{itemize}
-% 			\item \textbf{computational cost}: Expensive to launch BTE solves for each spatial DoF 
-% 			\item \textbf{grid truncation}: $v_{max} = \gamma \sqrt{\epsilon_{max}}$ v-space grid needs to be truncated depending on BTE input parameters
-% 			\item \textbf{memory footprint}: Infeasible to have independent v-space grid for each spatial point
-% 		\end{itemize}
-% 		\item \textbf{p-coarsening}: Launch BTE solve for each TPS mesh cell 
-% 		\item \textbf{Memory footprint}: Spatial points are clustered based on the approximate electron temperature ($T_e$), number of clusters can be specified by the user. Each cluster of points have the same v-space grid.
-% 		\item \textbf{Grid truncation} : $T_e$ is also used to determine $v_{max}$
-% 		\item For the TPS $T_e \approx$  0.02 eV to 0.8 eV
-		
-		
-% %		Launch 0D2V BTE solves for each spatial gird point
-% %		\item BTE require ~ 256 DoF per grid point
-% %		\item One-way coupling
-% %		\begin{itemize}
-% %			\item Evolve the TPS solution till time-periodic steady-state
-% %		\end{itemize}
-% 	\end{itemize}
-% \end{frame}
-
-% \begin{frame}
-% 	\frametitle{0D2V batched BTE solver}
-% 	\begin{columns}
-% 		\begin{column}{0.4\textwidth}
-% 			\includegraphics[width=\columnwidth]{tps_input0.png}
-% 		\end{column}
-% 		\begin{column}{0.6\textwidth}
-% 			For each cluster A
-% 			\begin{itemize}
-% 				\item Let $N_A$ be the number of spatial points
-% 				\item Right-hand-side computation done by stacking BTE DoFs 
-% 				\begin{align*}
-% 					\underbrace{C}_{\text{v-space operator for cluster A}} \underbrace{\begin{bmatrix}
-% 						\vdots & \vdots & \hdots &\vdots\\
-% 						f_1    & f_2    & \hdots & f_{N_A} \\
-% 						\vdots & \vdots & \hdots &\vdots
-% 					\end{bmatrix}}_{\text{batched DoFs for cluster A}}
-% 				\end{align*}
-% 				\item \texttt{Numpy} and \texttt{Cupy} is used for efficient linear algebra computations in CPUs and GPUs
-% 			\end{itemize}
-% 		\end{column}
-% 	\end{columns}
-% \end{frame}
-
-
 \begin{frame}
-	\frametitle{Batched 0D-Boltzmann}
+	\frametitle{Batched 0D-Boltzmann solver}
+	\vspace{-0.25in}
+	\begin{center}
+		\includegraphics[width=0.8\textwidth]{tps_0d_clusters.png}
+	\end{center}
 	\begin{itemize}
-		\item For $N$ 0D-BTE solves, cluster points by input gas temperature. 
-		\item Let $N_A$ be the number of points in cluster A
+		\item For $N$ 0D-BTE solves, cluster points by input gas temperature $T_g(\vect{x})$. 
+		\item For each cluster EEDF is resolved up to $\varepsilon(\bar{T}_g)$
+	\end{itemize}
+	\begin{center}
+		\resizebox{0.6\textwidth}{!}{
+		\begin{tikzpicture}
+			\begin{scope}[xshift=0cm]
+				\draw[thick, black] (0,0) -- (4,0);
+				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{0}$} (4,0.2);
+				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+				\node at (2,-0.5) {cluster 0};
+			\end{scope}
+			
+			\begin{scope}[xshift=5cm]
+				\draw[thick, black] (0,0) -- (4,0);
+				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{1}$} (4,0.2);
+				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+				\node at (2,-0.5) {cluster 1};
+			\end{scope}
+
+			\begin{scope}[xshift=10cm]
+				\draw[thick, black] (0,0) -- (4,0);
+				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{2}$} (4,0.2);
+				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+				\node at (2,-0.5) {cluster 2};
+			\end{scope}
+
+			\begin{scope}[xshift=15cm]
+				\draw[thick, black] (0,0) -- (4,0);
+				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{3}$} (4,0.2);
+				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+				\node at (2,-0.5) {cluster 3};
+			\end{scope}
+		\end{tikzpicture}}
+	\end{center}
+	\begin{itemize}
 		\item Right-hand-side computation done by stacking BTE DoFs 
 		\begin{align*}
 			\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for cluster A}} \underbrace{\begin{bmatrix}
@@ -576,77 +460,83 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 			\end{bmatrix}}_{\text{batched DoFs for cluster A}}
 		\end{align*}
 		%\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
+		%\item \textbf{Parla} is used for parallelization between clusters
 	\end{itemize}
-	Boltzmann + Parla + MPI
-	\begin{itemize}
-		\item \textbf{Parla} is used for parallelization between clusters
-		\item \textbf{MPI} is used for distributed memory parallelism
-		\item 0D-BTE batched solver is integrated with TPS code
-	\end{itemize}
+	% Boltzmann + Parla + MPI
+	% \begin{itemize}
+	% 	\item \textbf{Parla} is used for parallelization between clusters
+	% 	\item \textbf{MPI} is used for distributed memory parallelism
+	% 	\item 0D-BTE batched solver is integrated with TPS code
+	% \end{itemize}
 \end{frame}
 
-% \begin{frame}
-% 	\frametitle{Software integration}
-% 	\begin{itemize}
-% 		\item \textbf{Plasma torch simulator (TPS)}: MFEM based discontinuous Galerkin discretization for the torch
-% 		\begin{itemize}
-% 			\item CPU, GPU support through MFEM library
-% 			\item Python interface
-% 		\end{itemize}
-% 		\item \textbf{0D-space Boltzmann solver}
-% 		\begin{itemize}
-% 			%\item Galerkin discretization for the v-space
-% 			\item Verified with Bolsig+ and PIC-DSMC codes
-% 			\item Direct steady-state solution and fully-implicit time integrators for transient solutions
-% 			%\item Python implementation
-% 			\item CPU \& GPU support through \texttt{numpy} and \texttt{cupy}
-% 		\end{itemize}
-% 		\item \textbf{Parla}: Generic framework for task-based parallelism in Python
-% 			\begin{itemize}
-% 			\item Ability to handle fine grain tasks
-% 			\item Support for CPU/GPU tasks with asynchronous kernel execution
-% 			\item C/C++ based underlying task scheduler
-% 			\end{itemize}
-% 	\end{itemize}
-% 	Current integration
-% 	\begin{itemize}
-% 		\item TPS + Python + MPI
-% 		\item TPS + Boltzmann + Python + MPI + Parla
-% 	\end{itemize}
-	
-% 	% \begin{itemize}
-% 	% 	\item \textbf{Parla} is used for parallelization of clusters between GPUs on the same node
-% 	% 	\item \textbf{MPI} is used for distributed memory parallelism
-% 	% \end{itemize}
-% \end{frame}
-
-\begin{frame}
+\begin{frame}[fragile]
 	\frametitle{TPS + Python + Boltzmann + Parla + MPI}
-	\begin{figure}
-		\centering
-		\includegraphics[width=0.8\textwidth]{software_integration.png}
-	\end{figure}
+	\begin{columns}
+		\begin{column}{0.48\textwidth}
+			\begin{figure}
+				\centering
+				\includegraphics[width=1.0\columnwidth]{software_integration.png}
+			\end{figure}		
+		\end{column}
+		\begin{column}{0.50\textwidth}
+			\begin{mintedbox}{python}%[break at=.8\textheight]
+ts_1 = TaskSpace("T")
+for idx in range(num_clusters):
+@spawn(ts_1[idx], placement=[p1[idx]], dependencies=ts_0[idx], vcus=0.0)
+def t1():
+  try:
+    ff , qoi = bte.solve(idx, ...)
+  except:
+    print("solver failed")
+			\end{mintedbox}
+		\end{column}
+	\end{columns}
 	\begin{itemize}
 		\item Information from Boltzmann to TPS is exchanged with interface class
-		\item Spatial points are clustered using heavy temperature
-		\item Different clusters $\rightarrow$ different $\epsilon_{max}$ truncation
+		% \item Spatial points are clustered using heavy temperature
+		% \item Different clusters $\rightarrow$ different $\epsilon_{max}$ truncation
 		\item Parallelization between clusters via \textbf{Parla}
 	\end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
-	\frametitle{Scalability: TPS + 0D-Boltzmann}
+	\frametitle{2-way coupling: TPS + Boltzmann}
+	\begin{itemize}
+		\item Main loop is written in Python ochestrating between different codes. 
+	\end{itemize}
+	\begin{mintedbox}{python}%[break at=.8\textheight]
+import libtps
+from   bte_0d3v_batched import BoltzmannSolver
+comm = MPI.COMM_WORLD
+tps = libtps.Tps(comm)
+boltzmann = Boltzmann0D2VBactchedSolver(tps, comm)
+interface = libtps.Tps2Boltzmann(tps)
+while it < max_iters:
+	tps.solveStep()
+	tps.push(interface)
+	boltzmann.fetch(interface)
+	boltzmann.solve()
+	boltzmann.push(interface)
+	tps.fetch(interface)
+	it = it+1
+	\end{mintedbox}
+	\end{frame}
+
+
+\begin{frame}[fragile]
+	\frametitle{Parallel scalability: TPS + Boltzmann}
 %	TPS + 0D-Boltzmann problem setup
 	\begin{itemize}
-		\item spatial points = 7598, DoF per point = 256, Total DoFs $\approx$ 2M
-		\item runtime for 200 implicit timesteps
-		\item sclability study was performed in TACC's Lonestar 6 %$2\times 128$ AMD EPYC 7763 64-Core Processor with, 3-40GB Nvidia A100 GPU 
+		\item TPS spatial points = 7598, DoF per point = 256, Total DoFs $\approx$ 2M, time for 200 implicit timesteps
+		%\item runtime for 200 implicit timesteps
+		\item Sclability study was performed in TACC's Lonestar 6 %$2\times 128$ AMD EPYC 7763 64-Core Processor with, 3-40GB Nvidia A100 GPU 
 	\end{itemize}
 	\begin{figure}
 		\centering
 		\begin{tikzpicture}
 			\begin{axis}[
-				width=8cm,
+				width=10cm,
 				height=5cm,
 				ylabel={runtime (s)},
 				xlabel={GPUs},
@@ -665,26 +555,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 	\end{itemize}
 \end{frame}
 
-\begin{frame}[fragile]
-\frametitle{Strong coupling: TPS + 0D Boltzmann}
-\begin{mintedbox}{python}%[break at=.8\textheight]
-import libtps
-from   bte_0d3v_batched import bte_0d3v_batched as BoltzmannSolver
-comm = MPI.COMM_WORLD
-tps = libtps.Tps(comm)
-boltzmann = Boltzmann0D2VBactchedSolver(tps, comm)
-interface = libtps.Tps2Boltzmann(tps)
-it = 0
-while it < max_iters:
-    tps.solveStep()
-    tps.push(interface)
-    boltzmann.fetch(interface)
-    boltzmann.solve()
-    boltzmann.push(interface)
-    tps.fetch(interface)
-    it = it+1
-\end{mintedbox}
-\end{frame}
+
 
 % \begin{frame}
 % 	\frametitle{TPS + 0D2V Boltzmann weak coupling}
@@ -740,12 +611,12 @@ while it < max_iters:
 %\end{frame}
 
 \begin{frame}
-	\frametitle{Conclusions}
+	\frametitle{Conclusions \& future work}
 	\begin{itemize}
 		\item Observe significant errors between Maxwellian EEDF vs. 0D-Boltzmann for electrons %Solver with TPS + Boltzmann + Parla + MPI 
 		\item Characterize $k_i$ model error sensitivity for torch QoIs
-		\item Explore 1D, 2D space Boltzmann for torch 
 		\item Detailed performance analysis for Batched Boltzmann
+		\item Explore 1D, 2D space Boltzmann for torch 
 	\end{itemize}
 	% \vspace{0.125in}
 	% Ongoing Work

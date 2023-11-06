@@ -189,8 +189,8 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 	\begin{columns}
 		\begin{column}{0.4\textwidth}
 				\begin{itemize}
-				\item Spatially homogeneous Boltzmann equation
-				\item Formulation \& Discretization
+				\item Spatially homogeneous BTE
+				\item Formulation \& discretization
 				\item Collision operators
 				\begin{itemize}
 					\item electron-heavy collisions
@@ -204,13 +204,13 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 			\begin{itemize}
 				\item Year 1 : Discretization and formulation 
 				\begin{itemize}
-					\item B-Splines + Spherical harmonics (established)
+					\item B-Splines + Spherical harmonics
 				\end{itemize}	
 				\item Year 2 : Verification with Bolsig
 				\item Year 3 : Torch + Boltzmann coupling
 					\begin{itemize}
 						%\item Issues with the boundary condition
-						\item Importance on the electron-electron collisions
+						\item electron-electron collisions + anisotropic EEDF
 						\item Explore 1D-space Boltzmann
 					\end{itemize}
 			\end{itemize}
@@ -218,61 +218,27 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 			\textbf{Developments from last review}
 				\begin{itemize}
 					\item Beyond 2-term approximation
-					\item Verification with Bolsig+ with electron-heavy and electron-electron collisions
+					\item Verification with Bolsig+, PIC-DSMC code with new features
+					\item Efficient steady-state solver
 					\item Batched 0D-Boltzmann solver (steady-state and transient)
-					\item 0D-Boltzmann + TPS + Parla + MPI integration
+					\item Integration with TPS + Parla + MPI
 					%\item Implementation of 1d2v glow-discharge with Boltzmann
 					%\item 0D-Boltzmann paper
 				\end{itemize}
 		\end{column}
 	\end{columns}
-
-%	\begin{itemize}
-%		\item \large spatially homogeneous Boltzmann solver 
-%		\begin{itemize}
-%			\item Formulation
-%			\item Discretization
-%			\item Collision operators
-%			\item Results
-%			\item Verification with Bolsig+
-%		\end{itemize}
-%		\item 1D3V - Glow discharge problem
-%		\begin{itemize}
-%			\item \large Formulation
-%			\item Discretization
-%			\item Boundary conditions
-%		\end{itemize}
-%		\item Future work
-%	\end{itemize}
-	% \begin{itemize}
-	% 	\item Current work on deterministic Boltzmann solver for 0D3V and 1D3V
-	% 	\begin{itemize}
-	% 		\item 0D3V solver
-	% 		\begin{itemize}
-	% 			\item Studied efficient discretization in speed
-	% 			\item Verified 0D3V code with Bolsig+ in different parameter regimes
-	% 		\end{itemize}
-	% 		\item 1D3V solver
-	% 		\begin{itemize}
-	% 			\item Implemented CPU/GPU Python implementation
-	% 			\item Currently, resolving issues with boundary conditions
-	% 		\end{itemize}
-	% 	\end{itemize}
-	% 	\item 0D3V formulation and results
-	% 	\item 1D3V formulation and preliminary results
-	% \end{itemize}
 \end{frame}
 
 
 
 \begin{frame}
-	\frametitle{Boltzmann equation}
+	\frametitle{Boltzmann transport equation}
+	\begin{align}
+		\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}f + C_{ee}(f) + C_{re}(f)
+	\end{align}
 	\begin{itemize}
-		\item For a given electric field $\vect{E}$
-		\begin{align}
-			\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}f + C_{ee}(f)
-		\end{align}
-		\item $C_{en}$ : electron-heavy collisions (i.e., elastic, ionization)
+		%\item For a given electric field $\vect{E}$
+		\item $C_{en}$ : electron-heavy collisions: elastic, excitation, ionization
 		\begin{itemize}
 			\item Use LXCAT cross-section data 
 			\item Linear in $f$
@@ -281,6 +247,11 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 		\begin{itemize}
 			\item Modeled using Fokker-Plank equation with analytical cross-section
 			\item Nonlinear in $f$
+		\end{itemize}
+		\item $C_{ee}$ : electron-electron Columbic collisions 
+		\begin{itemize}
+			\item Implemented in PIC-DSMC solver
+			\item Under development for deterministic grid BTE solver
 		\end{itemize}
 		%\item $C_{ei}$: electron-ion Columbic can be modeled similarly if needed
 %		\item Derived the steady state equation
@@ -311,7 +282,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 \end{frame}
 
 \begin{frame}
-	\frametitle{$\vect{v}$-space discretization}
+	\frametitle{$\vect{v}$-space discretization (spherical coordinates)}
 	\small
 	\begin{itemize}
 		\item Representation of $f\of{\vect{v},t} = \sum_{klm} f_{klm} \underbrace{\phi_k\of{v}}_{\text{B-Spline basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$ 
@@ -343,7 +314,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 			\right)
 			\diff{\vect{v}_e} \diff{\vect{\omega}}
 			$
-		\item Isotropic scattering, azimuthal symmetry, and using spherical harmonics addition (1d integral)\\
+		\item Isotropic scattering, azimuthal symmetry, and using spherical harmonics addition theorem\\
 		$
 		\displaystyle
 		\quad 
@@ -361,7 +332,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 \end{frame}
 
 \begin{frame}
-	\frametitle{Electron-electron collisions}
+	\frametitle{Electron-electron  Coulomb collisions}
 	\begin{itemize}
 		\item We use Rosenbluth's (1957) Fokker-Plank derivation for electron-electron collisions. Let $H=\partial^2_{ab}$
 		\begin{align}
@@ -385,21 +356,22 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 \end{frame}
 
 \begin{frame}
-	\frametitle{Electron-electron collisions}
+	\frametitle{Electron-electron Coulomb collisions}
 	\begin{itemize}
-		\item Weak form of the coulomb collisions
+		\item Weak form of the Coulomb collisions
 		\begin{align}
 			\int_{R^3} C_{ee}(f) \psi(\vect{v})\diff{\vect{v}} = \Gamma_a \of{\int_{R^3} \nabla \psi\of{\vect{v}} \cdot (f \nabla h ) \diff{\vect{v}}  + \frac{1}{2} \int_{R^3} H\psi\of{\vect{v}} : \of{f H g} \diff{\vect{v}}} 
 		\end{align}
-		\item For given test function $\psi_{pq}$, we can pre-compute 6th order tensor ${C_{ee}}_{rs,kl}^{pq}$
+		\item For given test function $\psi_{pq}$, we can pre-compute 6-th order tensor ${C_{ee}}_{rs,kl}^{pq}$
 		\begin{align}
-			[C_{ee}]_{rs,kl}^{pq} = \int_{R^3} C_{ee}(\phi_{rs}, \phi_{kl}) \phi_{pq} \diff{\vect{v}} 
+			[C_{ee}]_{rs,kl}^{pq} = \int_{R^3} C_{ee}(\phi_{rs}, \phi_{kl}) \psi_{pq} \diff{\vect{v}} 
 		\end{align}
 		\item SymPy based symbolic framework for weak form derivation in spherical coordinates
 		\begin{itemize}
-			\item Ability to derive equation for arbitrary order of polar modes
-			\item Integrate the angular coordinates analytically, identification of the non-zero modes (i.e., sparse tensor) 
-			\item Radial integration performed exactly using gauss quadrature on B-Splines
+			\item Ability to derive equation for arbitrary number of polar modes
+			\item Integrate the angular coordinates analytically %, identification of the non-zero modes (i.e., sparse tensor) 
+			\item Sparsify tensor
+			\item Radial integration performed exactly using Gauss quadrature on B-Splines
 		\end{itemize}
 	\end{itemize}
 \end{frame}
@@ -417,24 +389,25 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 %		\item For steady-state solution we solve $\partial_t {\hat{f}} = 0$, with $R(\hat{f}) = (C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}, \hat{f}} - \mu(\hat{f})$, we can write the Jacobian $\frac{d R}{d\hat{f}} = J(\hat{f}) = C_{en} + E + n_e \of{C_{ee}\of{\cdot,\hat{f}} + C_{ee}\of{\hat{f},\cdot}} -\mu(\hat{f})I$
 		%\item $\hat{f}^{n+1} = \hat{f}^{n} - \alpha [J(\hat{f}^n)]^{-1}R(\hat{f}^n)$, where $\alpha \in(0,1]$ determined by line-search algorithm 
 	\end{itemize}
+	Both are novel numerical schemes for BTE
 \end{frame}
 
 \begin{frame}
-	\frametitle{Coulomb collisions}
-	$E/N$ = 1Td with elastic + ionization with varying $n_e/N$
-	\vspace*{-0.1in}
+	\frametitle{Electron-electron Coulomb collisions}
+	$E/N$ = 1Td with elastic + ionization; varying ionization degree $n_e/N$
+	\vspace*{-0.08in}
 	\begin{center}
-		\includegraphics[width=0.85\textwidth]{1Td_cc.png}
+		\includegraphics[width=0.9\textwidth]{1Td_cc.png}
 	\end{center}
 \end{frame}
 
 \begin{frame}
 	\frametitle{Verification}
 	\begin{itemize}
-		\item We use Bolsig\footnote[frame]{Hagelaar, G.J.M. and Pitchford, L.C., 2005. Solving the Boltzmann equation to obtain electron transport coefficients and rate coefficients for fluid models. Plasma sources science and technology, 14(4), p.722.} code for verification step 
-		\item Bolsig+ fixed two term approximation $f(\vect{v},t) = f_0(v, t) + f_1(v,t)\cos v_\theta$, assumes higher order correction terms negligible
-		\item finite differences with uniform grid in energy
-		\item supports steady state solutions or time-harmonic 
+		\item Bolsig+: fixed two term approximation $f(\vect{v},t) = f_0(v, t) + f_1(v,t)\cos v_\theta$, %assumes higher order correction terms negligible
+		\item Compare with Bolsig+\footnote[frame]{Hagelaar, G.J.M. and Pitchford, L.C., 2005. Solving the Boltzmann equation to obtain electron transport coefficients and rate coefficients for fluid models. Plasma sources science and technology, 14(4), p.722.} and PIC-DSMC (for multi-term approximation)\footnote[frame]{Almgren-Bell, J., Al Awar, N., Geethakrishnan, D.S., Gligoric, M. and Biros, G., 2022, November. A Multi-GPU Python Solver for Low-Temperature Non-Equilibrium Plasmas. In 2022 IEEE 34th International Symposium on Computer Architecture and High Performance Computing (SBAC-PAD) (pp. 140-149). IEEE.} code for verification step 
+		\item Finite differences with uniform grid in energy
+		\item Supports steady-state and time-harmonic solutions
 	\end{itemize}
 \end{frame}
 
@@ -499,10 +472,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 		\includegraphics[width=0.32\columnwidth]{mf_verification_3.pdf}
 	\end{center}
 	\begin{itemize}
-		\item Multi-term approximation is essential for highly anisotropic $f$. 
-		\begin{itemize}
-			\item E.g., BC in 1D-space Boltzmann
-		\end{itemize}
+		\item $E/N$ = 500Td , $T_g$=0K
 	\end{itemize}
 \end{frame}
 
@@ -531,28 +501,28 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 % 	\end{itemize}
 % \end{frame}
 
-\begin{frame}
-	\frametitle{Batched 0D-Boltzmann}
-	\begin{itemize}
-		\item For $N$ 0D-BTE solves, cluster points by input gas temperature. 
-		\item Let $N_A$ be the number of points in cluster A
-		\item Right-hand-side computation done by stacking BTE DoFs 
-		\begin{align*}
-			\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for cluster A}} \underbrace{\begin{bmatrix}
-				\vdots & \vdots & \hdots &\vdots\\
-				f_1    & f_2    & \hdots & f_{N_A} \\
-				\vdots & \vdots & \hdots &\vdots
-			\end{bmatrix}}_{\text{batched DoFs for cluster A}}
-		\end{align*}
-		%\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
-	\end{itemize}
-	Boltzmann + Parla + MPI
-	\begin{itemize}
-		\item \textbf{Parla} is used for parallelization between clusters
-		\item \textbf{MPI} is used for distributed memory parallelism
-		\item 0D-BTE batched solver is integrated with TPS code
-	\end{itemize}
-\end{frame}
+% \begin{frame}
+% 	\frametitle{Batched 0D-Boltzmann}
+% 	\begin{itemize}
+% 		\item For $N$ 0D-BTE solves, cluster points by input gas temperature. 
+% 		\item Let $N_A$ be the number of points in cluster A
+% 		\item Right-hand-side computation done by stacking BTE DoFs 
+% 		\begin{align*}
+% 			\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for cluster A}} \underbrace{\begin{bmatrix}
+% 				\vdots & \vdots & \hdots &\vdots\\
+% 				f_1    & f_2    & \hdots & f_{N_A} \\
+% 				\vdots & \vdots & \hdots &\vdots
+% 			\end{bmatrix}}_{\text{batched DoFs for cluster A}}
+% 		\end{align*}
+% 		%\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
+% 	\end{itemize}
+% 	Boltzmann + Parla + MPI
+% 	\begin{itemize}
+% 		\item \textbf{Parla} is used for parallelization between clusters
+% 		\item \textbf{MPI} is used for distributed memory parallelism
+% 		\item 0D-BTE batched solver is integrated with TPS code
+% 	\end{itemize}
+% \end{frame}
 
 
 \begin{frame}
@@ -580,45 +550,81 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 	% \end{itemize}
 \end{frame}
 
-
 \begin{frame}
-	\frametitle{1D-space Boltzmann}
-	\begin{columns}
-		\begin{column}{0.6\textwidth}
-			\begin{itemize}
-				\item Use method of discrete ordinates in $\vtheta$, $f_{\vtheta_j} = f(v, \vtheta_j, z, t)$
-				\begin{align*}
-					\tiny
-					&\partial_t f_{\vtheta_j} + v\cos\of{\vtheta_j} \partial_z f_{\vtheta_j} \nonumber \\
-					&\quad = P_{\vtheta_j} (C + E) \begin{bmatrix}
-						f_{\vtheta_0}\\
-						\vdots\\
-						f_{\vtheta_{N_\vtheta}}\\
-					\end{bmatrix} ; j=1,..., N_{\vtheta}
-					\label{eq:bte_discreate}
-				\end{align*}
-				\item B-splines + SPH in v-space +  Chebyshev-collocation %representation of $f$ in the velocity-space for collision and v-space advection
-				%\item Chebyshev-collocation in space %Finite differences in $z$ direction
-				\item Implicit time integration scheme
-				%\item First order operator splitting for evolving $n_i$ and $\vect{E}$ field equations
-			\end{itemize}
-			Ongoing work
-			\begin{itemize}
-				\item 1D-BTE solver improvements
-				\item Comparison with Fluid models, with Maxwellian reaction rates
-			\end{itemize}
-		\end{column}
-		\begin{column}{0.4\textwidth}
-			\vspace{-0.75in}
-			\begin{center}
-				\includegraphics[width=0.9\columnwidth]{1v_0.png}
-				\includegraphics[width=0.9\columnwidth]{1v_1.png}
-			\end{center}
-		\end{column}
-	\end{columns}
+	\frametitle{1D-space BTE discretization}
+
+	\begin{itemize}
+		\item Use method of discrete ordinates in $\vtheta$, $f_{\vtheta_j} = f(v, \vtheta_j, z, t)$
+		\begin{align*}
+			\tiny
+			&\partial_t f_{\vtheta_j} + v\cos\of{\vtheta_j} \partial_z f_{\vtheta_j} \nonumber \\
+			&\quad = P (C + E) P^{T}\begin{bmatrix}
+				f_{\vtheta_0}\\
+				\vdots\\
+				f_{\vtheta_{N_\vtheta}}\\
+			\end{bmatrix} ; j=1,..., N_{\vtheta}
+			\label{eq:bte_discreate}
+		\end{align*}
+		\item B-splines + SPH in v-space +  Chebyshev-collocation %representation of $f$ in the velocity-space for collision and v-space advection
+		%\item Chebyshev-collocation in space %Finite differences in $z$ direction
+		\item Implicit time integration scheme
+		%\item First order operator splitting for evolving $n_i$ and $\vect{E}$ field equations
+	\end{itemize}
+
+	% \begin{columns}
+	% 	\begin{column}{0.6\textwidth}
+	% 		\begin{itemize}
+	% 			\item Use method of discrete ordinates in $\vtheta$, $f_{\vtheta_j} = f(v, \vtheta_j, z, t)$
+	% 			\begin{align*}
+	% 				\tiny
+	% 				&\partial_t f_{\vtheta_j} + v\cos\of{\vtheta_j} \partial_z f_{\vtheta_j} \nonumber \\
+	% 				&\quad = P (C + E) P^{T}\begin{bmatrix}
+	% 					f_{\vtheta_0}\\
+	% 					\vdots\\
+	% 					f_{\vtheta_{N_\vtheta}}\\
+	% 				\end{bmatrix} ; j=1,..., N_{\vtheta}
+	% 				\label{eq:bte_discreate}
+	% 			\end{align*}
+	% 			\item B-splines + SPH in v-space +  Chebyshev-collocation %representation of $f$ in the velocity-space for collision and v-space advection
+	% 			%\item Chebyshev-collocation in space %Finite differences in $z$ direction
+	% 			\item Implicit time integration scheme
+	% 			%\item First order operator splitting for evolving $n_i$ and $\vect{E}$ field equations
+	% 		\end{itemize}
+	% 		Ongoing work
+	% 		\begin{itemize}
+	% 			\item 1D-BTE solver improvements
+	% 			\item Comparison with Fluid models, with Maxwellian reaction rates
+	% 		\end{itemize}
+	% 	\end{column}
+	% 	\begin{column}{0.4\textwidth}
+	% 		\vspace{-0.75in}
+		% 	\end{column}
+	% \end{columns}
 	
 \end{frame}
 
+\begin{frame}
+	\frametitle{Multi-term approximations for BTE}
+	\begin{center}
+		\includegraphics[width=\textwidth]{glow1d_adv_x_1.png} 
+	\end{center}
+	\begin{itemize}
+		\item Multi-term approximation is essential for highly anisotropic $f$. 
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Glow discharge with 1D-space Boltzmann}
+	\begin{center}
+		\includegraphics[width=0.48\textwidth]{1v_0.png}
+		\includegraphics[width=0.48\textwidth]{1v_1.png}
+	\end{center}
+	\begin{itemize}
+		\item 1D-BTE solver improvements
+		\item Quantify modelling errors between Boltzmann vs. Maxwellian rates with fluid models
+	\end{itemize}
+
+\end{frame}
 
 % \begin{frame}
 % 	\frametitle{Conclusions}
@@ -645,7 +651,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 % \end{frame}
 
 \begin{frame}
-	\frametitle{Summary}
+	\frametitle{Summary \& future work}
 	\begin{itemize}
 		\item v-space Galerkin with B-Splines + spherical harmonics with electron-heavy, electron-electron collisions
 		\item Ability for multi-term expansion in $f$ (i.e., BC in space for 1D-space BTE)

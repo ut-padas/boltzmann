@@ -114,7 +114,7 @@
 \column{.8\textwidth}
 {\bf \color{burntorange} \fontfamily{bch}\selectfont 
 % -- Set talk title here
-Solving the Boltzmann equation for electron kinetics using Galerkin approach
+Solving the Boltzmann transport equation (BTE) for electron kinetics %using Galerkin approach
 % --
 }
 \end{columns}
@@ -126,7 +126,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 {\fontfamily{phv}\selectfont
   { \scriptsize
     % -- define presenter, authors here
-    Milinda Fernando \\%, Todd Oliver, Laxminarayan Raja, Philip Varghese, Robert Moser, George Biros  \\
+    \textbf{Milinda Fernando}, George Biros, James Almgren-Bell, Todd Oliver, Laxminarayan Raja\\ Philip Varghese, Robert Moser \\%, Todd Oliver, Laxminarayan Raja, Philip Varghese, Robert Moser, George Biros  \\
     % --
   }
   {\color{burntorange} \tiny
@@ -207,19 +207,23 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 					\item B-Splines + Spherical harmonics (established)
 				\end{itemize}	
 				\item Year 2 : Verification with Bolsig
-				\item Year 3 : Glow discharge problem
+				\item Year 3 : Torch + Boltzmann coupling
 					\begin{itemize}
-						\item Issues with the boundary condition
+						%\item Issues with the boundary condition
 						\item Importance on the electron-electron collisions
+						\item Explore 1D-space Boltzmann
 					\end{itemize}
-				\item \textbf{Completed}
-				\begin{itemize}
-					\item Verification with bolsig with electron-heavy and electron-electron collisions
-					\item Beyond 2-term approximation
-					\item Ability to handle cases without azimuthal symmetry
-					\item Implementation of 1d2v glow-discharge with Boltzmann  
-				\end{itemize}\textbf{}
 			\end{itemize}
+			\vspace{0.25in}
+			\textbf{Developments from last review}
+				\begin{itemize}
+					\item Beyond 2-term approximation
+					\item Verification with Bolsig+ with electron-heavy and electron-electron collisions
+					\item Batched 0D-Boltzmann solver (steady-state and transient)
+					\item 0D-Boltzmann + TPS + Parla + MPI integration
+					%\item Implementation of 1d2v glow-discharge with Boltzmann
+					%\item 0D-Boltzmann paper
+				\end{itemize}
 		\end{column}
 	\end{columns}
 
@@ -266,7 +270,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 	\begin{itemize}
 		\item For a given electric field $\vect{E}$
 		\begin{align}
-			\partial_t f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}f + C_{ee}(f)
+			\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C_{en}f + C_{ee}(f)
 		\end{align}
 		\item $C_{en}$ : electron-heavy collisions (i.e., elastic, ionization)
 		\begin{itemize}
@@ -307,7 +311,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 \end{frame}
 
 \begin{frame}
-	\frametitle{Discretization}
+	\frametitle{$\vect{v}$-space discretization}
 	\small
 	\begin{itemize}
 		\item Representation of $f\of{\vect{v},t} = \sum_{klm} f_{klm} \underbrace{\phi_k\of{v}}_{\text{B-Spline basis}} \underbrace{Y_{lm}\of{v_\theta, v_\phi}}_{\tiny\text{sph. harm.}}$ 
@@ -366,14 +370,17 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 		\item Assuming azimuthal symmetry, we can compute Rosenbluth potentials, 
 		\begin{align}
 			& h_a\of{\vect{v}} = \sum_{l} A^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi}  \text{ and } g\of{\vect{v}} = \sum_{l} B^{b}_l\of{v} Y_{l0}\of{\vtheta, \vphi}\text{ where } \\
+			\tiny
 			& A^{b}_l\of{v} = \frac{8\pi}{(2l+1)}\of{\int_{0}^{v} dv^\prime \frac{{v^\prime}^{l+2}}{v^{l+1}} f^{b}_l\of{v^\prime} +  \int_{v}^{\infty} dv^\prime \frac{{v}^{l}}{{v^\prime}^{l-1}} f^{b}_l\of{v^\prime}}\\
+			\tiny
 			B^{b}_{l}\of{v} & = -\frac{4\pi}{(4l^2-1)} \of
 			{
-				\int_{0}^{v} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v^\prime}^{l+2}}{v^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v^\prime}^2 }{v^2}}} } + \nonumber\\
-			&-\frac{4\pi U_{l0}}{(4l^2-1)} \of{
-				\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
-			}
+				\int_{0}^{v} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v^\prime}^{l+2}}{v^{l-1}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v^\prime}^2 }{v^2}}} } + \hdots% \nonumber\\
+			% &-\frac{4\pi U_{l0}}{(4l^2-1)} \of{
+			% 	\int_{v}^{\infty} \diff{v^\prime} f^{b}_l\of{v^\prime} \frac{{v}^{l}}{{v^\prime}^{l-3}} \of{1 - \of{\frac{l-1/2}{l+3/2}}\of{\frac{{v}^2 }{{v^\prime}^2}}}
+			% }
 		\end{align}
+		\item \textbf{Take away} : $h$, and $g$ are moments of $f$, can be pre-computed
 	\end{itemize}
 \end{frame}
 
@@ -405,15 +412,15 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 			\partial_t {\hat{f}} &=(C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}} - \mu(\hat{f}) \hat{f} \text{ where } \mu(\hat{f}) = \frac{\partial_t n_e}{n_e} = u^T C_{en}(\hat{f})\\
 			&\text{ with constraint } u^T \hat{f} = 1 \nonumber 
 		\end{align}
-		\item Use Newton's method with line search
-		\item Implicit time integration
+		\item Steady-state: Newton's method with line search
+		\item Transient: Implicit time integration
 %		\item For steady-state solution we solve $\partial_t {\hat{f}} = 0$, with $R(\hat{f}) = (C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}, \hat{f}} - \mu(\hat{f})$, we can write the Jacobian $\frac{d R}{d\hat{f}} = J(\hat{f}) = C_{en} + E + n_e \of{C_{ee}\of{\cdot,\hat{f}} + C_{ee}\of{\hat{f},\cdot}} -\mu(\hat{f})I$
 		%\item $\hat{f}^{n+1} = \hat{f}^{n} - \alpha [J(\hat{f}^n)]^{-1}R(\hat{f}^n)$, where $\alpha \in(0,1]$ determined by line-search algorithm 
 	\end{itemize}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Effect of Columbic collisions}
+	\frametitle{Coulomb collisions}
 	$E/N$ = 1Td with elastic + ionization with varying $n_e/N$
 	\vspace*{-0.1in}
 	\begin{center}
@@ -422,7 +429,7 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 \end{frame}
 
 \begin{frame}
-	\frametitle{Boltzmann solver verification}
+	\frametitle{Verification}
 	\begin{itemize}
 		\item We use Bolsig\footnote[frame]{Hagelaar, G.J.M. and Pitchford, L.C., 2005. Solving the Boltzmann equation to obtain electron transport coefficients and rate coefficients for fluid models. Plasma sources science and technology, 14(4), p.722.} code for verification step 
 		\item Bolsig+ fixed two term approximation $f(\vect{v},t) = f_0(v, t) + f_1(v,t)\cos v_\theta$, assumes higher order correction terms negligible
@@ -432,49 +439,48 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 \end{frame}
 
 \begin{frame}[fragile]
-	\frametitle{Verification with Bolsig+ code}	
+	\frametitle{Verification with Bolsig+}	
 	\begin{center}
 		\only<+>{\includegraphics[width=0.9\textwidth]{pde_vs_bolsig_with_coulomb_collision1.png}}
-		\only<+>{\includegraphics[width=0.9\textwidth]{pde_vs_bolsig_with_coulomb_collision2.png}}
+		%\only<+>{\includegraphics[width=0.9\textwidth]{pde_vs_bolsig_with_coulomb_collision2.png}}
 	\end{center}
 \end{frame}
 
 \begin{frame}[fragile]
-	\frametitle{Verification with Bolsig+ code}
+	\frametitle{Verification with Bolsig+}
 	\vspace{-0.1in}
 	\begin{center}
 		\resizebox*{0.63\textwidth}{!}{
 		\renewcommand{\arraystretch}{1.2}
 		\begin{tabular}{|p{1cm}|p{1cm}|c|c|c|c|c|c|}
 			\hline
-			\multirow{2}{1cm}{\textbf{E/N (Td)}} & \multirow{2}{1cm}{\boldmath$n_e/N$} & \multicolumn{3}{c|}{\textbf{rel. error vs. Bolsig}} & \multicolumn{3}{c|}{\textbf{rel. error (self convergence)}}\\
+			\multirow{2}{1cm}{\textbf{$E/n_0$ (Td)}} & \multirow{2}{1cm}{\boldmath$n_e/n_0$} & \multicolumn{6}{c|}{\textbf{relative error}}  \\
 			% \hline
 			% \textbf{Inactive Modes} & \textbf{Description}\\
 			\cline{3-8}
-			& & \textbf{elastic} & \textbf{ionization} & \textbf{mobility} & \textbf{elastic} & \textbf{ionization} & \textbf{mobility}\\
-			%\hhline{~--}
+			& & \textbf{energy} &\textbf{mobility} & \textbf{elastic} & \textbf{ionization} & {$\mathbf{f_0(\varepsilon)}$} & {$\mathbf{f_1(\varepsilon)}$}\\
 			\hline
-			1        & 0.0 & 7.11E-05 &    --	    & 4.10E-05	& 4.61E-12	&   --	    & 2.47E-12 \\
-			5        & 0.0 & 4.12E-04 & 3.74E-04	& 2.92E-06	& 3.83E-07	& 3.84E-04	& 5.34E-07 \\
-			20       & 0.0 & 5.76E-04 & 3.49E-03	& 2.98E-04	& 2.77E-04	& 9.74E-03	& 1.29E-03 \\
-			100      & 0.0 & 1.35E-03 & 2.74E-03	& 4.85E-03	& 2.02E-03	& 4.11E-02	& 6.65E-04 \\
+			1	  &  0 & 	3.40E-11 & 	3.30E-11	&  5.74E-11	&   -	     &   6.42E-08	&1.99E-07\\
+			5	  &  0 & 	2.01E-10 & 	8.67E-10	&  2.69E-10	& 1.05E-08 &   1.08E-06	&3.77E-06\\
+			20	&  0 &  3.64E-10 & 	1.55E-09	&  6.08E-10	& 1.58E-08 &   1.78E-07	&2.50E-06\\
+			100 &  0 & 	3.62E-09 & 	5.10E-09	&  7.73E-09	& 1.20E-07 &   6.51E-07	&3.32E-06\\
+			\hline                  
+			1   &	$10^{-3}$ &	6.69E-07 &	7.21E-07 &	9.77E-07 &	4.77E-05 &	5.82E-07 &	1.28E-06\\
+			5   &	$10^{-3}$ &	9.71E-08 &	1.08E-07 &	1.40E-07 &	1.59E-06 &	1.22E-07 &	2.00E-07\\
+			20  &	$10^{-3}$ &	2.02E-09 &	4.09E-09 &	4.35E-09 &	7.94E-08 &	5.89E-07 &	5.23E-07\\
+			100 &	$10^{-3}$ &	6.30E-09 &	4.08E-08 &	1.33E-09 &	2.21E-08 &	1.69E-05 &  1.82E-05\\
 			\hline
-			1        & $10^{-3}$ & 9.40E-03	& 4.40E-03	& 7.99E-03	& 8.61E-07	& 3.60E-05	& 6.40E-07 \\
-			5        & $10^{-3}$ & 1.52E-02	& 4.12E-03	& 1.83E-04	& 1.66E-07	& 1.42E-06	& 1.31E-07 \\
-			20       & $10^{-3}$ & 1.69E-02	& 1.46E-02	& 1.13E-02	& 6.93E-08	& 1.89E-07	& 6.68E-08 \\
-			100      & $10^{-3}$ & 9.11E-03	& 1.87E-02	& 1.65E-02	& 1.53E-07	& 2.96E-07	& 2.50E-07 \\
+			1   &	$10^{-2}$ &	9.57E-06 &	1.07E-05 &	1.39E-05 &	3.36E-04 &	8.29E-06 &	1.94E-05\\
+			5   &	$10^{-2}$ &	4.04E-07 &	4.32E-07 &	5.87E-07 &	9.27E-06 &	3.65E-07 &	7.97E-07\\
+			20  &	$10^{-2}$ &	6.97E-08 &	6.73E-08 &	8.67E-08 &	1.76E-06 &	1.70E-07 &	2.23E-07\\
+			100 &	$10^{-2}$ &	4.04E-08 &	5.47E-08 &	4.67E-08 &	1.76E-07 &	3.05E-06 &	1.67E-06\\
 			\hline
-			1        & $10^{-2}$ & 4.88E-03	& 1.20E-02	& 9.94E-03	& 6.72E-06	& 1.77E-04	& 5.18E-06 \\
-			5        & $10^{-2}$ & 7.85E-03	& 8.73E-03	& 9.56E-03	& 2.73E-07	& 4.87E-06	& 2.07E-07 \\
-			20       & $10^{-2}$ & 1.13E-02	& 4.57E-03	& 6.19E-03	& 1.85E-08	& 4.32E-08	& 1.48E-08 \\
-			100      & $10^{-2}$ & 1.19E-02	& 9.93E-03	& 7.76E-03	& 2.50E-08	& 3.24E-09	& 2.57E-08 \\
+			1   &	$10^{-1}$ &	8.13E-05 &	1.07E-04 &	1.17E-04 &	1.69E-03 &	7.04E-05 &	1.94E-04\\
+			5   &	$10^{-1}$ &	3.34E-06 &	4.23E-06 &	4.84E-06 &	5.24E-05 &	2.89E-06 &	7.61E-06\\
+			20  &	$10^{-1}$ &	7.67E-07 &	8.58E-07 &	1.04E-06 &	1.07E-05 &	6.82E-07 &	1.62E-06\\
+			100 &	$10^{-1}$ &	4.04E-08 &	1.79E-08 &	2.06E-08 &	6.06E-07 &	5.21E-07 &	7.14E-07\\
 			\hline
-			1        & $10^{-1}$ & 1.72E-03	& 8.17E-03	& 5.31E-03	& 4.39E-05	& 6.37E-04	& 4.01E-05 \\
-			5        & $10^{-1}$ & 2.42E-03	& 7.80E-03	& 7.74E-03	& 5.49E-06	& 5.91E-05	& 4.79E-06 \\
-			20       & $10^{-1}$ & 3.84E-03	& 7.97E-03	& 8.41E-03	& 5.46E-07	& 5.01E-06	& 4.59E-07 \\
-			100      & $10^{-1}$ & 4.76E-03	& 9.80E-04	& 1.89E-03	& 3.97E-08	& 2.88E-07	& 3.35E-08 \\
-			\hline
-		\end{tabular}}
+		  \end{tabular}}
 		%\caption{Deterministic approach self convergence and comparison with the Bolsig code}
 	\end{center}
 \end{frame}
@@ -482,51 +488,175 @@ Solving the Boltzmann equation for electron kinetics using Galerkin approach
 
 
 \begin{frame}
-	\frametitle{Beyond two-term approximation}
-	$E/N$ = 20Td, $n_e/N$=1e-2 with elastic + ionization + columbic collisions
+	\frametitle{Multi-term Boltzmann vs. PIC-DSMC}
+	\vspace{-0.25in}
+	% \begin{center}
+	% 	%\includegraphics[width=0.6\textwidth]{mt_verification.png}
+	% \end{center}
 	\begin{center}
-		\includegraphics[width=\textwidth]{20Td_lmax3_ion_deg_1e-2.png}
+		\includegraphics[width=0.32\columnwidth]{mf_verification_0.pdf}
+		\includegraphics[width=0.32\columnwidth]{mf_verification_2.pdf}
+		\includegraphics[width=0.32\columnwidth]{mf_verification_3.pdf}
 	\end{center}
 	\begin{itemize}
-		\item Higher order modes triggered by larger E field and/or boundary conditions
-		%\item Stronger $E$ field $\rightarrow$ trigger anisotropy, can makes the higher order modes significant to ignore.
-		%\item Specially close to the boundaries of the torch application
-	\end{itemize}  
-\end{frame}
-
-\begin{frame}
-	\frametitle{Beyond two-term approximation}
-	$E/N$ = 5Td, $n_e/N$=1e-3 with elastic + ionization + columbic collisions, T=3e-8 s
-	\begin{center}
-		\includegraphics[width=\textwidth]{5Td_transient_ion_deg_1e-3.png}
-	\end{center}
-	\begin{itemize}
-		\item Relaxation time $\tau$ for the higher order modes, if $\tau > \tau_{torch}$ $\Rightarrow$ higher order terms maybe significant
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Conclusions}
-	\begin{itemize}
-		\item B-Splines + spherical harmonic based continuous Galerkin formulation for v-space Boltzmann eq.
-		\item Linear in $f$ collision terms (i.e., elastic, ionization, excitation)
-		\item Support for electron-electron collisions with symbolic code generation
-		\item \textbf{Beyond two-term expansion}: Generalization to higher order correction terms 
-		\item Open-source Python based implementation
-		\item Ongoing work
+		\item Multi-term approximation is essential for highly anisotropic $f$. 
 		\begin{itemize}
-			\item Integration with PyKokos and Parla + HPC 
-			\item Initial 1D + 3V approximation for the torch application
+			\item E.g., BC in 1D-space Boltzmann
 		\end{itemize}
-		%\item Artificial diffusion in speed, for stabilization ?
 	\end{itemize}
 \end{frame}
 
+
+% \begin{frame}
+% 	\frametitle{Beyond two-term approximation}
+% 	$E/N$ = 20Td, $n_e/N$=1e-2 with elastic + ionization + columbic collisions
+% 	\begin{center}
+% 		\includegraphics[width=\textwidth]{20Td_lmax3_ion_deg_1e-2.png}
+% 	\end{center}
+% 	\begin{itemize}
+% 		\item Higher order modes triggered by larger E field and/or boundary conditions
+% 		%\item Stronger $E$ field $\rightarrow$ trigger anisotropy, can makes the higher order modes significant to ignore.
+% 		%\item Specially close to the boundaries of the torch application
+% 	\end{itemize}  
+% \end{frame}
+
+% \begin{frame}
+% 	\frametitle{Beyond two-term approximation}
+% 	$E/N$ = 5Td, $n_e/N$=1e-3 with elastic + ionization + columbic collisions, T=3e-8 s
+% 	\begin{center}
+% 		\includegraphics[width=\textwidth]{5Td_transient_ion_deg_1e-3.png}
+% 	\end{center}
+% 	\begin{itemize}
+% 		\item Relaxation time $\tau$ for the higher order modes, if $\tau > \tau_{torch}$ $\Rightarrow$ higher order terms maybe significant
+% 	\end{itemize}
+% \end{frame}
+
 \begin{frame}
-	\centering
-	\Huge Questions ? \\
-	\centering
-	\Huge Thank You. 
+	\frametitle{Batched 0D-Boltzmann}
+	\begin{itemize}
+		\item For $N$ 0D-BTE solves, cluster points by input gas temperature. 
+		\item Let $N_A$ be the number of points in cluster A
+		\item Right-hand-side computation done by stacking BTE DoFs 
+		\begin{align*}
+			\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for cluster A}} \underbrace{\begin{bmatrix}
+				\vdots & \vdots & \hdots &\vdots\\
+				f_1    & f_2    & \hdots & f_{N_A} \\
+				\vdots & \vdots & \hdots &\vdots
+			\end{bmatrix}}_{\text{batched DoFs for cluster A}}
+		\end{align*}
+		%\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
+	\end{itemize}
+	Boltzmann + Parla + MPI
+	\begin{itemize}
+		\item \textbf{Parla} is used for parallelization between clusters
+		\item \textbf{MPI} is used for distributed memory parallelism
+		\item 0D-BTE batched solver is integrated with TPS code
+	\end{itemize}
+\end{frame}
+
+
+\begin{frame}
+	\frametitle{1D-space Boltzmann for glow discharge}
+	\begin{columns}
+		\begin{column}{0.8\textwidth}
+			\footnotesize{
+		\begin{align*}
+			&\partial_t f + v\cos\of{\vtheta} \partial_z f -\frac{\vect{E}q_e}{m_e}\cdot\nabla_v f = C(f, n_0, n_i, T_g) \\
+			&\textcolor{red!80}{f(\vect{v}, 0, t, \vtheta \leq \frac{\pi}{2})	= 0 \text{ and } f(\vect{v}, L, t, \vtheta > \frac{\pi}{2})	= 0}\\
+			&\partial_t n_i + \partial_z \of{\mu_i n_i E\of{z,t} -D_i \partial_z n_i} = n_0 n_e \myint_{\varepsilon}\myint_{\vect{\omega}} v \sigma_i f d\vect{\omega} d\varepsilon \\
+			& \vect{E} = \nabla \of{\Delta^{-1}\frac{e}{\epsilon_0} \of{n_i- n_e}} \text{ , } n_e = \myint_{\vect{v}} f\of{\vect{v}, z, t} \diff{\vect{v}}
+		\end{align*}}
+		\end{column}
+		\begin{column}{0.3\textwidth}
+			\includegraphics[width=\columnwidth]{glow1.png}
+		\end{column}
+	\end{columns}
+	% \begin{itemize}
+	% 	\item 1D3V - Challenges
+	% 	\begin{itemize}
+	% 		\item The spatial boundary conditions are discontinuous in $\vtheta$ $\Rightarrow$ will increase the number of $l$ modes required
+	% 		\item Periodic solution in time $\Rightarrow$ requires timestepping, no direct steady state solutions
+	% 	\end{itemize}
+	% \end{itemize}
+\end{frame}
+
+
+\begin{frame}
+	\frametitle{1D-space Boltzmann}
+	\begin{columns}
+		\begin{column}{0.6\textwidth}
+			\begin{itemize}
+				\item Use method of discrete ordinates in $\vtheta$, $f_{\vtheta_j} = f(v, \vtheta_j, z, t)$
+				\begin{align*}
+					\tiny
+					&\partial_t f_{\vtheta_j} + v\cos\of{\vtheta_j} \partial_z f_{\vtheta_j} \nonumber \\
+					&\quad = P_{\vtheta_j} (C + E) \begin{bmatrix}
+						f_{\vtheta_0}\\
+						\vdots\\
+						f_{\vtheta_{N_\vtheta}}\\
+					\end{bmatrix} ; j=1,..., N_{\vtheta}
+					\label{eq:bte_discreate}
+				\end{align*}
+				\item B-splines + SPH in v-space +  Chebyshev-collocation %representation of $f$ in the velocity-space for collision and v-space advection
+				%\item Chebyshev-collocation in space %Finite differences in $z$ direction
+				\item Implicit time integration scheme
+				%\item First order operator splitting for evolving $n_i$ and $\vect{E}$ field equations
+			\end{itemize}
+			Ongoing work
+			\begin{itemize}
+				\item 1D-BTE solver improvements
+				\item Comparison with Fluid models, with Maxwellian reaction rates
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.4\textwidth}
+			\vspace{-0.75in}
+			\begin{center}
+				\includegraphics[width=0.9\columnwidth]{1v_0.png}
+				\includegraphics[width=0.9\columnwidth]{1v_1.png}
+			\end{center}
+		\end{column}
+	\end{columns}
+	
+\end{frame}
+
+
+% \begin{frame}
+% 	\frametitle{Conclusions}
+% 	\begin{itemize}
+% 		\item B-Splines + spherical harmonic based continuous Galerkin formulation for v-space Boltzmann eq.
+% 		\item Linear in $f$ collision terms (i.e., elastic, ionization, excitation)
+% 		\item Support for electron-electron collisions with symbolic code generation
+% 		\item \textbf{Beyond two-term expansion}: Generalization to higher order correction terms 
+% 		\item Open-source Python based implementation
+% 		\item Ongoing work
+% 		\begin{itemize}
+% 			\item Integration with PyKokos and Parla + HPC 
+% 			\item Initial 1D + 3V approximation for the torch application
+% 		\end{itemize}
+% 		%\item Artificial diffusion in speed, for stabilization ?
+% 	\end{itemize}
+% \end{frame}
+
+% \begin{frame}
+% 	\centering
+% 	\Huge Questions ? \\
+% 	\centering
+% 	\Huge Thank You. 
+% \end{frame}
+
+\begin{frame}
+	\frametitle{Summary}
+	\begin{itemize}
+		\item v-space Galerkin with B-Splines + spherical harmonics with electron-heavy, electron-electron collisions
+		\item Ability for multi-term expansion in $f$ (i.e., BC in space for 1D-space BTE)
+		\item Batched 0D-space BTE solver with MPI + Parla + integration with torch code
+		\item 1D-space Boltzmann for glow discharge problem
+	\end{itemize}
+	\pause
+	\begin{center}
+		%Questions ? \\
+		Thank You!
+	\end{center}
 \end{frame}
 
 

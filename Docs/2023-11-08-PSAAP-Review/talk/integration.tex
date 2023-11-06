@@ -22,6 +22,7 @@
 \usepackage[absolute,overlay]{textpos}
 \usepackage{tikz} % Required for flow chart
 \usepackage[caption=false]{subfig}
+\usepackage{pgfplots}
 
 \newcommand{\overbar}[1]{\mkern 1.5mu\overline{\mkern-1.5mu#1\mkern-1.5mu}\mkern 1.5mu}
 \newcommand{\pp}[2]{\frac{\partial #1}{\partial #2}}
@@ -258,7 +259,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 				&\quad  \text{and energy for } \vect{u}, n_0, T_g \\
 				%\text{conservation of momentum for }  r^{+}, Ar  \\
 				&\text{Maxwell's equations for } \vect{E}\\
-				&\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f, n_0, T_g) \text{ in } \color{gray}{\text{ in } \Omega_x \Omega_v \times (0,T]}
+				&\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f, n_0, T_g) \color{gray}{\text{ in } \Omega_x \times \Omega_v \times (0,T]}
 			\end{align*}
 			\begin{itemize}
 				\item $T_e \sim \int_{\vect{v}} \norm{\vec{v}}^2 \hat{f} \diff{\vect{v}}$
@@ -352,27 +353,6 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 \end{frame}
 
 \begin{frame}
-	\frametitle{Maxwellian Vs. steady-state 0D-Boltzmann}
-	\begin{figure}
-		\begin{center}
-			\includegraphics[width=1.05\textwidth]{tps_0d2v_ss.png}
-		\end{center}
-	\end{figure}
-	\textbullet~ Relative errors 50\% compared to Maxwellian EEDF
-\end{frame}
-
-\begin{frame}
-	\frametitle{Maxwellian Vs. transient 0D-Boltzmann}
-	\begin{figure}
-		\begin{center}
-			%\hspace{-0.6in}
-			\includegraphics[width=1.05\textwidth]{tps_0d2v_ts.png}
-		\end{center}
-	\end{figure}
-	\textbullet~ Relative errors 200\% compared to Maxwellian EEDF
-\end{frame}
-
-\begin{frame}
 	\frametitle{TPS + 0D-Boltzmann}
 	\vspace{-0.25in}
 	\begin{figure}
@@ -381,6 +361,28 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 		\includegraphics[width=0.48\textwidth]{rates_tps_bte.png}
 	\end{figure}
 \end{frame}
+
+\begin{frame}
+	\frametitle{Maxwellian vs. steady-state 0D-Boltzmann}
+	\begin{figure}
+		\begin{center}
+			\includegraphics[width=1.05\textwidth]{tps_0d2v_ss.png}
+		\end{center}
+	\end{figure}
+	\textbullet~ Relative errors for $k_i n_0 n_i$ 50\% compared to Maxwellian EEDF
+\end{frame}
+
+\begin{frame}
+	\frametitle{Maxwellian vs. transient 0D-Boltzmann}
+	\begin{figure}
+		\begin{center}
+			%\hspace{-0.6in}
+			\includegraphics[width=1.05\textwidth]{tps_0d2v_ts.png}
+		\end{center}
+	\end{figure}
+	\textbullet~ Relative errors for $k_i n_0 n_i$ 200\% compared to Maxwellian EEDF
+\end{frame}
+
 
 % \begin{frame}
 % 	\frametitle{steady-state Vs. transient 0D-Boltzmann}
@@ -559,40 +561,64 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 % 	\end{columns}
 % \end{frame}
 
+
 \begin{frame}
-	\frametitle{Software integration}
+	\frametitle{Batched 0D-Boltzmann}
 	\begin{itemize}
-		\item \textbf{Plasma torch simulator (TPS)}: MFEM based discontinuous Galerkin discretization for the torch
-		\begin{itemize}
-			\item CPU, GPU support through MFEM library
-			\item Python interface
-		\end{itemize}
-		\item \textbf{0D-space Boltzmann solver}
-		\begin{itemize}
-			%\item Galerkin discretization for the v-space
-			\item Verified with Bolsig+ and PIC-DSMC codes
-			\item Direct steady-state solution and fully-implicit time integrators for transient solutions
-			%\item Python implementation
-			\item CPU \& GPU support through \texttt{numpy} and \texttt{cupy}
-		\end{itemize}
-		\item \textbf{Parla}: Generic framework for task-based parallelism in Python
-			\begin{itemize}
-			\item Ability to handle fine grain tasks
-			\item Support for CPU/GPU tasks with asynchronous kernel execution
-			\item C/C++ based underlying task scheduler
-			\end{itemize}
+		\item For $N$ 0D-BTE solves, cluster points by input gas temperature. 
+		\item Let $N_A$ be the number of points in cluster A
+		\item Right-hand-side computation done by stacking BTE DoFs 
+		\begin{align*}
+			\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for cluster A}} \underbrace{\begin{bmatrix}
+				\vdots & \vdots & \hdots &\vdots\\
+				f_1    & f_2    & \hdots & f_{N_A} \\
+				\vdots & \vdots & \hdots &\vdots
+			\end{bmatrix}}_{\text{batched DoFs for cluster A}}
+		\end{align*}
+		%\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
 	\end{itemize}
-	Current integration
+	Boltzmann + Parla + MPI
 	\begin{itemize}
-		\item TPS + Python + MPI
-		\item TPS + Boltzmann + Python + MPI + Parla
+		\item \textbf{Parla} is used for parallelization between clusters
+		\item \textbf{MPI} is used for distributed memory parallelism
+		\item 0D-BTE batched solver is integrated with TPS code
 	\end{itemize}
-	
-	% \begin{itemize}
-	% 	\item \textbf{Parla} is used for parallelization of clusters between GPUs on the same node
-	% 	\item \textbf{MPI} is used for distributed memory parallelism
-	% \end{itemize}
 \end{frame}
+
+% \begin{frame}
+% 	\frametitle{Software integration}
+% 	\begin{itemize}
+% 		\item \textbf{Plasma torch simulator (TPS)}: MFEM based discontinuous Galerkin discretization for the torch
+% 		\begin{itemize}
+% 			\item CPU, GPU support through MFEM library
+% 			\item Python interface
+% 		\end{itemize}
+% 		\item \textbf{0D-space Boltzmann solver}
+% 		\begin{itemize}
+% 			%\item Galerkin discretization for the v-space
+% 			\item Verified with Bolsig+ and PIC-DSMC codes
+% 			\item Direct steady-state solution and fully-implicit time integrators for transient solutions
+% 			%\item Python implementation
+% 			\item CPU \& GPU support through \texttt{numpy} and \texttt{cupy}
+% 		\end{itemize}
+% 		\item \textbf{Parla}: Generic framework for task-based parallelism in Python
+% 			\begin{itemize}
+% 			\item Ability to handle fine grain tasks
+% 			\item Support for CPU/GPU tasks with asynchronous kernel execution
+% 			\item C/C++ based underlying task scheduler
+% 			\end{itemize}
+% 	\end{itemize}
+% 	Current integration
+% 	\begin{itemize}
+% 		\item TPS + Python + MPI
+% 		\item TPS + Boltzmann + Python + MPI + Parla
+% 	\end{itemize}
+	
+% 	% \begin{itemize}
+% 	% 	\item \textbf{Parla} is used for parallelization of clusters between GPUs on the same node
+% 	% 	\item \textbf{MPI} is used for distributed memory parallelism
+% 	% \end{itemize}
+% \end{frame}
 
 \begin{frame}
 	\frametitle{TPS + Python + Boltzmann + Parla + MPI}
@@ -602,7 +628,40 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 	\end{figure}
 	\begin{itemize}
 		\item Information from Boltzmann to TPS is exchanged with interface class
-		\item Parallelization in space via Parla
+		\item Spatial points are clustered using heavy temperature
+		\item Different clusters $\rightarrow$ different $\epsilon_{max}$ truncation
+		\item Parallelization between clusters via \textbf{Parla}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Scalability: TPS + 0D-Boltzmann}
+%	TPS + 0D-Boltzmann problem setup
+	\begin{itemize}
+		\item spatial points = 7598, DoF per point = 256, Total DoFs $\approx$ 2M
+		\item runtime for 200 implicit timesteps
+		\item sclability study was performed in TACC's Lonestar 6 %$2\times 128$ AMD EPYC 7763 64-Core Processor with, 3-40GB Nvidia A100 GPU 
+	\end{itemize}
+	\begin{figure}
+		\centering
+		\begin{tikzpicture}
+			\begin{axis}[
+				width=8cm,
+				height=5cm,
+				ylabel={runtime (s)},
+				xlabel={GPUs},
+				symbolic x coords={3,6,12},
+				xtick=data,
+				grid=major
+			]
+			\addplot[-,mark=o,blue,thick] table[x={gpus}, y ={solve_max} ]{../ls6/tpp_0d2v_ss.dat};
+		%\legend{Data1,Data2,Data3}
+		\end{axis}
+		\end{tikzpicture}
+	\end{figure}
+	\begin{itemize}
+		\item 0D-Boltzmann grid setup $\approx$ 20s (independent of number of compute nodes)
+		\item Parallel efficiency 78\%, 82\% $\rightarrow$ better load-balance with increasing partitions
 	\end{itemize}
 \end{frame}
 
@@ -681,21 +740,23 @@ while it < max_iters:
 %\end{frame}
 
 \begin{frame}
-	\frametitle{Conclusions \& Future work}
-	Conclusions
+	\frametitle{Conclusions}
 	\begin{itemize}
-		\item Solver with TPS + Boltzmann + Parla + MPI 
-		\item Observe significant errors between Maxwellian EEDF vs. 0D-Boltzmann for electrons
+		\item Observe significant errors between Maxwellian EEDF vs. 0D-Boltzmann for electrons %Solver with TPS + Boltzmann + Parla + MPI 
+		\item Characterize $k_i$ model error sensitivity for torch QoIs
+		\item Explore 1D, 2D space Boltzmann for torch 
+		\item Detailed performance analysis for Batched Boltzmann
 	\end{itemize}
-	\vspace{0.125in}
-	Ongoing Work
-	\begin{itemize}
-		\item Characterize sensitivity for electron kinetic coefficients to torch stability profiles
-		\item HPC \& performance for TPS + Boltzmann
-		\item 1D2V Boltzmann setup for glow discharge
-	\end{itemize}
+	% \vspace{0.125in}
+	% Ongoing Work
+	% \begin{itemize}
+	% 	\item Characterize sensitivity for electron kinetic coefficients to torch stability profiles
+	% 	\item HPC \& performance for TPS + Boltzmann
+	% 	\item 1D2V Boltzmann setup for glow discharge
+	% \end{itemize}
 	\pause
 	\begin{center}
+		Questions ? \\
 		Thank You!
 	\end{center}
 \end{frame}

@@ -259,7 +259,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 				&\quad  \text{and energy for } \vect{u}, n_0, T_g \\
 				%\text{conservation of momentum for }  r^{+}, Ar  \\
 				&\text{Maxwell's equations for } \vect{E}\\
-				&\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f, n_0, T_g) \color{gray}{\text{ in } \Omega_x \times \Omega_v \times (0,T]}
+				&\partial_t f  + \vect{v} \cdot \nabla_{\vect{x}} f -\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f = C(f, n_0, n_i, T_g) \color{gray}{\text{ in } \Omega_x \times \Omega_v \times (0,T]}
 			\end{align*}
 			\begin{itemize}
 				\item $T_e \sim \int_{\vect{v}} \norm{\vec{v}}^2 \hat{f} \diff{\vect{v}}$
@@ -297,8 +297,8 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 							% \draw [->,very thick] (B) -- node [text width=3cm, midway, above, align=center,xshift = 1.6cm, yshift=-0.5cm] {collision operator assembly} (C);
 							% \draw [->,very thick] (C) -- node [text width=3cm, midway, above, align=center, yshift=-0.5cm, xshift=1.2cm] {static E-field assumption} (D);
 							% \draw [->,very thick] (D) -- node [text width=3cm, midway, above, align=center,xshift =-1.2cm, yshift=-1.8cm] {$T_e$-based \\ interpolation for rates, kinetic coefficients} (A);\pause
-							\draw [->,very thick] (A) to[bend left  = 8] node [text width=3cm, midway, above, align=center,yshift=0cm] {$T_g, E(x,t), n_e, n_0$} (C);
-							\draw [->,very thick] (C) to[bend left  = 8] node [text width=3cm, midway, below, align=center,xshift=0.0cm] {$k_i$, $n_e$, $T_e$} (A);
+							\draw [->,very thick] (A) to[bend left  = 8] node [text width=3cm, midway, above, align=center,yshift=0cm] {$T_g, \vect{E}, n_i, n_0$} (C);
+							\draw [->,very thick] (C) to[bend left  = 8] node [text width=3cm, midway, below, align=center,xshift=0.0cm] {$k_i$,  $T_e$} (A);
 						\end{scope}
 				\end{tikzpicture}}
 			\end{figure}
@@ -323,7 +323,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 							% \draw [->,very thick] (B) -- node [text width=3cm, midway, above, align=center,xshift = 1.6cm, yshift=-0.5cm] {collision operator assembly} (C);
 							% \draw [->,very thick] (C) -- node [text width=3cm, midway, above, align=center, yshift=-0.5cm, xshift=1.2cm] {static E-field assumption} (D);
 							% \draw [->,very thick] (D) -- node [text width=3cm, midway, above, align=center,xshift =-1.2cm, yshift=-1.8cm] {$T_e$-based \\ interpolation for rates, kinetic coefficients} (A);\pause
-							\draw [->,very thick] (A) to[bend left  = 8] node [text width=3cm, midway, above, align=center,yshift=0cm] {$T_g, E(x,t), n_e, n_0$} (C);
+							\draw [->,very thick] (A) to[bend left  = 8] node [text width=3cm, midway, above, align=center,yshift=0cm] {$T_g, \vect{E}, n_i, n_0$} (C);
 
 							\draw [->,very thick] (A) to node [text width=3cm, midway, above, align=center,yshift=0cm] {} (B);
 							\draw [->,very thick] (C) to node [text width=3cm, midway, above, align=center,yshift=0cm] {} (D);
@@ -334,7 +334,7 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 		\end{column}
 	\end{columns}
 	\begin{itemize}
-		\item Completed 1-way integration
+		\item Completed 1-way integration with 0D-space BTE
 	\end{itemize}
 	% Current integration
 	% \begin{itemize}
@@ -344,11 +344,135 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 \end{frame}
 
 \begin{frame}
+	\frametitle{Batched 0D-BTE}
+	%\vspace{-0.1in}
+	\begin{itemize}
+		\item Launch 0D-space BTE solve for each TPS spatial point ($\approx$ 256 DoFs per grid point)\\
+		% \item $N_{v} \approx$ 256 DoFs per grid point
+		% \item $\vect{v}$-space truncation, determining EEDF energy range
+		% \item Supports steady-state and transient solutions
+		\textbf{\textcolor{orange}{Amortize BTE v-space grid setup} }
+	\begin{center}
+		\includegraphics[width=0.6\textwidth]{tps_0d_clusters.png}
+		% \resizebox{0.48\textwidth}{!}{
+		% \begin{tikzpicture}
+		% 	\begin{scope}[xshift=0cm]
+		% 		\draw[thick, blue!80!black!80] (0,0) -- (4,0);
+		% 		\draw[thick, blue!80!black!80] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{0}$} (4,0.2);
+		% 		\draw[thick, blue!80!black!80] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+		% 		\node at (2,-0.5) {cluster 0};
+		% 	\end{scope}
+			
+		% 	\begin{scope}[xshift=5cm]
+		% 		\draw[thick, green!80!black!80] (0,0) -- (4,0);
+		% 		\draw[thick, green!80!black!80] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{1}$} (4,0.2);
+		% 		\draw[thick, green!80!black!80] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+		% 		\node at (2,-0.5) {cluster 1};
+		% 	\end{scope}
+
+		% 	% \begin{scope}[xshift=10cm]
+		% 	% 	\draw[thick, black] (0,0) -- (4,0);
+		% 	% 	\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{2}$} (4,0.2);
+		% 	% 	\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+		% 	% 	\node at (2,-0.5) {cluster 2};
+		% 	% \end{scope}
+
+		% 	% \begin{scope}[xshift=15cm]
+		% 	% 	\draw[thick, black] (0,0) -- (4,0);
+		% 	% 	\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{3}$} (4,0.2);
+		% 	% 	\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+		% 	% 	\node at (2,-0.5) {cluster 3};
+		% 	% \end{scope}
+		% \end{tikzpicture}}
+	\end{center}
+	\begin{itemize}
+		\item K-means clustering based on gas temperature $T_g(\vect{x})$. 
+		\item $\vect{v}$-space grid truncation $\quad\Rightarrow\quad$ $\overbar{T}_g$ $\quad\Rightarrow\quad$ set of $C_{en}, C_{ee}, A_v$ for cluster $i$%For each cluster EEDF is resolved up to $\varepsilon(\bar{T}_g)$
+	\end{itemize}
+	\pause
+	% \begin{itemize}
+	% 	\item Right-hand-side computation done by stacking BTE DoFs 
+	% \end{itemize}
+	{\footnotesize
+	\begin{align*}
+		\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for $i^{\text{th}}$-cluster}} \underbrace{\begin{bmatrix}
+			%\vdots & \vdots & \hdots &\vdots\\
+			f_1    & f_2    & \hdots & f_{N_A} \\
+			\vdots & \vdots & \hdots &\vdots
+		\end{bmatrix}}_{\text{batched DoFs for $i^{\text{th}}$-cluster}}
+	\end{align*}}
+	\end{itemize}
+\end{frame}
+
+% \begin{frame}
+% 	\frametitle{Batched 0D-BTE}
+% 	\textbf{\textcolor{orange}{Amortize BTE v-space grid setup} }
+% 	\begin{center}
+% 		\includegraphics[width=0.6\textwidth]{tps_0d_clusters.png}
+% 		% \resizebox{0.48\textwidth}{!}{
+% 		% \begin{tikzpicture}
+% 		% 	\begin{scope}[xshift=0cm]
+% 		% 		\draw[thick, blue!80!black!80] (0,0) -- (4,0);
+% 		% 		\draw[thick, blue!80!black!80] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{0}$} (4,0.2);
+% 		% 		\draw[thick, blue!80!black!80] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+% 		% 		\node at (2,-0.5) {cluster 0};
+% 		% 	\end{scope}
+			
+% 		% 	\begin{scope}[xshift=5cm]
+% 		% 		\draw[thick, green!80!black!80] (0,0) -- (4,0);
+% 		% 		\draw[thick, green!80!black!80] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{1}$} (4,0.2);
+% 		% 		\draw[thick, green!80!black!80] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+% 		% 		\node at (2,-0.5) {cluster 1};
+% 		% 	\end{scope}
+
+% 		% 	% \begin{scope}[xshift=10cm]
+% 		% 	% 	\draw[thick, black] (0,0) -- (4,0);
+% 		% 	% 	\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{2}$} (4,0.2);
+% 		% 	% 	\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+% 		% 	% 	\node at (2,-0.5) {cluster 2};
+% 		% 	% \end{scope}
+
+% 		% 	% \begin{scope}[xshift=15cm]
+% 		% 	% 	\draw[thick, black] (0,0) -- (4,0);
+% 		% 	% 	\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{3}$} (4,0.2);
+% 		% 	% 	\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
+% 		% 	% 	\node at (2,-0.5) {cluster 3};
+% 		% 	% \end{scope}
+% 		% \end{tikzpicture}}
+% 	\end{center}
+% 	\begin{itemize}
+% 		\item K-means clustering based on gas temperature $T_g(\vect{x})$. 
+% 		\item $\vect{v}$-space grid truncation $\quad\Rightarrow\quad$ $\overbar{T}_g$ $\quad\Rightarrow\quad$ set of $C_{en}, C_{ee}, A_v$ for cluster $i$%For each cluster EEDF is resolved up to $\varepsilon(\bar{T}_g)$
+% 	\end{itemize}
+% 	\pause
+% 	% \begin{itemize}
+% 	% 	\item Right-hand-side computation done by stacking BTE DoFs 
+% 	% \end{itemize}
+% 	{\footnotesize
+% 	\begin{align*}
+% 		\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for $i^{\text{th}}$-cluster}} \underbrace{\begin{bmatrix}
+% 			%\vdots & \vdots & \hdots &\vdots\\
+% 			f_1    & f_2    & \hdots & f_{N_A} \\
+% 			\vdots & \vdots & \hdots &\vdots
+% 		\end{bmatrix}}_{\text{batched DoFs for $i^{\text{th}}$-cluster}}
+% 	\end{align*}}
+% 		%\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
+% 		%\item \textbf{Parla} is used for parallelization between clusters
+	
+% 	% Boltzmann + Parla + MPI
+% 	% \begin{itemize}
+% 	% 	\item \textbf{Parla} is used for parallelization between clusters
+% 	% 	\item \textbf{MPI} is used for distributed memory parallelism
+% 	% 	\item 0D-BTE batched solver is integrated with TPS code
+% 	% \end{itemize}
+% \end{frame}
+
+\begin{frame}
 	\frametitle{Comparison between different models}
 	\begin{itemize}
-		\item \textbf{Maxwellian} : $T_e=T_g$ and $k_i^{A} = \int_{\vect{v}} \sigma f^{\text{Maxwellian}} $  (currently used in TPS code)%from Maxwellian EEDF %and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
-		\item \textbf{Static E-field} : Batched \textcolor{orange}{steady-state} 0D-Boltzmann, $k_i^{B} = \int_{\vect{v}} \sigma f^{B} $ 
-		\item \textbf{Oscillatory E-field} : Batched \textcolor{orange}{transient} 0D-Boltzmann, $k_i^{C} = \frac{1}{T} \int_{T} \int_{\vect{v}} \sigma f^{C} $ %Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
+		\item \textbf{Maxwellian} : $T_e=T_g$ and $k_i^{A} = \int_{\vect{v}} \sigma \textcolor{blue}{f^{\text{Maxwellian}}} $  (currently used in TPS code)%from Maxwellian EEDF %and $f_M(\vect{v}, t)=M_{T_e}(\vect{v})$ and $k_i^{M} = \mathcal{K}f_M$
+		\item \textbf{Static E-field} : Batched \textcolor{orange}{steady-state} 0D-Boltzmann, $k_i^{B} = \int_{\vect{v}} \sigma \textcolor{blue}{f^{B}} $ 
+		\item \textbf{Oscillatory E-field} : Batched \textcolor{orange}{transient} 0D-Boltzmann, $k_i^{C} = \frac{1}{T} \int_{T} \int_{\vect{v}} \sigma \textcolor{blue}{f^{C}} $ %Batched 0D-Boltzmann solver with oscillatory $\vect{E}$ field with cycle averaged rates, $k_i^{C} = \mathcal{K}f$ with weak-coupling
 		%\item In-terms of accuracy, $\text{\textbf{A}} < \text{\textbf{B}} < \text{\textbf{C}} < \text{Fully coupled TPS + Boltzmann}$
 		\vspace{0.25in}
 		\item Reaction rate errors, for example, $\cfrac{|k_i^{A} n_0 n_i  - k_i^{B} n_0 n_i|}{\norm{k_i^{A} n_0 n_i}_{\infty}}$ %> \epsilon = 10^{-2}$
@@ -407,68 +531,6 @@ Integration efforts on the electron Boltzmann solver with the torch plasma simul
 % 	\end{figure}
 % \end{frame}
 
-
-\begin{frame}
-	\frametitle{Batched 0D-Boltzmann solver}
-	\vspace{-0.25in}
-	\begin{center}
-		\includegraphics[width=0.8\textwidth]{tps_0d_clusters.png}
-	\end{center}
-	\begin{itemize}
-		\item For $N$ 0D-BTE solves, cluster points by input gas temperature $T_g(\vect{x})$. 
-		\item For each cluster EEDF is resolved up to $\varepsilon(\bar{T}_g)$
-	\end{itemize}
-	\begin{center}
-		\resizebox{0.6\textwidth}{!}{
-		\begin{tikzpicture}
-			\begin{scope}[xshift=0cm]
-				\draw[thick, black] (0,0) -- (4,0);
-				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{0}$} (4,0.2);
-				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
-				\node at (2,-0.5) {cluster 0};
-			\end{scope}
-			
-			\begin{scope}[xshift=5cm]
-				\draw[thick, black] (0,0) -- (4,0);
-				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{1}$} (4,0.2);
-				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
-				\node at (2,-0.5) {cluster 1};
-			\end{scope}
-
-			\begin{scope}[xshift=10cm]
-				\draw[thick, black] (0,0) -- (4,0);
-				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{2}$} (4,0.2);
-				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
-				\node at (2,-0.5) {cluster 2};
-			\end{scope}
-
-			\begin{scope}[xshift=15cm]
-				\draw[thick, black] (0,0) -- (4,0);
-				\draw[thick, black] (4,-0.2) --node[below, yshift=-0.1cm]{$\varepsilon^{max}_{3}$} (4,0.2);
-				\draw[thick, black] (0,-0.2) --node[below, yshift=-0.1cm]{$0$} (0,0.2);	
-				\node at (2,-0.5) {cluster 3};
-			\end{scope}
-		\end{tikzpicture}}
-	\end{center}
-	\begin{itemize}
-		\item Right-hand-side computation done by stacking BTE DoFs 
-		\begin{align*}
-			\underbrace{C_{en}, C_{ee}, A_{v}}_{\text{pre-computed v-space operator for cluster A}} \underbrace{\begin{bmatrix}
-				\vdots & \vdots & \hdots &\vdots\\
-				f_1    & f_2    & \hdots & f_{N_A} \\
-				\vdots & \vdots & \hdots &\vdots
-			\end{bmatrix}}_{\text{batched DoFs for cluster A}}
-		\end{align*}
-		%\item \texttt{Numpy} and \text{Cupy} is used for linear algebra computations
-		%\item \textbf{Parla} is used for parallelization between clusters
-	\end{itemize}
-	% Boltzmann + Parla + MPI
-	% \begin{itemize}
-	% 	\item \textbf{Parla} is used for parallelization between clusters
-	% 	\item \textbf{MPI} is used for distributed memory parallelism
-	% 	\item 0D-BTE batched solver is integrated with TPS code
-	% \end{itemize}
-\end{frame}
 
 \begin{frame}[fragile]
 	\frametitle{TPS + Python + Boltzmann + Parla + MPI}

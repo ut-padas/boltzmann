@@ -248,7 +248,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 			\item Modeled using Fokker-Plank equation with analytical cross-section
 			\item Nonlinear in $f$
 		\end{itemize}
-		\item $C_{ee}$ : electron-electron Columbic collisions 
+		\item $C_{re}$ : electron-electron Columbic collisions 
 		\begin{itemize}
 			\item Implemented in PIC-DSMC solver
 			\item Under development for deterministic grid BTE solver
@@ -366,7 +366,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 		\begin{align}
 			[C_{ee}]_{rs,kl}^{pq} = \int_{R^3} C_{ee}(\phi_{rs}, \phi_{kl}) \psi_{pq} \diff{\vect{v}} 
 		\end{align}
-		\item SymPy based symbolic framework for weak form derivation in spherical coordinates
+		\item SymPy based symbolic framework %for weak form derivation in spherical coordinates
 		\begin{itemize}
 			\item Ability to derive equation for arbitrary number of polar modes
 			\item Integrate the angular coordinates analytically %, identification of the non-zero modes (i.e., sparse tensor) 
@@ -389,7 +389,7 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 %		\item For steady-state solution we solve $\partial_t {\hat{f}} = 0$, with $R(\hat{f}) = (C_{en}+E)\hat{f} + n_e C_{ee}\of{\hat{f}, \hat{f}} - \mu(\hat{f})$, we can write the Jacobian $\frac{d R}{d\hat{f}} = J(\hat{f}) = C_{en} + E + n_e \of{C_{ee}\of{\cdot,\hat{f}} + C_{ee}\of{\hat{f},\cdot}} -\mu(\hat{f})I$
 		%\item $\hat{f}^{n+1} = \hat{f}^{n} - \alpha [J(\hat{f}^n)]^{-1}R(\hat{f}^n)$, where $\alpha \in(0,1]$ determined by line-search algorithm 
 	\end{itemize}
-	Both are novel numerical schemes for BTE
+	\textit{Both are novel numerical schemes for BTE}
 \end{frame}
 
 \begin{frame}
@@ -423,37 +423,69 @@ Solving the Boltzmann transport equation (BTE) for electron kinetics %using Gale
 	\frametitle{Verification with Bolsig+}
 	\vspace{-0.1in}
 	\begin{center}
-		\resizebox*{0.63\textwidth}{!}{
-		\renewcommand{\arraystretch}{1.2}
-		\begin{tabular}{|p{1cm}|p{1cm}|c|c|c|c|c|c|}
-			\hline
-			\multirow{2}{1cm}{\textbf{$E/n_0$ (Td)}} & \multirow{2}{1cm}{\boldmath$n_e/n_0$} & \multicolumn{6}{c|}{\textbf{relative error}}  \\
-			% \hline
-			% \textbf{Inactive Modes} & \textbf{Description}\\
-			\cline{3-8}
-			& & \textbf{energy} &\textbf{mobility} & \textbf{elastic} & \textbf{ionization} & {$\mathbf{f_0(\varepsilon)}$} & {$\mathbf{f_1(\varepsilon)}$}\\
-			\hline
-			1	  &  0 & 	3.40E-11 & 	3.30E-11	&  5.74E-11	&   -	     &   6.42E-08	&1.99E-07\\
-			5	  &  0 & 	2.01E-10 & 	8.67E-10	&  2.69E-10	& 1.05E-08 &   1.08E-06	&3.77E-06\\
-			20	&  0 &  3.64E-10 & 	1.55E-09	&  6.08E-10	& 1.58E-08 &   1.78E-07	&2.50E-06\\
-			100 &  0 & 	3.62E-09 & 	5.10E-09	&  7.73E-09	& 1.20E-07 &   6.51E-07	&3.32E-06\\
-			\hline                  
-			1   &	$10^{-3}$ &	6.69E-07 &	7.21E-07 &	9.77E-07 &	4.77E-05 &	5.82E-07 &	1.28E-06\\
-			5   &	$10^{-3}$ &	9.71E-08 &	1.08E-07 &	1.40E-07 &	1.59E-06 &	1.22E-07 &	2.00E-07\\
-			20  &	$10^{-3}$ &	2.02E-09 &	4.09E-09 &	4.35E-09 &	7.94E-08 &	5.89E-07 &	5.23E-07\\
-			100 &	$10^{-3}$ &	6.30E-09 &	4.08E-08 &	1.33E-09 &	2.21E-08 &	1.69E-05 &  1.82E-05\\
-			\hline
-			1   &	$10^{-2}$ &	9.57E-06 &	1.07E-05 &	1.39E-05 &	3.36E-04 &	8.29E-06 &	1.94E-05\\
-			5   &	$10^{-2}$ &	4.04E-07 &	4.32E-07 &	5.87E-07 &	9.27E-06 &	3.65E-07 &	7.97E-07\\
-			20  &	$10^{-2}$ &	6.97E-08 &	6.73E-08 &	8.67E-08 &	1.76E-06 &	1.70E-07 &	2.23E-07\\
-			100 &	$10^{-2}$ &	4.04E-08 &	5.47E-08 &	4.67E-08 &	1.76E-07 &	3.05E-06 &	1.67E-06\\
-			\hline
-			1   &	$10^{-1}$ &	8.13E-05 &	1.07E-04 &	1.17E-04 &	1.69E-03 &	7.04E-05 &	1.94E-04\\
-			5   &	$10^{-1}$ &	3.34E-06 &	4.23E-06 &	4.84E-06 &	5.24E-05 &	2.89E-06 &	7.61E-06\\
-			20  &	$10^{-1}$ &	7.67E-07 &	8.58E-07 &	1.04E-06 &	1.07E-05 &	6.82E-07 &	1.62E-06\\
-			100 &	$10^{-1}$ &	4.04E-08 &	1.79E-08 &	2.06E-08 &	6.06E-07 &	5.21E-07 &	7.14E-07\\
-			\hline
-		  \end{tabular}}
+		\resizebox{0.68\textwidth}{!}{
+			\renewcommand{\arraystretch}{1.2}
+			\begin{tabular}{|p{1cm}|p{1cm}|c|c|c|c|c|c|}
+			  \hline
+			  \multirow{2}{1cm}{\textbf{$E/n_0$ (Td)}} & \multirow{2}{1cm}{\boldmath$n_e/n_0$} & \multicolumn{3}{c|}{\textbf{rel. error (deterministic vs. Bolsig+)}} & \multicolumn{3}{c|}{\textbf{rel. error (DSMC vs. Bolsig+)}} \\
+			  % \hline
+			  % \textbf{Inactive Modes} & \textbf{Description}\\
+			  \cline{3-8}
+			  & & \textbf{elastic} & \textbf{ionization} & \textbf{mobility} & \textbf{elastic} & \textbf{ionization} & \textbf{mobility}\\
+			  %\hhline{~--}
+			  \hline
+			  1        & 0.0 & 7.11E-05 &    --	    & 4.10E-05	& 7.79E-03	& --  & 4.80E-03 \\
+			  5        & 0.0 & 4.12E-04 & 3.74E-04	& 2.92E-06	& 7.77E-03	& 1.95E-03	& 1.87E-03   \\
+			  20       & 0.0 & 5.76E-04 & 3.49E-03	& 2.98E-04	& 8.33E-03	& 4.77E-03	& 3.92E-03  \\
+			  100      & 0.0 & 1.35E-03 & 2.74E-03	& 4.85E-03	& 1.14E-02	& 8.31E-03	& 5.05E-03   \\
+			  \hline
+			  1        & $10^{-3}$ & 9.40E-03	& 4.40E-03	& 7.99E-03	& 6.23E-03	& 7.61E-03	& 3.17E-03  \\
+			  5        & $10^{-3}$ & 1.52E-02	& 4.12E-03	& 1.83E-04	& 5.90E-03	& 6.59E-03	& 5.89E-04  \\
+			  20       & $10^{-3}$ & 1.69E-02	& 1.46E-02	& 1.13E-02	& 8.17E-03	& 1.09E-02	& 4.73E-03   \\
+			  100      & $10^{-3}$ & 9.11E-03	& 1.87E-02	& 1.65E-02	& 1.50E-02	& 2.42E-02	& 1.75E-02   \\
+			  \hline
+			  1        & $10^{-2}$ & 4.88E-03	& 1.20E-02	& 9.94E-03	& 8.66E-03  & 1.38E-02  & 4.98E-03   \\
+			  5        & $10^{-2}$ & 7.85E-03	& 8.73E-03	& 9.56E-03	& 4.82E-03  & 4.66-03  & 4.23E-03    \\
+			  20       & $10^{-2}$ & 1.13E-02	& 4.57E-03	& 6.19E-03	& 5.36E-03  & 5.72E-03  & 2.10E-03   \\
+			  100      & $10^{-2}$ & 1.19E-02	& 9.93E-03	& 7.76E-03	& 1.04E-02  & 2.05E-02  & 1.38E-02  \\
+			  \hline
+			  1        & $10^{-1}$ & 1.72E-03	& 8.17E-03	& 5.31E-03	& 5.80E-03  & 3.22E-02  & 6.75E-03  \\
+			  5        & $10^{-1}$ & 2.42E-03	& 7.80E-03	& 7.74E-03	& 3.41E-03  & 3.03E-04  & 8.80E-03   \\
+			  20       & $10^{-1}$ & 3.84E-03	& 7.97E-03	& 8.41E-03	& 3.30E-03  & 1.08E-02  & 9.56E-03   \\
+			  100      & $10^{-1}$ & 4.76E-03	& 9.80E-04	& 1.89E-03	& 5.49E-03  & 5.59E-03  & 2.64E-03   \\
+			  \hline
+			\end{tabular}}
+		% \resizebox*{0.63\textwidth}{!}{
+		% \renewcommand{\arraystretch}{1.2}
+		% \begin{tabular}{|p{1cm}|p{1cm}|c|c|c|c|c|c|}
+		% 	\hline
+		% 	\multirow{2}{1cm}{\textbf{$E/n_0$ (Td)}} & \multirow{2}{1cm}{\boldmath$n_e/n_0$} & \multicolumn{6}{c|}{\textbf{relative error}}  \\
+		% 	% \hline
+		% 	% \textbf{Inactive Modes} & \textbf{Description}\\
+		% 	\cline{3-8}
+		% 	& & \textbf{energy} &\textbf{mobility} & \textbf{elastic} & \textbf{ionization} & {$\mathbf{f_0(\varepsilon)}$} & {$\mathbf{f_1(\varepsilon)}$}\\
+		% 	\hline
+		% 	1	  &  0 & 	3.40E-11 & 	3.30E-11	&  5.74E-11	&   -	     &   6.42E-08	&1.99E-07\\
+		% 	5	  &  0 & 	2.01E-10 & 	8.67E-10	&  2.69E-10	& 1.05E-08 &   1.08E-06	&3.77E-06\\
+		% 	20	&  0 &  3.64E-10 & 	1.55E-09	&  6.08E-10	& 1.58E-08 &   1.78E-07	&2.50E-06\\
+		% 	100 &  0 & 	3.62E-09 & 	5.10E-09	&  7.73E-09	& 1.20E-07 &   6.51E-07	&3.32E-06\\
+		% 	\hline                  
+		% 	1   &	$10^{-3}$ &	6.69E-07 &	7.21E-07 &	9.77E-07 &	4.77E-05 &	5.82E-07 &	1.28E-06\\
+		% 	5   &	$10^{-3}$ &	9.71E-08 &	1.08E-07 &	1.40E-07 &	1.59E-06 &	1.22E-07 &	2.00E-07\\
+		% 	20  &	$10^{-3}$ &	2.02E-09 &	4.09E-09 &	4.35E-09 &	7.94E-08 &	5.89E-07 &	5.23E-07\\
+		% 	100 &	$10^{-3}$ &	6.30E-09 &	4.08E-08 &	1.33E-09 &	2.21E-08 &	1.69E-05 &  1.82E-05\\
+		% 	\hline
+		% 	1   &	$10^{-2}$ &	9.57E-06 &	1.07E-05 &	1.39E-05 &	3.36E-04 &	8.29E-06 &	1.94E-05\\
+		% 	5   &	$10^{-2}$ &	4.04E-07 &	4.32E-07 &	5.87E-07 &	9.27E-06 &	3.65E-07 &	7.97E-07\\
+		% 	20  &	$10^{-2}$ &	6.97E-08 &	6.73E-08 &	8.67E-08 &	1.76E-06 &	1.70E-07 &	2.23E-07\\
+		% 	100 &	$10^{-2}$ &	4.04E-08 &	5.47E-08 &	4.67E-08 &	1.76E-07 &	3.05E-06 &	1.67E-06\\
+		% 	\hline
+		% 	1   &	$10^{-1}$ &	8.13E-05 &	1.07E-04 &	1.17E-04 &	1.69E-03 &	7.04E-05 &	1.94E-04\\
+		% 	5   &	$10^{-1}$ &	3.34E-06 &	4.23E-06 &	4.84E-06 &	5.24E-05 &	2.89E-06 &	7.61E-06\\
+		% 	20  &	$10^{-1}$ &	7.67E-07 &	8.58E-07 &	1.04E-06 &	1.07E-05 &	6.82E-07 &	1.62E-06\\
+		% 	100 &	$10^{-1}$ &	4.04E-08 &	1.79E-08 &	2.06E-08 &	6.06E-07 &	5.21E-07 &	7.14E-07\\
+		% 	\hline
+		%   \end{tabular}}
 		%\caption{Deterministic approach self convergence and comparison with the Bolsig code}
 	\end{center}
 \end{frame}

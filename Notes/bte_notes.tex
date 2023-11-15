@@ -1087,21 +1087,37 @@ The overall operator splitting scheme is summarized in Algorithm \ref{alg:1dglow
 	\end{algorithmic}
 \end{algorithm}
 
-\subsection{IMEX schemes}
-\noindent $n$ ions, $f$ electrons, $E$ electric field;\\
-Here I asume $\delta t =1$ for notational simplicity.\\
-I also use an Euler scheme. \\
-$p$ subscript means the solution at $t+\delta t$\\
-$s(f)$ are terms from $f$ to $n$.
-$J$ is the ion flux
+\subsection{Implicit-Explicit methods}
+In this section we explore implicit-explicit (IMEX) schemes for 1D glow discharge problem. Let's consider the ODE given by \eqref{eq:imex_ode}. Here $F$ and $G$ denotes the operators that handled explicitly and implicitly respectively. The implicit-explicit Runge-Kutta (IMEX-RK) scheme is given by \eqref{eq:imex_rk}.
 \begin{align}
-	&f_p + v \partial_x f_p = E \partial_v f + C(f)\\
-	&n_p + \nabla \cdot J(E,n_p) = s(f)\\
-	&E_p = -\nabla \Delta^{-1} \left(n-\int_v f\right)
+	&\dot{U} + F(U) + G(U) = 0 \label{eq:imex_ode}\\
+	&U^{i} = U^n + \Delta t \sum_{j=1}^{i-1} \hat{A}_{ij} F\of{U^j} + \Delta t \sum_{j=1}^{i} A_{ij} G\of{U^{j}} \\
+	&U^{n+1} = U^{n} + \Delta t \sum_{i=1}^{s} \hat{b}_i F\of{U^i} + \Delta t \sum_{i=1}^{s} b_i G\of{U^i} \label{eq:imex_rk}
 \end{align}
-\noindent Essentially, the left hand side has three block, linear implicit solves\\
-The right hand side are explicit terms\\
-We should use Crank-Nicolson for implicit; and RK2 for explicit.
+For 1D glow discharge problem, we can treat x-space advection implicitly with all the other terms are treated explicitly. 
+\begin{align}
+	&\partial_t n_s + \underbrace{\nabla \cdot \vect{J_s}}_{\text{implicit}} = \underbrace{S(f, n_0)}_{explicit}\\
+	&\partial_t f    + \underbrace{\cos(\vtheta) A_x \partial_x f}_{\text{implicit}} = \underbrace{C(f, T_g, n_s) + A_v f}_{explicit} \\
+	&E = \frac{e}{\epsilon} (n_i - n_e)
+\end{align}
+In the above, we get a decoupled system that where the operators can be inverted during the setup phase. 
+
+
+
+% \noindent $n$ ions, $f$ electrons, $E$ electric field;\\
+% Here I asume $\delta t =1$ for notational simplicity.\\
+% I also use an Euler scheme. \\
+% $p$ subscript means the solution at $t+\delta t$\\
+% $s(f)$ are terms from $f$ to $n$.
+% $J$ is the ion flux
+% \begin{align}
+% 	&f_p + v \partial_x f_p = E \partial_v f + C(f)\\
+% 	&n_p + \nabla \cdot J(E,n_p) = s(f)\\
+% 	&E_p = -\nabla \Delta^{-1} \left(n-\int_v f\right)
+% \end{align}
+% \noindent Essentially, the left hand side has three block, linear implicit solves\\
+% The right hand side are explicit terms\\
+% We should use Crank-Nicolson for implicit; and RK2 for explicit.
 
 \ \ 
 \newpage

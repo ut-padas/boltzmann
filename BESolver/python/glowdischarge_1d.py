@@ -472,8 +472,8 @@ class glow1d_fluid():
         """
         xp    = self.xp_module
         r     = - self.param.alpha * (ni-ne)
-        r[0]  = 0.0
-        r[-1] = xp.sin(2 * xp.pi * time) #+ self.params.verticalShift
+        r[0]  = xp.sin(2 * xp.pi * time) #+ self.params.verticalShift
+        r[-1] = 0.0
         return xp.dot(self.LpD_inv, r)
     
     def solve(self, Uin, ts_type):

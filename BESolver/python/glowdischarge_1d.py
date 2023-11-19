@@ -736,5 +736,5 @@ glow_1d   = glow1d_fluid(args)
 u         = glow_1d.initialize()
 v         = glow_1d.solve(u, ts_type=args.ts_type)
 
-
+#python3 glowdischarge_1d.py -Np 240 -cycles 11 -ts_type BE -atol 1e-14 -rtol 1e-14 -dir glow1d_liu_N240_dt5e-4 -cfl 5e-4
 

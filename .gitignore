@@ -5,3 +5,16 @@
 *.nav
 *.snm
 *.toc
+*.vrb
+*.o
+*.e
+*.pptx
+*.gz
+*.org
+*.listing
+*.bbl
+*.npy
+*.png
+*.zip
+*.exe
+*.nb 

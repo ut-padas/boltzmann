@@ -780,7 +780,7 @@ class glow1d_boltzmann():
       scale                    = xp.dot(mm_op / mm_fac, Vin_lm) * (2 * (vth/c_gamma)**3)
       return Vin_lm / scale
     
-    def push(self, Uin, Vin, time, dt):
+    def bte_to_fluid(self, Uin, Vin, time, dt):
       """
       boltzmann to fluid push
       """
@@ -802,7 +802,7 @@ class glow1d_boltzmann():
       
       return
     
-    def pull(self, Uin, Vin, time, dt):
+    def fluid_to_bte(self, Uin, Vin, time, dt):
       xp      = self.xp_module
       ele_idx = self.ele_idx
       ion_idx = self.ion_idx
@@ -1141,8 +1141,114 @@ class glow1d_boltzmann():
           print("BTE v-advection time = %.4E (s)" %(t2-t1), flush=True)
         
         return u + du
+    
+    def solve_imex(self, Uin, Vin):
+      dt              = self.args.cfl 
+      tT              = self.args.cycles
+      tt              = 0
+      steps           = max(1,int(tT/dt))
       
-    def solve(self, Uin, Vin):
+      
+      if self.args.use_gpu == 1: 
+        Uin1 = cp.asarray(Uin)
+        Vin1 = cp.asarray(Vin)
+      else:
+        Uin1 = Uin
+        Vin1 = Vin
+      
+      if self.args.use_gpu==1:
+        self.copy_operators_H2D(args.gpu_device_id)
+        self.xp_module = cp
+      else:
+        self.xp_module = np
+        
+      xp             = self.xp_module
+      u              = xp.copy(Uin1)
+      v              = xp.copy(Vin1)
+      DpL            = xp.eye(self.Np)
+      DpR            = xp.eye(self.Np)
+      
+      # left to right DpL (bc on left), and right to left (bc on right)
+      DpL[1:,:]       = self.Dp[1:,:]
+      DpR[:-1,:]      = self.Dp[:-1,:]
+      
+      Dp1L            = xp.zeros((self.Nr * self.Np, self.Nr * self.Np))
+      Dp1R            = xp.zeros((self.Nr * self.Np, self.Nr * self.Np))
+      
+      Ax1             = xp.zeros((self.Nr * self.Np, self.Nr * self.Np))
+      Ax1[0::self.Np, 0::self.Np] = self.op_adv_x 
+      
+      for i in range(self.Nr):
+        Dp1L[i * self.Np : (i+1) * self.Np , i * self.Np : (i+1) * self.Np] = DpL
+        Dp1R[i * self.Np : (i+1) * self.Np , i * self.Np : (i+1) * self.Np] = DpR
+      
+      Dp1L = xp.dot(Ax1, Dp1L)
+      Dp1R = xp.dot(Ax1, Dp1R)
+      
+      I1   = xp.eye((self.Nr * self.Np, self.Nr * self.Np))
+      
+      # bte implicit part
+      A    = xp.zeros((self.Nvt, self.Nr * self.Np, self.Nr * self.Np))
+      
+      for i in range(self.Nvt):
+        ck = np.cos(self.xp_vt[i])
+        if ck >=0:
+          A[i,:,:] = I1 + dt * ck *  Dp1L
+        else:
+          A[i,:,:] = I1 + dt * ck *  Dp1R
+      
+      A = xp.inv(A)
+      B = xp.inv(self.Lp)
+      
+      # self.bte_to_fluid(u, v, tt, dt) # bte to fluid
+      # self.fluid_to_bte(u, v, tt, dt) # fluid to bte
+      
+      ele_idx = self.ele_idx
+      ion_idx = self.ion_idx
+      Te_idx  = self.Te_idx
+      
+      def rhs_ns(time, ki, n0, ne):
+        return ki * n0, ne
+      
+      
+      ts_idx_b  = 0 
+      tt        = 0 
+      if args.restore==1:
+        ts_idx_b = int(args.rs_idx * io_freq)
+        tt       = ts_idx_b * dt
+        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+
+      for ts_idx in range(ts_idx_b, steps):
+        self.bte_to_fluid(u, v, tt, dt)
+        
+        ne = u[:, ele_idx]
+        ni = u[:, ion_idx]
+        ki = self.r_rates[:, ion_idx]
+        
+        
+        # E solve
+        phi = self.solve_poisson(ne, ni, tt)
+        E   = -xp.dot(self.Dp, phi)
+        
+        
+        # ns solve (for heavy)
+        mu_i    = self.mu[:, ion_idx]
+        Di      = self.D[:, ion_idx]
+        
+        nsLMat        = self.I_Nx + dt * (mu_i * E * self.Dp + mu_i * xp.dot(self.Dp, E) * self.I_Nx -Di * self.Lp) 
+        nsLMat[0,:]   = self.I_Nx[0,:]
+        nsLMat[-1,:]  = self.I_Nx[-1,:]
+        
+        nsRhs         = ni + dt * rhs_ns(tt, ki, ni, ne)
+        nsRhs[0]      = -xp.dot(self.Dp[0 , 1:]  , ni[1:])   / self.Dp[0 , 0]
+        nsRhs[-1]     = -xp.dot(self.Dp[-1, 0:-1], ni[0:-1]) / self.Dp[-1,-1]
+        ni            = xp.linalg.solve(nsLMat, nsRhs)
+        
+        
+        u[:,ion_idx]  = ni
+        tt += dt
+        
+    def solve_be(self, Uin, Vin):
       dt              = self.args.cfl 
       tT              = self.args.cycles
       tt              = 0
@@ -1178,8 +1284,8 @@ class glow1d_boltzmann():
       dg_qmat  = self.op_diag_dg
       dg_qmatT = xp.transpose(self.op_diag_dg)
       
-      self.push(u, v, tt, dt) # bte to fluid
-      self.pull(u, v, tt, dt) # fluid to bte
+      self.bte_to_fluid(u, v, tt, dt) # bte to fluid
+      self.fluid_to_bte(u, v, tt, dt) # fluid to bte
       ts_idx_b  = 0 
       if args.restore==1:
         ts_idx_b = int(args.rs_idx * io_freq)
@@ -1215,13 +1321,21 @@ class glow1d_boltzmann():
         # spherical to ordinates projection
         v          = xp.dot(self.op_psh2o,v_lm)
         
-        self.push(u, v, tt, dt)         # bte to fluid
+        self.bte_to_fluid(u, v, tt, dt)         # bte to fluid
         u = self.step_fluid(u, du, tt, dt, int(ts_idx % io_freq == 0))
-        self.pull(u, v, tt, dt)
+        self.fluid_to_bte(u, v, tt, dt)
         tt+= dt
         
         
       return u, v
+    
+    def solve(self, Uin, Vin):
+      if (self.args.ts_type == "BE"):
+        self.solve_be(Uin, Vin)
+      elif (self.args.ts_type == "IMEX"):
+        self.solve_imex(Uin, Vin)
+      else:
+        raise NotImplementedError
     
     def solve_unit_test1(self, Uin, Vin):
       """_summary_ This will test the advection effects in the full phase space, no ions involved
@@ -1585,7 +1699,7 @@ class glow1d_boltzmann():
     def plot(self, Uin, Vin, fname, time):
       xp = self.xp_module
       fig= plt.figure(figsize=(26,10), dpi=300)
-      self.push(Uin, Vin, time, self.args.cfl)
+      self.bte_to_fluid(Uin, Vin, time, self.args.cfl)
       
       def asnumpy(a):
         if self.xp_module == cp:

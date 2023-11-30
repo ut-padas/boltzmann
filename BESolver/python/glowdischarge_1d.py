@@ -116,9 +116,10 @@ class glow1d_fluid():
       Uin     = xp.ones((self.Np, self.Nv))
       
       if type==0:
-        if args.restore==1:
-          print("~~~restoring solver from %s.npy"%(args.fname))
-          Uin = xp.load("%s.npy"%(args.fname))
+        if self.args.restore==1:
+          print("~~~restoring solver from ", "%s_%04d_u.npy"%(args.fname, args.rs_idx))
+          Uin = xp.load("%s_%04d.npy"%(args.fname, args.rs_idx))
+        
           # D = np.load('newton_3spec_CN_Np100.npy')
           # Np=  self.Np
           # ne  = D[0:Np]
@@ -189,8 +190,12 @@ class glow1d_fluid():
       Ji[0]   = self.Zp[ion_idx] * mu_i[0]  * ni[0]  * E[0]
       Ji[-1]  = self.Zp[ion_idx] * mu_i[-1] * ni[-1] * E[-1]
       
+      self.param.Teb0 = nTe[0]/ne[0]
+      self.param.Teb1 = nTe[-1]/ne[-1]
       
       def res(Te_bdy, xloc):
+        nTe[:]    = Uin[:, Te_idx]
+        
         nTe[xloc] = ne[xloc] * Te_bdy
         Te        = nTe/ne
         
@@ -200,17 +205,51 @@ class glow1d_fluid():
         qe        = -1.5 * De * xp.dot(self.Dp, nTe) - 2.5 * mu_e * E * nTe - De * Te * xp.dot(self.Dp, ne)
         return qe[xloc] - 2.5 * Te[xloc] * Je[xloc]
 
-      sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (0,20), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
-      sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (0,20), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
+      # sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (self.param.Teb0 * 0  , 10 * self.param.Teb0), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
+      # sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (self.param.Teb1 * 0  , 10 * self.param.Teb1), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
       
-      assert sol0.converged == True
-      assert sol1.converged == True
+      try:
+        sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (self.param.Teb0 * 0  , 10 * self.param.Teb0), xtol=1e-4, rtol=1e-4, maxiter=50)
+        T0   = sol0.root
+      except:
+        print("left boundary temperature solve failed")
+        T0   = 1e-10
+        
+        # Te  = xp.linspace(0,100,100)
+        # fTe = xp.array([res(Te[i], -1) for i in range(len(Te))])
+        # plt.plot(Te, fTe)
+        # plt.title("left bdy")
+        # plt.show()
+        # plt.close()
+        
       
-      print("Te[0] = %.8E Te[-1]=%.8E feval[0]=%.8E, feval[-1]=%.8E, iter0=%d, iter1=%d"%(sol0.root, sol1.root, res(sol0.root, 0), res(sol1.root, -1), sol0.function_calls, sol1.function_calls))
+      try:
+        sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (self.param.Teb1 * 0  , 10 * self.param.Teb1), xtol=1e-4, rtol=1e-4, maxiter=50)
+        T1   = sol1.root
+      except:
+        print("right boundary temperature solve failed")
+        T1   = 1e-10
+        
+        # Te  = xp.linspace(0,100,100)
+        # fTe = xp.array([res(Te[i], -1) for i in range(len(Te))])
+        # plt.plot(Te, fTe)
+        # plt.title("right bdy")
+        # plt.show()
+        # plt.close()
+        
+      # sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=0, x1 = 100 * self.param.Teb0, method='secant', xtol=1e-4, rtol=1e-4, maxiter=50)
+      # sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=0, x1 = 100 * self.param.Teb1, method='secant', xtol=1e-4, rtol=1e-4, maxiter=50)
+      
+      
+      
+      
+        
+      # assert sol0.converged == True
+      # assert sol1.converged == True
+      #print("Te[0] = %.8E Te[-1]=%.8E feval[0]=%.8E, feval[-1]=%.8E "%(T0, T1, res(T0, 0), res(T1, -1)))
       #print("ks = %.8E ks0 = %.8E ks1= %.8E"%(self.param.ks, self.param.mw_flux(sol0.root), self.param.mw_flux(sol1.root)))
-      return sol0.root, sol1.root
+      return T0, T1
       
-            
     def rhs(self, Uin : np.array, time, dt):
       """Evaluates the residual.
 
@@ -641,12 +680,24 @@ class glow1d_fluid():
         self.weak_bc_ni = True
         #self.weak_bc_ne = True
         du  = xp.zeros_like(u)
-        for ts_idx in range(steps):
+        
+        ts_idx_b  = 0 
+        if args.restore==1:
+          ts_idx_b = int(args.rs_idx * io_freq)
+          tt       = ts_idx_b * dt
+          print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
           
-          # self.param.Teb0 , self.param.Teb1 = self.temperature_solve(u, tt, dt)
-          # self.param.ks0  , self.param.ks1  = self.param.mw_flux(self.param.Teb0), self.param.mw_flux(self.param.Teb1)
-          # print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
+        cycle_avg_u=xp.zeros_like(u)         
+        for ts_idx in range(ts_idx_b, steps):
           
+          if (self.args.bc_dirichlet_e == 0):
+            self.param.Teb0 , self.param.Teb1 = self.temperature_solve(u, tt, dt)
+            self.param.ks0  , self.param.ks1  = self.param.mw_flux(self.param.Teb0), self.param.mw_flux(self.param.Teb1)
+            #print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
+          
+          cycle_avg_u[:, self.ele_idx] += u[:, self.ele_idx]
+          cycle_avg_u[:, self.ion_idx] += u[:, self.ion_idx]
+          cycle_avg_u[:, self.Te_idx]  += u[:, self.Te_idx] / u[:, self.ele_idx] 
           
           def residual(du):
             u1       = u + du
@@ -687,7 +738,14 @@ class glow1d_fluid():
           
           if(self.args.checkpoint==1 and (ts_idx % io_freq)==0):
               print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-              self.plot(u, tt, "%s_%04d.png"%(args.fname, ts_idx//io_freq))
+              if self.args.plot_cycle_avg == 0:
+                self.plot(u, tt, "%s_%04d.png"%(args.fname, ts_idx//io_freq))
+              else:
+                cycle_avg_u = cycle_avg_u * 0.5 * dt
+                cycle_avg_u[:, self.Te_idx] = cycle_avg_u[:, self.Te_idx] * cycle_avg_u[:, self.ele_idx]
+                self.plot(cycle_avg_u, tt, "%s_%04d.png"%(args.fname, ts_idx//io_freq))
+                xp.save("%s_%04d_avg.npy"%(self.args.fname, ts_idx//io_freq), cycle_avg_u)
+                cycle_avg_u[:,:] = 0
               xp.save("%s_%04d.npy"%(self.args.fname, ts_idx//io_freq), u)
           
           ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
@@ -700,6 +758,11 @@ class glow1d_fluid():
           
           du = ns_info["x"]
           u  = u + du
+          
+          cycle_avg_u[:, self.ele_idx] += u[:, self.ele_idx]
+          cycle_avg_u[:, self.ion_idx] += u[:, self.ion_idx]
+          cycle_avg_u[:, self.Te_idx]  += u[:, self.Te_idx] / u[:, self.ele_idx] 
+          
           
           if ts_idx % io_freq == 0:
             u1 = xp.copy(u)
@@ -774,19 +837,22 @@ class glow1d_fluid():
     
     
 parser = argparse.ArgumentParser()
-parser.add_argument("-Ns", "--Ns"                       , help="number of species"      , type=int, default=2)
-parser.add_argument("-NT", "--NT"                       , help="number of temperatures" , type=int, default=1)
-parser.add_argument("-Np", "--Np"                       , help="number of collocation points" , type=int, default=100)
-parser.add_argument("-cfl", "--cfl"                     , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
-parser.add_argument("-cycles", "--cycles"               , help="number of cycles to run" , type=float, default=10)
-parser.add_argument("-ts_type", "--ts_type"             , help="ts mode" , type=str, default="BE")
-parser.add_argument("-atol", "--atol"                   , help="abs. tolerance" , type=float, default=1e-6)
-parser.add_argument("-rtol", "--rtol"                   , help="rel. tolerance" , type=float, default=1e-6)
-parser.add_argument("-fname", "--fname"                 , help="file name to store the solution" , type=str, default="1d_glow")
-parser.add_argument("-restore", "--restore"             , help="restore the solver" , type=int, default=0)
-parser.add_argument("-checkpoint", "--checkpoint"       , help="store the checkpoints every 250 cycles" , type=int, default=1)
-parser.add_argument("-max_iter", "--max_iter"           , help="max iterations for Newton solver" , type=int, default=1000)
-parser.add_argument("-dir"  , "--dir"                   , help="file name to store the solution" , type=str, default="glow1d_dir")
+parser.add_argument("-Ns", "--Ns"                         , help="number of species"      , type=int, default=2)
+parser.add_argument("-NT", "--NT"                         , help="number of temperatures" , type=int, default=1)
+parser.add_argument("-Np", "--Np"                         , help="number of collocation points" , type=int, default=100)
+parser.add_argument("-cfl", "--cfl"                       , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
+parser.add_argument("-cycles", "--cycles"                 , help="number of cycles to run" , type=float, default=10)
+parser.add_argument("-ts_type", "--ts_type"               , help="ts mode" , type=str, default="BE")
+parser.add_argument("-atol", "--atol"                     , help="abs. tolerance" , type=float, default=1e-6)
+parser.add_argument("-rtol", "--rtol"                     , help="rel. tolerance" , type=float, default=1e-6)
+parser.add_argument("-fname", "--fname"                   , help="file name to store the solution" , type=str, default="1d_glow")
+parser.add_argument("-restore", "--restore"               , help="restore the solver" , type=int, default=0)
+parser.add_argument("-rs_idx",  "--rs_idx"                , help="restore file_idx"   , type=int, default=0)
+parser.add_argument("-checkpoint", "--checkpoint"         , help="store the checkpoints every 250 cycles" , type=int, default=1)
+parser.add_argument("-max_iter", "--max_iter"             , help="max iterations for Newton solver" , type=int, default=1000)
+parser.add_argument("-dir"  , "--dir"                     , help="file name to store the solution" , type=str, default="glow1d_dir")
+parser.add_argument("-plot_cycle_avg", "--plot_cycle_avg" , help="plot cycle averaged solution" , type=int, default=1)
+parser.add_argument("-bc_dirichlet_e", "--bc_dirichlet_e" , help="plot cycle averaged solution" , type=int, default=1)
 
 args      = parser.parse_args()
 glow_1d   = glow1d_fluid(args)

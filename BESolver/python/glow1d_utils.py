@@ -22,6 +22,8 @@ class parameters():
     self.qe    = scipy.constants.e         # C
     self.eps0  = scipy.constants.epsilon_0 # eps_0 
     self.kB    = scipy.constants.Boltzmann # J/K
+    self.ev_to_K = scipy.constants.electron_volt / scipy.constants.Boltzmann
+    self.me    = scipy.constants.electron_mass
     
     self.n0    = 3.22e22                   #m^{-3}
     self.np0   = 8e16                      #"nominal" electron density [1/m^3]
@@ -46,8 +48,14 @@ class parameters():
     self.Hi    = 15.76                              # eV
     self.ks    *= (self.tau/self.L)
     
+    self.ks0   = self.ks
+    self.ks1   = self.ks
+    
+    self.Teb0  = self.Teb
+    self.Teb1  = self.Teb
+    
     self.Tg    = 300.0
-    self.gamma = 0.01
+    self.gamma = 0.0
     self.alpha = self.np0 * self.L**2 * self.qe / (self.eps0 * self.V0)
     
     # self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))   
@@ -55,7 +63,11 @@ class parameters():
     
     self.ki     = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))   
     self.ki_nTe = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (18.687 * ne / nTe**2)  
-    self.ki_ne  = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (-18.687 / nTe)  
+    self.ki_ne  = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (-18.687 / nTe)
+    
+    # non-dimentionalized maxwellian flux. 
+    self.mw_flux    = lambda Te : (self.tau/self.L) * (self.kB * Te * self.ev_to_K / (2 * np.pi * self.me)) ** 0.5
+    #self.mw_flux_Te = lambda Te : 0.5 * (self.kB * self.ev_to_K / (2 * np.pi * self.me)) * (self.kB * Te * self.ev_to_K / (2 * np.pi * self.me)) ** (-0.5)      
     
 def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   x0       = xp.copy(x)

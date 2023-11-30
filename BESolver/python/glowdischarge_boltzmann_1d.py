@@ -1975,6 +1975,6 @@ if args.use_gpu==1:
   gpu_device = cp.cuda.Device(args.gpu_device_id)
   gpu_device.use()
 
-#uu,vv   = glow_1d.solve(u, v)
-uu,vv   = glow_1d.solve_unit_test3(u, v)
+uu,vv   = glow_1d.solve(u, v)
+#uu,vv   = glow_1d.solve_unit_test3(u, v)
 

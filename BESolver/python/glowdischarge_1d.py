@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import sys
 import glow1d_utils
 import os
-
+import scipy.optimize
 class glow1d_fluid():
     def __init__(self, args) -> None:
       self.args  = args
@@ -131,8 +131,8 @@ class glow1d_fluid():
           # Uin[:, ion_idx] = ni[:,0]
           # Uin[:, Te_idx]  = Te[:,0]
           
-          # Uin[0, Te_idx]  = self.param.Teb
-          # Uin[-1, Te_idx] = self.param.Teb
+          # Uin[0, Te_idx]  = self.param.Teb0
+          # Uin[-1, Te_idx] = self.param.Teb1
           # Uin[:, Te_idx] *= Uin[:, ele_idx]
           
         else:
@@ -141,8 +141,8 @@ class glow1d_fluid():
           Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
           Uin[:, Te_idx]  = 0.5 
         
-          Uin[0, Te_idx]  = self.param.Teb
-          Uin[-1, Te_idx] = self.param.Teb
+          Uin[0, Te_idx]  = self.param.Teb0
+          Uin[-1, Te_idx] = self.param.Teb1
           Uin[:, Te_idx] *= Uin[:, ele_idx]
           
           #print(Uin[:, Te_idx]/Uin[:, ele_idx])
@@ -159,7 +159,58 @@ class glow1d_fluid():
         raise NotImplementedError
       
       return Uin
+    
+    def temperature_solve(self, Uin : np.array, time, dt):
+      """
+      solves non-linear system for boundary conditions. 
+      """
+      xp         = self.xp_module
       
+      ele_idx = self.ele_idx
+      ion_idx = self.ion_idx
+      Te_idx  = self.Te_idx
+      
+      ne      = Uin[: , ele_idx]
+      ni      = Uin[: , ion_idx]
+      nTe     = xp.copy(Uin[: ,  Te_idx])
+      
+      mu_i    = self.mu[:, ion_idx]
+      mu_e    = self.mu[:, ele_idx]
+      
+      De      = self.D[:, ele_idx]
+      Di      = self.D[:, ion_idx]
+      
+      phi     = self.solve_poisson(Uin[:,ele_idx], Uin[:, ion_idx], time)
+      E       = -xp.dot(self.Dp, phi)
+      
+      Je      = self.Zp[ele_idx] * mu_e * ne * E - De * xp.dot(self.Dp, ne)
+      Ji      = self.Zp[ion_idx] * mu_i * ni * E - Di * xp.dot(self.Dp, ni)
+      
+      Ji[0]   = self.Zp[ion_idx] * mu_i[0]  * ni[0]  * E[0]
+      Ji[-1]  = self.Zp[ion_idx] * mu_i[-1] * ni[-1] * E[-1]
+      
+      
+      def res(Te_bdy, xloc):
+        nTe[xloc] = ne[xloc] * Te_bdy
+        Te        = nTe/ne
+        
+        Je[0]     = -self.param.mw_flux(Te[0])  * ne[0]  - self.param.gamma * Ji[0]
+        Je[-1]    =  self.param.mw_flux(Te[-1]) * ne[-1] - self.param.gamma * Ji[-1]
+        
+        qe        = -1.5 * De * xp.dot(self.Dp, nTe) - 2.5 * mu_e * E * nTe - De * Te * xp.dot(self.Dp, ne)
+        return qe[xloc] - 2.5 * Te[xloc] * Je[xloc]
+
+      sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (0,20), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
+      sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (0,20), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
+      
+      assert sol0.converged == True
+      assert sol1.converged == True
+      
+      print("Te[0] = %.8E Te[-1]=%.8E feval[0]=%.8E, feval[-1]=%.8E, iter0=%d, iter1=%d"%(sol0.root, sol1.root, res(sol0.root, 0), res(sol1.root, -1), sol0.function_calls, sol1.function_calls))
+      #print("ks = %.8E ks0 = %.8E ks1= %.8E"%(self.param.ks, self.param.mw_flux(sol0.root), self.param.mw_flux(sol1.root)))
+      return sol0.root, sol1.root
+      
+            
     def rhs(self, Uin : np.array, time, dt):
       """Evaluates the residual.
 
@@ -204,16 +255,16 @@ class glow1d_fluid():
         fluxJ[:, sp_idx] = self.Zp[sp_idx] * self.mu[: , sp_idx] * Uin[: , sp_idx] * E - self.D[: , sp_idx] * Us_x[:, sp_idx]
       
       if (self.weak_bc_ne):        
-        fluxJ[0 , ele_idx] = -self.param.ks * ne[0]   - self.param.gamma * self.mu[0 , ion_idx] * ni[0]  * E[0] 
-        fluxJ[-1, ele_idx] = self.param.ks  * ne[-1]  - self.param.gamma * self.mu[-1, ion_idx] * ni[-1] * E[-1] 
+        fluxJ[0 , ele_idx] = -self.param.ks0 * ne[0]   - self.param.gamma * self.mu[0 , ion_idx] * ni[0]  * E[0] 
+        fluxJ[-1, ele_idx] = self.param.ks1  * ne[-1]  - self.param.gamma * self.mu[-1, ion_idx] * ni[-1] * E[-1] 
         
       if (self.weak_bc_ni):
         fluxJ[0 , ion_idx] = self.mu[0 , ion_idx] * ni[0]  * E[0] 
         fluxJ[-1, ion_idx] = self.mu[-1, ion_idx] * ni[-1] * E[-1] 
         
       if (self.weak_bc_Te):
-        nTe[0]  = self.param.Teb * ne[0]
-        nTe[-1] = self.param.Teb * ne[-1]
+        nTe[0]  = self.param.Teb0 * ne[0]
+        nTe[-1] = self.param.Teb1 * ne[-1]
         
       Te      = nTe/ne
       fluxJ_x = xp.dot(self.Dp, fluxJ)
@@ -233,22 +284,22 @@ class glow1d_fluid():
       strong_bc = xp.zeros((2,self.Nv))  
       if self.args.ts_type=="FE":
         # if evolving nT else just set this to zero. 
-        FUin[0  , Te_idx]   = (self.param.Teb * (ne[0]  + dt * FUin[0,ele_idx] ) - Uin[0,Te_idx])/dt
-        FUin[-1 , Te_idx]   = (self.param.Teb * (ne[-1] + dt * FUin[-1,ele_idx]) - Uin[-1,Te_idx])/dt
+        FUin[0  , Te_idx]   = (self.param.Teb0 * (ne[0]  + dt * FUin[0,ele_idx] ) - Uin[0,Te_idx])/dt
+        FUin[-1 , Te_idx]   = (self.param.Teb1 * (ne[-1] + dt * FUin[-1,ele_idx]) - Uin[-1,Te_idx])/dt
         return FUin
       
       elif self.args.ts_type=="BE":
         if not self.weak_bc_ne:            
-          strong_bc[0,  ele_idx] = (fluxJ[0,ele_idx]  - (-self.param.ks * ne[ 0]   - self.param.gamma * mu_i[0]  * E[0 ] * ni[ 0] ))
-          strong_bc[-1, ele_idx] = (fluxJ[-1,ele_idx] - (self.param.ks  * ne[-1]   - self.param.gamma * mu_i[-1] * E[-1] * ni[-1] ))
+          strong_bc[0,  ele_idx] = (fluxJ[0,ele_idx]  - (-self.param.ks0 * ne[ 0]   - self.param.gamma * mu_i[0]  * E[0 ] * ni[ 0] ))
+          strong_bc[-1, ele_idx] = (fluxJ[-1,ele_idx] - (self.param.ks1  * ne[-1]   - self.param.gamma * mu_i[-1] * E[-1] * ni[-1] ))
           
         if not self.weak_bc_ni:            
           strong_bc[0,  ion_idx] = (fluxJ[0 , ion_idx] - self.mu[0 , ion_idx] * ni[0]  * E[0] )
           strong_bc[-1, ion_idx] = (fluxJ[-1, ion_idx] - self.mu[-1, ion_idx] * ni[-1] * E[-1] )
           
         if not self.weak_bc_Te:
-          strong_bc[0,  Te_idx]  = (nTe[0]  - self.param.Teb * ne[ 0])
-          strong_bc[-1, Te_idx]  = (nTe[-1] - self.param.Teb * ne[-1])
+          strong_bc[0,  Te_idx]  = (nTe[0]  - self.param.Teb0 * ne[ 0])
+          strong_bc[-1, Te_idx]  = (nTe[-1] - self.param.Teb1 * ne[-1])
       
       return FUin, strong_bc
     
@@ -302,8 +353,8 @@ class glow1d_fluid():
       Js_nk[ion_idx, ele_idx] = self.Zp[ion_idx] * self.mu[:,ion_idx] * Uin[:,ion_idx] * E_ne
       
       if self.weak_bc_Te:
-        nTe[0]  = self.param.Teb * ne[0]
-        nTe[-1] = self.param.Teb * ne[-1]
+        nTe[0]  = self.param.Teb0 * ne[0]
+        nTe[-1] = self.param.Teb1 * ne[-1]
       
       Te      = nTe/ne
       
@@ -316,8 +367,8 @@ class glow1d_fluid():
       Je_ni        = Js_nk[ele_idx,ion_idx]
       
       if self.weak_bc_ne:
-        Je_ne[0  , :] = -self.param.ks * Imat[0,:] - self.param.gamma * mu_i[0]   * ni[0]   * E_ne[0  , :]
-        Je_ne[-1 , :] = self.param.ks *Imat[-1,:]  - self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1 , :]
+        Je_ne[0  , :] = -self.param.ks0 * Imat[0,:] - self.param.gamma * mu_i[0]   * ni[0]   * E_ne[0  , :]
+        Je_ne[-1 , :] = self.param.ks1 *Imat[-1,:]  - self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1 , :]
         
         Je_ni[0 , :]  = - self.param.gamma * mu_i[0]   * (ni[0]   * E_ni[0 , :] + E[0]  * Imat[0,:])
         Je_ni[-1, :]  = - self.param.gamma * mu_i[-1]  * (ni[-1]  * E_ni[-1 ,:] + E[-1] * Imat[-1,:])
@@ -350,18 +401,19 @@ class glow1d_fluid():
       Je      = self.Zp[ele_idx] * mu_e * ne * E - De * ne_x
       
       if self.weak_bc_ne:
-        Je[0 ]  = -self.param.ks * ne[0]   - self.param.gamma * mu_i[0 ] * ni[0]  * E[0]
-        Je[-1]  = self.param.ks  * ne[-1]  - self.param.gamma * mu_i[-1] * ni[-1] * E[-1]
+        Je[0 ]  = -self.param.ks0 * ne[0]   - self.param.gamma * mu_i[0 ] * ni[0]  * E[0]
+        Je[-1]  = self.param.ks1  * ne[-1]  - self.param.gamma * mu_i[-1] * ni[-1] * E[-1]
       
-      Teb     = self.param.Teb
+      Teb0     = self.param.Teb0
+      Teb1     = self.param.Teb1
       
       qe_ne          = -2.5 * (mu_e * nTe)[:,xp.newaxis] * E_ne - (De * Te)[:,xp.newaxis] * self.Dp + De * (ne_x / ne**2) * nTe * Imat
       qe_ni          = -2.5 * (mu_e * nTe)[:,xp.newaxis] * E_ni
       qe_nTe         = -1.5 * De[:,xp.newaxis] * self.Dp - 2.5 * mu_e * E * Imat - De * (ne_x / ne) * Imat
       
       if self.weak_bc_Te:
-        qe_ne[0 , :]   = -1.5 * De[ 0]  * self.Dp[ 0, :] * Teb * Imat[0 ,:] - 2.5 * mu_e[ 0] * (E[0]  * Teb * Imat[0 ,:] + ne[0]  * Teb * E_ne[0, :]) - De[0]  * Teb * self.Dp[0 ,:]
-        qe_ne[-1, :]   = -1.5 * De[-1]  * self.Dp[-1, :] * Teb * Imat[-1,:] - 2.5 * mu_e[-1] * (E[-1] * Teb * Imat[-1,:] + ne[-1] * Teb * E_ne[-1,:]) - De[-1] * Teb * self.Dp[-1,:]
+        qe_ne[0 , :]   = -1.5 * De[ 0]  * self.Dp[ 0, :] * Teb0 * Imat[0 ,:] - 2.5 * mu_e[ 0] * (E[0]  * Teb0 * Imat[0 ,:] + ne[0]  * Teb0 * E_ne[0, :]) - De[0]  * Teb0 * self.Dp[0 ,:]
+        qe_ne[-1, :]   = -1.5 * De[-1]  * self.Dp[-1, :] * Teb1 * Imat[-1,:] - 2.5 * mu_e[-1] * (E[-1] * Teb1 * Imat[-1,:] + ne[-1] * Teb1 * E_ne[-1,:]) - De[-1] * Teb1 * self.Dp[-1,:]
         
         qe_ni[0 ,:]    = 0
         qe_ni[-1,:]    = 0
@@ -396,8 +448,8 @@ class glow1d_fluid():
       
       if self.args.ts_type=="BE":
         if not self.weak_bc_ne:
-          jac_bc[0, ele_idx , ele_idx::self.Nv]  = Je_ne[ 0,:] - (-self.param.ks * Imat[ 0 ,:] - self.param.gamma * mu_i[ 0]  * ni[ 0]  * E_ne[ 0  , :])
-          jac_bc[1, ele_idx , ele_idx::self.Nv]  = Je_ne[-1,:] - (self.param.ks  * Imat[-1 ,:] - self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1  , :])
+          jac_bc[0, ele_idx , ele_idx::self.Nv]  = Je_ne[ 0,:] - (-self.param.ks0 * Imat[ 0 ,:] - self.param.gamma * mu_i[ 0]  * ni[ 0]  * E_ne[ 0  , :])
+          jac_bc[1, ele_idx , ele_idx::self.Nv]  = Je_ne[-1,:] - (self.param.ks1  * Imat[-1 ,:] - self.param.gamma * mu_i[-1]  * ni[-1]  * E_ne[-1  , :])
           
           jac_bc[0, ele_idx , ion_idx::self.Nv]  = Je_ni[ 0,:] - ( - self.param.gamma * mu_i[ 0]  * (ni[ 0]  * E_ni[ 0  , :] + E[0]  * Imat[0  , :]))
           jac_bc[1, ele_idx , ion_idx::self.Nv]  = Je_ni[-1,:] - ( - self.param.gamma * mu_i[-1]  * (ni[-1]  * E_ni[-1  , :] + E[-1] * Imat[-1 , :]))
@@ -410,10 +462,10 @@ class glow1d_fluid():
           jac_bc[1, ion_idx , ele_idx::self.Nv]  = Ji_ne[-1 ,:] - (mu_i[-1] * ni[-1] * E_ne[-1  , :])
         
         if not self.weak_bc_Te:            
-          jac_bc[0, Te_idx, 0 * self.Nv + ele_idx]  = -self.param.Teb
+          jac_bc[0, Te_idx, 0 * self.Nv + ele_idx]  = -self.param.Teb0
           jac_bc[0, Te_idx, 0 * self.Nv + Te_idx ]  = 1
           
-          jac_bc[1, Te_idx, (self.Np-1) * self.Nv + ele_idx]  = -self.param.Teb
+          jac_bc[1, Te_idx, (self.Np-1) * self.Nv + ele_idx]  = -self.param.Teb1
           jac_bc[1, Te_idx, (self.Np-1) * self.Nv + Te_idx ]  = 1
           
       else:
@@ -590,6 +642,12 @@ class glow1d_fluid():
         #self.weak_bc_ne = True
         du  = xp.zeros_like(u)
         for ts_idx in range(steps):
+          
+          # self.param.Teb0 , self.param.Teb1 = self.temperature_solve(u, tt, dt)
+          # self.param.ks0  , self.param.ks1  = self.param.mw_flux(self.param.Teb0), self.param.mw_flux(self.param.Teb1)
+          # print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
+          
+          
           def residual(du):
             u1       = u + du
             rhs, bc  = self.rhs(u1, tt + dt, dt) 

@@ -55,7 +55,7 @@ class parameters():
     self.Teb1  = self.Teb
     
     self.Tg    = 300.0
-    self.gamma = 0.0
+    self.gamma = 0.01
     self.alpha = self.np0 * self.L**2 * self.qe / (self.eps0 * self.V0)
     
     # self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))   

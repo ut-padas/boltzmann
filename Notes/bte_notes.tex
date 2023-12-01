@@ -1086,21 +1086,101 @@ The overall operator splitting scheme is summarized in Algorithm \ref{alg:1dglow
 		\State \Return $n_s(t + \Delta t, x), f_1, E(t+\Delta t)$ 
 	\end{algorithmic}
 \end{algorithm}
-
+\ \ 
+\newpage
 \subsection{Implicit-Explicit methods}
 In this section we explore implicit-explicit (IMEX) schemes for 1D glow discharge problem. Let's consider the ODE given by \eqref{eq:imex_ode}. Here $F$ and $G$ denotes the operators that handled explicitly and implicitly respectively. The implicit-explicit Runge-Kutta (IMEX-RK) scheme is given by \eqref{eq:imex_rk}.
 \begin{align}
-	&\dot{U} + F(U) + G(U) = 0 \label{eq:imex_ode}\\
-	&U^{i} = U^n + \Delta t \sum_{j=1}^{i-1} \hat{A}_{ij} F\of{U^j} + \Delta t \sum_{j=1}^{i} A_{ij} G\of{U^{j}} \\
-	&U^{n+1} = U^{n} + \Delta t \sum_{i=1}^{s} \hat{b}_i F\of{U^i} + \Delta t \sum_{i=1}^{s} b_i G\of{U^i} \label{eq:imex_rk}
+	&\partial_t U = F(t, U) + G(t, U) \label{eq:imex_ode}\\
+	&k_{i} = F(t_n + \hat{c}_i \Delta t, U^n + \Delta t \sum_{j=1}^{i-1} \hat{A}_{ij} F\of{U^j}) + G(t_n + c_i \Delta t, U^n + \Delta t \sum_{j=1}^{s} A_{ij} G\of{U^j}) \\%\Delta t \sum_{j=1}^{i} A_{ij} G\of{U^{j}} \\
+	&U^{n+1} = U^{n} + \Delta t \sum_{i=1}^{s} \hat{b}_i k_i + \Delta t \sum_{i=1}^{s} b_i k_i \label{eq:imex_rk}
 \end{align}
-For 1D glow discharge problem, we can treat x-space advection implicitly with all the other terms are treated explicitly. 
+For 1D glow discharge problem, we can use the following IMEX scheme. 
 \begin{align}
-	&\partial_t n_s + \underbrace{\nabla \cdot \vect{J_s}}_{\text{implicit}} = \underbrace{S(f, n_0)}_{explicit}\\
-	&\partial_t f    + \underbrace{\cos(\vtheta) A_x \partial_x f}_{\text{implicit}} = \underbrace{C(f, T_g, n_s) + A_v f}_{explicit} \\
-	&E = \frac{e}{\epsilon} (n_i - n_e)
+	&\partial_t n_s  = S(f,n_0) - \nabla \cdot \vect{J_s} \text{ implicit with } E = -\nabla\of{\Delta^{-1}\of{\frac{e}{\epsilon} (n_i - n_e)}} \\
+	&\partial_t f    +  \cos(\vtheta) A_x \partial_x f = 0 \text{ analytically solved}\\  
+	&\partial_t f    = \underbrace{E A_v f}_{\text{explicit}} + \underbrace{C(f, T_g, n_s)}_{\text{implicit}}
 \end{align}
-In the above, we get a decoupled system that where the operators can be inverted during the setup phase. 
+For time independent $n_0$, $T_g$ and avoiding Coulomb collisions, $C(f, T_g, n_s) = n_0 \of{C_{en} + T_g C_{gT}}$. 
+
+\subsection{Semi-Lagrangian approach}
+In this section, we explore the semi-Lagrangian approach for the 1D Boltzmann equation. We write the Boltzmann equation in the full phase space as \eqref{eq:bte}, where $C$ denotes the collision kernel. 
+\begin{align}
+	\partial_t f + \of{v\cos(\vtheta), -\frac{q_e E}{m_e}} \cdot \begin{bmatrix}
+		\nabla_{\vect{x}} f \\
+		\nabla_{\vect{v}} f
+	\end{bmatrix} = Cf \label{eq:bte}
+\end{align}
+The semi-Lagrange scheme for the above, can be written as follows. 
+\begin{align}
+	\frac{f^{n+1} - f(\vect{x}_{AP}, \vect{v}_{AP})}{\Delta t} = Cf^{n+1}
+\end{align} where $\vect{x}_{AP}$ and $\vect{v}_{AP}$ denotes the solution at arrival point (AP) computed from semi-Lagrangian (SL) advection. Let $f^{n}(x,v,\vtheta)$ be the solution at $t=t_n$. Then the solution at $f(\vect{x}_{AP}, \vect{v}_{AP})$ can be written as \eqref{eq:sl_adv}. %Let $\{x_i\}_{i=1}^{N_p}$, $\{v_i\}_{i=1}^{N_r}$, and $\{\vtheta_i\}_{i=1}^{N_\theta}$ be the grid used for SL advection.
+\begin{align}
+	f(x, v, \vtheta) = f_0(x-v\cos\of{\vtheta} \Delta t, v^\prime\of{v, \vtheta, E, \Delta t}, \vtheta^\prime \of{v, \vtheta, E, \Delta t} ) \label{eq:sl_adv}
+\end{align} where $v^\prime$ and $\vtheta^\prime$ is given bellow.  
+\begin{align}
+&v^\prime\of{v, \vtheta, E, \Delta t} = \of{v^2 + 2v cos\of{\vtheta} \frac{q_e E}{m_e}\Delta t +  \of{\frac{q_e E}{m_e}\Delta t}^2 }^{1/2} \\
+&\cos\of{\vtheta^\prime}  =  \frac{v\cos\of{\vtheta} + \frac{q_e E}{m_e} \Delta t}{v^\prime}
+\end{align} For the 1D glow discharge problem azimuthal symmetry is preserved. Therefore, we use $m=0$ mode in spherical expansion. 
+\begin{align}
+	&f_0(x, v, \vtheta) = \sum_{kl} f^{0}_{kl}\of{x} B_k\of {\frac{v}{v_{th}}} Y_{l0}\of{\vtheta} \\
+	&f(x, v, \vtheta)    = \sum_{kl} f^{0}_{kl}\of{x-v\cos\of{\vtheta}\Delta t} B_k\of {\frac{v^\prime}{v_{th}}} Y_{l0}\of{\vtheta^\prime} = \sum_{kl} f_{kl}(x) B_k\of{\frac{v}{v_{th}}} Y_{l0}\of{\vtheta}
+\end{align} We need to find the $f_{kl}$ coefficients from $f^{0}_{kl}$. The above can be computed as \eqref{eq:sl_advection}, where $M^{pq}_{kl}$ denotes the mass matrix of the projection. 
+\begin{align}
+	M^{pq}_{kl} f_{kl}(x) &= w_{pq} = \int_{\vect{v}} B_p\of{\frac{v}{v_{th}}} Y_q\of{\vtheta} \sum_{kl} f^{0}_{kl}\of{x-v\cos\of{\vtheta}\Delta t} B_k\of {\frac{v^\prime}{v_{th}}} Y_{l0}\of{\vtheta^\prime} \diff{\vect{v}} \label{eq:sl_advection}
+\end{align}
+The following approximations are useful for precomputing the SL advection operators. 
+\begin{align}
+&f^{0}_{kl}\of{x-v\cos\of{\vtheta}\Delta t} \approx f^{0}_{kl}(x) - \gamma \partial_x f^{0}_{kl}(x), \gamma=\bar{v} v_{th} \cos\of{\vtheta}\Delta t\\
+&\bar{v}^\prime = \of{\bar{v} + 2\bar{v} \cos\of{\vtheta} \alpha + \alpha^2}^{1/2} \text{, } \alpha = \frac{q_e E \Delta t}{m_e v_{th}} \text{ , } \bar{v} = \frac{v}{v_{th}}\\
+&\approx \bar{v} + \alpha \cos\of{\vtheta} \nonumber \\
+&\vtheta^\prime  = \vtheta + \beta \implies \cos\of{\vtheta^\prime} = \frac{\bar{v}\cos\of{\vtheta} + \alpha}{\bar{v}^\prime} \approx \cos\of{\vtheta} - \sin\of{\vtheta} \beta \\
+&\beta = -\frac{\alpha \sin\of{\vtheta}}{\bar{v} + \alpha \cos\of{\vtheta}} \text{ hence } \vtheta^\prime = \vtheta - \frac{\alpha \sin\of{\vtheta}}{\bar{v} + \alpha \cos\of{\vtheta}}
+\end{align} Using all the approximations above we can simplify the $w_{pq}$ as \eqref{eq:wpq_approx}.
+\begin{align}
+&w_{pq} \approx \of{{}_1P^{pq}_{kl} + {}_3P^{pq}_{kl} + {}_5P^{pq}_{kl} + {}_7P^{pq}_{kl}} f^{0}_{kl} -\of{{}_2P^{pq}_{kl} + {}_4P^{pq}_{kl} + {}_6P^{pq}_{kl} + {}_8P^{pq}_{kl}} \partial_x f^{0}_{kl} \label{eq:wpq_approx}
+\end{align} where the operators used are defined below. 
+\begin{align}
+	{}_1P^{pq}_{kl} = \int_{\vect{v}} B_p\of{\bar{v}} Y_{q0}\of{\vtheta} B_k\of{\bar{v}} Y_{l0}\of{\vtheta} \diff{\vect{v}}\\
+	{}_2P^{pq}_{kl} = \int_{\vect{v}} \gamma B_p\of{\bar{v}} Y_{q0}\of{\vtheta} B_k\of{\bar{v}} Y_{l0}\of{\vtheta} \diff{\vect{v}}\\
+	{}_3P^{pq}_{kl}	= \int_{\vect{v}} \beta  B_p\of{\bar{v}} Y_{q0}\of{\vtheta} B_k\of{\bar{v}} \partial_{\vtheta}Y_{l0}\of{\vtheta} \diff{\vect{v}}\\
+    {}_4P^{pq}_{kl}	= \int_{\vect{v}} \beta \gamma B_p\of{\bar{v}} Y_{q0}\of{\vtheta} B_k\of{\bar{v}} \partial_{\vtheta}Y_{l0}\of{\vtheta} \diff{\vect{v}}\\
+    {}_5P^{pq}_{kl} = \int_{\vect{v}} \alpha \cos\of{\vtheta} B_p\of{\bar{v}} Y_{q0}\of{\vtheta} \partial_{\bar{v}} B_k\of{\bar{v}} Y_{l0}\of{\vtheta} \diff{\vect{v}}\\
+    {}_6P^{pq}_{kl} = \int_{\vect{v}} \alpha \cos\of{\vtheta} \gamma B_p\of{\bar{v}} Y_{q0}\of{\vtheta} \partial_{\bar{v}} B_k\of{\bar{v}} Y_{l0}\of{\vtheta} \diff{\vect{v}}\\
+    {}_7P^{pq}_{kl} = \int_{\vect{v}} \alpha \beta \cos\of{\vtheta} B_p\of{\bar{v}} Y_{q0}\of{\vtheta} \partial_{\bar{v}} B_k\of{\bar{v}} \partial_{\vtheta}Y_{l0}\of{\vtheta} \diff{\vect{v}}\\
+    {}_8P^{pq}_{kl} = \int_{\vect{v}} \alpha \beta \cos\of{\vtheta} \gamma B_p\of{\bar{v}} Y_{q0}\of{\vtheta} \partial_{\bar{v}} B_k\of{\bar{v}} \partial_{\vtheta}Y_{l0}\of{\vtheta} \diff{\vect{v}}
+\end{align}
+The approximation errors goes to as $\Delta t \rightarrow 0$. Therefore, it is crucial to select $\Delta t$ such that $\alpha, \beta, \gamma \leq \varepsilon$ where $\varepsilon$ is a user-specified parameter. 
+\begin{align*}
+	|\alpha| \leq \varepsilon \implies \Delta t \leq \frac{\varepsilon m_e v_{th}}{q_e |E|_{max}}\\
+	|\gamma| \leq \varepsilon \implies \Delta t \leq \frac{\varepsilon}{v_{max} \cos\of{\vtheta}} \text{ therefore }\\
+	\Delta t \leq \min\of{\frac{\varepsilon m_e v_{th}}{q_e |E|_{max}}, \frac{\varepsilon}{v_{max} \cos\of{\vtheta}}}
+\end{align*}
+
+
+
+
+
+
+
+%$\vect{v}_{AP} = \vect{v}_{DP} + \frac{q_e E}{m_e} \Delta t$ where $\vect{v}_{DP}$ denotes the departure point.  
+%\begin{align}
+%	\vect{v}_{DP} (t) = \int_{R^3} \vect{v} f(t, \vect{v}) d \vect{v}
+%\end{align} For $\vect{x}$ advection, we use the diagolization of A where, $A=Q_A \Lambda_A Q_A^{-1}$. Let $h = Q_{A}^{-1}f$ then we can write the Lagrangian advection \eqref{eq:bte_x_adv_q1}.
+%\begin{align}
+%h(\Delta t,\vect{x}_{AP}) = h_0(\vect{x}_{AP} - \Lambda\cos(\vect{\vtheta}) \Delta t) \label{eq:bte_x_adv_q1}
+%\end{align}. For the v-space advection we can write the Galerkin projection operators as \eqref{eq:projection}
+%\begin{align*}
+%	P = M^{-1} K \text{ where } K_{klm}^{pqs} = \int_{\vect{V}} B_k\of{v_r} Y_{lm}\of{\vtheta, \vphi} B_p\of{v_r^\prime} Y_{qs}\of{\vtheta^\prime, \vphi^\prime} d \vect{v} \label{eq:projection}
+%\end{align*} where $\vect{v}= \{v_r, \vtheta, \vphi\}$ and $\vect{v}_{AP}=\{v_r^\prime, \vtheta^\prime, \vphi^\prime\}$.
+
+
+
+
+
+
+
+
 
 
 

@@ -190,8 +190,8 @@ class glow1d_fluid():
       Ji[0]   = self.Zp[ion_idx] * mu_i[0]  * ni[0]  * E[0]
       Ji[-1]  = self.Zp[ion_idx] * mu_i[-1] * ni[-1] * E[-1]
       
-      self.param.Teb0 = nTe[0]/ne[0]
-      self.param.Teb1 = nTe[-1]/ne[-1]
+      Teb0_g = nTe[0]/ne[0]
+      Teb1_g = nTe[-1]/ne[-1]
       
       def res(Te_bdy, xloc):
         nTe[:]    = Uin[:, Te_idx]
@@ -209,11 +209,11 @@ class glow1d_fluid():
       # sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (self.param.Teb1 * 0  , 10 * self.param.Teb1), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
       
       try:
-        sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (self.param.Teb0 * 0  , 10 * self.param.Teb0), xtol=1e-4, rtol=1e-4, maxiter=50)
+        sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (Teb0_g * (0.9)  , 1.1 * Teb0_g), xtol=1e-4, rtol=1e-4, maxiter=50)
         T0   = sol0.root
       except:
-        print("left boundary temperature solve failed")
-        T0   = 1e-10
+        T0   = Teb0_g
+        print("left boundary temperature solve failed setting T0=%.8E, res(T0)=%.8E\n"%(T0, res(T0, 0)))
         
         # Te  = xp.linspace(0,100,100)
         # fTe = xp.array([res(Te[i], -1) for i in range(len(Te))])
@@ -224,11 +224,12 @@ class glow1d_fluid():
         
       
       try:
-        sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (self.param.Teb1 * 0  , 10 * self.param.Teb1), xtol=1e-4, rtol=1e-4, maxiter=50)
+        sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (Teb1_g * 0.9  , 1.1 * Teb1_g), xtol=1e-4, rtol=1e-4, maxiter=50)
         T1   = sol1.root
       except:
-        print("right boundary temperature solve failed")
-        T1   = 1e-10
+        T1   = Teb1_g
+        print("right boundary temperature solve failed setting T1=%.8E, res(T1)=%.8E\n"%(T1, res(T1, -1)))
+        
         
         # Te  = xp.linspace(0,100,100)
         # fTe = xp.array([res(Te[i], -1) for i in range(len(Te))])
@@ -693,7 +694,7 @@ class glow1d_fluid():
           if (self.args.bc_dirichlet_e == 0):
             self.param.Teb0 , self.param.Teb1 = self.temperature_solve(u, tt, dt)
             self.param.ks0  , self.param.ks1  = self.param.mw_flux(self.param.Teb0), self.param.mw_flux(self.param.Teb1)
-            #print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
+            print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
           
           cycle_avg_u[:, self.ele_idx] += u[:, self.ele_idx]
           cycle_avg_u[:, self.ion_idx] += u[:, self.ion_idx]

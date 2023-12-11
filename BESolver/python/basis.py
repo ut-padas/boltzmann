@@ -257,7 +257,7 @@ class Laguerre(Basis):
 
 class BSpline(Basis):
     
-    def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=list(), knots_vec=None, dg_splines=False, verbose=True, extend_domain=False):
+    def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=list(), knots_vec=None, dg_splines=False, verbose=True, extend_domain=False, extend_domain_with_log=False):
         self._basis_type = BasisType.SPLINES
         self._domain     = k_domain
         self._window     = k_domain
@@ -271,9 +271,11 @@ class BSpline(Basis):
                 else:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots_1(k_domain, num_p, spline_order,sig_pts)
             else:
-                if extend_domain==True:
-                    self._t     = BSpline.uniform_knots((k_domain[0], 1.2 * k_domain[1]), num_p, spline_order) 
-                    #self._t      = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 4 * k_domain[1])
+                if extend_domain == True:
+                    self._t     = BSpline.uniform_knots((k_domain[0], 1.2 * k_domain[1]), num_p, spline_order)
+                elif extend_domain_with_log == True:
+                    self._t     = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = 10 * k_domain[1])
+                    #self._t       = BSpline.logspace_knots(k_domain, num_p, spline_order, 1e-3, base=2)
                 else:
                     self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
                 self._ele    = 1
@@ -604,7 +606,7 @@ class BSpline(Basis):
         # t          = np.append(t,glx)
         # t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
 
-        num_p1     = 8 * (num_p //10)
+        num_p1     = 5 * (num_p //10)
         num_p2     = num_p -num_p1
 
         t          = (k_domain[0])*np.ones(sp_order)

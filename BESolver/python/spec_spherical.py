@@ -372,7 +372,7 @@ class SpectralExpansionSpherical:
             num_l  = len(lmodes)
             l_max  = lmodes[-1]
             
-            [gx_e, gw_e] = self._basis_p.Gauss_Pn((sp_order + 2) * self._basis_p._num_knot_intervals)
+            [gx_e, gw_e] = self._basis_p.Gauss_Pn((sp_order + 2) * 2 * self._basis_p._num_knot_intervals)
             
             mm1=np.zeros((num_p,num_p))
             mm2=np.zeros((num_p,num_p))

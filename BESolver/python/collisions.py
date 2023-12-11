@@ -76,12 +76,12 @@ class Collisions(abc.ABC):
         if self._cs_interp_type == CollisionInterpolationType.USE_BSPLINE_PROJECTION:
             sp_order        = 3
             num_p           = 128
-            k_domain        = (self._energy[0], self._energy[-1]) 
+            k_domain        = (self._energy[0], self._energy[-1] + 1e-10) 
             k_vec           = basis.BSpline.logspace_knots(k_domain, num_p, sp_order, 0.5 *(self._energy[1] + self._energy[0]) , base=2)
             bb              = basis.BSpline(k_domain, sp_order, num_p, sig_pts=None, knots_vec=k_vec, dg_splines=0, verbose=False)
             
             num_intervals   = bb._num_knot_intervals
-            q_pts           = (2 * sp_order + 1)
+            q_pts           = (2 * sp_order + 1) * 2
             gx, gw          = basis.Legendre().Gauss_Pn(q_pts)
 
             mm_mat    = np.zeros((num_p, num_p))  
@@ -114,14 +114,14 @@ class Collisions(abc.ABC):
 
         # import matplotlib.pyplot as plt
         # fig=plt.figure(figsize=(20,20), dpi=300)
-        # plt.loglog(np_data[0], np_data[1],'r-*',label=r"tabulated"                               ,linewidth=1, markersize=0.5)
-        # plt.loglog(np_data[0], self.total_cross_section(np_data[0]),'b--^', label=r"interpolated",linewidth=1, markersize=0.5)
+        # plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated")
+        # plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated")
         
         # plt.legend()
         # plt.grid(visible=True)
         # plt.xlabel(r"energy (eV)")
         # plt.ylabel(r"cross section ($m^2$)")
-        # plt.savefig("col_%s.svg"%(self._col_name))
+        # plt.savefig("col_%s.png"%(self._col_name))
         # plt.close()
 
         return

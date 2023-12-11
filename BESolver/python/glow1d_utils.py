@@ -6,6 +6,8 @@ import scipy.constants
 #from multiprocess import Pool as WorkerPool
 from multiprocessing.pool import ThreadPool as WorkerPool
 import scipy.sparse.linalg as spla
+import cupyx.scipy.sparse.linalg
+import scipy.sparse.linalg
 try:
   import cupy as cp
 except ImportError:

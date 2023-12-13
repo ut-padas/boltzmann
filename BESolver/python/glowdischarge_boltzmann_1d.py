@@ -613,10 +613,10 @@ class glow1d_boltzmann():
     def initialize_bte_adv_x(self, dt):
       """initialize spatial advection operator"""
       xp = self.xp_module
-      assert xp == np
+      #assert xp == np
       
       self.bte_x_shift      = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
-      self.bte_x_shift_rmat = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
+      #self.bte_x_shift_rmat = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
       DpL = xp.zeros((self.Np, self.Np))
       DpR = xp.zeros((self.Np, self.Np))
 
@@ -636,8 +636,8 @@ class glow1d_boltzmann():
             self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
             #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
         
-      #self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
-      self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
+      self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
+      #self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
       
       # v1 = -self.xp**2 + 1.2
       # plt.figure(figsize=(10,4), dpi=300)
@@ -788,8 +788,6 @@ class glow1d_boltzmann():
         
         self.op_psh2o       = cp.asarray(self.op_psh2o)
         self.op_po2sh       = cp.asarray(self.op_po2sh)
-        self.bte_x_shift    = cp.asarray(self.bte_x_shift)
-        #self.bte_x_shift_rmat= cp.asarray(self.bte_x_shift_rmat)
         self.op_col_en      = cp.asarray(self.op_col_en)
         self.op_col_gT      = cp.asarray(self.op_col_gT)
         
@@ -831,8 +829,6 @@ class glow1d_boltzmann():
         
         self.op_psh2o       = cp.asnumpy(self.op_psh2o)
         self.op_po2sh       = cp.asnumpy(self.op_po2sh)
-        self.bte_x_shift    = cp.asnumpy(self.bte_x_shift)
-        #self.bte_x_shift_rmat= cp.asnumpy(self.bte_x_shift_rmat)
         self.op_col_en      = cp.asnumpy(self.op_col_en)
         self.op_col_gT      = cp.asnumpy(self.op_col_gT)
         
@@ -1394,14 +1390,12 @@ class glow1d_boltzmann():
       tt              = 0
       
       dt              = self.args.cfl 
-      dt_bte          = self.args.cfl #* self.ts_op_split_factor
-      dt_fluid        = self.args.cfl #/10
+      # dt_bte          = self.args.cfl 
+      # dt_fluid        = self.args.cfl 
       
-      bte_steps       = int(dt/dt_bte)
-      fluid_steps     = int(dt/dt_fluid)
+      # bte_steps       = int(dt/dt_bte)
+      # fluid_steps     = int(dt/dt_fluid)
       steps           = max(1,int(tT/dt))
-      
-      self.initialize_bte_adv_x(dt_bte * 0.5)
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       
       if self.args.use_gpu == 1: 
@@ -1439,7 +1433,7 @@ class glow1d_boltzmann():
         print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
         
       if(self.ts_type_bte_v == "IMEX"):
-        lmat = self.I_Nv - dt_bte * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT)
+        lmat = self.I_Nv - dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT)
         self.bte_imex_lmat_inv = xp.linalg.inv(lmat)
       else:
         self.bte_imex_lmat_inv = None
@@ -1451,7 +1445,8 @@ class glow1d_boltzmann():
         self.ns_imex_lmat_inv = xp.linalg.inv(lmat)
       else:
         self.ns_imex_lmat_inv = None
-        
+      
+      self.initialize_bte_adv_x(dt * 0.5)
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
@@ -1495,7 +1490,6 @@ class glow1d_boltzmann():
       tt              = 0
       steps           = max(1,int(tT/dt))
       
-      self.initialize_bte_adv_x(dt)
       print("++++ Using backward Euler ++++")
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       
@@ -1534,6 +1528,8 @@ class glow1d_boltzmann():
         ts_idx_b = int(args.rs_idx * io_freq)
         tt  = ts_idx_b * dt
         print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+      
+      self.initialize_bte_adv_x(dt)
       for ts_idx in range(ts_idx_b,steps):
         du[:,:]=0
         dv[:,:]=0
@@ -1551,78 +1547,6 @@ class glow1d_boltzmann():
       return u, v
     
     def solve_unit_test2(self, Uin, Vin):
-      """_summary_ This will test the advection effects in the full phase space, no ions involved
-      E can be specified to be constant or oscillatory field. 
-
-      Args:
-          Uin (_type_): _description_
-          Vin (_type_): _description_
-      """
-      
-      dt              = self.args.cfl 
-      tT              = self.args.cycles
-      tt              = 0
-      steps           = max(1,int(tT/dt))
-      
-      self.initialize_bte_adv_x(dt)
-      print("++++ Using backward Euler ++++")
-      print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
-      
-      if self.args.use_gpu == 1: 
-        Uin1 = cp.asarray(Uin)
-        Vin1 = cp.asarray(Vin)
-      else:
-        Uin1 = Uin
-        Vin1 = Vin
-      
-      if self.args.use_gpu==1:
-        self.copy_operators_H2D(args.gpu_device_id)
-        self.xp_module = cp
-      else:
-        self.xp_module = np
-        
-      xp             = self.xp_module
-      
-      u = xp.copy(Uin1)
-      v = xp.copy(Vin1)
-      
-      du    = xp.zeros_like(u)
-      dv    = xp.zeros_like(v)
-      dv_lm = xp.zeros((self.dof_v, self.Np))
-      
-      io_freq  = 1000#int(1/dt)
-      
-      dg_qmat  = self.op_diag_dg
-      dg_qmatT = xp.transpose(self.op_diag_dg)
-      
-      self.bs_E = xp.zeros_like(self.xp)
-      ts_idx_b  = 0
-      if args.restore==1:
-        ts_idx_b = int(args.rs_idx * io_freq)
-        tt       = ts_idx_b * dt
-        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
-      
-      for ts_idx in range(ts_idx_b, steps):
-        du[:,:]=0
-        dv[:,:]=0
-        
-        if (ts_idx % io_freq == 0):
-          print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-          
-        if (ts_idx % io_freq == 0):
-          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, self.bs_E)
-          np.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
-          np.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
-        
-        v    = self.step_bte_x(v, tt, dt)
-        v_lm = xp.dot(self.op_po2sh, v)
-        v1   = xp.dot(self.op_psh2o, v_lm)
-        #print(tt, " @ abs = ", xp.linalg.norm(v1-v), "rel = ", (xp.linalg.norm(v1-v)/np.linalg.norm(v)))
-        v    = v1
-        tt+= dt
-      return u, v
-    
-    def solve_unit_test3(self, Uin, Vin):
       dt              = self.args.cfl
       dt_bte          = self.args.cfl #* self.ts_op_split_factor
       tT              = self.args.cycles
@@ -1630,7 +1554,6 @@ class glow1d_boltzmann():
       bte_steps       = int(dt/dt_bte)
       steps           = max(1,int(tT/dt))
       
-      self.initialize_bte_adv_x(dt_bte * 0.5)
       print("++++ Using backward Euler ++++")
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       
@@ -1684,7 +1607,7 @@ class glow1d_boltzmann():
       else:
         self.ns_imex_lmat_inv = None
         
-      
+      self.initialize_bte_adv_x(dt_bte * 0.5)
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
@@ -1693,8 +1616,8 @@ class glow1d_boltzmann():
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
           
         if (ts_idx % io_freq == 0):
-          #self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
-          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=False)
+          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
+          #self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=False)
           #xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
           #xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
         
@@ -2013,5 +1936,5 @@ if args.use_gpu==1:
   gpu_device.use()
 
 uu,vv   = glow_1d.solve(u, v)
-#uu,vv   = glow_1d.solve_unit_test3(u, v)
+#uu,vv   = glow_1d.solve_unit_test2(u, v)
 

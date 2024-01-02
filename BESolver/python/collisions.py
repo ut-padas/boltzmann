@@ -56,7 +56,8 @@ class Collisions(abc.ABC):
         self._sc_direction_mat            = None
         self._col_name                    = cross_section
         self._reaction_threshold          = 0.0
-        #self._cs_interp_type             = CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT
+        #self._cs_interp_type              = CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT
+        self._cs_extrapolate              = True # extrapolate cs as factor of ln(e)/e
         self._cs_interp_type              = CollisionInterpolationType.USE_BSPLINE_PROJECTION #CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT
         pass
     
@@ -112,17 +113,19 @@ class Collisions(abc.ABC):
             self._sigma_k = np.dot(mm_inv, b_rhs)
             self._bb      = bb  
 
-        # import matplotlib.pyplot as plt
-        # fig=plt.figure(figsize=(20,20), dpi=300)
-        # plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated")
-        # plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated")
+        import matplotlib.pyplot as plt
+        fig=plt.figure(figsize=(8,8), dpi=300)
+        plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated", markersize=0.3)
+        plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated", markersize=0.3)
+        ext_ev = np.logspace(-4, 4, 1000, base=10)
+        plt.loglog(ext_ev, self.total_cross_section(ext_ev),'g--^', label=r"interpolated + extended", markersize=0.3)
         
-        # plt.legend()
-        # plt.grid(visible=True)
-        # plt.xlabel(r"energy (eV)")
-        # plt.ylabel(r"cross section ($m^2$)")
-        # plt.savefig("col_%s.png"%(self._col_name))
-        # plt.close()
+        plt.legend()
+        plt.grid(visible=True)
+        plt.xlabel(r"energy (eV)")
+        plt.ylabel(r"cross section ($m^2$)")
+        plt.savefig("col_%s.png"%(self._col_name))
+        plt.close()
 
         return
 
@@ -212,14 +215,26 @@ class Collisions(abc.ABC):
         computes the total cross section based on the experimental data. 
         """
         if self._cs_interp_type == CollisionInterpolationType.USE_BSPLINE_PROJECTION:
-            bb    =  self._bb
-            num_p =  bb._num_p 
-            Vq = np.array([bb.Pn(p)(energy, 0) for p in range(num_p)]).reshape((num_p, len(energy)))
-            return np.abs(np.dot(self._sigma_k, Vq))
+            bb       =  self._bb
+            num_p    =  bb._num_p 
+            Vq       = np.array([bb.Pn(p)(energy, 0) for p in range(num_p)]).reshape((num_p, len(energy)))
+            total_cs = np.abs(np.dot(self._sigma_k, Vq))
+            if self._cs_extrapolate == True:
+                idx           = np.where(energy > self._energy[-1])[0]
+                if (len(idx)>0):
+                    idx0 = max(0, idx[0]-1)
+                    total_cs[idx] = total_cs[idx0] * (np.log(energy[idx]) / energy[idx]) / (np.log(energy[idx0]) / energy[idx0])
+            return total_cs
         elif self._cs_interp_type == CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT:
             return Collisions.synthetic_tcs(energy,self._col_name)  
         else:
-            return self._total_cs_interp1d(energy)
+            total_cs = self._total_cs_interp1d(energy)
+            if self._cs_extrapolate == True:
+                idx           = np.where(energy > self._energy[-1])[0]
+                if (len(idx)>0):
+                    idx0 = max(0, idx[0]-1)
+                    total_cs[idx] = total_cs[idx0] * (np.log(energy[idx]) / energy[idx]) / (np.log(energy[idx0]) / energy[idx0])
+            return total_cs
 
     @staticmethod
     def diff_cs_to_total_cs_ratio(energy,scattering_angle):

@@ -70,7 +70,7 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, scale=1.0):
         dg_idx       = spec_sp._basis_p._dg_idx
         sp_order     = spec_sp._basis_p._sp_order
 
-        gx_m , gw_m  = spec_sp._basis_p.Gauss_Pn((sp_order//2 + 2) * spec_sp._basis_p._num_knot_intervals)
+        gx_m , gw_m  = spec_sp._basis_p.Gauss_Pn(2 * (sp_order + 2) * spec_sp._basis_p._num_knot_intervals)
         MP_klm       = np.zeros(num_p * num_sh)
         sph_fac      = spec_sp.basis_eval_spherical(0,0,0,0) * 4 * np.pi
 
@@ -243,7 +243,7 @@ def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, scale=1.0):
         dg_idx       = spec_sp._basis_p._dg_idx
         sp_order     = spec_sp._basis_p._sp_order
 
-        gx_m , gw_m  = spec_sp._basis_p.Gauss_Pn((sp_order//2 + 3) * spec_sp._basis_p._num_knot_intervals)
+        gx_m , gw_m  = spec_sp._basis_p.Gauss_Pn(2 * (sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
         MP_klm       = np.zeros(num_p * num_sh)
         sph_fac      = spec_sp.basis_eval_spherical(0,0,0,0) * 4 * np.pi
 
@@ -781,7 +781,7 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_lis
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
 
-        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn((sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(3 * (sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
         c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
         cs_total = 0
         for g in g_list:
@@ -814,7 +814,7 @@ def mobility_op(spec_sp : spec_spherical.SpectralExpansionSpherical, mw, vth):
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
 
-        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn((sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(2 * (sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
 
         for p in range(num_p):
             qx_idx   = np.logical_and(gmx_a >= k_vec[p], gmx_a <= k_vec[p + sp_order + 1])
@@ -841,7 +841,7 @@ def diffusion_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
 
-        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn((sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(2 * (sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
         total_cs     = 0
         
         for g in g_list:

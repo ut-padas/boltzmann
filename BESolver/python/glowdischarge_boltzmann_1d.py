@@ -1411,8 +1411,6 @@ class glow1d_boltzmann():
       dg_qmat  = self.op_diag_dg
       dg_qmatT = xp.transpose(self.op_diag_dg)
       
-      self.bte_to_fluid(u, v, tt, dt) # bte to fluid
-      self.fluid_to_bte(u, v, tt, dt) # fluid to bte
       ts_idx_b  = 0 
       if args.restore==1:
         ts_idx_b = int(args.rs_idx * io_freq)
@@ -1445,6 +1443,17 @@ class glow1d_boltzmann():
           self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt)
           xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
           xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
+          
+          Vin_lm   = xp.dot(self.op_po2sh, v)
+          Vin_lm1  = self.bte_eedf_normalization(Vin_lm)
+          Vin_lm1  = xp.asnumpy(Vin_lm1)
+      
+          vth       = self.bs_vth
+          kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
+          ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6)
+          ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)    
+          ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
+          xp.save("%s_%04d_v_eedf.npy"%(args.fname, ts_idx//io_freq), ff_v)
         
         
         # second-order split scheme
@@ -1566,7 +1575,8 @@ class glow1d_boltzmann():
       dv    = xp.zeros_like(v)
       dv_lm = xp.zeros((self.dof_v, self.Np))
       
-      io_freq  = int(0.1/dt)
+      io_cycle = 0.1
+      io_freq  = int(io_cycle/dt)
       
       # dg_qmat  = self.op_diag_dg
       # dg_qmatT = xp.transpose(self.op_diag_dg)
@@ -1604,19 +1614,36 @@ class glow1d_boltzmann():
         self.ns_imex_lmat_inv = None
         
       self.initialize_bte_adv_x(dt_bte * 0.5)
+      cycle_avg_u=xp.zeros_like(u)
+      cycle_avg_v=xp.zeros_like(v)
+      
+      self.bte_to_fluid(u, v, tt, dt)
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
         #self.bs_E       = Et[ts_idx % 1000]  #xp.ones(len(self.xp)) * Emax * xp.sin(2* xp.pi * tt)
         self.bs_E        = Ex * xp.sin(2* xp.pi * tt)
-        if (ts_idx % io_freq == 0):
-          print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+        #cycle_avg_u += u
+        cycle_avg_v += v
           
         if (ts_idx % io_freq == 0):
-          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
-          #self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=False)
+          print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+          self.plot_unit_test1(u, v,           "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
           xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
           xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
+          
+          if ts_idx>ts_idx_b:
+            cycle_avg_v *= 0.5 * dt / io_cycle
+            self.plot_unit_test1(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
+            xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
+            xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
+            
+            cycle_avg_u[:,:] = 0
+            cycle_avg_v[:,:] = 0
+          else:
+            xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
+            xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
+            
           
           Vin_lm   = xp.dot(self.op_po2sh, v)
           Vin_lm1  = self.bte_eedf_normalization(Vin_lm)
@@ -1625,16 +1652,15 @@ class glow1d_boltzmann():
           vth       = self.bs_vth
           #ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
           kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
-          ev_range  = (self.ev_lim[0] + 0.1, (kx_max * vth/self.c_gamma)**2 - 0.1) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+          ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
           ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)    
           ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
           xp.save("%s_%04d_v_eedf.npy"%(args.fname, ts_idx//io_freq), ff_v)
-          
-          
         
-        v = self.step_bte(v, dv, tt, dt, None, 0)
+        v            = self.step_bte(v, dv, tt, dt, None, 0)
+        cycle_avg_v += v
         tt+= dt
-        
+        self.bte_to_fluid(u, v, tt, dt)
         
       return u, v
     
@@ -1668,11 +1694,7 @@ class glow1d_boltzmann():
       
       num_p   = self.op_spec_sp._p + 1
       num_sh  = len(self.op_spec_sp._sph_harm_lm)
-      
-      Vin_lm                   = xp.dot(self.op_po2sh, Vin)
-      Uin[:, ele_idx]          = xp.dot(self.op_mass[0::num_sh], Vin_lm[0::num_sh,:])
-      Uin[:, Te_idx]           = xp.dot(self.op_temp[0::num_sh], Vin_lm[0::num_sh,:])/Uin[:,ele_idx]
-      
+      Vin_lm  = xp.dot(self.op_po2sh, Vin)
       
       def asnumpy(a):
         if self.xp_module == cp:
@@ -1742,7 +1764,7 @@ class glow1d_boltzmann():
       vth       = self.bs_vth
       #ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
-      ev_range  = (self.ev_lim[0] + 0.1, (kx_max * vth/self.c_gamma)**2 - 0.1) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       print(ev_range)
       ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
       
@@ -1786,7 +1808,6 @@ class glow1d_boltzmann():
     def plot(self, Uin, Vin, fname, time):
       xp = self.xp_module
       fig= plt.figure(figsize=(26,10), dpi=300)
-      self.bte_to_fluid(Uin, Vin, time, self.args.cfl)
       
       def asnumpy(a):
         if self.xp_module == cp:
@@ -1856,7 +1877,7 @@ class glow1d_boltzmann():
       
       vth       = self.bs_vth
       kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
-      ev_range  = (self.ev_lim[0] + 0.1, (kx_max * vth/self.c_gamma)**2 - 0.1) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       #ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]-0.1) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       
       ev_grid   = np.linspace(ev_range[0], ev_range[1], 500)
@@ -2167,7 +2188,7 @@ if args.use_gpu==1:
   gpu_device = cp.cuda.Device(args.gpu_device_id)
   gpu_device.use()
 
-#uu,vv   = glow_1d.solve(u, v)
-uu,vv   = glow_1d.solve_unit_test2(u, v)
+uu,vv   = glow_1d.solve(u, v)
+#uu,vv   = glow_1d.solve_unit_test2(u, v)
 #uu,vv   = glow_1d.solve_unit_test3(u, v)
 

@@ -890,7 +890,11 @@ class glow1d_boltzmann():
       u[:, Te_idx]           = xp.dot(self.op_temp[0::num_sh], v_lm[0::num_sh,:])/u[:,ele_idx]
       
       v_lm1                  = self.bte_eedf_normalization(v_lm)
-      self.r_rates[:, ion_idx] = xp.dot(self.op_rate[1], v_lm1[0::num_sh,:]) * self.param.np0 * self.param.tau 
+      
+      if (len(self.op_rate) > 1):
+        self.r_rates[:, ion_idx] = xp.dot(self.op_rate[1], v_lm1[0::num_sh,:]) * self.param.np0 * self.param.tau
+      else:
+        self.r_rates[:, ion_idx] = 0.0
       
       # treat the negative values. 
       # self.r_rates[self.r_rates[:, ion_idx] <0, ion_idx]  = 0.0
@@ -1867,8 +1871,10 @@ class glow1d_boltzmann():
       Vin_lm1      = self.bte_eedf_normalization(Vin_lm)
       r_elastic    = asnumpy(xp.dot(self.op_rate[0], Vin_lm1[0::num_sh,:]))
       plt.semilogy(self.xp, r_elastic    , 'b', label="elastic")
-      r_ionization = asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
-      plt.semilogy(self.xp, r_ionization , 'r', label="ionization")
+      
+      if (len(self.op_rate) > 1):
+        r_ionization = asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
+        plt.semilogy(self.xp, r_ionization , 'r', label="ionization")
       
       plt.xlabel(r"x/L")
       plt.ylabel(r"rate coefficients ($m^3 s^{-1}$)")

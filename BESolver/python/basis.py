@@ -615,6 +615,16 @@ class BSpline(Basis):
         t          = np.append(t , np.logspace(np.log(k_domain[1])/np.log(lg_base), np.log(ext_kdomain)/np.log(lg_base), num_p2-sp_order,base = lg_base, endpoint=False))
         #t          = np.append(t , np.linspace(k_domain[1], ext_kdomain, num_p2-sp_order, endpoint=False)) 
         t          = np.append(t , ext_kdomain * np.ones(sp_order+1))
+        
+        # nr_list     = np.array([num_p2//2, num_p2//4,  num_p2//8,  0])
+        # nr_list[-1] = num_p2 - np.sum(nr_list)
+        # t1          = np.linspace(k_domain[1], ext_kdomain, len(nr_list) + 1)
+        
+        # for i in range(0, len(nr_list)-1):
+        #     t      = np.append(t , np.linspace(t1[i], t1[i+1], nr_list[i], endpoint=False))
+        
+        # t          = np.append(t , np.linspace(t1[-2], t1[-1], nr_list[-1] - sp_order, endpoint=False))
+        # t          = np.append(t , ext_kdomain * np.ones(sp_order+1))
 
         #print(len(t), num_p+sp_order+1)
         return t

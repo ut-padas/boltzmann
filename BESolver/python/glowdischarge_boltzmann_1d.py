@@ -159,7 +159,7 @@ class glow1d_boltzmann():
       Imat[0,0] = Imat[-1,-1] = 1.0
       self.I_Nx          = Imat
       self.I_Nv          = np.eye(self.dof_v)
-      self.I_Nxv_stacked = np.einsum('i,kl->ikl',np.ones_like(self.xp), self.I_Nv) 
+      self.I_Nxv_stacked = np.eye(self.dof_v)#np.einsum('i,kl->ikl',np.ones_like(self.xp), self.I_Nv) 
       
       # setting up the Boltzmann grid params
       
@@ -388,7 +388,8 @@ class glow1d_boltzmann():
                         mm_l[p,k] = np.dot((gmx**3) * b_p * b_k, gmw)
             return mm_l
       
-
+      t1 = perf_counter()
+      print("assembling collision operators")
       for col_idx in range(len(self.bs_coll_list)):
           g = self.bs_coll_list[col_idx]
           g.reset_scattering_direction_sp_mat()
@@ -418,7 +419,11 @@ class glow1d_boltzmann():
           else:
               print("%s unknown collision"%(col))
               sys.exit(0)
-          
+      t2 = perf_counter()
+      print("assembly = %.4E"%(t2-t1))
+      
+      t1 = perf_counter()
+      print("bte qoi op assembly")    
       self.op_sigma_m   = sigma_m
       
       self.op_mass      = bte_utils.mass_op(spec_sp, 1) #* maxwellian(0) * vth**3
@@ -433,7 +438,11 @@ class glow1d_boltzmann():
           rr_op[col_idx] = bte_utils.reaction_rates_op(spec_sp, [g], maxwellian, vth) 
           
       self.op_rate      = rr_op
-          
+      t2 = perf_counter()
+      print("assembly = %.4E"%(t2-t1))
+      
+      t1 = perf_counter()
+      print("assembling v-space advection op")
       if self.bs_use_dg == 1 : 
           adv_mat_v, eA, qA = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
           qA              = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
@@ -462,6 +471,9 @@ class glow1d_boltzmann():
       self.op_adv_x_d           = adv_x_d
       self.op_adv_x_q           = adv_x_q
       self.op_adv_x_qinv        = np.linalg.inv(adv_x_q)
+      
+      t2 = perf_counter()
+      print("assembly = %.4E"%(t2-t1))
       #print(self.op_adv_x_d)
       #plt.plot(self.op_adv_x_d)
       #plt.show()
@@ -1355,6 +1367,56 @@ class glow1d_boltzmann():
         rhs_explicit  =  u + dt * self.param.tau * self.bs_E * xp.dot(self.op_adv_v, u)
         return xp.dot(self.bte_imex_lmat_inv, rhs_explicit)
     
+    def step_bte_v1(self, u, du, time, dt, ts_type, verbose=0):
+      """
+      specialized case to handle spatially homogenous E fields. 
+      """
+      assert ts_type=="BE"
+      xp      = self.xp_module
+      
+      if PROFILE_SOLVERS==1:
+        if xp == cp:
+          cp.cuda.runtime.deviceSynchronize()
+        t1 = perf_counter()
+      
+      time    = time
+      dt      = dt
+      rhs     = self.rhs_bte_v
+      
+      rtol            = self.args.rtol
+      atol            = self.args.atol
+      iter_max        = self.args.max_iter
+      use_gmres       = True
+      
+      steps_cycle     = int(1/dt)
+      pmat_freq       = steps_cycle//50
+      step            = int(time/dt)
+      
+      cp.cuda.runtime.deviceSynchronize()
+      a_t1 = perf_counter()
+      
+      E               = self.bs_E
+      assert (E[0]==E).all()==True, "E field is not spatially homogenous"
+      E               = self.bs_E[0]
+      
+      dof_v           = self.dof_v
+      Imat            = self.I_Nv
+      
+      Jmat            = self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) + self.param.tau * E * self.op_adv_v
+      Lmat            = Imat -dt * Jmat
+      
+      cp.cuda.runtime.deviceSynchronize()
+      a_t2 = perf_counter()
+      
+      cp.cuda.runtime.deviceSynchronize()
+      s_t1 = perf_counter()
+      v = xp.dot(xp.linalg.inv(Lmat), u)
+      cp.cuda.runtime.deviceSynchronize()
+      s_t2 = perf_counter()
+      norm_res = xp.linalg.norm(xp.dot(Lmat, v) - u) / xp.linalg.norm(u.reshape(-1))
+      print("%08d Boltzmann step time = %.6E op. assembly =%.6E solve = %.6E res=%.12E"%(step, time, (a_t2-a_t1), (s_t2-s_t1), norm_res))
+      return v
+    
     def step_bte(self, u, du, time, dt, ts_type, verbose=0):
       xp     = self.xp_module
       tt_bte = time
@@ -1638,6 +1700,7 @@ class glow1d_boltzmann():
           
           if ts_idx>ts_idx_b:
             cycle_avg_v *= 0.5 * dt / io_cycle
+            self.bte_to_fluid(cycle_avg_u, cycle_avg_v, tt, dt)
             self.plot_unit_test1(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
             xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
             xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
@@ -1656,12 +1719,28 @@ class glow1d_boltzmann():
           vth       = self.bs_vth
           #ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
           kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
-          ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+          #ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+          ev_range  = (self.ev_lim[0], self.ev_lim[1] * 4) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
           ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)    
           ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
           xp.save("%s_%04d_v_eedf.npy"%(args.fname, ts_idx//io_freq), ff_v)
         
-        v            = self.step_bte(v, dv, tt, dt, None, 0)
+        #v            = self.step_bte(v, dv, tt, dt, None, 0)
+        
+        # # First order splitting
+        # v       = self.step_bte_x(v, tt_bte, dt_bte)
+        # v_lm    = xp.dot(self.op_po2sh,v)
+        # v_lm    = self.step_bte_v(v_lm, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
+        # v       = xp.dot(self.op_psh2o,v_lm)
+        # v[v<0]  = 0
+        
+        # Strang-Splitting
+        v       = self.step_bte_x(v, tt, dt_bte * 0.5)
+        v_lm    = xp.dot(self.op_po2sh,v)
+        v_lm    = self.step_bte_v1(v_lm, None, tt, dt_bte, self.ts_type_bte_v , 0)
+        v       = xp.dot(self.op_psh2o,v_lm)
+        v       = self.step_bte_x(v, tt + 0.5 * dt_bte, dt_bte * 0.5)
+        
         cycle_avg_v += v
         tt+= dt
         self.bte_to_fluid(u, v, tt, dt)
@@ -1756,8 +1835,9 @@ class glow1d_boltzmann():
       plt.semilogy(self.xp, r_elastic    , 'b', label="elastic")
       
       if plot_ionization:
-        r_ionization = asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
-        plt.semilogy(self.xp, r_ionization , 'r', label="ionization")
+        if (len(self.op_rate) > 1):
+          r_ionization = asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
+          plt.semilogy(self.xp, r_ionization , 'r', label="ionization")
       
       plt.xlabel(r"x/L")
       plt.ylabel(r"rate coefficients ($m^3 s^{-1}$)")
@@ -1768,7 +1848,8 @@ class glow1d_boltzmann():
       vth       = self.bs_vth
       #ev_range  = (self.ev_lim[0] + 0.1, self.ev_lim[1]) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
-      ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      #ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_range  = (self.ev_lim[0], self.ev_lim[1] * 4) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       print(ev_range)
       ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
       

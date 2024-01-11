@@ -781,7 +781,7 @@ def reaction_rates_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_lis
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
 
-        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(3 * (sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
         c_gamma  = np.sqrt(2*scipy.constants.e / scipy.constants.m_e)
         cs_total = 0
         for g in g_list:
@@ -841,7 +841,7 @@ def diffusion_op(spec_sp : spec_spherical.SpectralExpansionSpherical, g_list, mw
         dg_idx     = spec_sp._basis_p._dg_idx
         sp_order   = spec_sp._basis_p._sp_order
 
-        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(2 * (sp_order + 3) * spec_sp._basis_p._num_knot_intervals)
+        gmx_a, gmw_a = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
         total_cs     = 0
         
         for g in g_list:

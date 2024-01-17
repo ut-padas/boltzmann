@@ -1289,14 +1289,25 @@ class glow1d_boltzmann():
             pc_emat_idx.append((0, idx))
             
           for i in range(1, len(pcEval)):
-            idx = xp.logical_and(E >= pcEval[i-1], E < pcEval[i])
+            idx = xp.logical_and(pcEval[i-1]<=E, E<pcEval[i])
             if ((idx==True).any()==True):
               pc_emat_idx.append((i, idx))
           
-          idx = (E >= pcEval[-1])
+          idx = (pcEval[-1]<=E)
           if ((idx==True).any()==True):
-            pc_emat_idx.append((len(pcEval)+1, idx))
+            print(E[idx], pcEval[-1])
+            pc_emat_idx.append((len(pcEval), idx))
             
+          len_vec = np.array([len(idx[1]) for idx_id, idx in enumerate(pc_emat_idx)], dtype=xp.int32)
+          px = xp.zeros((len(pc_emat_idx), pcEmat.shape[2], np.max(len_vec)))
+          pcEmatActive = list()
+          for idx_id, idx in enumerate(pc_emat_idx):
+            pcEmatActive.append(pcEmat[idx[0]])
+          pcEmatActive = xp.array(pcEmatActive) 
+          
+          # num_gpu_streams = 4
+          # cuda_stream     = [xp.cuda.Stream() for i in range(num_gpu_streams)] 
+          
           # print(E)
           # for idx_id, idx in enumerate(pc_emat_idx):
           #     if idx_id>0 and idx_id<len(pc_emat_idx)-1:
@@ -1316,7 +1327,16 @@ class glow1d_boltzmann():
             x      = x.reshape((self.dof_v, self.Np))
             y      = xp.dot(self.PmatC, x)
             
-            for idx in pc_emat_idx:
+            # px[:,:, :] = 0.0
+            # for idx_id, idx in enumerate(pc_emat_idx):
+            #   px[idx_id, : , idx[1]] = xp.transpose(y[:,idx[1]])
+              
+            # wx = xp.einsum("ijk,ikm->ijm", pcEmatActive, px)
+            
+            # for idx_id, idx in enumerate(pc_emat_idx):
+            #   y[:,idx[1]] = xp.transpose(wx[idx_id, : , idx[1]])
+            
+            for idx_id, idx in enumerate(pc_emat_idx):
               y[:, idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
             
             return y.reshape((-1))
@@ -1325,7 +1345,7 @@ class glow1d_boltzmann():
           Ndof      = self.dof_v * self.Np
           Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
           Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
-          v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=1e-10/norm_b, atol=None, M=Mmat_op, maxiter=100)
+          v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=rtol/norm_b, atol=atol, M=Mmat_op, maxiter=1000)
           
           norm_res_abs  = xp.linalg.norm(Lmat_mvec(v) -  u.reshape((-1)))
           norm_res_rel  = xp.linalg.norm(Lmat_mvec(v) -  u.reshape((-1))) / norm_b
@@ -1540,18 +1560,26 @@ class glow1d_boltzmann():
       else:
         self.ns_imex_lmat_inv = None
       
-      num_pc_evals  = 10
-      ep            = xp.logspace(2,5, num_pc_evals//2, base=10)
+      num_pc_evals  = 50
+      ep            = xp.logspace(2, 6, num_pc_evals//2, base=10)
       self.Evals    = -xp.flip(ep)
       self.Evals    = xp.append(self.Evals,ep)
       self.PmatC    = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT))
       self.PmatE    = list()
       
-      self.PmatE.append(xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v))
+      emat = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v)
+      self.PmatE.append(emat)
+      
       for i in range(1, num_pc_evals):
-        self.PmatE.append(xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v))
-      self.PmatE.append(xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v))
+        emat = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v)
+        self.PmatE.append(emat)
+      
+      emat = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v)
+      self.PmatE.append(emat)
+      self.PmatE = xp.array(self.PmatE)
+      
       assert len(self.PmatE) == num_pc_evals + 1
+      assert len(self.Evals) == num_pc_evals
       print(self.Evals)
       
       self.initialize_bte_adv_x(dt * 0.5)
@@ -1708,7 +1736,7 @@ class glow1d_boltzmann():
       #self.bs_E       = 400 * xp.sin(2 * xp.pi * xp.asarray(self.xp)) #-xp.ones(len(self.xp)) * 400
       Emax             = 1e4
       Ex               = Emax * xp.ones_like(self.xp) #xp.asarray(self.xp)**7
-      # self.bs_E       = xp.ones(len(self.xp)) * Emax
+      # self.bs_E        = xp.ones(len(self.xp)) * Emax
       
       # Et = xp.zeros((1000, self.Np))
       # for i in range(1000):
@@ -1737,19 +1765,20 @@ class glow1d_boltzmann():
       else:
         self.ns_imex_lmat_inv = None
         
+      cycle_avg_u       = xp.zeros_like(u)
+      cycle_avg_v       = xp.zeros_like(v)
+      ele_idx           = self.ele_idx
+      ion_idx           = self.ion_idx
+      Te_idx            = self.Te_idx
+      num_p             = self.op_spec_sp._p + 1
+      num_sh            = len(self.op_spec_sp._sph_harm_lm)
+
       self.initialize_bte_adv_x(dt_bte * 0.5)
-      cycle_avg_u=xp.zeros_like(u)
-      cycle_avg_v=xp.zeros_like(v)
-      
-      self.bte_to_fluid(u, v, tt, dt)
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
-        #self.bs_E       = Et[ts_idx % 1000]  #xp.ones(len(self.xp)) * Emax * xp.sin(2* xp.pi * tt)
+        
         self.bs_E        = Ex * xp.sin(2* xp.pi * tt)
-        #cycle_avg_u += u
-        cycle_avg_v += v
-          
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
           self.plot_unit_test1(u, v,           "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
@@ -1757,15 +1786,16 @@ class glow1d_boltzmann():
           xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
           
           if ts_idx>ts_idx_b:
-            cycle_avg_v *= 0.5 * dt / io_cycle
-            self.bte_to_fluid(cycle_avg_u, cycle_avg_v, tt, dt)
+            cycle_avg_u       *= 0.5 * dt / io_cycle
+            cycle_avg_v       *= 0.5 * dt / io_cycle
+            #print(np.abs(1-cycle_avg_u[:, ion_idx]/u[:,ion_idx]))
             self.plot_unit_test1(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
             xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
             xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
-            
-            cycle_avg_u[:,:] = 0
-            cycle_avg_v[:,:] = 0
+            cycle_avg_u[:,:]       = 0
+            cycle_avg_v[:,:]       = 0
           else:
+            self.plot_unit_test1(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
             xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
             xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
             
@@ -1783,6 +1813,14 @@ class glow1d_boltzmann():
           ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
           xp.save("%s_%04d_v_eedf.npy"%(args.fname, ts_idx//io_freq), ff_v)
         
+        
+        v_lm             = xp.dot(self.op_po2sh, v)
+        u[:, ele_idx]    = xp.dot(self.op_mass[0::num_sh], v_lm[0::num_sh,:])
+        u[:, Te_idx]     = xp.dot(self.op_temp[0::num_sh], v_lm[0::num_sh,:])/u[:,ele_idx]
+
+        cycle_avg_u     += u
+        cycle_avg_v     += (v/u[ : , ele_idx])
+        
         #v            = self.step_bte(v, dv, tt, dt, None, 0)
         
         # # First order splitting
@@ -1799,9 +1837,13 @@ class glow1d_boltzmann():
         v       = xp.dot(self.op_psh2o,v_lm)
         v       = self.step_bte_x(v, tt + 0.5 * dt_bte, dt_bte * 0.5)
         
-        cycle_avg_v += v
+        v_lm             = xp.dot(self.op_po2sh, v)
+        u[:, ele_idx]    = xp.dot(self.op_mass[0::num_sh], v_lm[0::num_sh,:])
+        u[:, Te_idx]     = xp.dot(self.op_temp[0::num_sh], v_lm[0::num_sh,:])/u[:,ele_idx]
+
+        cycle_avg_u     += u
+        cycle_avg_v     += (v/u[ : , ele_idx])
         tt+= dt
-        self.bte_to_fluid(u, v, tt, dt)
         
       return u, v
     

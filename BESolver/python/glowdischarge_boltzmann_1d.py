@@ -283,7 +283,16 @@ class glow1d_boltzmann():
       
       
       # construct the spectral class 
-      bb                     = basis.BSpline(k_domain, self.args.sp_order, self.bs_nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=self.bs_use_dg, verbose = args.verbose, extend_domain_with_log=True)
+      if (args.ev_extend==0):
+        bb                     = basis.BSpline(k_domain, self.args.sp_order, self.bs_nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=self.bs_use_dg, verbose = args.verbose)
+      elif (args.ev_extend==1):
+        print("using uniform grid extention")
+        bb                     = basis.BSpline(k_domain, self.args.sp_order, self.bs_nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=self.bs_use_dg, verbose = args.verbose, extend_domain=True)
+      else:
+        assert args.ev_extend==2
+        print("using log spaced grid extention")
+        bb                     = basis.BSpline(k_domain, self.args.sp_order, self.bs_nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=self.bs_use_dg, verbose = args.verbose, extend_domain_with_log=True)
+        
       spec_sp                = sp.SpectralExpansionSpherical(self.bs_nr, bb, self.bs_lm)
       spec_sp._num_q_radial  = bb._num_knot_intervals * self.args.spline_qpts
       collision_op           = collOpSp.CollisionOpSP(spec_sp)
@@ -572,7 +581,10 @@ class glow1d_boltzmann():
           
           h_init = h_init/m0
           print("boltzmann initial conditions, mass and temperature (eV)", m0, xp.dot(temp_op, h_init)/m0)
-          
+          # hh1    = self.bte_eedf_normalization(h_init)
+          # num_sh = len(spec_sp._sph_harm_lm)
+          # ev_max_ext = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
+          # print("g0 = %.8E g2=%.8E ev_max = %.8E"%(xp.dot(self.op_rate[0], hh1[0::num_sh]), xp.dot(self.op_rate[1], hh1[0::num_sh]), ev_max_ext))
           h_init    = xp.dot(self.op_psh2o, h_init)
           h_init_l  = xp.copy(h_init)
           h_init_r  = xp.copy(h_init)
@@ -1284,20 +1296,21 @@ class glow1d_boltzmann():
           
           pc_emat_idx = list()
           
-          idx         = (E<pcEval[0])
-          if ((idx==True).any()==True):
+          idx         = xp.where(E<pcEval[0])[0]
+          if (len(idx)>0):
             pc_emat_idx.append((0, idx))
             
           for i in range(1, len(pcEval)):
-            idx = xp.logical_and(pcEval[i-1]<=E, E<pcEval[i])
-            if ((idx==True).any()==True):
+            #idx = xp.logical_and(pcEval[i-1]<=E, E<pcEval[i])
+            idx  = xp.where((pcEval[i-1]<=E) & (E<pcEval[i]))[0]
+            if (len(idx)>0):
               pc_emat_idx.append((i, idx))
           
-          idx = (pcEval[-1]<=E)
-          if ((idx==True).any()==True):
+          idx = xp.where(pcEval[-1]<=E)[0]
+          if (len(idx)>0):
             print(E[idx], pcEval[-1])
             pc_emat_idx.append((len(pcEval), idx))
-            
+          
           len_vec = np.array([len(idx[1]) for idx_id, idx in enumerate(pc_emat_idx)], dtype=xp.int32)
           px = xp.zeros((len(pc_emat_idx), pcEmat.shape[2], np.max(len_vec)))
           pcEmatActive = list()
@@ -1337,8 +1350,8 @@ class glow1d_boltzmann():
             #   y[:,idx[1]] = xp.transpose(wx[idx_id, : , idx[1]])
             
             for idx_id, idx in enumerate(pc_emat_idx):
-              y[:, idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
-            
+              y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+              
             return y.reshape((-1))
           
           norm_b    = xp.linalg.norm(u.reshape((-1)))
@@ -1560,7 +1573,7 @@ class glow1d_boltzmann():
       else:
         self.ns_imex_lmat_inv = None
       
-      num_pc_evals  = 50
+      num_pc_evals  = 10
       ep            = xp.logspace(2, 6, num_pc_evals//2, base=10)
       self.Evals    = -xp.flip(ep)
       self.Evals    = xp.append(self.Evals,ep)
@@ -2334,6 +2347,7 @@ parser.add_argument("-out_fname", "--out_fname"                   , help="output
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
 parser.add_argument("-c", "--collisions"                          , help="collisions model",nargs='+', type=str, default=["g0","g2"])
 parser.add_argument("-ev_max", "--ev_max"                         , help="energy max v-space grid (eV)" , type=float, default=50)
+parser.add_argument("-ev_extend", "--ev_extend"                   , help="energy max boundary extenstion (0 = no extention, 1= 1.2 ev_max, 2 = 25ev_max)", type=int, default=2)
 parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-steady", "--steady_state"                   , help="steady state or transient", type=int, default=1)

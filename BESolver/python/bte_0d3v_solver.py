@@ -633,6 +633,9 @@ class bte_0d3v():
 
         if h_init is None:
             h_init                = self.initialize(init_type="maxwellian")
+            # hh                    = bte_utils.normalized_distribution(spec_sp, self._mass_op, h_init, self._mw, vth)
+            # qois                  = self.compute_QoIs(hh, None)
+            # print("Maxwellian at Te= %.4E (ev) ev_max=%.4E g0=%.8E g2=%.8E"%(self._args.electron_volt, self._args.ev_max, qois["rates"][0], qois["rates"][1]))
 
         h_init                = h_init/np.dot(mm_op,h_init)
         h_init                = np.dot(np.transpose(qA),h_init)

@@ -58,7 +58,7 @@ def compute_rate_coefficients(args, bte_op, v, collisions):
     mm_fac   = np.sqrt(4 * np.pi) 
     mm_op    = bte_op["mass"]
     c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
-    vth      = (float) (args["Te"]) * c_gamma
+    vth      = (float) (args["Te"])**0.5 * c_gamma
     v_lm     = np.array([np.dot(bte_op["po2sh"], v[idx]) for idx in range(n_pts)])
     scale    = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(n_pts)])
     v_lm_n   = np.array([v_lm[idx]/scale[idx] for idx in range(n_pts)])

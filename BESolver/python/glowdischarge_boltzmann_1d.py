@@ -587,10 +587,10 @@ class glow1d_boltzmann():
           print("BTE initial condition")
           print("mass       = %.8E"%(m0))
           print("temp (eV)  = %.8E"%(xp.dot(temp_op, h_init)/m0))
-          print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.bs_ev_range[1], ev_max_ext))
+          print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
           print("elastic rate coeffcient [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])))
           if (len(self.op_rate) > 1):
-            self.r_rates[:, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh,:]) * self.param.np0 * self.param.tau
+            self.r_rates[:, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
             print("ionization rate coeffcient [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
           
           h_init    = xp.dot(self.op_psh2o, h_init)
@@ -1641,13 +1641,13 @@ class glow1d_boltzmann():
               cycle_avg_u       *= 0.5 * dt / io_cycle
               cycle_avg_v       *= 0.5 * dt / io_cycle
               #print(np.abs(1-cycle_avg_u[:, ion_idx]/u[:,ion_idx]))
-              self.plot_unit_test1(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
+              self.plot(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt)
               xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
               xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
               cycle_avg_u[:,:]       = 0
               cycle_avg_v[:,:]       = 0
             else:
-              self.plot_unit_test1(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
+              self.plot(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt)
               xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
               xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
           
@@ -2481,7 +2481,7 @@ if args.use_gpu==1:
   gpu_device = cp.cuda.Device(args.gpu_device_id)
   gpu_device.use()
 
-uu,vv   = glow_1d.solve(u, v)
+uu,vv   = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
 #uu,vv   = glow_1d.solve_unit_test2(u, v, 1)
 #uu,vv   = glow_1d.solve_unit_test3(u, v)
 

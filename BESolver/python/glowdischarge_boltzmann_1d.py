@@ -579,12 +579,20 @@ class glow1d_boltzmann():
             if lm[0]>0:
               h_init[lm_idx::len(spec_sp._sph_harm_lm)]=0.0
           
-          h_init = h_init/m0
-          print("boltzmann initial conditions, mass and temperature (eV)", m0, xp.dot(temp_op, h_init)/m0)
-          # hh1    = self.bte_eedf_normalization(h_init)
-          # num_sh = len(spec_sp._sph_harm_lm)
-          # ev_max_ext = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
-          # print("g0 = %.8E g2=%.8E ev_max = %.8E"%(xp.dot(self.op_rate[0], hh1[0::num_sh]), xp.dot(self.op_rate[1], hh1[0::num_sh]), ev_max_ext))
+          h_init     = h_init/m0
+          ev_max_ext = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
+          hh1        = self.bte_eedf_normalization(h_init)
+          num_sh     = len(spec_sp._sph_harm_lm)
+          
+          print("BTE initial condition")
+          print("mass       = %.8E"%(m0))
+          print("temp (eV)  = %.8E"%(xp.dot(temp_op, h_init)/m0))
+          print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.bs_ev_range[1], ev_max_ext))
+          print("elastic rate coeffcient [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])))
+          if (len(self.op_rate) > 1):
+            self.r_rates[:, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh,:]) * self.param.np0 * self.param.tau
+            print("ionization rate coeffcient [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
+          
           h_init    = xp.dot(self.op_psh2o, h_init)
           h_init_l  = xp.copy(h_init)
           h_init_r  = xp.copy(h_init)
@@ -1318,6 +1326,12 @@ class glow1d_boltzmann():
             pcEmatActive.append(pcEmat[idx[0]])
           pcEmatActive = xp.array(pcEmatActive) 
           
+          idx_set  = xp.array([],dtype=xp.int32)
+          for idx_id, idx in enumerate(pc_emat_idx):
+            idx_set = xp.append(idx_set, idx[1])
+            
+          assert (idx_set.shape[0]==self.Np), "!!! Error: preconditioner partitioning does not match the domain size"
+            
           # num_gpu_streams = 4
           # cuda_stream     = [xp.cuda.Stream() for i in range(num_gpu_streams)] 
           
@@ -1338,7 +1352,7 @@ class glow1d_boltzmann():
           
           def Mmat_mvec(x):
             x      = x.reshape((self.dof_v, self.Np))
-            y      = xp.dot(self.PmatC, x)
+            y      = xp.copy(x)
             
             # px[:,:, :] = 0.0
             # for idx_id, idx in enumerate(pc_emat_idx):
@@ -1351,7 +1365,7 @@ class glow1d_boltzmann():
             
             for idx_id, idx in enumerate(pc_emat_idx):
               y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
-              
+            
             return y.reshape((-1))
           
           norm_b    = xp.linalg.norm(u.reshape((-1)))
@@ -1514,7 +1528,7 @@ class glow1d_boltzmann():
       v       = self.step_bte_x(v, tt_bte + 0.5 * dt_bte, dt_bte * 0.5)
       return v
     
-    def solve(self, Uin, Vin):
+    def solve(self, Uin, Vin, output_cycle_averaged_qois=False):
       tT              = self.args.cycles
       tt              = 0
       
@@ -1548,7 +1562,8 @@ class glow1d_boltzmann():
       dv    = xp.zeros_like(v)
       dv_lm = xp.zeros((self.dof_v, self.Np))
       
-      io_freq  = int(1.00/dt)
+      io_cycle = 1.00
+      io_freq  = int(io_cycle/dt)
       
       dg_qmat  = self.op_diag_dg
       dg_qmatT = xp.transpose(self.op_diag_dg)
@@ -1577,23 +1592,38 @@ class glow1d_boltzmann():
       ep            = xp.logspace(2, 6, num_pc_evals//2, base=10)
       self.Evals    = -xp.flip(ep)
       self.Evals    = xp.append(self.Evals,ep)
-      self.PmatC    = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT))
+      self.PmatC    = xp.linalg.inv(self.I_Nv - 0.5 * dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT))
       self.PmatE    = list()
       
-      emat = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v)
-      self.PmatE.append(emat)
+      pmat          = self.PmatC
+      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v)
+      ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+      self.PmatE.append(ep_mat)
       
       for i in range(1, num_pc_evals):
-        emat = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v)
-        self.PmatE.append(emat)
+        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v)
+        ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+        self.PmatE.append(ep_mat)
       
-      emat = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v)
-      self.PmatE.append(emat)
-      self.PmatE = xp.array(self.PmatE)
+      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v)
+      ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+      self.PmatE.append(ep_mat)
+      self.PmatE    = xp.array(self.PmatE)
       
       assert len(self.PmatE) == num_pc_evals + 1
       assert len(self.Evals) == num_pc_evals
-      print(self.Evals)
+      print("v-space advection mat preconditioner gird : \n", self.Evals)
+      
+      
+      if (output_cycle_averaged_qois == True):
+        cycle_avg_u       = xp.zeros_like(u)
+        cycle_avg_v       = xp.zeros_like(v)
+      
+      ele_idx           = self.ele_idx
+      ion_idx           = self.ion_idx
+      Te_idx            = self.Te_idx
+      num_p             = self.op_spec_sp._p + 1
+      num_sh            = len(self.op_spec_sp._sph_harm_lm)
       
       self.initialize_bte_adv_x(dt * 0.5)
       for ts_idx in range(ts_idx_b, steps):
@@ -1602,11 +1632,24 @@ class glow1d_boltzmann():
         
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-          
-        if (ts_idx % io_freq == 0):
           self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt)
           xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
           xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
+          
+          if (output_cycle_averaged_qois == True):
+            if ts_idx>ts_idx_b:
+              cycle_avg_u       *= 0.5 * dt / io_cycle
+              cycle_avg_v       *= 0.5 * dt / io_cycle
+              #print(np.abs(1-cycle_avg_u[:, ion_idx]/u[:,ion_idx]))
+              self.plot_unit_test1(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
+              xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
+              xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
+              cycle_avg_u[:,:]       = 0
+              cycle_avg_v[:,:]       = 0
+            else:
+              self.plot_unit_test1(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
+              xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
+              xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
           
           Vin_lm   = xp.dot(self.op_po2sh, v)
           Vin_lm1  = self.bte_eedf_normalization(Vin_lm)
@@ -1620,6 +1663,9 @@ class glow1d_boltzmann():
           ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
           xp.save("%s_%04d_v_eedf.npy"%(args.fname, ts_idx//io_freq), ff_v)
         
+        if (output_cycle_averaged_qois == True):
+          cycle_avg_u     += u
+          cycle_avg_v     += (v/u[ : , ele_idx])
         
         # second-order split scheme
         u = self.step_fluid(u, du, tt, dt * 0.5,  self.ts_type_fluid, int(ts_idx % io_freq == 0))
@@ -1633,6 +1679,11 @@ class glow1d_boltzmann():
         # self.fluid_to_bte(u, v, tt, dt)
         # v = self.step_bte(v, dv, tt, dt, None, int(ts_idx % io_freq == 0))
         # self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
+        
+        if (output_cycle_averaged_qois == True):
+          cycle_avg_u     += u
+          cycle_avg_v     += (v/u[ : , ele_idx])
+        
         tt+= dt
         
         
@@ -1707,7 +1758,12 @@ class glow1d_boltzmann():
         tt+= dt
       return u, v
     
-    def solve_unit_test2(self, Uin, Vin):
+    def solve_unit_test2(self, Uin, Vin, mode:int):
+      """
+      mode - 0 spatially homogenous E field
+      mode - 1 spatially varying E field. 
+      """
+      
       dt              = self.args.cfl
       dt_bte          = self.args.cfl #* self.ts_op_split_factor
       tT              = self.args.cycles
@@ -1747,8 +1803,44 @@ class glow1d_boltzmann():
       # dg_qmatT = xp.transpose(self.op_diag_dg)
       
       #self.bs_E       = 400 * xp.sin(2 * xp.pi * xp.asarray(self.xp)) #-xp.ones(len(self.xp)) * 400
+      
+      xx               = xp.asarray(self.xp)
       Emax             = 1e4
-      Ex               = Emax * xp.ones_like(self.xp) #xp.asarray(self.xp)**7
+      if (mode == 0): 
+        Ex               = Emax * xp.ones_like(self.xp) #xp.asarray(self.xp)**7
+        bte_v_solve      = self.step_bte_v1
+      elif (mode==1):
+        Ex               = Emax * xx**7 
+        bte_v_solve      = self.step_bte_v
+        
+        ## setting up the preconditioner matrices
+        num_pc_evals  = 10
+        ep            = xp.logspace(2, 6, num_pc_evals//2, base=10)
+        self.Evals    = -xp.flip(ep)
+        self.Evals    = xp.append(self.Evals,ep)
+        self.PmatC    = xp.linalg.inv(self.I_Nv - 0.5 * dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT))
+        self.PmatE    = list()
+        
+        pmat          = self.PmatC
+        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v)
+        ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+        self.PmatE.append(ep_mat)
+        
+        for i in range(1, num_pc_evals):
+          emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v)
+          ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+          self.PmatE.append(ep_mat)
+        
+        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v)
+        ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+        self.PmatE.append(ep_mat)
+        self.PmatE    = xp.array(self.PmatE)
+        
+        assert len(self.PmatE) == num_pc_evals + 1
+        assert len(self.Evals) == num_pc_evals
+        print("v-space advection mat preconditioner gird : \n", self.Evals)
+      else:
+        raise NotImplementedError
       # self.bs_E        = xp.ones(len(self.xp)) * Emax
       
       # Et = xp.zeros((1000, self.Np))
@@ -1839,14 +1931,14 @@ class glow1d_boltzmann():
         # # First order splitting
         # v       = self.step_bte_x(v, tt_bte, dt_bte)
         # v_lm    = xp.dot(self.op_po2sh,v)
-        # v_lm    = self.step_bte_v(v_lm, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
+        # v_lm    = bte_v_solve(v_lm, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
         # v       = xp.dot(self.op_psh2o,v_lm)
         # v[v<0]  = 0
         
         # Strang-Splitting
         v       = self.step_bte_x(v, tt, dt_bte * 0.5)
         v_lm    = xp.dot(self.op_po2sh,v)
-        v_lm    = self.step_bte_v1(v_lm, None, tt, dt_bte, self.ts_type_bte_v , 0)
+        v_lm    = bte_v_solve(v_lm, None, tt, dt_bte, self.ts_type_bte_v , 0)
         v       = xp.dot(self.op_psh2o,v_lm)
         v       = self.step_bte_x(v, tt + 0.5 * dt_bte, dt_bte * 0.5)
         
@@ -2390,6 +2482,6 @@ if args.use_gpu==1:
   gpu_device.use()
 
 uu,vv   = glow_1d.solve(u, v)
-#uu,vv   = glow_1d.solve_unit_test2(u, v)
+#uu,vv   = glow_1d.solve_unit_test2(u, v, 1)
 #uu,vv   = glow_1d.solve_unit_test3(u, v)
 

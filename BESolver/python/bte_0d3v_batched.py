@@ -706,20 +706,20 @@ class bte_0d3v_batched():
                 
             
             if(is_diverged):
-                print("Iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
+                print("[steady-state] iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
                 break
             
             h_curr      = h_prev + alpha * p
             
             if iteration_steps % 10 == 0:
                 rel_error = xp.linalg.norm(h_prev-h_curr, axis=0)/xp.linalg.norm(h_curr, axis=0)
-                print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
+                print("[steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
             
             #fb_prev      = np.dot(Rmat,h_curr)
             h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
             iteration_steps+=1
 
-        print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        print("[steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
         h_curr = xp.dot(qA, h_curr)
         h_curr = self.normalized_distribution(grid_idx, h_curr)
         qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
@@ -732,113 +732,100 @@ class bte_0d3v_batched():
         Rmat         = self._op_rmat[grid_idx]
         QTmat        = xp.transpose(self._op_qmat[grid_idx])
         qA           = self._op_diag_dg[grid_idx]
+        tau          = 1e-7                         #[s] time normalization factor
         
         if (solver_type == "steady-state"):
             # need to check for fourier modes for the solver.
             return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
         elif(solver_type== "transient"):
-            f0, _ = self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
-            if self._args.Efreq==0:
-                tau             = 1e-7
-            else:
-                tau             = 1/(self._args.Efreq)
+            f0          , _ = self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
+            dt              = self._args.dt     
+            tT              = self._args.cycles
             
-            dt              = self._args.dt * tau
-            tT              = self._args.cycles * tau
+            tau             = 1/(self._args.Efreq)
+            io_cycle        = 1.00
+            io_freq         = int(io_cycle/dt)
+            steps_total     = int(tT/dt)
             rhs , rhs_u     = self.get_rhs_and_jacobian(grid_idx, f0.shape[1])
-            
             
             u               = f0
             tt              = 0
             n_pts           = f0.shape[1]
-            Imat            = xp.zeros((n_pts, Qmat.shape[1], Qmat.shape[1]))
-            tmp             = xp.eye(Qmat.shape[1])
+            INr             = xp.eye(Qmat.shape[1])
+            Imat            = xp.einsum("i,jk->ijk",xp.ones(n_pts), INr) 
             
-            for i in range(n_pts):
-                Imat[i,:,:] = tmp[:,:]
-            
-            a1 = a2 = 1.0
+            a1              = a2 = 1.0
             du              = xp.zeros((Qmat.shape[1],n_pts))
-            #print(tt < tT and (a1 > atol or a2 > rtol), tT, tt)
             
-            steps_per_cycle = int(1/self._args.dt)
-            steps_total     = steps_per_cycle * int(self._args.cycles)
-            u_avg           = 0
-            v_qoi           = xp.zeros((steps_per_cycle + 1, 3 + len(self._coll_list), n_pts))
+            u0              = xp.zeros_like(u)
+            #u1             = xp.zeros_like(u)
+            cycle_avg_u     = xp.zeros_like(u)
+            cycle_avg_v     = xp.zeros_like(u)
             
-            for ts_idx in range(steps_total):
-                
+            v_qoi           = xp.zeros((3 + len(self._coll_list), n_pts))
+            u0              = xp.copy(u)
+            for ts_idx in range(steps_total+1):
                 def residual(du):
                     #return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
-                    return du  - 0.5 * dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt) - 0.5 * dt * rhs(u, tt, dt)
+                    return du  - 0.5 * dt * tau * rhs(u + xp.dot(Qmat, du), tt + dt, dt) - 0.5 * dt * tau * rhs(u, tt, dt)
         
                 def jacobian(du):
                     #return (Imat - dt * rhs_u(u, tt, dt))
-                    return Imat - 0.5 * dt * rhs_u(u, tt, dt)
+                    return Imat - 0.5 * dt * tau * rhs_u(u, tt, dt)
                 
                 ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
                 
                 if ns_info["status"]==False:
-                    print("At time = %.2E "%(tt/tau), end='')
+                    print("At time = %.2E "%(tt), end='')
                     print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
                     print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
-                    return u0
+                    sys.exit(-1)
+                    #return u0
                 
-                if ts_idx % steps_per_cycle ==0:
-                    u0          = u
-                    u_avg       = 0
+                if(ts_idx > 0 and ts_idx % io_freq ==0):
+                    cycle_avg_u   *= 0.5 * dt / io_cycle
                     
-                z        = xp.dot(qA, u)
-                z        = self.normalized_distribution(grid_idx, z)
-                qoi      = self.compute_QoIs(grid_idx, z, effective_mobility=False)
-                v_qoi[ts_idx % steps_per_cycle, 0] = qoi["energy"]
-                v_qoi[ts_idx % steps_per_cycle, 1] = qoi["mobility"]
-                v_qoi[ts_idx % steps_per_cycle, 2] = qoi["diffusion"]
-                rates                              = qoi["rates"]
-                for col_idx, g in enumerate(self._coll_list):
-                    v_qoi[ts_idx % steps_per_cycle, 3 + col_idx] = rates[col_idx] 
-                
-                du = ns_info["x"]
-                u  = u + xp.dot(Qmat, du)
-                tt += dt
-                
-                if (ts_idx+1) % steps_per_cycle ==0:
-                    u1     = u
-                    u_avg += 0.5 * dt * (u0 + u1)
+                    h_curr         = xp.dot(qA, cycle_avg_u)
+                    h_curr         = self.normalized_distribution(grid_idx, h_curr)
+                    qoi            = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
                     
-                    print("time = %.2E "%(tt/tau), end='')
-                    print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
+                    v_qoi[0]    = qoi["energy"]
+                    v_qoi[1]    = qoi["mobility"]
+                    v_qoi[2]    = qoi["diffusion"]
+                    rates          = qoi["rates"]
                     
-                    a1 = xp.linalg.norm(u1-u0)
+                    for col_idx, g in enumerate(self._coll_list):
+                        v_qoi[3 + col_idx] = rates[col_idx]
+                    
+                    a1 = xp.linalg.norm(u-u0)
                     a2 = a1/ xp.linalg.norm(u0)
+                    
+                    print("time = %.2E "%(tt), end='')
+                    print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
                     print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
                     
+                    u0                   = np.copy(u)
+                    cycle_avg_v[: , :]   = cycle_avg_u
+                    cycle_avg_u[: , :]   = 0
                     
-                    z            = xp.dot(qA, u)
-                    z            = self.normalized_distribution(grid_idx, z)
-                    qoi          = self.compute_QoIs(grid_idx, z, effective_mobility=False)
-                    v_qoi[-1, 0] = qoi["energy"]
-                    v_qoi[-1, 1] = qoi["mobility"]
-                    v_qoi[-1, 2] = qoi["diffusion"]
-                    rates                              = qoi["rates"]
-                    for col_idx, g in enumerate(self._coll_list):
-                        v_qoi[-1, 3 + col_idx] = rates[col_idx] 
-                    
-                    if(tt > tT or (a1 < atol or a2 < rtol)):
+                    if (ts_idx == steps_total):
                         break
-                else:
-                    u_avg += dt * u
                     
                 
-                if ((ts_idx + 1) == steps_total):
-                    break
+                cycle_avg_u +=u
+                du          = ns_info["x"]
+                u           = u + xp.dot(Qmat, du)
+                cycle_avg_u +=u
+                tt += dt
+                    
+                
                         
-            h_curr = xp.dot(qA, u_avg)
+            h_curr = xp.dot(qA, cycle_avg_v)
             h_curr = self.normalized_distribution(grid_idx, h_curr)
             qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
             
             xp.save("%s_avg_qoi_%04d.npy"%(self._args.out_fname, grid_idx), v_qoi)
-            xp.save("%s_avg_f_%04d.npy"%(self._args.out_fname, grid_idx)  , u_avg)
+            xp.save("%s_avg_f_%04d.npy"%(self._args.out_fname, grid_idx)  , cycle_avg_v)
             xp.save("%s_f_%04d.npy"%(self._args.out_fname, grid_idx)      , u)
             return u, qoi
             

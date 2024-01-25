@@ -330,7 +330,10 @@ class bte_0d3v_batched():
             hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=args.threads)
             cc_op_a, cc_op_b     = collision_op.coulomb_collision_op_assembly(maxwellian, vth, mp_pool_sz=args.threads)
             
-            xp                   = self.xp_module
+            if (args.use_gpu==1):
+                xp                   = cp
+            else:
+                xp                   = np
             
             hl_op                = xp.asarray(hl_op)
             gl_op                = xp.asarray(gl_op) 
@@ -575,7 +578,6 @@ class bte_0d3v_batched():
                     
                 profile_tt[pp.RHS_EVAL].start()
                 E       = Etx(time)
-                
                 y1      = n0 * (xp.dot(QT_Cen, x) + Tg * xp.dot(QT_Cgt, x)) + E * xp.dot(QT_A, x) - n0 * xp.dot(Wmat, x) * xp.dot(QTmat, x) 
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
@@ -720,10 +722,13 @@ class bte_0d3v_batched():
             iteration_steps+=1
 
         print("[steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        if xp==cp:
+            xp.cuda.runtime.deviceSynchronize()
+        profile_tt[pp.SOLVE].stop()
+        
         h_curr = xp.dot(qA, h_curr)
         h_curr = self.normalized_distribution(grid_idx, h_curr)
         qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
-        profile_tt[pp.SOLVE].stop()
         return h_curr, qoi
     
     def solve(self, grid_idx:int, f0:np.array, atol, rtol, max_iter:int, solver_type:str):
@@ -738,11 +743,23 @@ class bte_0d3v_batched():
             # need to check for fourier modes for the solver.
             return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
         elif(solver_type== "transient"):
-            f0          , _ = self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
             dt              = self._args.dt     
             tT              = self._args.cycles
-            
             tau             = 1/(self._args.Efreq)
+            
+            et1             = self._par_ef_t[grid_idx]
+            
+            self._par_ef_t[grid_idx] = lambda t : et1(0.25 * tau)
+            f0          , _ = self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
+            
+            self._par_ef_t[grid_idx] = et1
+            
+            profile_tt[pp.SOLVE].reset()
+            if xp==cp:
+                xp.cuda.runtime.deviceSynchronize()
+                
+            profile_tt[pp.SOLVE].start()
+            
             io_cycle        = 1.00
             io_freq         = int(io_cycle/dt)
             steps_total     = int(tT/dt)
@@ -767,11 +784,11 @@ class bte_0d3v_batched():
             for ts_idx in range(steps_total+1):
                 def residual(du):
                     #return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
-                    return du  - 0.5 * dt * tau * rhs(u + xp.dot(Qmat, du), tt + dt, dt) - 0.5 * dt * tau * rhs(u, tt, dt)
+                    return du  - 0.5 * dt * tau * rhs(u + xp.dot(Qmat, du), (tt + dt) * tau , tau * dt) - 0.5 * dt * tau * rhs(u, tt * tau, dt * tau)
         
                 def jacobian(du):
                     #return (Imat - dt * rhs_u(u, tt, dt))
-                    return Imat - 0.5 * dt * tau * rhs_u(u, tt, dt)
+                    return Imat - 0.5 * dt * tau * rhs_u(u, tt * tau, dt * tau)
                 
                 ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
                 
@@ -817,8 +834,11 @@ class bte_0d3v_batched():
                 u           = u + xp.dot(Qmat, du)
                 cycle_avg_u +=u
                 tt += dt
-                    
-                
+            
+            if xp==cp:
+                xp.cuda.runtime.deviceSynchronize()
+                                
+            profile_tt[pp.SOLVE].stop()    
                         
             h_curr = xp.dot(qA, cycle_avg_v)
             h_curr = self.normalized_distribution(grid_idx, h_curr)

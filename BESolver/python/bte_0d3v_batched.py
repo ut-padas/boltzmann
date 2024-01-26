@@ -148,7 +148,6 @@ class bte_0d3v_batched():
         self._op_mobility     = [None for i in range(self._par_nvgrids)]
         self._op_rate         = [None for i in range(self._par_nvgrids)]
         self._op_spec_sp      = [None for i in range(self._par_nvgrids)]
-        self._par_ef_t        = [None for i in range(self._par_nvgrids)]
         
         self.xp_module        = np
         self._par_dof         = np.array([(self._par_nr[i]+1) * len(lm) for i in range(self._par_nvgrids)] , dtype=np.int32)
@@ -403,10 +402,6 @@ class bte_0d3v_batched():
     def get_boltzmann_parameter(self, grid_idx, key:str):
         return self._par_bte_params[grid_idx][key]
     
-    def set_efield_function(self, grid_idx, ef_t):
-        self._par_ef_t[grid_idx] = ef_t
-        return 
-    
     def host_to_device_setup(self, *args):
         """
         host_to_device_setup(dev_id, grid_idx) will put grid_idx operators on device dev_id
@@ -480,11 +475,6 @@ class bte_0d3v_batched():
         me           = scipy.constants.electron_mass
         qe           = scipy.constants.e
         
-        n0           = self._par_bte_params[grid_idx]["n0"]
-        ne           = self._par_bte_params[grid_idx]["ne"]
-        #ni           = self._par_bte_params[grid_idx]["ni"]
-        Tg           = self._par_bte_params[grid_idx]["Tg"]
-        
         vth          = self._par_vth[grid_idx]
         mw           = bte_utils.get_maxwellian_3d(vth, 1)
         Mop          = self._op_mass[grid_idx].reshape((1,-1))
@@ -505,7 +495,6 @@ class bte_0d3v_batched():
         u            = xp.dot(xp.transpose(mm_op),qA)
         
         Wmat         = xp.dot(u, c_en)
-        Etx          = self._par_ef_t[grid_idx]
         
         if args.ee_collisions==1:
             cc_op_l1     = c_ee
@@ -515,6 +504,8 @@ class bte_0d3v_batched():
                 m0           = mw(0) *  xp.dot(Mop, fb) * vth**3 
                 kT           = mw(0) * (xp.dot(Top, fb) / m0) * vth**5 * scipy.constants.Boltzmann 
                 kT           = xp.abs(kT).reshape((-1,))
+                
+                ne           = self._par_bte_params[grid_idx]["ne"]
             
                 c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * xp.sqrt(ne)))
                 gamma_a      = (xp.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
@@ -529,7 +520,13 @@ class bte_0d3v_batched():
                     xp.cuda.runtime.deviceSynchronize()
                     
                 profile_tt[pp.RHS_EVAL].start()
-                E       = Etx(time)
+                
+                n0           = self._par_bte_params[grid_idx]["n0"]
+                ne           = self._par_bte_params[grid_idx]["ne"]
+                Tg           = self._par_bte_params[grid_idx]["Tg"]
+                E            = self._par_bte_params[grid_idx]["E"]
+                #ni          = self._par_bte_params[grid_idx]["ni"]
+                
                 c_ee_x  = xp.dot(c_ee, x)
                 c_ee_xx = xp.einsum("abc,bc->ac", c_ee_x, x)
                 
@@ -544,14 +541,19 @@ class bte_0d3v_batched():
             QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
             Imat         = xp.eye(QTmat.shape[0])
             
-            Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", n0 * Tg, QT_Cgt_Q)
-            
             def jac_func(x, time, dt):
                 if xp==cp:
                     xp.cuda.runtime.deviceSynchronize()
                     
                 profile_tt[pp.JAC_EVAL].start()
-                E       = Etx(time)
+                n0           = self._par_bte_params[grid_idx]["n0"]
+                ne           = self._par_bte_params[grid_idx]["ne"]
+                Tg           = self._par_bte_params[grid_idx]["Tg"]
+                E            = self._par_bte_params[grid_idx]["E"]
+                #ni          = self._par_bte_params[grid_idx]["ni"]
+                
+                Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", n0 * Tg, QT_Cgt_Q)
+                
                 cc1_x_p_cc2x = ( xp.dot(cc_op_l1, x) + xp.dot(cc_op_l2, x) ) 
                 mu           = n0 * xp.dot(Wmat, x)
                 cc1_x_p_cc2x = xp.swapaxes(xp.swapaxes(cc1_x_p_cc2x, 0, 2), 1, 2)
@@ -577,8 +579,14 @@ class bte_0d3v_batched():
                     xp.cuda.runtime.deviceSynchronize()
                     
                 profile_tt[pp.RHS_EVAL].start()
-                E       = Etx(time)
-                y1      = n0 * (xp.dot(QT_Cen, x) + Tg * xp.dot(QT_Cgt, x)) + E * xp.dot(QT_A, x) - n0 * xp.dot(Wmat, x) * xp.dot(QTmat, x) 
+                n0           = self._par_bte_params[grid_idx]["n0"]
+                ne           = self._par_bte_params[grid_idx]["ne"]
+                Tg           = self._par_bte_params[grid_idx]["Tg"]
+                E            = self._par_bte_params[grid_idx]["E"]
+                #ni          = self._par_bte_params[grid_idx]["ni"]
+                
+                y1           = n0 * (xp.dot(QT_Cen, x) + Tg * xp.dot(QT_Cgt, x)) + E * xp.dot(QT_A, x) - n0 * xp.dot(Wmat, x) * xp.dot(QTmat, x)
+                
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].stop()
@@ -589,14 +597,19 @@ class bte_0d3v_batched():
             QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
             Imat         = xp.eye(QTmat.shape[0])
             
-            Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", n0 * Tg, QT_Cgt_Q)
-            
             def jac_func(x, time, dt):
                 if xp==cp:
                     xp.cuda.runtime.deviceSynchronize()
                     
                 profile_tt[pp.JAC_EVAL].start()
-                E            = Etx(time)
+                n0           = self._par_bte_params[grid_idx]["n0"]
+                ne           = self._par_bte_params[grid_idx]["ne"]
+                Tg           = self._par_bte_params[grid_idx]["Tg"]
+                E            = self._par_bte_params[grid_idx]["E"]
+                #ni          = self._par_bte_params[grid_idx]["ni"]
+                
+                Lmat_pre     = xp.einsum("a,bc->abc", n0, QT_Cen_Q) + xp.einsum("a,bc->abc", n0 * Tg, QT_Cgt_Q)
+                
                 mu           = n0 * xp.dot(Wmat, x)
                 Lmat         = Lmat_pre + xp.einsum("a,bc->abc", E, QT_A_Q) - xp.einsum("a,bc->abc", mu, Imat)
                 
@@ -731,6 +744,10 @@ class bte_0d3v_batched():
         qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
         return h_curr, qoi
     
+    def step(self, grid_idx:int, f0:np.array, atol, rtol, max_iter, time, dt):
+        """
+        perform a single step of the transient 0d batched solve. 
+        """
     def solve(self, grid_idx:int, f0:np.array, atol, rtol, max_iter:int, solver_type:str):
         xp           = self.xp_module
         Qmat         = self._op_qmat[grid_idx]
@@ -740,19 +757,11 @@ class bte_0d3v_batched():
         tau          = 1e-7                         #[s] time normalization factor
         
         if (solver_type == "steady-state"):
-            # need to check for fourier modes for the solver.
             return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
         elif(solver_type== "transient"):
             dt              = self._args.dt     
             tT              = self._args.cycles
             tau             = 1/(self._args.Efreq)
-            
-            et1             = self._par_ef_t[grid_idx]
-            
-            self._par_ef_t[grid_idx] = lambda t : et1(0.25 * tau)
-            f0          , _ = self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
-            
-            self._par_ef_t[grid_idx] = et1
             
             profile_tt[pp.SOLVE].reset()
             if xp==cp:
@@ -782,13 +791,18 @@ class bte_0d3v_batched():
             v_qoi           = xp.zeros((3 + len(self._coll_list), n_pts))
             u0              = xp.copy(u)
             for ts_idx in range(steps_total+1):
+                eRe = self.get_boltzmann_parameter(grid_idx, "eRe")
+                eIm = self.get_boltzmann_parameter(grid_idx, "eIm")
+                Et  = eRe * xp.cos(2 * xp.pi * (tt + dt)) + eIm * xp.sin(2 * xp.pi * (tt + dt))
+                self.set_boltzmann_parameter(grid_idx, "E", Et)
+
                 def residual(du):
-                    #return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
-                    return du  - 0.5 * dt * tau * rhs(u + xp.dot(Qmat, du), (tt + dt) * tau , tau * dt) - 0.5 * dt * tau * rhs(u, tt * tau, dt * tau)
+                    return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
+                    #return du  - 0.5 * dt * tau * rhs(u + xp.dot(Qmat, du), (tt + dt) * tau , tau * dt) - 0.5 * dt * tau * rhs(u, tt * tau, dt * tau)
         
                 def jacobian(du):
-                    #return (Imat - dt * rhs_u(u, tt, dt))
-                    return Imat - 0.5 * dt * tau * rhs_u(u, tt * tau, dt * tau)
+                    return (Imat - dt * rhs_u(u, tt, dt))
+                    #return Imat - 0.5 * dt * tau * rhs_u(u, tt * tau, dt * tau)
                 
                 ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
                 
@@ -809,7 +823,7 @@ class bte_0d3v_batched():
                     v_qoi[0]    = qoi["energy"]
                     v_qoi[1]    = qoi["mobility"]
                     v_qoi[2]    = qoi["diffusion"]
-                    rates          = qoi["rates"]
+                    rates       = qoi["rates"]
                     
                     for col_idx, g in enumerate(self._coll_list):
                         v_qoi[3 + col_idx] = rates[col_idx]
@@ -844,9 +858,9 @@ class bte_0d3v_batched():
             h_curr = self.normalized_distribution(grid_idx, h_curr)
             qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
             
-            xp.save("%s_avg_qoi_%04d.npy"%(self._args.out_fname, grid_idx), v_qoi)
-            xp.save("%s_avg_f_%04d.npy"%(self._args.out_fname, grid_idx)  , cycle_avg_v)
-            xp.save("%s_f_%04d.npy"%(self._args.out_fname, grid_idx)      , u)
+            # xp.save("%s_avg_qoi_%04d.npy"%(self._args.out_fname, grid_idx), v_qoi)
+            # xp.save("%s_avg_f_%04d.npy"%(self._args.out_fname, grid_idx)  , cycle_avg_v)
+            # xp.save("%s_f_%04d.npy"%(self._args.out_fname, grid_idx)      , u)
             return u, qoi
             
         elif(solver_type=="BE_L"):
@@ -864,7 +878,7 @@ class bte_0d3v_batched():
         # ne       = self._par_bte_params[grid_idx]["ne"]
         # ni       = self._par_bte_params[grid_idx]["ni"]
         # Tg       = self._par_bte_params[grid_idx]["Tg"]
-        ef       = self._par_ef_t[grid_idx](0)
+        E       = self._par_bte_params[grid_idx]["E"]
         
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
@@ -881,7 +895,7 @@ class bte_0d3v_batched():
         mu  = xp.dot(self._op_temp[grid_idx], ff) * mw(0) * vth**5  / mm
 
         if effective_mobility:
-            M   = xp.dot(self._op_mobility[grid_idx], xp.sqrt(3) * ff[1::num_sh, :])  * (-(c_gamma / (3 * ( ef / n0))))
+            M   = xp.dot(self._op_mobility[grid_idx], xp.sqrt(3) * ff[1::num_sh, :])  * (-(c_gamma / (3 * ( E / n0))))
         else:
             M   = xp.dot(self._op_mobility[grid_idx], xp.sqrt(3) * ff[1::num_sh, :])  * (-(c_gamma / (3 * ( 1 / n0))))
         

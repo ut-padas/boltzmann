@@ -148,6 +148,7 @@ class bte_0d3v_batched():
         self._op_mobility     = [None for i in range(self._par_nvgrids)]
         self._op_rate         = [None for i in range(self._par_nvgrids)]
         self._op_spec_sp      = [None for i in range(self._par_nvgrids)]
+        self._op_imat_vx      = [None for i in range(self._par_nvgrids)]
         
         self.xp_module        = np
         self._par_dof         = np.array([(self._par_nr[i]+1) * len(lm) for i in range(self._par_nvgrids)] , dtype=np.int32)
@@ -391,7 +392,7 @@ class bte_0d3v_batched():
         
         for i in range(n_pts):
             f0[:,i] = h_init
-            
+        
         profile_tt[pp.INIT_COND].stop()
         return f0
     
@@ -744,10 +745,46 @@ class bte_0d3v_batched():
         qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
         return h_curr, qoi
     
-    def step(self, grid_idx:int, f0:np.array, atol, rtol, max_iter, time, dt):
+    def step(self, grid_idx:int, f0:np.array, atol, rtol, max_iter, time, delta_t):
         """
         perform a single step of the transient 0d batched solve. 
         """
+        xp           = self.xp_module
+        Qmat         = self._op_qmat[grid_idx]
+        Rmat         = self._op_rmat[grid_idx]
+        QTmat        = xp.transpose(self._op_qmat[grid_idx])
+        qA           = self._op_diag_dg[grid_idx]
+        tau          = 1/(self._args.Efreq)
+        
+        n_pts        = f0.shape[1]
+        Imat         = self._op_imat_vx[grid_idx]
+        
+        rhs , rhs_u  = self.get_rhs_and_jacobian(grid_idx, f0.shape[1])
+        tt           = time/tau
+        dt           = delta_t/tau
+        
+        def residual(du):
+            return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
+            #return du  - 0.5 * dt * tau * rhs(u + xp.dot(Qmat, du), (tt + dt) * tau , tau * dt) - 0.5 * dt * tau * rhs(u, tt * tau, dt * tau)
+
+        def jacobian(du):
+            return (Imat - dt * rhs_u(u, tt, dt))
+            #return Imat - 0.5 * dt * tau * rhs_u(u, tt * tau, dt * tau)
+        u       = f0            
+        du      = xp.zeros((Qmat.shape[1],n_pts))
+        ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
+        
+        if ns_info["status"]==False:
+            print("At time = %.2E "%(time), end='')
+            print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
+            print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], xp.max(ns_info["atol"]), xp.max(ns_info["rtol"])))
+            sys.exit(-1)
+        
+        du          = ns_info["x"]
+        v           = u + xp.dot(Qmat, du)
+        
+        return v
+        
     def solve(self, grid_idx:int, f0:np.array, atol, rtol, max_iter:int, solver_type:str):
         xp           = self.xp_module
         Qmat         = self._op_qmat[grid_idx]

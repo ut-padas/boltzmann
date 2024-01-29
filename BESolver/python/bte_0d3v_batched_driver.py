@@ -89,11 +89,13 @@ bte_solver = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, args.colli
 bte_solver.assemble_operators(grid_idx)
 f0         = bte_solver.initialize(grid_idx, n_pts,"maxwellian")
 
-bte_solver.set_boltzmann_parameter(grid_idx, "n0", n0)
-bte_solver.set_boltzmann_parameter(grid_idx, "ne", ne)
-bte_solver.set_boltzmann_parameter(grid_idx, "Tg", Tg)
-bte_solver.set_boltzmann_parameter(grid_idx, "ef", ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "n0" , n0)
+bte_solver.set_boltzmann_parameter(grid_idx, "ne" , ne)
+bte_solver.set_boltzmann_parameter(grid_idx, "Tg" , Tg)
+bte_solver.set_boltzmann_parameter(grid_idx, "eRe", 0*ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "eIm", ef)
 bte_solver.set_boltzmann_parameter(grid_idx, "f0", f0)
+bte_solver.set_boltzmann_parameter(grid_idx,  "E" , ef)
 
 if args.Efreq == 0:
     ef_t = lambda t : ef
@@ -103,13 +105,14 @@ else:
 if args.use_gpu==1:
     dev_id   = 0
     bte_solver.host_to_device_setup(dev_id, grid_idx)
-    ef_d     = bte_solver.get_boltzmann_parameter(grid_idx, "ef")
-    if args.Efreq == 0:
-        ef_t = lambda t : ef_d
-    else:
-        ef_t = lambda t : ef_d * cp.sin(2 * cp.pi * args.Efreq * t)
     
-bte_solver.set_efield_function(grid_idx, ef_t)
+    
+#     if args.Efreq == 0:
+#         ef_t = lambda t : ef_d
+#     else:
+#         ef_t = lambda t : ef_d * cp.sin(2 * cp.pi * args.Efreq * t)
+    
+# bte_solver.set_efield_function(grid_idx, ef_t)
 
 if args.profile==1:
     res_func, jac_func = bte_solver.get_rhs_and_jacobian(0, f0.shape[1], 16)

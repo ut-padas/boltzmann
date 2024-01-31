@@ -6,10 +6,10 @@ import scipy.constants
 #from multiprocess import Pool as WorkerPool
 from multiprocessing.pool import ThreadPool as WorkerPool
 import scipy.sparse.linalg as spla
-import cupyx.scipy.sparse.linalg
 import scipy.sparse.linalg
 try:
   import cupy as cp
+  import cupyx.scipy.sparse.linalg
 except ImportError:
   print("Please install CuPy for GPU use")
 
@@ -31,24 +31,29 @@ class parameters():
     self.np0   = 8e16                      #"nominal" electron density [1/m^3]
     
     # raw transport coefficients 
-    self.De    = (3.86e22) * 1e2 / self.n0 #m^{2}s^{-1}
-    self.mu_e  = (9.66e21) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1} 
+    self._De    = (3.86e22) * 1e2 / self.n0 #m^{2}s^{-1}
+    self._mu_e  = (9.66e21) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1} 
+    
     self.Di    = (2.07e18) * 1e2 / self.n0 #m^{2} s^{-1}
     self.mu_i  = (4.65e19) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1}
     self.ks    = (1.19e7)  * 1e-2 #(1.366109824889323e7) * 1e-2          # m s^{-1}
     
     # non-dimensionalized transport coefficients
     
+    # non-dimentionalized maxwellian flux. 
+    self.mw_flux    = lambda Te : (self.tau/self.L) * (self.kB * Te * self.ev_to_K / (2 * np.pi * self.me)) ** 0.5
+    
     self.n0    /=self.np0
-    self.De    *= (self.tau/(self.L**2))
+    self._De    *= (self.tau/(self.L**2))
     self.Di    *= (self.tau/(self.L**2))
     
-    self.mu_e  *= (self.V0 * self.tau/(self.L**2)) 
+    self._mu_e  *= (self.V0 * self.tau/(self.L**2)) 
     self.mu_i  *= (self.V0 * self.tau/(self.L**2))
     
-    self.Teb   = 0.5                                # eV
+    self.Teb   = 1.5                                # eV
     self.Hi    = 15.76                              # eV
-    self.ks    *= (self.tau/self.L)
+    #self.ks    *= (self.tau/self.L)
+    self.ks    = self.mw_flux(self.Teb)
     
     self.ks0   = self.ks
     self.ks1   = self.ks
@@ -63,12 +68,18 @@ class parameters():
     # self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))   
     # self.ki_Te = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))  * (18.687/np.abs(Te)**2)
     
-    self.ki     = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))   
-    self.ki_nTe = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (18.687 * ne / nTe**2)  
-    self.ki_ne  = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (-18.687 / nTe)
+    self.ki       = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))   
+    self.ki_ne    = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (-18.687 / nTe)
+    self.ki_nTe   = lambda nTe,ne : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))  * (18.687 * ne / nTe**2)  
     
-    # non-dimentionalized maxwellian flux. 
-    self.mw_flux    = lambda Te : (self.tau/self.L) * (self.kB * Te * self.ev_to_K / (2 * np.pi * self.me)) ** 0.5
+    self.mu_e     = lambda nTe,ne : self._mu_e * np.ones_like(ne)
+    self.mu_e_ne  = lambda nTe,ne : ne * 0
+    self.mu_e_nTe = lambda nTe,ne : ne * 0
+    
+    self.De       = lambda nTe,ne : self._De * np.ones_like(ne)
+    self.De_ne    = lambda nTe,ne : ne * 0
+    self.De_nTe   = lambda nTe,ne : ne * 0
+    
     #self.mw_flux_Te = lambda Te : 0.5 * (self.kB * self.ev_to_K / (2 * np.pi * self.me)) * (self.kB * Te * self.ev_to_K / (2 * np.pi * self.me)) ** (-0.5)      
     
 def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):

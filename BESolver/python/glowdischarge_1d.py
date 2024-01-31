@@ -292,7 +292,7 @@ class glow1d_fluid():
       # sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (self.param.Teb1 * 0  , 10 * self.param.Teb1), xtol=self.args.atol, rtol=self.args.rtol, maxiter=50)
       
       try:
-        sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (Teb0_g * (0.9)  , 1.1 * Teb0_g), xtol=1e-4, rtol=1e-4, maxiter=50)
+        sol0 = scipy.optimize.root_scalar(res, args=(0) , x0=self.param.Teb0, method='brentq',bracket = (Teb0_g * (0.9)  , 1.1 * Teb0_g), xtol=1e-8, rtol=1e-8, maxiter=100)
         T0   = sol0.root
       except:
         T0   = Teb0_g
@@ -307,7 +307,7 @@ class glow1d_fluid():
         
       
       try:
-        sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (Teb1_g * 0.9  , 1.1 * Teb1_g), xtol=1e-4, rtol=1e-4, maxiter=50)
+        sol1 = scipy.optimize.root_scalar(res, args=(-1), x0=self.param.Teb1, method='brentq',bracket = (Teb1_g * 0.9  , 1.1 * Teb1_g), xtol=1e-8, rtol=1e-8, maxiter=100)
         T1   = sol1.root
       except:
         T1   = Teb1_g

@@ -742,7 +742,7 @@ class bte_0d3v_batched():
         
         h_curr = xp.dot(qA, h_curr)
         h_curr = self.normalized_distribution(grid_idx, h_curr)
-        qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=False)
+        qoi    = self.compute_QoIs(grid_idx, h_curr, effective_mobility=True)
         return h_curr, qoi
     
     def step(self, grid_idx:int, f0:np.array, atol, rtol, max_iter, time, delta_t):

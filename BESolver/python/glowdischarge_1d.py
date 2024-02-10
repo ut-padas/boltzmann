@@ -244,6 +244,59 @@ class glow1d_fluid():
       
       return Uin
     
+    def electron_bdy_temperature(self, Uin: np.array, time, dt):
+      xp  = self.xp_module
+      
+      ele_idx = self.ele_idx
+      ion_idx = self.ion_idx
+      Te_idx  = self.Te_idx
+      
+      ne      = Uin[: , ele_idx]
+      ni      = Uin[: , ion_idx]
+      nTe     = Uin[: ,  Te_idx]
+      
+      Te      = nTe/ne
+      
+      phi     = self.solve_poisson(Uin[:,ele_idx], Uin[:, ion_idx], time)
+      E       = -xp.dot(self.Dp, phi)
+      
+      ki                  = self.param.ki(nTe, ne)
+      self.mu[:, ele_idx] = self.param.mu_e(nTe, ne)
+      self.D [:, ele_idx] = self.param.De(nTe, ne)
+      
+      
+      mu_i    = self.mu[:, ion_idx]
+      mu_e    = self.mu[:, ele_idx]
+      
+      De      = self.D[:, ele_idx]
+      Di      = self.D[:, ion_idx]
+      
+      Je      = xp.array([0., 0.])
+      Ji      = xp.array([0., 0.])
+      
+      Ji[0]   = self.Zp[ion_idx] * mu_i[0]  * ni[0]  * E[0]
+      Ji[-1]  = self.Zp[ion_idx] * mu_i[-1] * ni[-1] * E[-1]
+      
+      Je[0]   = -self.param.mw_flux(Te[0])  * ne[0]  - self.param.gamma * Ji[0]
+      Je[-1]  =  self.param.mw_flux(Te[-1]) * ne[-1] - self.param.gamma * Ji[-1]
+      
+      rhs     = xp.copy(Te)
+      rhs[0]  = 2.5 * Te[0]  * Je[0]
+      rhs[-1] = 2.5 * Te[-1] * Je[-1]
+      
+      qe_mat      = xp.eye(self.Np)
+      Imat        = self.I_Np
+      #qe         = -1.5 * De * xp.dot(self.Dp, nTe) - 2.5 * mu_e * E * nTe - De * Te * xp.dot(self.Dp, ne)
+      
+      ne_x         = xp.dot(self.Dp, ne)
+      qe_mat[0,:]  = -1.5 * De[0]  * ne[0]  * self.Dp[0,:]  - 2.5 * mu_e[0]  * E[0]  * ne[0]  * Imat[0, :]  - De[0]  * ne_x * Imat[0  , :] 
+      qe_mat[-1,:] = -1.5 * De[-1] * ne[-1] * self.Dp[-1,:] - 2.5 * mu_e[-1] * E[-1] * ne[-1] * Imat[-1, :] - De[-1] * ne_x * Imat[-1 , :]
+      
+      Te_new       = xp.linalg.solve(qe_mat, rhs) 
+      # print("old \n", Te)
+      # print("new \n", Te_new)
+      return Te_new[0], Te_new[-1]
+    
     def temperature_solve(self, Uin : np.array, time, dt):
       """
       solves non-linear system for boundary conditions. 
@@ -826,7 +879,7 @@ class glow1d_fluid():
         for ts_idx in range(ts_idx_b, steps):
           
           if (self.args.bc_dirichlet_e == 0):
-            self.param.Teb0 , self.param.Teb1 = self.temperature_solve(u, tt, dt)
+            self.param.Teb0 , self.param.Teb1 = self.electron_bdy_temperature(u, tt, dt) #self.temperature_solve(u, tt, dt)
             self.param.ks0  , self.param.ks1  = self.param.mw_flux(self.param.Teb0), self.param.mw_flux(self.param.Teb1)
             print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
           

@@ -439,8 +439,8 @@ class glow1d_boltzmann():
       self.op_temp      = bte_utils.temp_op(spec_sp, 1) * (vth**2) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
       
       # note non-dimentionalized electron mobility and diffusion,  ## not used at the moment, but needs to check.          
-      self.op_mobility  = bte_utils.mobility_op(spec_sp, maxwellian, vth) * self.param.V0 * self.param.tau/self.param.L**2
-      self.op_diffusion = bte_utils.diffusion_op(spec_sp, self.bs_coll_list, maxwellian, vth) * self.param.tau/self.param.L**2
+      self.op_mobility  = bte_utils.mobility_op(spec_sp, maxwellian, vth) #* self.param.V0 * self.param.tau/self.param.L**2
+      self.op_diffusion = bte_utils.diffusion_op(spec_sp, self.bs_coll_list, maxwellian, vth) #* self.param.tau/self.param.L**2
           
       rr_op  = [None] * len(self.bs_coll_list)
       for col_idx, g in enumerate(self.bs_coll_list):
@@ -506,11 +506,13 @@ class glow1d_boltzmann():
       self.op_col_gT            = FOp_g
       
       xp=np
-      xp.save("%s_bte_mass_op.npy"%(args.fname), self.op_mass)
-      xp.save("%s_bte_temp_op.npy"%(args.fname), self.op_temp)
-      xp.save("%s_bte_po2sh.npy"  %(args.fname), self.op_po2sh)
-      xp.save("%s_bte_psh2o.npy"  %(args.fname), self.op_psh2o)
-      xp.save("%s_bte_op_g0.npy"  %(args.fname), self.op_rate[0])
+      xp.save("%s_bte_mass_op.npy"   %(args.fname), self.op_mass)
+      xp.save("%s_bte_temp_op.npy"   %(args.fname), self.op_temp)
+      xp.save("%s_bte_po2sh.npy"     %(args.fname), self.op_po2sh)
+      xp.save("%s_bte_psh2o.npy"     %(args.fname), self.op_psh2o)
+      xp.save("%s_bte_mobility.npy"  %(args.fname), self.op_mobility)
+      xp.save("%s_bte_diffusion.npy" %(args.fname), self.op_diffusion)
+      xp.save("%s_bte_op_g0.npy"     %(args.fname), self.op_rate[0])
       
       if (len(self.op_rate) > 1):
         xp.save("%s_bte_op_g2.npy"  %(args.fname), self.op_rate[1])
@@ -558,9 +560,18 @@ class glow1d_boltzmann():
           Vin = xp.load("%s_%04d_v.npy"%(args.fname, args.rs_idx))
         else:
           xx = self.param.L * (self.xp + 1)
-          Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
-          Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
-          Uin[:, Te_idx]  = self.param.Teb
+          read_from_file   = False 
+          if read_from_file==True:
+            fname = "1dglow/1d_glow_1000_fluid.npy"
+            print("loading initial conditoin from ", fname)
+            fluid_U         = xp.load(fname)
+            Uin[:, ele_idx] = fluid_U[:, ele_idx] 
+            Uin[:, ion_idx] = fluid_U[:, ion_idx] 
+            Uin[:, Te_idx]  = fluid_U[:, Te_idx]  / Uin[:, ele_idx]
+          else:
+            Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+            Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+            Uin[:, Te_idx]  = self.param.Teb
           
           spec_sp     = self.op_spec_sp
           mmat        = spec_sp.compute_mass_matrix()
@@ -570,73 +581,40 @@ class glow1d_boltzmann():
 
           mass_op     = self.op_mass
           temp_op     = self.op_temp
-
-          v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
-          hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
-          h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=mmat_inv)
-          m0      = xp.dot(mass_op, h_init)
-          for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-            if lm[0]>0:
-              h_init[lm_idx::len(spec_sp._sph_harm_lm)]=0.0
           
-          h_init     = h_init/m0
-          ev_max_ext = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
-          hh1        = self.bte_eedf_normalization(h_init)
-          num_sh     = len(spec_sp._sph_harm_lm)
+          [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+          Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
           
-          print("BTE initial condition")
-          print("mass       = %.8E"%(m0))
-          print("temp (eV)  = %.8E"%(xp.dot(temp_op, h_init)/m0))
+          num_p       = spec_sp._p +1
+          num_sh      = len(spec_sp._sph_harm_lm)
+          h_init      = xp.zeros(num_p * num_sh)
+          
+          ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
           print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
-          print("elastic rate coeffcient [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])))
-          if (len(self.op_rate) > 1):
-            self.r_rates[:, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
-            print("ionization rate coeffcient [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
-          
-          h_init    = xp.dot(self.op_psh2o, h_init)
-          h_init_l  = xp.copy(h_init)
-          h_init_r  = xp.copy(h_init)
-          
-          # h_init_l[self.xp_vt_l] = 0
-          # h_init_r[self.xp_vt_r] = 0
-          
-          # h_init_l               = xp.dot(self.op_po2sh,h_init_l)
-          # m0                     = xp.dot(mass_op, h_init_l)
-          # h_init_l               = h_init_l/m0
-          # h_init_l               = xp.dot(self.op_psh2o, h_init_l)
-          # h_init_l[self.xp_vt_l] = 0
-          
-          # hh                     = xp.dot(self.op_po2sh,h_init_l)
-          # m0                     = xp.dot(mass_op, hh)
-          # print("x at left bdy, mass and temperature (eV)", m0, xp.dot(temp_op, hh)/m0)
-          
-          
-          # h_init_r               = xp.dot(self.op_po2sh,h_init_r)
-          # m0                     = xp.dot(mass_op, h_init_r)
-          # h_init_r               = h_init_r/m0
-          # h_init_r               = xp.dot(self.op_psh2o, h_init_r)
-          # h_init_r[self.xp_vt_r] = 0
-          
-          # hh                     = xp.dot(self.op_po2sh,h_init_r)
-          # m0                     = xp.dot(mass_op, hh)
-          # print("x at right bdy, mass and temperature (eV)", m0, xp.dot(temp_op, hh)/m0)
-          
-          for i in range(1, self.Np-1):
-            Vin[:,i] = h_init
-          
-          Vin[:,0]  = h_init_l
-          Vin[:,-1] = h_init_r
-          
-          
+          for i in range(self.Np):
+            v_ratio           = (self.c_gamma * xp.sqrt(Uin[i, Te_idx])/vth)
+            hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+            h_init[0::num_sh] = xp.sqrt(4 * xp.pi) * xp.dot(mmat_inv[0::num_sh,0::num_sh], xp.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
+            m0                = xp.dot(mass_op, h_init)
+            
+            h_init            = h_init/m0
+            
+            hh1               = self.bte_eedf_normalization(h_init)
+            num_sh            = len(spec_sp._sph_harm_lm)
+            
+            print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Uin[i, self.Te_idx], m0, (xp.dot(temp_op, h_init)/m0)), end='')
+            print(" k_elastic [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])), end='')
+            if (len(self.op_rate) > 1):
+              self.r_rates[:, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
+              print("k_ionization [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
+            
+            Vin[:, i] = xp.dot(self.op_psh2o, h_init)
+            
           # scale functions to have ne, at initial timestep
           Vin = Vin * Uin[:,ele_idx]
-          
-          #Vin_lm = self.bte_eedf_normalization(xp.dot(self.op_po2sh, Vin))
-          #print(Vin_lm)
-          #print(xp.dot(self.op_rate[1] , Vin_lm[0::2]))
         
-        self.mu[:, ele_idx] = self.param.mu_e
-        self.D[: , ele_idx] = self.param.De
+        self.mu[:, ele_idx] = self.param._mu_e
+        self.D[: , ele_idx] = self.param._De
         
         self.mu[:, ion_idx] = self.param.mu_i
         self.D[: , ion_idx] = self.param.Di
@@ -1588,8 +1566,8 @@ class glow1d_boltzmann():
       else:
         self.ns_imex_lmat_inv = None
       
-      num_pc_evals  = 10
-      ep            = xp.logspace(2, 6, num_pc_evals//2, base=10)
+      num_pc_evals  = 20
+      ep            = xp.logspace(xp.log10(1e2), xp.log10(6e5), num_pc_evals//2, base=10)
       self.Evals    = -xp.flip(ep)
       self.Evals    = xp.append(self.Evals,ep)
       self.PmatC    = xp.linalg.inv(self.I_Nv - 0.5 * dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT))

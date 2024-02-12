@@ -878,10 +878,20 @@ class glow1d_fluid():
         cycle_avg_u=xp.zeros_like(u)         
         for ts_idx in range(ts_idx_b, steps):
           
+          if (ts_idx % io_freq) == 0:
+            u1 = xp.copy(u)
+            # print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+            # print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+            a1 = xp.max(xp.abs(u1[:,0] -u0[:, 0]))
+            a2 = xp.max(xp.abs((u1[:,0]-u0[:,0]) / xp.max(xp.abs(u0[:,0]))))
+            print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
+            print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
+            u0=u1
+          
           if (self.args.bc_dirichlet_e == 0):
             self.param.Teb0 , self.param.Teb1 = self.electron_bdy_temperature(u, tt, dt) #self.temperature_solve(u, tt, dt)
             self.param.ks0  , self.param.ks1  = self.param.mw_flux(self.param.Teb0), self.param.mw_flux(self.param.Teb1)
-            print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
+            #print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
           
           cycle_avg_u[:, self.ele_idx] += u[:, self.ele_idx]
           cycle_avg_u[:, self.ion_idx] += u[:, self.ion_idx]
@@ -954,17 +964,8 @@ class glow1d_fluid():
           cycle_avg_u[:, self.Te_idx]  += u[:, self.Te_idx] / u[:, self.ele_idx] 
           
           
-          print("time = %.6E step=%d/%d"%(tt, ts_idx, steps))
-          print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
-          if ts_idx % io_freq == 0:
-            u1 = xp.copy(u)
-            # print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-            # print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
-            a1 = xp.linalg.norm(u1-u0)
-            a2 = a1/ xp.linalg.norm(u0)
-            print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
-            u0=u1
-            
+          # print("time = %.6E step=%d/%d"%(tt, ts_idx, steps))
+          # print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
           tt+=dt
         print("time = %.10E step=%d/%d"%(tt, ts_idx, steps))
         return u  

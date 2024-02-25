@@ -25,6 +25,7 @@ import csv
 import sys
 import scipy.cluster
 from itertools import cycle
+import cross_section
 
 plt.rcParams.update({
     "text.usetex": False,
@@ -40,7 +41,7 @@ parser.add_argument("-threads", "--threads"                       , help="number
 parser.add_argument("-out_fname", "--out_fname"                   , help="output file name for the qois", type=str, default="bte")
 parser.add_argument("-solver_type", "--solver_type"               , help="solver type", type=str, default="steady-state")
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
-parser.add_argument("-c", "--collisions"                          , help="collisions model",nargs='+', type=str, default=["g0","g2"])
+parser.add_argument("-c", "--collisions"                          , help="collisions model", type=str, default="lxcat_data/eAr_crs.nominal.Biagi.3sp")
 parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-atol", "--atol"                             , help="absolute tolerance", type=float, default=1e-10)
@@ -79,11 +80,21 @@ Te          = np.ones(n_grids) * args.Te
 ev_max      = np.ones(n_grids) * args.ev_max
 ef          = np.linspace(1e-10 , 1, n_pts) * 3.22e1
 n0          = np.linspace(1     , 1, n_pts) * 3.22e22
+
+all_species = cross_section.read_available_species(args.collisions)
+
+if(len(all_species)==1):
+    ns_by_n0    = np.ones(n_pts).reshape((1, n_pts))
+else:
+    ns_by_n0    = np.linspace(0.6   , 1, n_pts)
+    ns_by_n0    = np.concatenate([ns_by_n0] + [(1-ns_by_n0)/(len(all_species)-1) for i in range(1, len(all_species))] ,  axis = 0).reshape(len(all_species), n_pts)
+
+
 ne          = np.linspace(1     , 1, n_pts) * 3.22e20
 ni          = np.linspace(1     , 1, n_pts) * 3.22e20
-Tg          = np.linspace(1     , 1, n_pts) * 5000 #0.5 * collisions.TEMP_K_1EV
+Tg          = np.linspace(1     , 1, n_pts) * 6000 #0.5 * collisions.TEMP_K_1EV
 
-clustering_experiment = 1
+clustering_experiment = 0
 if (clustering_experiment == 1): 
     ev_to_K       = (scipy.constants.electron_volt/scipy.constants.Boltzmann) 
     Td_fac        = 1e-21 #[Vm^2]
@@ -171,18 +182,19 @@ if (clustering_experiment == 1):
 lm_modes    = [[[l,0] for l in range(args.l_max+1)] for i in range(n_grids)]
 nr          = np.ones(n_grids, dtype=np.int32) * args.Nr
 
-bte_solver = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, args.collisions)
+bte_solver  = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, args.collisions)
 
 bte_solver.assemble_operators(grid_idx)
 f0         = bte_solver.initialize(grid_idx, n_pts,"maxwellian")
 
-bte_solver.set_boltzmann_parameter(grid_idx, "n0" , n0)
-bte_solver.set_boltzmann_parameter(grid_idx, "ne" , ne)
-bte_solver.set_boltzmann_parameter(grid_idx, "Tg" , Tg)
-bte_solver.set_boltzmann_parameter(grid_idx, "eRe", 0*ef)
-bte_solver.set_boltzmann_parameter(grid_idx, "eIm", ef)
-bte_solver.set_boltzmann_parameter(grid_idx, "f0" , f0)
-bte_solver.set_boltzmann_parameter(grid_idx,  "E" , ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "n0"       , n0)
+bte_solver.set_boltzmann_parameter(grid_idx, "ne"       , ne)
+bte_solver.set_boltzmann_parameter(grid_idx, "ns_by_n0" , ns_by_n0)
+bte_solver.set_boltzmann_parameter(grid_idx, "Tg"       , Tg)
+bte_solver.set_boltzmann_parameter(grid_idx, "eRe"      , 0*ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "eIm"      , ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "f0"       , f0)
+bte_solver.set_boltzmann_parameter(grid_idx,  "E"       , ef)
 
 if args.use_gpu==1:
     dev_id   = 0
@@ -213,6 +225,7 @@ ff_r     = cp.asnumpy(ff_r)
 for k, v in qoi.items():
     qoi[k] = cp.asnumpy(v)
 
+collision_names = bte_solver.get_collision_names()
 csv_write = args.store_csv
 if csv_write:
     fname = args.out_fname
@@ -220,13 +233,13 @@ if csv_write:
         writer = csv.writer(f,delimiter=',')
         # write the header
         header = ["n0", "ne", "ni", "Tg", "E",  "energy", "mobility", "diffusion"]
-        for col_idx, g in enumerate(args.collisions):
+        for col_idx, g in enumerate(collision_names):
             header.append(str(g))
             
         writer.writerow(header)
         
         data = np.concatenate((n0.reshape(-1,1), ne.reshape(-1,1), ni.reshape(-1,1), Tg.reshape(-1,1), ef.reshape(-1,1), qoi["energy"].reshape(-1,1), qoi["mobility"].reshape(-1,1), qoi["diffusion"].reshape(-1,1)), axis=1)
-        for col_idx, g in enumerate(args.collisions):
+        for col_idx, g in enumerate(collision_names):
             data = np.concatenate((data, qoi["rates"][col_idx].reshape(-1,1)), axis=1)
         
         writer.writerows(data)

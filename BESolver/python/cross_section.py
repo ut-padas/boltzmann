@@ -22,34 +22,43 @@ def lxcat_cross_section_to_numpy(file : str, column_fields : tp.List[str] )->lis
     
     return np_data
 
-def read_cross_section_data(file: str):
+def read_available_species(file:str):
     try:
-        data = ldp.CrossSectionSet(file)
+        with open(file,'r') as f:
+            species = [line.split(":")[1].split("/")[1].strip() for line in f if "SPECIES:" in line]
     except:
         print("Error while cross section file read")
         sys.exit(0)
+    
+    species = list(sorted(set(species), key=species.index))
+    return species
 
-    species = data.species
-    print("read species: ", species)
-    print("number of cross sections read: ", len(data.cross_sections))
-    print(data.cross_sections)
+def read_cross_section_data(file: str):
     
+    species = read_available_species(file)
     cs_dict = dict()
-    for i in range(len(data.cross_sections)):
-        process          = data.cross_sections[i].info["PROCESS"].split(",")[0]
-        energy           = np.array(data.cross_sections[i].data["energy"])
-        cross_section    = np.array(data.cross_sections[i].data["cross section"])
-        threshold        = 0 
-        if data.cross_sections[i].threshold !=None:
-            threshold    = data.cross_sections[i].threshold
-        
-        mass_ratio       = data.cross_sections[i].mass_ratio
-        # if data.cross_sections[i].mass_ratio !=None:
-        #     mass_ratio   = data.cross_sections[i].mass_ratio 
-        
-        cs_dict[process] = {"energy": energy, "cross section": cross_section, "threshold": threshold, "mass ratio": mass_ratio}
     
-    #print(cs_dict)
+    for s in species:
+        try:
+            data = ldp.CrossSectionSet(file, imposed_species=s)
+        except:
+            print("Error while cross section file read")
+            sys.exit(0)
+            
+        #print("reading species: ", data.species)
+        #print("number of cross sections read: ", len(data.cross_sections))
+        #print(data.cross_sections)
+    
+        for i in range(len(data.cross_sections)):
+            process          = data.cross_sections[i].info["PROCESS"].split(",")[0].strip()
+            process_str      = data.cross_sections[i].info["PROCESS"].split(",")[1].strip().upper()
+            energy           = np.array(data.cross_sections[i].data["energy"])
+            cross_section    = np.array(data.cross_sections[i].data["cross section"])
+            threshold        = data.cross_sections[i].threshold
+            mass_ratio       = data.cross_sections[i].mass_ratio
+            sp               = data.cross_sections[i].species
+            cs_dict[process] = {"info": data.cross_sections[i].info, "type": process_str, "species": sp, "energy": energy, "cross section": cross_section, "threshold": threshold, "mass_ratio": mass_ratio, "raw": data.cross_sections[i]}
+    
     return cs_dict
 
-CROSS_SECTION_DATA = read_cross_section_data(os.path.dirname(os.path.abspath(__file__)) + "/lxcat_data/eAr_crs.nominal.Biagi_minimal.txt")
+CROSS_SECTION_DATA = "" #read_cross_section_data(os.path.dirname(os.path.abspath(__file__)) + "/lxcat_data/eAr_crs.nominal.Biagi_minimal.txt")

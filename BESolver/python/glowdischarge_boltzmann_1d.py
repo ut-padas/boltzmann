@@ -18,6 +18,7 @@ import scipy.constants
 import os
 import cupyx.scipy.sparse.linalg
 import scipy.sparse.linalg
+import cross_section
 from time import perf_counter, sleep
 
 CUDA_NUM_DEVICES      = 0
@@ -228,39 +229,43 @@ class glow1d_boltzmann():
       #self.vth_fac       = 100
       self.ev_lim         = (0,self.args.ev_max)
       
+      self.collision_names              = list()
+      self.coll_list                    = list()
+
+      self.avail_species                = cross_section.read_available_species(self.args.collisions)
+      cross_section.CROSS_SECTION_DATA  = cross_section.read_cross_section_data(self.args.collisions)
+      self.cross_section_data           = cross_section.CROSS_SECTION_DATA
+      
+      print("==========read collissions=====================")
+      collision_count = 0
+      for col_str, col_data in self.cross_section_data.items():
+          print(col_str, col_data["type"])
+          g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
+          g.reset_scattering_direction_sp_mat()
+          self.coll_list.append(g)
+          self.collision_names.append("C%d"%(collision_count)) 
+          collision_count+=1
+      print("===============================================")
+      print("number of total collisions = %d " %(len(self.coll_list)))
+      self.num_collisions = len(self.coll_list)
+      self.bs_coll_list = self.coll_list
+      
+      assert (len(self.avail_species)==1), "currently supports for all reactions from 1 common state"
+      
       self.initialize_boltzmann()
     
     def initialize_boltzmann(self):
-      
-      for col_idx, col in enumerate(self.args.collisions):
-          if "g0NoLoss" == col:
-              g  = collisions.eAr_G0_NoEnergyLoss()
-              g.reset_scattering_direction_sp_mat()
-          elif "g0ConstNoLoss" == col:
-              g  = collisions.eAr_G0_NoEnergyLoss(cross_section="g0Const")
-              g.reset_scattering_direction_sp_mat()
-          elif "g0" in str(col):
-              g = collisions.eAr_G0(cross_section=col)
-              g.reset_scattering_direction_sp_mat()
-          elif "g1" in str(col):
-              g = collisions.eAr_G1(cross_section=col)
-              g.reset_scattering_direction_sp_mat()
-          elif "g2" in str(col):
-              g = collisions.eAr_G2(cross_section=col)
-              g.reset_scattering_direction_sp_mat()
-          else:
-              print("unknown collision %s"%(col))
-              sys.exit(0)
+      args                = self.args
 
-          self.bs_coll_list.append(g)
-          
-      args      = self.args
-      sig_pts   =  list()
-      for col_idx, col in enumerate(self.bs_coll_list):
+      sig_pts             =  list()
+      for col_idx, g in enumerate(self.bs_coll_list):
           g  = self.bs_coll_list[col_idx]
-          if g._reaction_threshold >0:
+          if g._reaction_threshold != None and g._reaction_threshold >0:
               sig_pts.append(g._reaction_threshold)
       
+      self._sig_pts          = np.sort(np.array(list(set(sig_pts))))
+      sig_pts                = self._sig_pts
+        
       vth                    = self.bs_vth
       maxwellian             = bte_utils.get_maxwellian_3d(vth, 1.0)
       
@@ -399,35 +404,20 @@ class glow1d_boltzmann():
       
       t1 = perf_counter()
       print("assembling collision operators")
-      for col_idx in range(len(self.bs_coll_list)):
+      for col_idx, (col_str, col_data) in enumerate(self.cross_section_data.items()):
           g = self.bs_coll_list[col_idx]
           g.reset_scattering_direction_sp_mat()
           col = g._col_name
           
           if args.verbose==1:
-              print("collision %d included %s"%(col_idx, col))
-
-          if "g0NoLoss" == col:
-              FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
-              FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=args.threads)
-              sigma_m  += g.total_cross_section(gx_ev)
-          elif "g0ConstNoLoss" == col:
-              FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
-              FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=args.threads)
-              sigma_m  += g.total_cross_section(gx_ev)
-          elif "g0" in col:
-              FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
-              FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=args.threads)
-              sigma_m  += g.total_cross_section(gx_ev)
-          elif "g1" in col:
-              FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
-              sigma_m  += g.total_cross_section(gx_ev)
-          elif "g2" in col:
-              FOp       = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
-              sigma_m  += g.total_cross_section(gx_ev)
-          else:
-              print("%s unknown collision"%(col))
-              sys.exit(0)
+              print("collision %d  %s %s"%(col_idx, col, col_data["type"]))
+              
+          if col_data["type"] == "ELASTIC":
+            FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=args.threads)
+          
+          FOp         = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
+          sigma_m    += g.total_cross_section(gx_ev)
+          
       t2 = perf_counter()
       print("assembly = %.4E"%(t2-t1))
       
@@ -560,7 +550,7 @@ class glow1d_boltzmann():
           Vin = xp.load("%s_%04d_v.npy"%(args.fname, args.rs_idx))
         else:
           xx = self.param.L * (self.xp + 1)
-          read_from_file   = False 
+          read_from_file   = True 
           if read_from_file==True:
             fname = "1dglow/1d_glow_1000_fluid.npy"
             print("loading initial conditoin from ", fname)
@@ -2415,7 +2405,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-threads", "--threads"                       , help="number of cpu threads (boltzmann operator assembly)", type=int, default=4)
 parser.add_argument("-out_fname", "--out_fname"                   , help="output file name for the qois", type=str, default="bte_glow1d")
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
-parser.add_argument("-c", "--collisions"                          , help="collisions model",nargs='+', type=str, default=["g0","g2"])
+parser.add_argument("-c", "--collisions"                          , help="collisions model", type=str, default="lxcat_data/eAr_crs.Biagi.3sp2r")
 parser.add_argument("-ev_max", "--ev_max"                         , help="energy max v-space grid (eV)" , type=float, default=50)
 parser.add_argument("-ev_extend", "--ev_extend"                   , help="energy max boundary extenstion (0 = no extention, 1= 1.2 ev_max, 2 = 25ev_max)", type=int, default=2)
 parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)

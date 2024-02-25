@@ -42,7 +42,7 @@ parser.add_argument("-T", "--T_END"                               , help="Simula
 parser.add_argument("-dt", "--T_DT"                               , help="Simulation time step size ", type=float, default=1e-7)
 parser.add_argument("-o",  "--out_fname"                          , help="output file name", type=str, default='pde_vs_bolsig')
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
-parser.add_argument("-c", "--collisions"                          , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)",nargs='+', type=str, default=["g0Const"])
+parser.add_argument("-c", "--collisions"                          , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default="lxcat_data/eAr_crs.nominal.Biagi.3sp")
 parser.add_argument("-ev", "--electron_volt"                      , help="initial electron volt", type=float, default=0.25)
 parser.add_argument("-q_vr", "--quad_radial"                      , help="quadrature in r"        , type=int, default=200)
 parser.add_argument("-q_vt", "--quad_theta"                       , help="quadrature in polar"    , type=int, default=8)
@@ -62,6 +62,7 @@ parser.add_argument("-dg", "--use_dg"                             , help="enable
 parser.add_argument("-Tg", "--Tg"                                 , help="Gas temperature (K)" , type=float, default=1e-12)
 parser.add_argument("-n0", "--n0"                                 , help="heavy density (1/m^3)" , type=float, default=3.22e22)
 parser.add_argument("-ion_deg", "--ion_deg"                       , help="Ionization degree"   , type=float, nargs='+', default=[1e-1])
+parser.add_argument("-ns_by_n0", "--ns_by_n0"                     , help="ns/n0 ratio for each collision specified in the file in that order", type=float, nargs='+', default=[1, 1, 1, 1, 1, 1, 1, 1])
 parser.add_argument("-store_eedf", "--store_eedf"                 , help="store EEDF"          , type=int, default=0)
 parser.add_argument("-store_csv", "--store_csv"                   , help="store csv format of QoI comparisons", type=int, default=0)
 parser.add_argument("-ee_collisions", "--ee_collisions"           , help="Enable electron-electron collisions", type=float, default=1)
@@ -112,8 +113,11 @@ for run_id in range(len(run_params)):
     spec_list   = list()
     qoi_list    = list()
     solver_data = list()
+    
+    collision_list  = bte_solver.get_collision_list()
+    collision_names = bte_solver.get_collision_names()
 
-    for i in enumerate(args.collisions):
+    for i , _ in enumerate(collision_list):
         rates.append([])
 
     bolsig_ev = bte_solver._bolsig_data["ev"]
@@ -163,7 +167,7 @@ for run_id in range(len(run_params)):
         D.append(qois["diffusion"][-1])
         rr = qois["rates"]
 
-        for col_idx, col in enumerate(args.collisions):
+        for col_idx, g in enumerate(collision_list):
             rates[col_idx].append(rr[col_idx][-1])
         
         # tmp       = BEUtils.compute_radial_components(ev, spec_sp, h_bolsig,mw, vth, 1)
@@ -206,20 +210,20 @@ for run_id in range(len(run_params)):
             if run_id == 0:
                 # write the header
                 header = ["E/N(Td)", "E(V/m)", "Nr", "energy", "diffusion", "mobility", "bolsig_energy", "bolsig_defussion", "bolsig_mobility", "l2_f0", "l2_f1", "Tg", "ion_deg", "atol", "rtol"]
-                for g in args.collisions:
+                for col_idx, g in collision_names:
                     header.append(str(g))
                     header.append("bolsig_"+str(g))
 
                 header.append("rel_energy")
                 header.append("rel_mobility")
                 header.append("rel_diffusion")
-                for g in args.collisions:
+                for col_idx, g in collision_names:
                     header.append("rel_"+str(g))
                 
                 header.append("rel_energy_vs_bolsig")
                 header.append("rel_mobility_vs_bolsig")
                 header.append("rel_diffusion_vs_bolsig")
-                for g in args.collisions:
+                for col_idx, g in collision_names:
                     header.append("rel_"+str(g)+"_vs_bolsig")
                 
                 for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
@@ -235,20 +239,20 @@ for run_id in range(len(run_params)):
                 l2_f1     = normL2(np.abs(radial[i, 1]), np.abs(bolsig_f1), ev) #np.linalg.norm(np.abs(radial[i, 1])-np.abs(bolsig_f1))/np.linalg.norm(np.abs(bolsig_f1))
 
                 data = [args.E_field/args.n0/1e-21, args.E_field, args.sweep_values[i], mu[i], D[i], M[i], bolsig_mu, bolsig_D, bolsig_M, l2_f0, l2_f1, args.Tg, args.ion_deg, solver_data[i]["atol"], solver_data[i]["rtol"]]
-                for col_idx , _ in enumerate(args.collisions):
+                for col_idx , _ in enumerate(collision_list):
                     data.append(rates[col_idx][i])
                     data.append(bolsig_rates[col_idx])
 
                 data.append(np.abs(mu[i]/ mu[-1]-1))
                 data.append(np.abs(M[i] / M[-1] -1))
                 data.append(np.abs(D[i] / D[-1] -1))
-                for col_idx , _ in enumerate(args.collisions):
+                for col_idx , _ in enumerate(collision_list):
                     data.append(np.abs(rates[col_idx][i]/rates[col_idx][-1]-1))
 
                 data.append(np.abs(mu[i]/ bolsig_mu-1))
                 data.append(np.abs(M[i] / bolsig_M -1))
                 data.append(np.abs(D[i] / bolsig_D -1))
-                for col_idx , _ in enumerate(args.collisions):
+                for col_idx , _ in enumerate(collision_list):
                     data.append(np.abs(rates[col_idx][i]/bolsig_rates[col_idx]-1))
 
                 for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
@@ -269,8 +273,6 @@ for run_id in range(len(run_params)):
         
         fig       = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
         
-        COLLISOIN_NAMES = bte_solver._collision_names
-
         #f0
         plt.subplot(num_plt_rows, num_plt_cols,  3)
         plt.semilogy(bolsig_ev,  abs(bolsig_f0), '-k', label="bolsig")
@@ -281,9 +283,9 @@ for run_id in range(len(run_params)):
         plt.subplot(num_plt_rows, num_plt_cols, 1)
         plt.semilogy(args.sweep_values, abs(np.array(mu)/bolsig_mu-1), 'o-', label='mean energy')
         
-        for col_idx, col in enumerate(args.collisions):
+        for col_idx, col in enumerate(collision_list):
             if bolsig_rates[col_idx] != 0:
-                plt.semilogy(args.sweep_values, abs(rates[col_idx]/bolsig_rates[col_idx]-1), 'o-', label=COLLISOIN_NAMES[col])
+                plt.semilogy(args.sweep_values, abs(rates[col_idx]/bolsig_rates[col_idx]-1), 'o-', label=collision_names[col_idx])
         
         plt.semilogy(args.sweep_values, abs(np.array(M)/bolsig_M-1), 'o-', label='mobility')
         plt.xlabel(args.sweep_param)
@@ -295,9 +297,9 @@ for run_id in range(len(run_params)):
         plt.subplot(num_plt_rows, num_plt_cols, 2)
         plt.semilogy(args.sweep_values, abs(np.array(mu)/mu[-1]-1), 'o-', label='mean energy')
         
-        for col_idx, col in enumerate(args.collisions):
+        for col_idx, col in enumerate(collision_list):
             if bolsig_rates[col_idx] != 0:
-                plt.semilogy(args.sweep_values, abs(rates[col_idx]/rates[col_idx][-1]-1), 'o-', label=COLLISOIN_NAMES[col])
+                plt.semilogy(args.sweep_values, abs(rates[col_idx]/rates[col_idx][-1]-1), 'o-', label=collision_names[col_idx])
         
         plt.semilogy(args.sweep_values, abs(np.array(M)/M[-1]-1), 'o-', label='mobility')
         plt.xlabel(args.sweep_param)
@@ -351,7 +353,7 @@ for run_id in range(len(run_params)):
                 plt_idx+=1
 
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
-            plt.semilogy(ev,  abs(abs(radial[i, 0])/abs(bolsig_f0)-1), '-', label=lbl, color=color)
+            plt.semilogy(ev,  np.abs(np.abs(radial[i, 0]) - np.abs(bolsig_f0))/np.max(np.abs(bolsig_f0)), '-', label=lbl, color=color)
             plt.ylim((None, 1))
             plt.ylabel(r"relative error")
             plt.xlabel(r"evergy (eV)")
@@ -359,7 +361,8 @@ for run_id in range(len(run_params)):
             plt.title("f0 (PDE vs. Bolsig)")
             
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 1)
-            plt.semilogy(ev,  abs(abs(radial[i, 1])/abs(bolsig_f1)-1), '-', label=lbl, color=color)
+            plt.semilogy(ev,  np.abs(np.abs(radial[i, 1]) - np.abs(bolsig_f1))/np.max(np.abs(bolsig_f1)), '-', label=lbl, color=color)
+            #plt.semilogy(ev,  abs(abs(radial[i, 1])/abs(bolsig_f1)-1), '-', label=lbl, color=color)
             plt.ylim((None, 1))
             plt.ylabel(r"relative error")
             plt.xlabel(r"evergy (eV)")
@@ -367,14 +370,14 @@ for run_id in range(len(run_params)):
             plt.title("f1 (PDE vs. Bolsig)")
 
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 2)
-            plt.semilogy(ev,  np.abs(np.abs(radial[i, 0])/np.abs(radial[-1, 0])-1), '-', label=lbl, color=color)
+            plt.semilogy(ev,  np.abs(np.abs(radial[i, 0]) - np.abs(radial[-1, 0]))/np.max(np.abs(radial[-1, 0])), '-', label=lbl, color=color)
             plt.ylabel(r"relative error")
             plt.xlabel(r"evergy (eV)")
             plt.grid(visible=True)
             plt.title("f0 (PDE vs. PDE)")
 
             plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 3)
-            plt.semilogy(ev,  np.abs(np.abs(radial[i, 1])/np.abs(radial[-1, 1])-1), '-', label=lbl, color=color)
+            plt.semilogy(ev,  np.abs(np.abs(radial[i, 1]) - np.abs(radial[-1, 1]))/np.max(np.abs(radial[-1, 1])), '-', label=lbl, color=color)
             plt.ylabel(r"relative error")
             plt.xlabel(r"evergy (eV)")
             plt.grid(visible=True)
@@ -396,11 +399,11 @@ for run_id in range(len(run_params)):
                 plt.xlabel(r"time (s)")
                 plt.grid(visible=True)
 
-                for col_idx, col in enumerate(args.collisions):
+                for col_idx, col in enumerate(collision_list):
                     plt.subplot(num_plt_rows, num_plt_cols, plt_idx + 6 + col_idx)
                     plt.semilogy(tgrid, qois["rates"][col_idx], '-', label=lbl, color=color)
 
-                    plt.title(COLLISOIN_NAMES[col])
+                    plt.title(collision_names[col_idx])
                     plt.ylabel(r"reaction rate ($m^3s^{-1}$)")
                     plt.xlabel(r"time (s)")
                     plt.grid(visible=True)
@@ -409,16 +412,17 @@ for run_id in range(len(run_params)):
         fig.suptitle("E=%.4EV/m  E/N=%.4ETd ne/N=%.2E gas temp.=%.2EK, N=%.4E $m^{-3}$"%(args.E_field, args.E_field/args.n0/1e-21, args.ion_deg, args.Tg, args.n0))
         # plt.show()
         effective_efield = args.E_field/args.n0/1e-21
+        colfname = args.collisions.split("/")[-1].strip()
         if len(spec_sp._basis_p._dg_idx)==2:
             if args.steady_state == 1 : 
-                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("pde_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("us_vs_bolsig_cg_" + "_".join(args.collisions) + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".png")
+                plt.savefig("pde_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".png")
         else:
             if args.steady_state == 1 : 
-                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("pde_dg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("us_vs_bolsig_dg_" + "_".join(args.collisions) + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".png")
+                plt.savefig("pde_dg_" + colfname + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".png")
 
         plt.close()
 

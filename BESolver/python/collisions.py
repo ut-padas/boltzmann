@@ -17,6 +17,7 @@ import utils as BEUtils
 import scipy.ndimage
 import basis
 import spec_spherical as sp
+import sys
 
 def electron_thermal_velocity(T):
     """
@@ -70,14 +71,15 @@ class Collisions(abc.ABC):
         self._energy             = cs_data["energy"]
         self._total_cs           = cs_data["cross section"]
         self._reaction_threshold = cs_data["threshold"]
-        self._mByM               = cross_section.CROSS_SECTION_DATA["E + Ar -> E + Ar"]["mass ratio"]
+        self._mByM               = cross_section.CROSS_SECTION_DATA["E + Ar -> E + Ar"]["mass_ratio"]
         
         self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear', bounds_error=False,fill_value=(self._total_cs[0],self._total_cs[-1]))
 
         if self._cs_interp_type == CollisionInterpolationType.USE_BSPLINE_PROJECTION:
             sp_order        = 3
             num_p           = 128
-            k_domain        = (self._energy[0], self._energy[-1] + 1e-10) 
+            kd_threshold    = 1e-8
+            k_domain        = (self._energy[0]- kd_threshold, self._energy[-1] + kd_threshold) 
             k_vec           = basis.BSpline.logspace_knots(k_domain, num_p, sp_order, 0.5 *(self._energy[1] + self._energy[0]) , base=2)
             bb              = basis.BSpline(k_domain, sp_order, num_p, sig_pts=None, knots_vec=k_vec, dg_splines=0, verbose=False)
             
@@ -115,10 +117,10 @@ class Collisions(abc.ABC):
 
         import matplotlib.pyplot as plt
         fig=plt.figure(figsize=(8,8), dpi=300)
-        plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated", markersize=0.3)
-        plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated", markersize=0.3)
+        plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated", markersize=5)
+        plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated", markersize=0.8)
         ext_ev = np.logspace(-4, 4, 1000, base=10)
-        plt.loglog(ext_ev, self.total_cross_section(ext_ev),'g--^', label=r"interpolated + extended", markersize=0.3)
+        plt.loglog(ext_ev, self.total_cross_section(ext_ev),'g--^', label=r"interpolated + extended", markersize=0.8)
         
         plt.legend()
         plt.grid(visible=True)
@@ -269,14 +271,14 @@ class Collisions(abc.ABC):
     #     pass
 
     @staticmethod
-    def synthetic_tcs(ev,mode):
+    def synthetic_tcs(ev, mode):
         """
         synthetic cross-sections for testing. 
         """
         if mode==0:
             return 2e-20 * np.ones_like(ev)
         
-        elif mode == "g0":
+        elif mode == "E + Ar -> E + Ar":
             """
             G0 cross section data fit with analytical function
             """
@@ -293,7 +295,7 @@ class Collisions(abc.ABC):
             assert len(y[y<0]) == 0 , "g0 cross section is negative" 
             return  y
         
-        elif mode == "g2":
+        elif mode == "E + Ar -> E + E + Ar+":
             """
             G2 cross section data fit with analytical function (ionization)
             """
@@ -303,7 +305,7 @@ class Collisions(abc.ABC):
             y[ev>=10000]=0
             return  y
 
-        elif mode == "g2Regul":
+        elif mode == "E + Ar -> E + E + Ar+___":
             """
             G2 cross section data fit with analytical function (ionization)
             """
@@ -340,7 +342,7 @@ class Collisions(abc.ABC):
             
             return  y
         
-        elif mode == "g1":
+        elif mode == "E + Ar -> E + Ar(1S5)":
             """
             G1 cross section data fit with analytical function (excitation)
             """
@@ -369,9 +371,38 @@ class Collisions(abc.ABC):
     
 
 class CollisionType():
+    # electron-heavy elastic (momentum transfer)
     EAR_G0=0
+    
+    # electron-heavy excitation
     EAR_G1=1
+    
+    # electron-heavy ionization
     EAR_G2=2
+    
+    # electron-heavy stepwise-ionization
+    EAR_G3=3
+    
+
+class electron_heavy_binary_collision(Collisions):
+    """
+    class to manage all electron heavy collissions
+    """
+    def __init__(self, cross_section, collision_type) -> None:
+        super().__init__(cross_section)
+        self.load_cross_section(cross_section)
+        
+        if collision_type=="ELASTIC":
+            self._type = CollisionType.EAR_G0
+        elif collision_type == "EXCITATION":
+            self._type = CollisionType.EAR_G1
+        elif collision_type == "IONIZATION":
+            self._type = CollisionType.EAR_G2
+        else:
+            print("[Error]: unknown collision type")
+            sys.exit(0)
+            
+
 
 
 """

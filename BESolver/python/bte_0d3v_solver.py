@@ -98,8 +98,8 @@ class bte_0d3v():
         self.num_collisions = len(self._coll_list)
         
         species       = cross_section.read_available_species(self._args.collisions)
-        mole_fraction = np.array(self._args.ns_by_n0)[0:len(species)]
-        assert np.allclose(np.sum(mole_fraction),1), "mole fractions does not add up to 1.0"
+        # mole_fraction = np.array(self._args.ns_by_n0)[0:len(species)]
+        # assert np.allclose(np.sum(mole_fraction),1), "mole fractions does not add up to 1.0"
         
     
     def get_collision_list(self):

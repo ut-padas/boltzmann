@@ -115,19 +115,19 @@ class Collisions(abc.ABC):
             self._sigma_k = np.dot(mm_inv, b_rhs)
             self._bb      = bb  
 
-        import matplotlib.pyplot as plt
-        fig=plt.figure(figsize=(8,8), dpi=300)
-        plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated", markersize=5)
-        plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated", markersize=0.8)
-        ext_ev = np.logspace(-4, 4, 1000, base=10)
-        plt.loglog(ext_ev, self.total_cross_section(ext_ev),'g--^', label=r"interpolated + extended", markersize=0.8)
+        # import matplotlib.pyplot as plt
+        # fig=plt.figure(figsize=(8,8), dpi=300)
+        # plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated", markersize=5)
+        # plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated", markersize=0.8)
+        # ext_ev = np.logspace(-4, 4, 1000, base=10)
+        # plt.loglog(ext_ev, self.total_cross_section(ext_ev),'g--^', label=r"interpolated + extended", markersize=0.8)
         
-        plt.legend()
-        plt.grid(visible=True)
-        plt.xlabel(r"energy (eV)")
-        plt.ylabel(r"cross section ($m^2$)")
-        plt.savefig("col_%s.png"%(self._col_name))
-        plt.close()
+        # plt.legend()
+        # plt.grid(visible=True)
+        # plt.xlabel(r"energy (eV)")
+        # plt.ylabel(r"cross section ($m^2$)")
+        # plt.savefig("col_%s.png"%(self._col_name))
+        # plt.close()
 
         return
 

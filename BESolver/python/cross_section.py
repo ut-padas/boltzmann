@@ -12,8 +12,8 @@ import os
 def lxcat_cross_section_to_numpy(file : str, column_fields : tp.List[str] )->list:
     try:
         data    = ldp.CrossSectionSet(file)
-    except:
-        print("Error while cross section file read")
+    except Exception as e:
+        print("Error while cross section file read: %s "%str(e))
         sys.exit(0)
     
     np_data = list()
@@ -26,8 +26,8 @@ def read_available_species(file:str):
     try:
         with open(file,'r') as f:
             species = [line.split(":")[1].split("/")[1].strip() for line in f if "SPECIES:" in line]
-    except:
-        print("Error while cross section file read")
+    except Exception as e:
+        print("Error while cross section file read: %s "%str(e))
         sys.exit(0)
     
     species = list(sorted(set(species), key=species.index))
@@ -41,8 +41,8 @@ def read_cross_section_data(file: str):
     for s in species:
         try:
             data = ldp.CrossSectionSet(file, imposed_species=s)
-        except:
-            print("Error while cross section file read")
+        except Exception as e:
+            print("Error while cross section file read: %s "%str(e))
             sys.exit(0)
             
         #print("reading species: ", data.species)

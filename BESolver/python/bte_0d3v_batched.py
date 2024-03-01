@@ -220,12 +220,7 @@ class bte_0d3v_batched():
         # at the moment we don't have flux conditions for the elliptic operator that depends on the Gas temperature, hence disable DG for now. 
         # the DG code should at the limit of advection dominated Tg is low, and E is large. 
         use_dg                 = 0
-        
-        if use_ee==1:
-            use_dg=0
-        else:
-            use_dg=0
-        
+        self._args.use_dg      = use_dg
         bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain=True)
         print("grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1])
         
@@ -499,6 +494,7 @@ class bte_0d3v_batched():
         Wmat         = xp.einsum("v,svu->su",u, c_en)
         
         if args.ee_collisions==1:
+            assert self._args.use_dg==0, "Coulombic collisoins are not permited in the DG formulation"
             cc_op_l1     = c_ee
             cc_op_l2     = xp.swapaxes(c_ee,1,2)
             
@@ -685,7 +681,6 @@ class bte_0d3v_batched():
         c_en         = self._op_col_en[grid_idx]
         qA           = self._op_diag_dg[grid_idx]
         mm_op        = self._op_mass[grid_idx] * mw(0) * vth**3
-        u            = mm_op
         u            = xp.dot(xp.transpose(mm_op),qA)
         Wmat         = xp.dot(u, c_en)
         
@@ -697,10 +692,13 @@ class bte_0d3v_batched():
         
         abs_error       = np.ones(n_pts)
         rel_error       = np.ones(n_pts) 
-        iteration_steps = 0        
+        iteration_steps = 0
 
+        f0       = f0 / xp.dot(u,f0)
+        f0       = np.dot(qA.T, f0)
+        
         fb_prev  = xp.dot(Rmat, f0)
-        f1       = u / xp.dot(u, u)
+        f1       = u  / xp.dot(u, u)
         f1p      = xp.zeros((len(f1), n_pts))
         
         for ii in range(n_pts):
@@ -770,8 +768,8 @@ class bte_0d3v_batched():
         Imat         = self._op_imat_vx[grid_idx]
         
         rhs , rhs_u  = self.get_rhs_and_jacobian(grid_idx, f0.shape[1])
-        tt           = time/tau
-        dt           = delta_t/tau
+        tt           = time
+        dt           = delta_t
         
         def residual(du):
             return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
@@ -801,15 +799,16 @@ class bte_0d3v_batched():
         Rmat         = self._op_rmat[grid_idx]
         QTmat        = xp.transpose(self._op_qmat[grid_idx])
         qA           = self._op_diag_dg[grid_idx]
-        tau          = 1e-7                         #[s] time normalization factor
+        vth          = self._par_vth[grid_idx]
+        mw           = bte_utils.get_maxwellian_3d(vth, 1)
+        mm_op        = self._op_mass[grid_idx] * mw(0) * vth**3
         
         if (solver_type == "steady-state"):
             return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
         elif(solver_type== "transient"):
             dt              = self._args.dt     
             tT              = self._args.cycles
-            tau             = 1/(self._args.Efreq)
-            
+            tau             = 1e-7 if self._args.Efreq==0 else (1/self._args.Efreq)
             profile_tt[pp.SOLVE].reset()
             if xp==cp:
                 xp.cuda.runtime.deviceSynchronize()
@@ -821,7 +820,9 @@ class bte_0d3v_batched():
             steps_total     = int(tT/dt)
             rhs , rhs_u     = self.get_rhs_and_jacobian(grid_idx, f0.shape[1])
             
-            u               = f0
+            
+            u               = f0 / xp.dot(mm_op, f0)
+            u               = np.dot(qA.T, u)
             tt              = 0
             n_pts           = f0.shape[1]
             INr             = xp.eye(Qmat.shape[1])
@@ -838,17 +839,18 @@ class bte_0d3v_batched():
             v_qoi           = xp.zeros((3 + len(self._coll_list), n_pts))
             u0              = xp.copy(u)
             for ts_idx in range(steps_total+1):
-                eRe = self.get_boltzmann_parameter(grid_idx, "eRe")
-                eIm = self.get_boltzmann_parameter(grid_idx, "eIm")
-                Et  = eRe * xp.cos(2 * xp.pi * (tt + dt)) + eIm * xp.sin(2 * xp.pi * (tt + dt))
-                self.set_boltzmann_parameter(grid_idx, "E", Et)
+                if (self._args.Efreq>0):
+                    eRe = self.get_boltzmann_parameter(grid_idx, "eRe")
+                    eIm = self.get_boltzmann_parameter(grid_idx, "eIm")
+                    Et  = eRe * xp.cos(2 * xp.pi * (tt + dt)) + eIm * xp.sin(2 * xp.pi * (tt + dt))
+                    self.set_boltzmann_parameter(grid_idx, "E", Et)
 
                 def residual(du):
-                    return du - dt * rhs(u + xp.dot(Qmat, du), tt + dt, dt)
+                    return du - dt * tau * rhs(u + xp.dot(Qmat, du), (tt + dt) * tau, dt * tau)
                     #return du  - 0.5 * dt * tau * rhs(u + xp.dot(Qmat, du), (tt + dt) * tau , tau * dt) - 0.5 * dt * tau * rhs(u, tt * tau, dt * tau)
         
                 def jacobian(du):
-                    return (Imat - dt * rhs_u(u, tt, dt))
+                    return (Imat - dt * tau * rhs_u(u, tt * tau, dt * tau))
                     #return Imat - 0.5 * dt * tau * rhs_u(u, tt * tau, dt * tau)
                 
                 ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
@@ -939,7 +941,7 @@ class bte_0d3v_batched():
         xp  = cp.get_array_module(ff) 
 
         mm  = xp.dot(self._op_mass[grid_idx], ff) * mw(0) * vth**3
-        mu  = xp.dot(self._op_temp[grid_idx], ff) * mw(0) * vth**5  / mm
+        mu  = 1.5 * xp.dot(self._op_temp[grid_idx], ff) * mw(0) * vth**5  / mm
 
         if effective_mobility:
             M   = xp.dot(self._op_mobility[grid_idx], xp.sqrt(3) * ff[1::num_sh, :])  * (-(c_gamma / (3 * ( E / n0))))

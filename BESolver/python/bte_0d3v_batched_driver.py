@@ -253,7 +253,7 @@ if plot_data:
     num_plt_rows = np.int64(np.ceil(num_subplots/num_plt_cols))
     fig        = plt.figure(figsize=(num_plt_cols * 8 + 0.5*(num_plt_cols-1), num_plt_rows * 8 + 0.5*(num_plt_rows-1)), dpi=300, constrained_layout=True)
     plt_idx    =  1
-    n_pts_step =  n_pts // 20
+    n_pts_step =  max(1, n_pts // 20)
 
     for lm_idx, lm in enumerate(lm_modes[0]):
         plt.subplot(num_plt_rows, num_plt_cols, plt_idx)

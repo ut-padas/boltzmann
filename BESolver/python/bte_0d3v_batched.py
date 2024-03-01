@@ -730,20 +730,20 @@ class bte_0d3v_batched():
                 
             
             if(is_diverged):
-                print("[steady-state] iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
+                print("grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
                 break
             
             h_curr      = h_prev + alpha * p
             
             if iteration_steps % 10 == 0:
                 rel_error = xp.linalg.norm(h_prev-h_curr, axis=0)/xp.linalg.norm(h_curr, axis=0)
-                print("[steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
+                print("grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
             
             #fb_prev      = np.dot(Rmat,h_curr)
             h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
             iteration_steps+=1
 
-        print("[steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        print("grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
         profile_tt[pp.SOLVE].stop()

@@ -959,19 +959,19 @@ For general collision terms with energy threshold is larger than the quadrature 
 %	&\partial_t M^{p}_{k} y_{kqs} + E\Lambda^{qs}_{lm}(D^{p}_k + 2S^{p}_{k})y_{klm} -E Q^T B^{qs}_{lm} Q S^{p}_{k} y_{klm} = Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r} \\
 %	&\partial_t M^{p}_{k} y_{kqs} = -E \of{\of{2 \Lambda^{qs}_{lm} -Q^T B^{qs}_{lm} Q} S^p_{k} + \Lambda^{qs}_{lm} D^{p}_{k}}y_{klm} + Q^T C^{pqs}_{klm}Q y_{klm} + E\Lambda^{qs}_{lm}[y_{lm}^*(v) v^2 \psi_{p}\of{v}]_{D_l}^{D^r}
 %\end{align*}
-\newpage
-\subsection{Using piecewise polynomials}
-$P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,1]$. For $\of{\frac{v}{v_{th}}} \in [a,b]$, we can write 
-\begin{align*}
-	x=\of{\frac{v}{v_{th}}} &= \of{\frac{b-a}{2}}t + \of{\frac{a+b}{2}} \\
-	\phi_k\of{\frac{v}{v_{th}}} &= \exp\of{-\of{\frac{v}{v_{th}}}^2} P_k(t) \\
-	\psi_k\of{\frac{v}{v_{th}}} &= P_k(t) \\
-	M^p_k = &\myint_{av_{th}}^{b v_{th}} v^2 \psi_p\of{\frac{v}{v_{th}}} \phi_k\of{\frac{v}{v_{th}}} dv = v_{th}^3  \myint_{a}^{b} x^2 \psi_p\of{x} \phi_k\of{x}dx\\
-	&=v_{th}^3 \myint_{-1}^{1} x^2 \exp\of{-x^2}  P_k(t) P_p(t) \of{\frac{b-a}{2}} dt
-\end{align*} Where full mass matrix (i.e., with spherical basis)
-\begin{align*}
-	M^{pqs}_{klm} = M^{p}_k \delta^{q}_{l} \delta^{s}_{m}
-\end{align*}
+%\newpage
+%\subsection{Using piecewise polynomials}
+%$P_k\of{t}$ be Chebyshev polynomial with degree $k$, defined on domain $t\in[-1,1]$. For $\of{\frac{v}{v_{th}}} \in [a,b]$, we can write 
+%\begin{align*}
+%	x=\of{\frac{v}{v_{th}}} &= \of{\frac{b-a}{2}}t + \of{\frac{a+b}{2}} \\
+%	\phi_k\of{\frac{v}{v_{th}}} &= \exp\of{-\of{\frac{v}{v_{th}}}^2} P_k(t) \\
+%	\psi_k\of{\frac{v}{v_{th}}} &= P_k(t) \\
+%	M^p_k = &\myint_{av_{th}}^{b v_{th}} v^2 \psi_p\of{\frac{v}{v_{th}}} \phi_k\of{\frac{v}{v_{th}}} dv = v_{th}^3  \myint_{a}^{b} x^2 \psi_p\of{x} \phi_k\of{x}dx\\
+%	&=v_{th}^3 \myint_{-1}^{1} x^2 \exp\of{-x^2}  P_k(t) P_p(t) \of{\frac{b-a}{2}} dt
+%\end{align*} Where full mass matrix (i.e., with spherical basis)
+%\begin{align*}
+%	M^{pqs}_{klm} = M^{p}_k \delta^{q}_{l} \delta^{s}_{m}
+%\end{align*}
 
 
 %were $C^{qs}_{lm}$ denotes the projection of the collision operator to $Y_{qs}$, which can be written as, 

@@ -14,8 +14,8 @@ cs_species                       = cross_section.read_available_species("lxcat_d
 crs_data                         = cross_section.read_cross_section_data("lxcat_data/eAr_crs.15sp106r")
 cross_section.CROSS_SECTION_DATA = crs_data
 
-Tg                               = 0.8 #eV
-out_cs_fname                     = "lxcat_data/eAr_crs.6sp_Tg_0.8eV"
+Tg                               = 1.0 #eV
+out_cs_fname                     = "lxcat_data/eAr_crs.6sp_Tg_1.0eV"
 
 mass_ar    = scipy.constants.electron_mass / crs_data["E + Ar -> E + Ar"]["mass_ratio"]
 c_gamma_Ar = np.sqrt(2 * scipy.constants.elementary_charge / mass_ar)
@@ -63,7 +63,43 @@ lump_mechanism = {
                                             "E + Ar(2p1) -> E + E + Ar(+)"]
             }
 
-species_energy = {"Ar": 0,  "Ar*(1)":11.54835 , "Ar5":11.54835 , "Ar4":11.62359, "Ar*(2)":11.72316, "Ar3":11.72316, "Ar2":11.82807, "Ar*(3)":12.907, "Ar(2p10)":12.907, "Ar(2p9)":13.076, "Ar(2p8)":13.095, "Ar(2p7)":13.153, "Ar(2p6)":13.172, "Ar(2p5)":13.273, "Ar(2p4)":13.283, "Ar(2p3)":13.302, "Ar(2p2)":13.328, "Ar(2p1)":13.48}
+species_energy  = {
+                  "Ar": 0,
+                  "Ar*(1)":11.54835,
+                  "Ar5":11.54835,
+                  "Ar4":11.62359,
+                  "Ar*(2)":11.72316,
+                  "Ar3":11.72316,
+                  "Ar2":11.82807,
+                  "Ar*(3)":12.907,
+                  "Ar(2p10)":12.907,
+                  "Ar(2p9)":13.076,
+                  "Ar(2p8)":13.095,
+                  "Ar(2p7)":13.153,
+                  "Ar(2p6)":13.172,
+                  "Ar(2p5)":13.273,
+                  "Ar(2p4)":13.283,
+                  "Ar(2p3)":13.302,
+                  "Ar(2p2)":13.328,
+                  "Ar(2p1)":13.48}
+
+species_degeneracy = {
+    "Ar":1,
+    "Ar5": 5,
+    "Ar4": 3,
+    "Ar3": 1,
+    "Ar2": 3,
+    "Ar(2p10)":3,
+    "Ar(2p9)":7,
+    "Ar(2p8)":5,
+    "Ar(2p7)":3,
+    "Ar(2p6)":5,
+    "Ar(2p5)":1,
+    "Ar(2p4)":3,
+    "Ar(2p3)":5,
+    "Ar(2p2)":3,
+    "Ar(2p1)":1 }
+
 num_cs_pts  = 256
 for idx, (k, lump_r) in enumerate(lump_mechanism.items()):
     cs_type    = list()
@@ -74,7 +110,7 @@ for idx, (k, lump_r) in enumerate(lump_mechanism.items()):
     
     lump_sp    = k.split("+")[1].strip()
     
-    cs_weight = np.array([mw(species_energy[crs_data[r]["species"]]) for r in lump_r])
+    cs_weight = np.array([species_degeneracy[crs_data[r]["species"]] * mw(species_energy[crs_data[r]["species"]]) for r in lump_r])
     #cs_weight = np.array([mw(np.sqrt(species_energy[crs_data[r]["species"]]) * c_gamma_Ar/vth) for r in lump_r])
     #cs_weight = np.array([(np.sqrt(species_energy[crs_data[r]["species"]]) * c_gamma_Ar/vth) for r in lump_r])
     cs_weight = cs_weight/np.sum(cs_weight)

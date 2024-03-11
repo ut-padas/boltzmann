@@ -491,7 +491,17 @@ class bte_0d3v_batched():
         v, u, a, b  - index in v-space
         x, y, z     - index in x-space
         """
+        
         Wmat         = xp.einsum("v,svu->su",u, c_en)
+        
+        QT_Cen       = xp.einsum("mu,suv->smv", QTmat, c_en) #xp.dot(QTmat, c_en)
+        QT_Cgt       = xp.dot(QTmat, c_gT)
+        QT_A         = xp.dot(QTmat, adv_mat)
+        
+        QT_Cen_Q     = xp.einsum("av,svu->sau",QTmat, xp.dot(c_en, Qmat)) #xp.dot(QTmat, xp.dot(c_en, Qmat))
+        QT_Cgt_Q     = xp.dot(QTmat, xp.dot(c_gT, Qmat))
+        QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
+        Imat         = xp.eye(QTmat.shape[0])
         
         if args.ee_collisions==1:
             assert self._args.use_dg==0, "Coulombic collisoins are not permited in the DG formulation"
@@ -508,10 +518,6 @@ class bte_0d3v_batched():
                 c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * xp.sqrt(ne)))
                 gamma_a      = (xp.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
                 return gamma_a
-            
-            QT_Cen     = xp.einsum("mu,suv->smv", QTmat, c_en) #xp.dot(QTmat, c_en)
-            QT_Cgt     = xp.dot(QTmat, c_gT)
-            QT_A       = xp.dot(QTmat, adv_mat)
             
             def res_func(x, time, dt):
                 if xp == cp:
@@ -537,11 +543,6 @@ class bte_0d3v_batched():
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].stop()
                 return y1
-            
-            QT_Cen_Q     = xp.einsum("av,svu->sau",QTmat, xp.dot(c_en, Qmat)) #xp.dot(QTmat, xp.dot(c_en, Qmat))
-            QT_Cgt_Q     = xp.dot(QTmat, xp.dot(c_gT, Qmat))
-            QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
-            Imat         = xp.eye(QTmat.shape[0])
             
             def jac_func(x, time, dt):
                 if xp==cp:
@@ -574,10 +575,6 @@ class bte_0d3v_batched():
                     
         else:
             
-            QT_Cen     = xp.einsum("mu,suv->smv", QTmat, c_en) #xp.dot(QTmat, c_en)
-            QT_Cgt     = xp.dot(QTmat, c_gT)
-            QT_A       = xp.dot(QTmat, adv_mat)
-            
             def res_func(x, time, dt):
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
@@ -598,11 +595,6 @@ class bte_0d3v_batched():
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].stop()
                 return y1
-            
-            QT_Cen_Q     = xp.einsum("av,svu->sau",QTmat, xp.dot(c_en, Qmat)) #xp.dot(QTmat, xp.dot(c_en, Qmat))
-            QT_Cgt_Q     = xp.dot(QTmat, xp.dot(c_gT, Qmat))
-            QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
-            Imat         = xp.eye(QTmat.shape[0])
             
             def jac_func(x, time, dt):
                 if xp==cp:
@@ -628,40 +620,34 @@ class bte_0d3v_batched():
         return res_func, jac_func
     
     def rhs_and_jac_flops(self):
-        args = self._args
-        if args.ee_collisions==1:
-            def res_flops(n, p):
-                m0 = p * (2 * n -1) * 2 + p                                     # ne * gamma_a(x)
-                m1 = (n-1) * p * (2 * n -1)                                     # xp.dot(QT_Cen,x)
-                m2 = (n-1) * p * (2 * n -1) + (n-1) * p                         # Tg * xp.dot(QT_Cgt, x)
-                m3 = (n-1) * p * 2                                              # n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) )
-                m4 = (n-1) * p * (2 * n -1) + (n-1) * p                         # ef * xp.dot(QT_A,x)
-                m5 = p * (2 * n -1) + p + (n-1) * p * (2 * n - 1)  + (n-1) * p  # n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
-                m6 = n * n * p * (2 * n -1)                                     # c_ee_x  = xp.dot(c_ee, x) 
-                m7 = p * (n * (2 * n -1) + (n-1) * (2 * n - 1)  + (n-1))        # ga[ii] * xp.dot(QTmat, xp.dot(c_ee_x[:,:,ii], x[:,ii]))
+        args   = self._args
+        s      = len(self._avail_species)
+        
+        def res_flops(n, p):
+            m0 = p * (2 * n -1) * 2 + (1 + 1 + 1) * p                       # ne * gamma_a(x)
+            m1 = (n-1) * p * (2 * n -1) + (2 * s -1) * (n-1) * p            # xp.einsum("sx,svx->vx", ns_by_n0, xp.dot(QT_Cen, x))
+            m2 = (n-1) * p * (2 * n -1) + (n-1) * p                         # Tg * xp.dot(QT_Cgt, x)
+            m3 = (n-1) * p * 3                                              # n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) )
+            m4 = (n-1) * p * (2 * n -1) + (n-1) * p                         # ef * xp.dot(QT_A,x)
+            m5 = p * (2 * n -1) + p + (n-1) * p * (2 * n - 1)  + (n-1) * p  # n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
+            m6 = n * n * p * (2 * n -1)                                     # c_ee_x  = xp.dot(c_ee, x) 
+            m7 = n * p * (2 * n -1)  + (n-1) * p * (2 * n - 1) + (n-1) * p  # ne * gamma_a(x) * xp.dot(QTmat, xp.dot(c_ee_x[:,:,ii], x[:,ii]))
+            if args.ee_collisions==1:
                 return m0 + m1 + m2 + m3 + m4 + m5 + m6 + m7
+            else:
+                return m1 + m2 + m3 + m4 + m5 
+        
+        def jac_flops(n,p):
+            m0 = p * (2 * n -1) * 2 + (1 + 1 + 1) * p                       # ne * gamma_a(x)
+            m1 = n * n * p * (2 * n - 1) * 2 + n * n * p                    # cc1_x_p_cc2x = xp.dot(cc_op_l1, x) + xp.dot(cc_op_l2, x)
+            m2 = p * (2 *n -1) + p                                          # mu           = n0 * xp.dot(Wmat, x)
+            m3 = (n-1) * (n-1) * p * (2 * s -1) + p * (n-1) * (n-1) * 2     # xp.einsum("sx,svu->xvu", ns, QT_Cen_Q) + xp.einsum("a,bc->abc", n0 * Tg, QT_Cgt_Q) + xp.einsum("a,bc->abc", E, QT_A_Q)
+            m4 = n * p * (n-1) * (2 * n -1) + (n-1) * (n-1) * p * (2 * n -1) + (n-1) * (n-1) * p #ga[ii] * xp.dot(QTmat, xp.dot(cc1_x_p_cc2x[:,:,ii], Qmat))
+            m5 = p * (n-1) * (n-1)                                          # Imat * mu[ii]
             
-            def jac_flops(n,p):
-                m0 = p * (2 * n -1) * 2 + p # ne * gamma_a(x)
-                m1 = n * n * p * (2 * n - 1) * 2 + n * n * p #cc1_x_p_cc2x = xp.dot(cc_op_l1, x) + xp.dot(cc_op_l2, x)
-                m2 = p * (2 *n -1) + p # mu           = n0 * xp.dot(Wmat, x)
-                m3 = p * ((n-1) * (n-1) * 6)  # n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q +
-                m4 = p * ( 2 * n * (n-1) * (2 * n -1)  + (n-1) * (n-1))  # ga[ii] * xp.dot(QTmat, xp.dot(cc1_x_p_cc2x[:,:,ii], Qmat))
-                m5 = p * (n-1) * (n-1) # Imat * mu[ii]
+            if args.ee_collisions==1:
                 return m0 + m1 + m2 + m3 + m4 + m5
-        else:
-            def res_flops(n, p):
-                m1 = (n-1) * p * (2 * n -1) # xp.dot(QT_Cen,x)
-                m2 = (n-1) * p * (2 * n -1) + (n-1) * p # Tg * xp.dot(QT_Cgt, x)
-                m3 = (n-1) * p # n0 * ( xp.dot(QT_Cen,x) + Tg * xp.dot(QT_Cgt, x) )
-                m4 = (n-1) * p * (2 * n -1) + (n-1) * p   # ef * xp.dot(QT_A,x)
-                m5 = p * (2 * n -1) + p + (n-1) * p * (2 * n - 1) + (n-1) * p # n0 * xp.dot(Wmat, x) *  xp.dot(QTmat, x)
-                return m1 + m2 + m3 + m4 + m5
-            
-            def jac_flops(n,p):
-                m2 = p * (2 *n -1) + p # mu           = n0 * xp.dot(Wmat, x)
-                m3 = p * ((n-1) * (n-1) * 6)  # n0[ii] * (QT_Cen_Q + Tg[ii] * QT_Cgt_Q) + ef[ii] * QT_A_Q +
-                m5 = p * (n-1) * (n-1) # Imat * mu[ii]
+            else:
                 return m2 + m3 + m5
         
         return res_flops, jac_flops
@@ -710,7 +696,16 @@ class bte_0d3v_batched():
             Lmat      =  jac_func(h_prev, 0, 0)
             rhs_vec   =  res_func(h_prev, 0, 0)
             abs_error =  xp.linalg.norm(rhs_vec, axis=0)
+            
+            if xp==cp:
+                xp.cuda.runtime.deviceSynchronize()
+            profile_tt[pp.JAC_LA_SOL].start()
+            
             Lmat_inv  =  xp.linalg.inv(Lmat)
+            
+            if xp==cp:
+                xp.cuda.runtime.deviceSynchronize()
+            profile_tt[pp.JAC_LA_SOL].stop()
             
             pp_mat    = xp.einsum("abc,ca->ba",Lmat_inv, -rhs_vec)
             p         = xp.dot(Qmat,pp_mat)
@@ -1002,24 +997,66 @@ class bte_0d3v_batched():
         
         return
     
-    def profile_stats(self):
+    def profile_stats(self, fname=""):
         args = self._args
         res_flops, jac_flops = self.rhs_and_jac_flops()
         n                    = (args.l_max + 1) * (args.Nr + 1) 
         p                    = args.n_pts
         
+        t_setup              = profile_tt[pp.SETUP].seconds
+        t_solve              = profile_tt[pp.SOLVE].seconds
         
-        print("--setup\t %.4Es"%(profile_tt[pp.SETUP].seconds))
+        t_rhs                = profile_tt[pp.RHS_EVAL].seconds
+        t_jac                = profile_tt[pp.JAC_EVAL].seconds
+        t_jac_solve          = profile_tt[pp.JAC_LA_SOL].seconds
+        
+        
+        
+        print("--setup\t %.4Es"%(t_setup))
         print("   |electon-X \t %.4Es"%(profile_tt[pp.C_EN_SETUP].seconds))
         print("   |coulombic \t %.4Es"%(profile_tt[pp.C_EE_SETUP].seconds))
         print("   |advection \t %.4Es"%(profile_tt[pp.ADV_SETUP].seconds))
-        print("--solve \t %.4Es"%(profile_tt[pp.SOLVE].seconds))
-        print("   |rhs \t %.4Es"%(profile_tt[pp.RHS_EVAL].seconds))
+        print("--solve \t %.4Es"%(t_solve))
         
-        t1      = profile_tt[pp.RHS_EVAL].seconds/profile_tt[pp.RHS_EVAL].iter
-        flops   = res_flops(n, p) / t1
-        print("   |rhs/call \t %.4Es flops = %.4E"%(t1, flops))
-        t1      = profile_tt[pp.JAC_EVAL].seconds/profile_tt[pp.JAC_EVAL].iter
-        flops   = res_flops(n, p) / t1
-        print("   |jacobian \t %.4Es"%(profile_tt[pp.JAC_EVAL].seconds))
-        print("   |jacobian/call \t %.4Es flops = %.4E"%(t1, flops))
+        t1         = profile_tt[pp.RHS_EVAL].seconds/profile_tt[pp.RHS_EVAL].iter
+        flops_rhs  = res_flops(n, p) / t1
+        
+        print("   |rhs \t %.4Es # iter = %d"%(profile_tt[pp.RHS_EVAL].seconds, profile_tt[pp.RHS_EVAL].iter))
+        print("   |rhs/call \t %.4Es flops = %.4E"%(t1, flops_rhs))
+        
+        t1        = profile_tt[pp.JAC_EVAL].seconds/profile_tt[pp.JAC_EVAL].iter
+        flops_jac = jac_flops(n, p) / t1
+        
+        print("   |jacobian \t %.4Es # iter = %d"%(profile_tt[pp.JAC_EVAL].seconds, profile_tt[pp.JAC_EVAL].iter))
+        print("   |jacobian/call \t %.4Es flops = %.4E"%(t1, flops_jac))
+        
+        t1               = profile_tt[pp.JAC_LA_SOL].seconds/profile_tt[pp.JAC_LA_SOL].iter
+        flops_jac_solve  = p*((n-1)**3 + 2 * (n-1)**2)/t1
+        print("   |jacobian solve \t %.4Es # iter = %d"%(profile_tt[pp.JAC_LA_SOL].seconds, profile_tt[pp.JAC_LA_SOL].iter))
+        print("   |jacobian solve /call \t %.4Es flops = %.4E"%(t1, flops_jac_solve))
+        
+        if fname!="":
+            with open(fname, "a") as f:
+                header = ["Nv", "Nx", "total", "setup", "solve", "rhs_calls", "rhs_per_call", "rhs_per_call_flops/s",  "jac_calls", "jac_per_call", "rhs_per_call_flops/s",  "jac_solve_per_call", "jac_solve_per_call_flops/s"]
+                data   = [n, p,
+                          t_setup + t_solve, t_setup, t_solve, 
+                          profile_tt[pp.RHS_EVAL].iter,
+                          t_rhs/profile_tt[pp.RHS_EVAL].iter,
+                          flops_rhs,
+                          profile_tt[pp.JAC_EVAL].iter,
+                          t_jac/profile_tt[pp.JAC_EVAL].iter,
+                          flops_jac,
+                          profile_tt[pp.JAC_LA_SOL].seconds/profile_tt[pp.JAC_EVAL].iter,
+                          flops_jac_solve
+                          ]
+                data_str= ["%.4E"%d for d in data]
+                f.write(",".join(header)+"\n")
+                f.write(",".join(data_str)+"\n")
+                f.close()
+            
+                
+                
+        
+        
+        
+        

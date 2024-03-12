@@ -146,15 +146,22 @@ if args.use_gpu==1:
     bte_solver.host_to_device_setup(dev_id, grid_idx)
     
 if args.profile==1:
-    res_func, jac_func = bte_solver.get_rhs_and_jacobian(0, f0.shape[1], 16)
+    res_func, jac_func = bte_solver.get_rhs_and_jacobian(0, f0.shape[1])
+    f0  = bte_solver.get_boltzmann_parameter(grid_idx, "f0")
     for i in range(args.warm_up):
-        a=res_func(f0)
-        b=jac_func(f0)
+        xp = bte_solver.xp_module
+        a  = res_func(f0, 0, 0)
+        b  = jac_func(f0, 0, 0)
+        b  = bte_solver.batched_inv(grid_idx, b)
+        b  = xp.einsum("ijk,ki->ji", b, a)
     
     bte_solver.profile_reset()
     for i in range(args.runs):
-        a=res_func(f0)
-        b=jac_func(f0)
+        xp = bte_solver.xp_module
+        a  = res_func(f0, 0, 0)
+        b  = jac_func(f0, 0, 0)
+        b  = bte_solver.batched_inv(grid_idx, b)
+        b  = xp.einsum("ijk,ki->ji", b, a)
     
     bte_solver.profile_stats()
     sys.exit(0)

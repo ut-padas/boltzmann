@@ -45,16 +45,11 @@ class pp(enum.IntEnum):
     D2H           = 12
     LAST          = 13
 
-profile_tt  = [None] * int(pp.LAST)
-profile_nn  = ["all","setup", "e-n c_op", "e-e c_op", "adv op", "initialize", "solve", "rhs", "jac", "jac_solve", "H2D", "D2H", "last"]
-for i in range(pp.LAST):
-    profile_tt[i] = profile_t(profile_nn[i])
 
-
-def newton_solver_batched(x, n_pts, residual, jacobian, atol, rtol, iter_max, xp=np):
+def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol, iter_max, xp=np):
     jac      = jacobian(x)
     assert jac.shape[0] == n_pts
-    jac_inv  = xp.linalg.inv(jac)
+    jac_inv  = jacobian_inv(jac) #xp.linalg.inv(jac)
   
     ns_info  = dict()
     alpha    = 1.0 #xp.ones(n_pts)
@@ -120,6 +115,13 @@ class bte_0d3v_batched():
         n_vspace_grids  : number of v-space grids to use
         collision model : collision string detailing which collisions to perform
         """
+        
+        self.profile_nn     = ["all","setup", "e-n c_op", "e-e c_op", "adv op", "initialize", "solve", "rhs", "jac", "jac_solve", "H2D", "D2H", "last"]
+        self.profile_tt_all = list()
+        for i in range(n_vspace_grids):
+            profile_tt          = [profile_t(self.profile_nn[i]) for i in range(int(pp.LAST))]
+            self.profile_tt_all.append(profile_tt)
+        
         self._par_nvgrids    = n_vspace_grids
         self._args           = args # common arguments for all cases
         self._par_ap_Te      = Te 
@@ -154,6 +156,8 @@ class bte_0d3v_batched():
         self.xp_module        = np
         self._par_dof         = np.array([(self._par_nr[i]+1) * len(lm) for i in range(self._par_nvgrids)] , dtype=np.int32)
         
+        
+        profile_tt = self.profile_tt_all[0]
         profile_tt[pp.C_CS_SETUP].start()
         
         self._collision_names              = list()
@@ -198,6 +202,7 @@ class bte_0d3v_batched():
         args            = self._args
         collision_model = self._par_col_model
         lm              = self._par_lm[idx]
+        profile_tt      = self.profile_tt_all[grid_idx]
         profile_tt[pp.SETUP].start()
         
         vth                    = self._par_vth[idx]
@@ -354,6 +359,7 @@ class bte_0d3v_batched():
         """
         Initialize the grid to Maxwell-Boltzmann distribution
         """
+        profile_tt  = self.profile_tt_all[grid_idx]
         profile_tt[pp.INIT_COND].start()
         spec_sp     = self._op_spec_sp[grid_idx]
         mmat        = self._op_mass_mat[grid_idx]
@@ -397,9 +403,12 @@ class bte_0d3v_batched():
         """
         host_to_device_setup(dev_id, grid_idx) will put grid_idx operators on device dev_id
         """
-        profile_tt[pp.H2D].start()
         dev_id = args[0]
         idx    = args[1]
+        
+        profile_tt = self.profile_tt_all[idx]
+        profile_tt[pp.H2D].start()
+        
         with cp.cuda.Device(dev_id):
             self._op_mass_mat[idx]  = cp.asarray(self._op_mass_mat[idx])
             self._op_advection[idx] = cp.asarray(self._op_advection[idx])
@@ -428,9 +437,11 @@ class bte_0d3v_batched():
         return
     
     def device_to_host_setup(self, *args):
-        profile_tt[pp.D2H].start()
         dev_id   = args[0]
         idx      = args[1]
+        
+        profile_tt = self.profile_tt_all[idx]
+        profile_tt[pp.D2H].start()
          
         with cp.cuda.Device(dev_id):
             self._op_mass_mat[idx]  = cp.asnumpy(self._op_mass_mat[idx])
@@ -461,6 +472,7 @@ class bte_0d3v_batched():
     
     def get_rhs_and_jacobian(self, grid_idx: int, n_pts:int):
         xp           = self.xp_module
+        profile_tt   = self.profile_tt_all[grid_idx]
         args         = self._args
         eps_0        = scipy.constants.epsilon_0
         me           = scipy.constants.electron_mass
@@ -651,9 +663,28 @@ class bte_0d3v_batched():
                 return m2 + m3 + m5
         
         return res_flops, jac_flops
+    
+    def batched_inv(self, grid_idx, Jmat):
+        """
+        computes the batched inverse of array of dense matrices
+        """
+        xp           = self.xp_module
+        profile_tt   = self.profile_tt_all[grid_idx]
+        
+        if xp==cp:
+            xp.cuda.runtime.deviceSynchronize()
+        profile_tt[pp.JAC_LA_SOL].start()
+        
+        Jmat_inv = xp.linalg.inv(Jmat)
+        
+        if xp==cp:
+            xp.cuda.runtime.deviceSynchronize()
+        profile_tt[pp.JAC_LA_SOL].stop()
+        return Jmat_inv
             
     def steady_state_solve(self, grid_idx : int, f0 : np.array, atol, rtol, max_iter):
         xp           = self.xp_module
+        profile_tt   = self.profile_tt_all[grid_idx]
         
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
@@ -697,18 +728,10 @@ class bte_0d3v_batched():
             rhs_vec   =  res_func(h_prev, 0, 0)
             abs_error =  xp.linalg.norm(rhs_vec, axis=0)
             
-            if xp==cp:
-                xp.cuda.runtime.deviceSynchronize()
-            profile_tt[pp.JAC_LA_SOL].start()
+            Lmat_inv  =  self.batched_inv(grid_idx, Lmat)
             
-            Lmat_inv  =  xp.linalg.inv(Lmat)
-            
-            if xp==cp:
-                xp.cuda.runtime.deviceSynchronize()
-            profile_tt[pp.JAC_LA_SOL].stop()
-            
-            pp_mat    = xp.einsum("abc,ca->ba",Lmat_inv, -rhs_vec)
-            p         = xp.dot(Qmat,pp_mat)
+            pp_mat    =  xp.einsum("abc,ca->ba",Lmat_inv, -rhs_vec)
+            p         =  xp.dot(Qmat,pp_mat)
 
             alpha  = xp.ones(n_pts)
             is_diverged = False
@@ -773,9 +796,13 @@ class bte_0d3v_batched():
         def jacobian(du):
             return (Imat - dt * rhs_u(u, tt, dt))
             #return Imat - 0.5 * dt * tau * rhs_u(u, tt * tau, dt * tau)
+        
+        def jacobian_inv(J):
+            return self.batched_inv(grid_idx, J) 
+        
         u       = f0            
         du      = xp.zeros((Qmat.shape[1],n_pts))
-        ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
+        ns_info = newton_solver_batched(du, n_pts, residual, jacobian, jacobian_inv, atol, rtol, max_iter, xp)
         
         if ns_info["status"]==False:
             print("At time = %.2E "%(time), end='')
@@ -790,6 +817,8 @@ class bte_0d3v_batched():
         
     def solve(self, grid_idx:int, f0:np.array, atol, rtol, max_iter:int, solver_type:str):
         xp           = self.xp_module
+        profile_tt   = self.profile_tt_all[grid_idx]
+        
         Qmat         = self._op_qmat[grid_idx]
         Rmat         = self._op_rmat[grid_idx]
         QTmat        = xp.transpose(self._op_qmat[grid_idx])
@@ -847,8 +876,11 @@ class bte_0d3v_batched():
                 def jacobian(du):
                     return (Imat - dt * tau * rhs_u(u, tt * tau, dt * tau))
                     #return Imat - 0.5 * dt * tau * rhs_u(u, tt * tau, dt * tau)
+                    
+                def jacobian_inv(J):
+                    return self.batched_inv(grid_idx, J) 
                 
-                ns_info = newton_solver_batched(du, n_pts, residual, jacobian, atol, rtol, max_iter, xp)
+                ns_info = newton_solver_batched(du, n_pts, residual, jacobian, jacobian_inv, atol, rtol, max_iter, xp)
                 
                 if ns_info["status"]==False:
                     print("At time = %.2E "%(tt), end='')
@@ -992,9 +1024,9 @@ class bte_0d3v_batched():
     
     def profile_reset(self):
         args = self._args
-        for i in range(pp.LAST):
-            profile_tt[i].reset()
-        
+        for profile_tt in self.profile_tt_all:
+            for i in range(pp.LAST):
+                profile_tt[i].reset()
         return
     
     def profile_stats(self, fname=""):
@@ -1002,6 +1034,7 @@ class bte_0d3v_batched():
         res_flops, jac_flops = self.rhs_and_jac_flops()
         n                    = (args.l_max + 1) * (args.Nr + 1) 
         p                    = args.n_pts
+        profile_tt           = self.profile_tt_all[0]
         
         t_setup              = profile_tt[pp.SETUP].seconds
         t_solve              = profile_tt[pp.SOLVE].seconds

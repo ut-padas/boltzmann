@@ -226,5 +226,6 @@ if plot_data:
     plt.savefig("%s_plot.png"%(args.out_fname))
 
 bte_solver.profile_stats(fname="%s_profile.csv"%(args.out_fname))
+bte_solver.profile_reset()
 
 

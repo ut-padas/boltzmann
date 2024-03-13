@@ -776,6 +776,10 @@ class bte_0d3v_batched():
         perform a single step of the transient 0d batched solve. 
         """
         xp           = self.xp_module
+        if xp==cp:
+            xp.cuda.runtime.deviceSynchronize()
+        profile_tt[pp.SOLVE].start()
+        
         Qmat         = self._op_qmat[grid_idx]
         Rmat         = self._op_rmat[grid_idx]
         QTmat        = xp.transpose(self._op_qmat[grid_idx])
@@ -813,6 +817,9 @@ class bte_0d3v_batched():
         du          = ns_info["x"]
         v           = u + xp.dot(Qmat, du)
         
+        if xp==cp:
+            xp.cuda.runtime.deviceSynchronize()
+        profile_tt[pp.SOLVE].stop()
         return v
         
     def solve(self, grid_idx:int, f0:np.array, atol, rtol, max_iter:int, solver_type:str):
@@ -833,7 +840,7 @@ class bte_0d3v_batched():
             dt              = self._args.dt     
             tT              = self._args.cycles
             tau             = 1e-7 if self._args.Efreq==0 else (1/self._args.Efreq)
-            profile_tt[pp.SOLVE].reset()
+            
             if xp==cp:
                 xp.cuda.runtime.deviceSynchronize()
                 

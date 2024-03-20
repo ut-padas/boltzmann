@@ -776,6 +776,8 @@ class bte_0d3v_batched():
         perform a single step of the transient 0d batched solve. 
         """
         xp           = self.xp_module
+        profile_tt   = self.profile_tt_all[grid_idx]
+        
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
         profile_tt[pp.SOLVE].start()

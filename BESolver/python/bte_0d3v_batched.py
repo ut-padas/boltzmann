@@ -29,6 +29,8 @@ import enum
 from os import environ
 from profile_t import profile_t
 
+NVTX_FLAGS=0
+
 class pp(enum.IntEnum):
     ALL           = 0
     SETUP         = 1
@@ -50,7 +52,7 @@ def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol
     jac      = jacobian(x)
     assert jac.shape[0] == n_pts
     jac_inv  = jacobian_inv(jac) #xp.linalg.inv(jac)
-  
+    
     ns_info  = dict()
     alpha    = 1.0 #xp.ones(n_pts)
     x0       = x
@@ -534,6 +536,9 @@ class bte_0d3v_batched():
             def res_func(x, time, dt):
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePush("bteRHS")
                     
                 profile_tt[pp.RHS_EVAL].start()
                 
@@ -554,11 +559,17 @@ class bte_0d3v_batched():
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].stop()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePop()
                 return y1
             
             def jac_func(x, time, dt):
                 if xp==cp:
                     xp.cuda.runtime.deviceSynchronize()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePush("bteJac")
                     
                 profile_tt[pp.JAC_EVAL].start()
                 n0           = self._par_bte_params[grid_idx]["n0"]
@@ -583,6 +594,10 @@ class bte_0d3v_batched():
                 if xp==cp:
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.JAC_EVAL].stop()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePop()
+                    
                 return Lmat
                     
         else:
@@ -590,6 +605,9 @@ class bte_0d3v_batched():
             def res_func(x, time, dt):
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePush("bteRHS")
                     
                 profile_tt[pp.RHS_EVAL].start()
                 n0           = self._par_bte_params[grid_idx]["n0"]
@@ -606,11 +624,18 @@ class bte_0d3v_batched():
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].stop()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePop()
+                    
                 return y1
             
             def jac_func(x, time, dt):
                 if xp==cp:
                     xp.cuda.runtime.deviceSynchronize()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePush("bteJac")
                     
                 profile_tt[pp.JAC_EVAL].start()
                 n0           = self._par_bte_params[grid_idx]["n0"]
@@ -627,6 +652,10 @@ class bte_0d3v_batched():
                 if xp==cp:
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.JAC_EVAL].stop()
+                
+                if(NVTX_FLAGS==1):
+                    cp.cuda.nvtx.RangePop()
+                    
                 return Lmat
             
         return res_func, jac_func
@@ -673,13 +702,21 @@ class bte_0d3v_batched():
         
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
-        profile_tt[pp.JAC_LA_SOL].start()
         
+        if(NVTX_FLAGS==1):
+            cp.cuda.nvtx.RangePush("bteJacSolve")
+            
+        profile_tt[pp.JAC_LA_SOL].start()
         Jmat_inv = xp.linalg.inv(Jmat)
         
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
+            
         profile_tt[pp.JAC_LA_SOL].stop()
+        
+        if(NVTX_FLAGS==1):
+            cp.cuda.nvtx.RangePop()
+            
         return Jmat_inv
             
     def steady_state_solve(self, grid_idx : int, f0 : np.array, atol, rtol, max_iter):

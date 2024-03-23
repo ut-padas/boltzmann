@@ -113,12 +113,12 @@ else:
     if(len(all_species)==1):
         ns_by_n0    = np.ones(n_pts).reshape((1, n_pts))
     else:
-        ns_by_n0    = np.linspace(0.998   , 0.999, n_pts)
+        ns_by_n0    = np.linspace(0.999998   , 1, n_pts)
         ns_by_n0    = np.concatenate([ns_by_n0] + [(1-ns_by_n0)/(len(all_species)-1) for i in range(1, len(all_species))] ,  axis = 0).reshape(len(all_species), n_pts)
         print(ns_by_n0[:, -1])
 
-    ne          = np.linspace(1     , 1, n_pts) * 3.22e20
-    ni          = np.linspace(1     , 1, n_pts) * 3.22e20
+    ne          = np.linspace(1     , 1, n_pts) * 3.22e18
+    ni          = np.linspace(1     , 1, n_pts) * 3.22e18
     Tg          = np.linspace(1     , 1, n_pts) * 6000 #0.5 * collisions.TEMP_K_1EV
     
 Te          = np.ones(n_grids) * args.Te 

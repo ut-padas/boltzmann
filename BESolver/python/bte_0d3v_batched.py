@@ -880,11 +880,6 @@ class bte_0d3v_batched():
             tT              = self._args.cycles
             tau             = 1e-7 if self._args.Efreq==0 else (1/self._args.Efreq)
             
-            if xp==cp:
-                xp.cuda.runtime.deviceSynchronize()
-                
-            profile_tt[pp.SOLVE].start()
-            
             io_cycle        = 1.00
             io_freq         = int(io_cycle/dt)
             steps_total     = int(tT/dt)
@@ -908,6 +903,11 @@ class bte_0d3v_batched():
             
             v_qoi           = xp.zeros((3 + len(self._coll_list), n_pts))
             u0              = xp.copy(u)
+            
+            if xp==cp:
+                xp.cuda.runtime.deviceSynchronize()
+            
+            profile_tt[pp.SOLVE].start()
             for ts_idx in range(steps_total+1):
                 if (self._args.Efreq>0):
                     eRe = self.get_boltzmann_parameter(grid_idx, "eRe")
@@ -1077,13 +1077,24 @@ class bte_0d3v_batched():
     
     def profile_stats(self, fname=""):
         args = self._args
+        dt              = args.dt     
+        tT              = args.cycles
+        tau             = 1e-7 if self._args.Efreq==0 else (1/args.Efreq)
+        io_cycle        = 1.00
+        io_freq         = int(io_cycle/dt)
+        steps_total     = int(tT/dt)
+        
+        solve_s1        = 1
+        if args.solver_type=="transient":
+            solve_s1    = 1/steps_total
+        
         res_flops, jac_flops = self.rhs_and_jac_flops()
         n                    = (args.l_max + 1) * (args.Nr + 1) 
         p                    = args.n_pts
         profile_tt           = self.profile_tt_all[0]
         
         t_setup              = profile_tt[pp.SETUP].seconds
-        t_solve              = profile_tt[pp.SOLVE].seconds
+        t_solve              = profile_tt[pp.SOLVE].seconds * solve_s1
         
         t_rhs                = profile_tt[pp.RHS_EVAL].seconds
         t_jac                = profile_tt[pp.JAC_EVAL].seconds

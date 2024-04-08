@@ -300,6 +300,7 @@ A Fast solver for electron Boltzmann transport equation
 		\partial_t f  + \underbrace{\vect{v} \cdot \nabla_{\vect{x}} f}_{\textcolor{orange}{\text{spatial advection}}} -\underbrace{\frac{\vect{E} q}{m} \cdot \nabla_{\vect{v }}f}_{\textcolor{orange}{\text{Acceleration due to $\vect{E}$ field}}} = \underbrace{C_{en}f + C_{ee}(f)}_{\textcolor{orange}{\text{underlying collisions}}}
 	\end{align}
 	\begin{itemize}
+		\item $f(t, \vect{x}, \vect{v})$ : electron distribution function
 		\item $\nabla_{\vect{x}} f =0$ (spatially homogeneous assumption), $f(t, \vect{v})$
 		\item $C_{en}$ : electron-heavy collisions: elastic, excitation, ionization, $e + X \rightarrow k e + Y$
 		\begin{itemize}
@@ -328,11 +329,11 @@ A Fast solver for electron Boltzmann transport equation
 \begin{frame}
 	\frametitle{Related work}
 	\begin{itemize}
-		\item Particle-in-cell direct simulation Monte Carlo (PIC-DSMC) approaches, Aleph\footnote[frame]{\tiny Hooper, Russell, et al. "Aleph: Highly Scalable Unstructured PIC-DSMC Low Temperature Plasma Code." 2020 IEEE International Conference on Plasma Science (ICOPS). IEEE, 2020.}, EMPIRE-PIC \footnote[frame]{\tiny Bettencourt, Matthew T., et al. "EMPIRE-PIC: a performance portable unstructured particle-in-cell code." Communications in Computational Physics 30.SAND-2021-2806J (2021).}, and others \footnote[frame]{ \tiny Almgren-Bell, James, et al. "A Multi-GPU Python Solver for Low-Temperature Non-Equilibrium Plasmas." 2022 IEEE 34th International Symposium on Computer Architecture and High Performance Computing (SBAC-PAD). IEEE, 2022.}
+		\item \textbf{Particle-in-cell direct simulation Monte Carlo (PIC-DSMC)} approaches, Aleph\footnote[frame]{\tiny Hooper, Russell, et al. "Aleph: Highly Scalable Unstructured PIC-DSMC Low Temperature Plasma Code." 2020 IEEE International Conference on Plasma Science (ICOPS). IEEE, 2020.}, EMPIRE-PIC \footnote[frame]{\tiny Bettencourt, Matthew T., et al. "EMPIRE-PIC: a performance portable unstructured particle-in-cell code." Communications in Computational Physics 30.SAND-2021-2806J (2021).}, and others \footnote[frame]{ \tiny Almgren-Bell, James, et al. "A Multi-GPU Python Solver for Low-Temperature Non-Equilibrium Plasmas." 2022 IEEE 34th International Symposium on Computer Architecture and High Performance Computing (SBAC-PAD). IEEE, 2022.}
 		% \begin{itemize}
 		% 	\item Evolved in Lagrangian approach with Monte Carlo methods for collisions
 		% \end{itemize}
-		\item Deterministic solvers: Numerical approximation for distribution function, with finite-difference, finite-volume discretization scheme
+		\item \textbf{Deterministic solvers}: Numerical approximation for distribution function, with finite-difference, finite-volume discretization scheme
 		\item Bolsig+\footnote[frame]{\tiny Hagelaar, G.J.M. and Pitchford, L.C., 2005. Solving the Boltzmann equation to obtain electron transport coefficients and rate coefficients for fluid models. Plasma sources science and technology, 14(4), p.722.}
 		\begin{itemize}
 			\item fixed two-term approximation $f(t, v, \vtheta) = f_0(v) + f_1(v) \cos(\vtheta)$
@@ -480,6 +481,8 @@ A Fast solver for electron Boltzmann transport equation
 			\partial_t {\hat{f}} &=(C_{en}+E)\hat{f} +n_e C_{ee}\of{\hat{f}} - \mu(\hat{f}) \hat{f} \text{ where } \mu(\hat{f}) = \frac{\partial_t n_e}{n_e} = u^T C_{en}(\hat{f})\\
 			&\text{ with constraint } u^T \hat{f} = 1 \nonumber 
 		\end{align}
+		\item \textbf{Transient} : Evolve above with implicit time integrator (i.e., BE)
+		\item \textbf{Steady-state}: $R(\hat{f})=(C_{en}+E)\hat{f} +n_e C_{ee}\of{\hat{f}} - \mu(\hat{f}) \hat{f} =0$ such that $u^T \hat{f}=1$, solved using Newton scheme 
 	\end{itemize}
 \end{frame}
 

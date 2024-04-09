@@ -107,7 +107,7 @@ else:
     grid_idx    = 0
 
     n0          = np.linspace(1     , 1, n_pts) * 3.22e22
-    ef          = np.linspace(1.0   , 2, n_pts)
+    ef          = np.linspace(1.8   , 2, n_pts)
     ef          = ef * n0 * Td_fac
     
     if(len(all_species)==1):

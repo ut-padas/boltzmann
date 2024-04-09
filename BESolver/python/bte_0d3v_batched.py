@@ -1127,7 +1127,7 @@ class bte_0d3v_batched():
         
         if fname!="":
             with open(fname, "a") as f:
-                header = ["Nv", "Nx", "total", "setup", "solve", "rhs_calls", "rhs_per_call", "rhs_per_call_flops/s",  "jac_calls", "jac_per_call", "rhs_per_call_flops/s",  "jac_solve_per_call", "jac_solve_per_call_flops/s"]
+                header = ["Nv", "Nx", "total", "setup", "solve", "rhs_calls", "rhs_per_call", "rhs_per_call_flops/s",  "jac_calls", "jac_per_call", "jac_per_call_flops/s",  "jac_solve_per_call", "jac_solve_per_call_flops/s"]
                 data   = [n, p,
                           t_setup + t_solve, t_setup, t_solve, 
                           profile_tt[pp.RHS_EVAL].iter,

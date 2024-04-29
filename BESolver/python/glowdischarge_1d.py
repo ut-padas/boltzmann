@@ -11,6 +11,15 @@ import glow1d_utils
 import os
 import scipy.optimize
 import scipy.interpolate
+np.seterr(divide='ignore', invalid='ignore', over='ignore')
+#np.seterr(all=='raise')
+
+
+class state_idx():
+  electron_idx        = 0
+  ionized_Ar_idx      = 1
+  electron_temp       = 2
+
 class glow1d_fluid():
     def __init__(self, args) -> None:
       self.args  = args
@@ -24,6 +33,9 @@ class glow1d_fluid():
         print("directory %s created"%(dir))
       
       args.fname=str(dir)+"/"+args.fname
+      with open("%s_args.txt"%(args.fname), "w") as ff:
+        ff.write("args: %s"%(args))
+        ff.close()
       
       self.param = glow1d_utils.parameters()
       
@@ -115,9 +127,9 @@ class glow1d_fluid():
       self.Np  = self.args.Np    # Number of points used to define state in space
       self.Nc  = self.args.Np-2  # number of collocation pts (Np-2 b/c BCs)
       
-      self.ele_idx = 0
-      self.ion_idx = 1
-      self.Te_idx  = self.Ns
+      self.ele_idx = state_idx.electron_idx
+      self.ion_idx = state_idx.ionized_Ar_idx
+      self.Te_idx  = state_idx.electron_temp
       
       self.kB   = scipy.constants.Boltzmann
       
@@ -186,6 +198,9 @@ class glow1d_fluid():
       self.weak_bc_Te = False
       self.weak_bc_ni = False
       self.weak_bc_ne = False
+      
+      
+      self.I_NpNv     = np.eye(self.Nv * self.Np)
       
       self.xp_module = np
     
@@ -647,8 +662,8 @@ class glow1d_fluid():
           jac_bc[1, ele_idx , ion_idx::self.Nv]  = Je_ni[-1,:] - ( - self.param.gamma * mu_i[-1]  * (ni[-1]  * E_ni[-1  , :] + E[-1] * Imat[-1 , :]))
         
         if not self.weak_bc_ni:
-          jac_bc[0, ion_idx , ion_idx::self.Nv]  = Ji_ni[0  ,:] - (mu_i[0]  * (ni[0]  * E_ni[0   , :] + E[0]  * ni[0]  * Imat[0 ,:]))
-          jac_bc[1, ion_idx , ion_idx::self.Nv]  = Ji_ni[-1 ,:] - (mu_i[-1] * (ni[-1] * E_ni[-1  , :] + E[-1] * ni[-1] * Imat[-1,:]))
+          jac_bc[0, ion_idx , ion_idx::self.Nv]  = Ji_ni[0  ,:] - (mu_i[0]  * (ni[0]  * E_ni[0   , :] + E[0]  * Imat[0 ,:]))
+          jac_bc[1, ion_idx , ion_idx::self.Nv]  = Ji_ni[-1 ,:] - (mu_i[-1] * (ni[-1] * E_ni[-1  , :] + E[-1] * Imat[-1,:]))
           
           jac_bc[0, ion_idx , ele_idx::self.Nv]  = Ji_ne[0  ,:] - (mu_i[0]  * ni[0]  * E_ne[0   , :])
           jac_bc[1, ion_idx , ele_idx::self.Nv]  = Ji_ne[-1 ,:] - (mu_i[-1] * ni[-1] * E_ne[-1  , :])
@@ -699,10 +714,37 @@ class glow1d_fluid():
       #   R_Te[j,:] = w[2::self.Nv]
       
       # jac[2::self.Nv, 2::self.Nv] = R_Te
-      
-      
-      
       return jac
+    
+    def sensitivity_jac_FD(self, Uin, time, dt):
+      xp  = self.xp_module
+      dof = self.Nv * self.Np
+      jac = xp.zeros((dof, dof))
+      
+      u      = np.copy(Uin)
+      du     = xp.zeros_like(u)
+      
+      v, _   = self.solve_step(u, du, time, dt, 1e-13, 1e-13, 400)
+      
+      for j in range(0, self.Np):
+        for i in range(0, self.Nv):
+          dU      = max(xp.finfo(np.float64).eps**0.125 * xp.absolute(Uin[j,i]), xp.finfo(xp.float64).eps)
+          up      = np.copy(u)
+          up[j,i] +=dU 
+          vp, _       = self.solve_step(up, du, time, dt, 1e-13, 1e-13, 400)
+          
+          # plt.figure(figsize=(8,8))
+          # plt.plot(self.xp,  u[:,0], label=r"u")
+          # plt.plot(self.xp, up[:,0], label=r"up")
+          # plt.plot(self.xp, vp[:,0], label=r"vp")
+          # plt.plot(self.xp, v[:,0], label=r"v")
+          # plt.legend()
+          # plt.grid()
+          # plt.savefig("%s_i%02d_j%02d"%(self.args.fname, i, j))
+          # plt.close()
+          jac[:, j * self.Nv + i] = (vp - v).reshape((-1))/dU
+      
+      return jac 
       
     def solve_poisson(self, ne, ni,time):
         """Solve Gauss' law for the electric potential.
@@ -865,7 +907,7 @@ class glow1d_fluid():
         Imat            = xp.eye(self.Np * self.Nv)
         u0              = xp.copy(u)
         
-        self.weak_bc_ni = True
+        #self.weak_bc_ni = True
         #self.weak_bc_ne = True
         du  = xp.zeros_like(u)
         
@@ -942,8 +984,9 @@ class glow1d_fluid():
               self.plot(cycle_avg_u, tt, "%s_avg_%04d.png"     %(args.fname, ts_idx//io_freq))
               self.plot(u,           tt, "%s_%04d.png" %(args.fname, ts_idx//io_freq))
               
-              xp.save("%s_%04d_avg.npy"%(self.args.fname, ts_idx//io_freq), cycle_avg_u)
-              xp.save("%s_%04d.npy"%(self.args.fname, ts_idx//io_freq), u)
+              if (ts_idx % (io_freq * 10)==0):
+                xp.save("%s_%04d_avg.npy"%(self.args.fname, ts_idx//io_freq), cycle_avg_u)
+                xp.save("%s_%04d.npy"%(self.args.fname, ts_idx//io_freq), u)
               
               cycle_avg_u[:,:] = 0
               
@@ -1025,8 +1068,245 @@ class glow1d_fluid():
       plt.tight_layout()
       fig.savefig("%s"%(fname))
       plt.close()
+    
+    def solve_step(self, u, du, time, dt, atol, rtol, iter_max):
+      xp              = self.xp_module 
+      Imat            = self.I_NpNv
+      tt              = time
+      status          = True
       
+      if (self.args.bc_dirichlet_e == 0):
+        self.param.Teb0 , self.param.Teb1 = self.electron_bdy_temperature(u, tt, dt) 
+        self.param.ks0  , self.param.ks1  = self.param.mw_flux(self.param.Teb0), self.param.mw_flux(self.param.Teb1)
       
+      def residual(du):
+        u1       = u + du
+        rhs, bc  = self.rhs(u1, tt + dt, dt) 
+        res      = du - dt * rhs
+        
+        if not self.weak_bc_ne:
+          res[0  , self.ele_idx] = bc[0  , self.ele_idx]
+          res[-1 , self.ele_idx] = bc[-1 , self.ele_idx]
+        
+        if not self.weak_bc_ni:              
+          res[0  , self.ion_idx] = bc[0  , self.ion_idx]
+          res[-1 , self.ion_idx] = bc[-1 , self.ion_idx]
+        
+        if not self.weak_bc_Te:              
+          res[0  , self.Te_idx]  = bc[0  , self.Te_idx]
+          res[-1 , self.Te_idx]  = bc[-1 , self.Te_idx]
+          
+        return res.reshape(-1)
+        
+      def jacobian(du):
+        rhs_j, j_bc = self.rhs_jacobian(u, tt, dt)
+        jac         = Imat - dt * rhs_j
+        
+        if not self.weak_bc_ne:
+          jac[0 * self.Nv           + self.ele_idx, :] = j_bc[0, self.ele_idx,:]
+          jac[(self.Np-1) * self.Nv + self.ele_idx, :] = j_bc[1, self.ele_idx,:]
+        
+        if not self.weak_bc_ni:              
+          jac[0 * self.Nv           + self.ion_idx, :] = j_bc[0, self.ion_idx, :]
+          jac[(self.Np-1) * self.Nv + self.ion_idx, :] = j_bc[1, self.ion_idx, :]
+        
+        if not self.weak_bc_Te:
+          jac[0 * self.Nv           + self.Te_idx, :]  = j_bc[0, self.Te_idx, :]
+          jac[(self.Np-1) * self.Nv + self.Te_idx, :]  = j_bc[1, self.Te_idx, :]
+        
+        return jac
+          
+      ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
+      if ns_info["status"]==False:
+        print("time %.2E non-linear solver step FAILED!!! try with smaller time step size or increase max iterations"%(tt))
+        print("\tNewton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+        status=False
+        return u, status
+      
+      du = ns_info["x"]
+      v  = u + du
+      return v, status
+    
+    def evolve(self, u, time, dt, sensitivity_mat=False):
+      xp              = self.xp_module 
+      steps           = (int)(time/dt)
+      cycle_freq      = (int)(1/dt)
+      
+      assert steps * dt == time
+      
+      tb              = 0
+      
+      dv_by_du        = np.copy(self.I_NpNv)
+      J0              = np.copy(self.I_NpNv)
+      u0              = np.copy(u)
+      
+      J1              = np.copy(self.I_NpNv)
+      du              = np.zeros_like(u)
+      
+      assert self.weak_bc_ne==False
+      assert self.weak_bc_ni==False
+      assert self.weak_bc_Te==False
+      
+      J1[0 * self.Nv           + self.ele_idx, :]   = 0 
+      J1[(self.Np-1) * self.Nv + self.ele_idx, :]   = 0 
+      J1[0 * self.Nv           + self.ion_idx, :]   = 0 
+      J1[(self.Np-1) * self.Nv + self.ion_idx, :]   = 0 
+      J1[0 * self.Nv           + self.Te_idx,  :]   = 0 
+      J1[(self.Np-1) * self.Nv + self.Te_idx,  :]   = 0 
+      
+      um = np.copy(u)
+      
+      for ts_idx in range(steps + 1):
+        tn          = tb + ts_idx* dt
+        
+        if (ts_idx > 0 and ts_idx % cycle_freq == 0):
+          a1 = np.linalg.norm(u-um)
+          r1 = a1/np.linalg.norm(u)
+          print("time = %.4E ||u1-u0|| = %.4E ||u1-u0||/||u0|| = %.4E"%(tn, a1, r1))
+          um = np.copy(u)
+        
+        if ts_idx==steps:
+          break
+        
+        v, status   = self.solve_step(u, du, tn, dt, self.args.atol, self.args.rtol, self.args.max_iter)
+        du          = v-u
+        
+        if status == False:
+          print("!!! solver failed.... :(")
+          sys.exit(0)
+        
+        if sensitivity_mat == True:
+          rhs_j, j_bc  = self.rhs_jacobian(v, tn + dt, dt)
+          jac          = self.I_NpNv - dt * rhs_j
+          
+          if not self.weak_bc_ne:
+            jac[0 * self.Nv           + self.ele_idx, :]     = j_bc[0, self.ele_idx,:]
+            jac[(self.Np-1) * self.Nv + self.ele_idx, :]     = j_bc[1, self.ele_idx,:]
+            
+          if not self.weak_bc_ni:              
+            jac[0 * self.Nv           + self.ion_idx, :]     = j_bc[0, self.ion_idx, :]
+            jac[(self.Np-1) * self.Nv + self.ion_idx, :]     = j_bc[1, self.ion_idx, :]
+            
+          if not self.weak_bc_Te:
+            jac[0 * self.Nv           + self.Te_idx, :]     = j_bc[0, self.Te_idx, :]
+            jac[(self.Np-1) * self.Nv + self.Te_idx, :]     = j_bc[1, self.Te_idx, :]
+          
+          dv_by_du = np.linalg.solve(jac, np.dot(J1, J0))
+          J0       = dv_by_du
+          
+          # dv_by_du_fd = self.sensitivity_jac_FD(u, tn, dt)
+          # np.savetxt("dv_by_du.txt", dv_by_du, fmt='%.4E')
+          # np.savetxt("dv_by_du_fd.txt", dv_by_du_fd, fmt='%.4E')
+          # sys.exit(0)
+          
+        u = v
+        
+        
+      u1 = u
+      
+      return u0, u1, dv_by_du
+      
+    def time_periodic_shooting(self, u, atol, rtol, max_iter):
+      xp         = self.xp_module
+      dt         = self.args.cfl
+      Imat       = self.I_NpNv
+      
+      tt         = 0
+      du         = np.zeros_like(u)
+      
+      alpha0     = 1.0
+      alpha_min  = 1e-1
+      alpha_max  = 1.0
+      alpha      = alpha_min
+      
+      def residual(u):
+        u0, u1, Js = self.evolve(u, 1, dt, sensitivity_mat=False)
+        return (u1-u0)
+      
+      u0, u1, Js = self.evolve(u, self.args.cycles, dt, sensitivity_mat=False)
+      print(np.linalg.norm(u1-u0), np.linalg.norm(u1-u0)/np.linalg.norm(u0))
+      res        = (u1 - u0)
+      
+      count      = 0
+      r0         = res
+      
+      norm_rr    = norm_r0 = xp.linalg.norm(r0)
+      converged  = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
+      u          = u1
+      
+      while( not converged and (count < max_iter) ):
+        u0, u1, Js = self.evolve(u, 1, dt, sensitivity_mat=True)
+        jac        = (Js - self.I_NpNv)
+        jac_inv    = np.linalg.inv(jac)
+        
+        rr         = (u1-u0)
+        norm_rr    = xp.linalg.norm(rr)
+        jinv_rr    = xp.dot(jac_inv, rr.reshape((-1))).reshape(u.shape)
+        alpha      = min(0.01, 0.01 * np.linalg.norm(u)/np.linalg.norm(jinv_rr))
+        u          = u  - alpha * jinv_rr
+        # while(1):
+        #   ug         = u  + alpha * xp.dot(jac_inv, -rr).reshape(u.shape)
+        #   rr_g       = residual(ug)
+        #   norm_rrg   = np.linalg.norm(rr_g)
+          
+        #   if norm_rrg > norm_rr:
+        #     alpha *=1e-1
+        #     alpha  = max(alpha_min, alpha)
+        #     if alpha == alpha_min:
+        #       #u = u  + alpha * xp.dot(jac_inv, -rr).reshape(u.shape)
+        #       print("shooting method fallback to u1")
+        #       u = u1
+        #       break
+        #   else:
+        #     u      = ug
+        #     alpha *=1e1
+        #     alpha  = min(alpha_max, alpha)
+        #     break
+          
+          
+            
+        
+        count   += 1
+        #if count%1000==0:
+        print("{0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
+        converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
+        
+        plt.figure(figsize=(16,8), dpi=200)
+        plt.subplot(1, 2, 1)
+        
+        plt.plot(self.xp, u0[:, 0]         , label=r"u0(ne)")
+        plt.plot(self.xp, u1[:, 0]         , label=r"u1(ne)")
+        plt.plot(self.xp,  u[:, 0]         , label=r"u(ne)")
+        plt.legend()
+        plt.grid(visible=True)
+        plt.xlabel(r"x")
+        plt.ylabel(r"density x %.2E"%(self.param.np0))
+        
+        plt.subplot(1, 2, 2)
+        plt.plot(self.xp, u0[:, 2]/u0[:, 0]         , label=r"u0(Te)")
+        plt.plot(self.xp, u1[:, 2]/u1[:, 0]         , label=r"u1(Te)")
+        plt.plot(self.xp,  u[:, 2]/ u[:, 0]         , label=r"u(Te)")
+        plt.legend()
+        plt.grid(visible=True)
+        plt.xlabel(r"x")
+        plt.ylabel(r"temperature [eV]")
+        
+        plt.savefig("%s_newton_iter_%04d.png"%(self.args.fname, count))
+        plt.close()
+      
+      # while(alpha > 1e-8):
+        
+        
+      #   if (not converged):
+      #     alpha *= 0.25
+      #     #print(alpha)
+          
+      #   else:
+      #     #print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
+      #     break
+      
+      return u
+        
     
     
 parser = argparse.ArgumentParser()
@@ -1052,6 +1332,6 @@ glow_1d   = glow1d_fluid(args)
 
 u         = glow_1d.initialize()
 v         = glow_1d.solve(u, ts_type=args.ts_type)
-
+#v         = glow_1d.time_periodic_shooting(u, args.atol, args.rtol, args.max_iter)
 #python3 glowdischarge_1d.py -Np 240 -cycles 11 -ts_type BE -atol 1e-14 -rtol 1e-14 -dir glow1d_liu_N240_dt5e-4 -cfl 5e-4
 

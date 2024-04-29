@@ -4,6 +4,14 @@ import scipy.constants
 import os
 import scipy.interpolate
 
+import sys
+sys.path.append("../.")
+import basis
+import cross_section
+import utils as bte_utils
+import spec_spherical as sp
+import collisions
+
 class op():
     def __init__(self,Np):
       self.Np  = Np
@@ -144,13 +152,75 @@ def make_dir(dir_name):
        os.makedirs(dir_name)
        print("directory %s is created!"%(dir_name))
     
-def load_data(dir_name, num_cycles):
-    a=list()
-    for i in range(num_cycles):
-        a.append(np.load(dir_name+"/1d_glow_%04d.npy"%(i)))
-    return np.array(a)
+# def load_data(dir_name, num_cycles):
+#     a=list()
+#     for i in range(num_cycles):
+#         a.append(np.load(dir_name+"/1d_glow_%04d.npy"%(i)))
+#     return np.array(a)
 
-def load_data_bte(folder, cycles, eedf_idx=None, read_cycle_avg=False):
+# def load_data_bte(folder, cycles, eedf_idx=None, read_cycle_avg=False):
+#     args   = dict()
+    
+#     f  = open(folder+"/1d_glow_args.txt")
+#     st = f.read().strip()
+#     st = st.split(":")[1].strip()
+#     st = st.split("(")[1]
+#     st = st.split(")")[0].strip()
+#     st = st.split(",")
+    
+#     for s in st:
+#         kv = s.split("=")
+#         if len(kv)!=2 or kv[0].strip()=="collisions":
+#             continue
+#         args[kv[0].strip()]=kv[1].strip()
+    
+#     bte_op = dict()
+#     bte_op["mass"]  = np.load(folder+"/1d_glow_bte_mass_op.npy")
+#     bte_op["temp"]  = np.load(folder+"/1d_glow_bte_temp_op.npy")
+#     bte_op["g0"]    = np.load(folder+"/1d_glow_bte_op_g0.npy")
+#     bte_op["g2"]    = np.load(folder+"/1d_glow_bte_op_g2.npy")
+#     bte_op["po2sh"] = np.load(folder+"/1d_glow_bte_po2sh.npy")
+#     bte_op["psh2o"] = np.load(folder+"/1d_glow_bte_psh2o.npy")
+    
+#     u  = list()
+#     v  = list()
+#     v1 = list()
+    
+#     read_eedf = not(eedf_idx is None)
+    
+#     for idx in cycles:
+#         if read_cycle_avg:
+#             u.append(np.load(folder+"/1d_glow_%04d_u_avg.npy"%(idx)))
+#             v.append(np.load(folder+"/1d_glow_%04d_v_avg.npy"%(idx)))
+#         else:
+#             u.append(np.load(folder+"/1d_glow_%04d_u.npy"%(idx)))
+#             v.append(np.load(folder+"/1d_glow_%04d_v.npy"%(idx)))
+        
+#     if read_eedf:
+#         for idx in cycles:
+#             w = np.load(folder+"/1d_glow_%04d_v_eedf.npy"%(idx))
+#             v1.append(w[eedf_idx])
+        
+#     u  = np.array(u)
+#     v  = np.array(v)
+#     v1 = np.array(v1)
+#     return [args, u, v, bte_op, v1]
+
+# def compute_rate_coefficients(args, bte_op, v, collisions):
+#     n_pts    = v.shape[0] 
+#     mm_fac   = np.sqrt(4 * np.pi) 
+#     mm_op    = bte_op["mass"]
+#     c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+#     vth      = (float) (args["Te"]) * c_gamma
+#     v_lm     = np.array([np.dot(bte_op["po2sh"], v[idx]) for idx in range(n_pts)])
+#     scale    = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(n_pts)])
+#     v_lm_n   = np.array([v_lm[idx]/scale[idx] for idx in range(n_pts)])
+#     num_sh   = (int) (args["l_max"]) + 1
+#     return [np.dot(bte_op[col_type], v_lm_n[:, 0::num_sh, :]) for col_type in collisions]
+
+
+
+def load_data_bte(folder, cycles, eedf_idx=None, read_cycle_avg=False, use_ionization=1):
     args   = dict()
     
     f  = open(folder+"/1d_glow_args.txt")
@@ -170,9 +240,22 @@ def load_data_bte(folder, cycles, eedf_idx=None, read_cycle_avg=False):
     bte_op["mass"]  = np.load(folder+"/1d_glow_bte_mass_op.npy")
     bte_op["temp"]  = np.load(folder+"/1d_glow_bte_temp_op.npy")
     bte_op["g0"]    = np.load(folder+"/1d_glow_bte_op_g0.npy")
-    bte_op["g2"]    = np.load(folder+"/1d_glow_bte_op_g2.npy")
+    
+    if use_ionization==1:
+        bte_op["g2"]    = np.load(folder+"/1d_glow_bte_op_g2.npy")
+    
     bte_op["po2sh"] = np.load(folder+"/1d_glow_bte_po2sh.npy")
     bte_op["psh2o"] = np.load(folder+"/1d_glow_bte_psh2o.npy")
+    bte_op["Cmat"]  = np.load(folder+"/1d_glow_bte_cmat.npy")
+    bte_op["Emat"]  = np.load(folder+"/1d_glow_bte_emat.npy")
+    
+    try:
+        bte_op["mobility"]  = np.load(folder+"/1d_glow_bte_mobility.npy")
+        bte_op["diffusion"] = np.load(folder+"/1d_glow_bte_diffusion.npy")
+    except:
+        bte_op["mobility"]  = None
+        bte_op["diffusion"] = None 
+    
     
     u  = list()
     v  = list()
@@ -198,19 +281,150 @@ def load_data_bte(folder, cycles, eedf_idx=None, read_cycle_avg=False):
     v1 = np.array(v1)
     return [args, u, v, bte_op, v1]
 
-def compute_rate_coefficients(args, bte_op, v, collisions):
-    n_pts    = v.shape[0] 
+def compute_rate_coefficients(args, bte_op, v, collisions_list):
+    t_pts    = v.shape[0] 
     mm_fac   = np.sqrt(4 * np.pi) 
     mm_op    = bte_op["mass"]
     c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
-    vth      = (float) (args["Te"]) * c_gamma
-    v_lm     = np.array([np.dot(bte_op["po2sh"], v[idx]) for idx in range(n_pts)])
-    scale    = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(n_pts)])
-    v_lm_n   = np.array([v_lm[idx]/scale[idx] for idx in range(n_pts)])
+    vth      = (float) (args["Te"])**0.5 * c_gamma
+    v_lm     = np.array([np.dot(bte_op["po2sh"], v[idx]) for idx in range(t_pts)])
+    scale    = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(t_pts)])
+    v_lm_n   = np.array([v_lm[idx]/scale[idx] for idx in range(t_pts)])
     num_sh   = (int) (args["l_max"]) + 1
-    return [np.dot(bte_op[col_type], v_lm_n[:, 0::num_sh, :]) for col_type in collisions]
+    return [np.dot(bte_op[col_type], v_lm_n[:, 0::num_sh, :]) for col_type in collisions_list]
 
+def compute_mobility(args, bte_op, v, EbyN):
+    t_pts    = v.shape[0] 
+    mm_fac   = np.sqrt(4 * np.pi) 
+    mm_op    = bte_op["mass"]
+    c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    vth      = (float) (args["Te"])**0.5 * c_gamma
+    v_lm     = np.array([np.dot(bte_op["po2sh"], v[idx]) for idx in range(t_pts)])
+    scale    = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(t_pts)])
+    v_lm_n   = np.array([v_lm[idx]/scale[idx] for idx in range(t_pts)])
+    num_sh   = (int) (args["l_max"]) + 1
+    return np.dot(bte_op["mobility"], v_lm_n[:, 1::num_sh, :]) * (-(c_gamma / (3 * EbyN)))
 
+def compute_diffusion(args, bte_op, v):
+    t_pts    = v.shape[0] 
+    mm_fac   = np.sqrt(4 * np.pi) 
+    mm_op    = bte_op["mass"]
+    c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    vth      = (float) (args["Te"])**0.5 * c_gamma
+    v_lm     = np.array([np.dot(bte_op["po2sh"], v[idx]) for idx in range(t_pts)])
+    scale    = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(t_pts)])
+    v_lm_n   = np.array([v_lm[idx]/scale[idx] for idx in range(t_pts)])
+    num_sh   = (int) (args["l_max"]) + 1
+    return np.dot(bte_op["diffusion"], v_lm_n[:, 0::num_sh, :]) * (c_gamma / 3.)
 
+def gen_spec_sp(args):
+    sig_pts             = list()
+    bs_coll_list        = list()
+    collision_names     = list()
+    coll_list           = list()
+    
+    collision_str       = "../lxcat_data/eAr_crs.Biagi.3sp2r"
+
+    avail_species                     = cross_section.read_available_species(collision_str)
+    cross_section.CROSS_SECTION_DATA  = cross_section.read_cross_section_data(collision_str)
+    cross_section_data                = cross_section.CROSS_SECTION_DATA
+      
+    print("==========read collissions=====================")
+    collision_count = 0
+    for col_str, col_data in cross_section_data.items():
+        print(col_str, col_data["type"])
+        g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
+        g.reset_scattering_direction_sp_mat()
+        coll_list.append(g)
+        collision_names.append("C%d"%(collision_count)) 
+        collision_count+=1
+    print("===============================================")
+    print("number of total collisions = %d " %(len(coll_list)))
+    num_collisions = len(coll_list)
+    bs_coll_list   = coll_list
+    
+    for col_idx, g in enumerate(bs_coll_list):
+        g  = bs_coll_list[col_idx]
+        if g._reaction_threshold != None and g._reaction_threshold >0:
+            sig_pts.append(g._reaction_threshold)
+    
+    Te               = (float)(args["Te"])
+    vth              = collisions.electron_thermal_velocity(Te * (scipy.constants.elementary_charge / scipy.constants.Boltzmann))
+    c_gamma          = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+      
+    sig_pts          = np.sort(np.array(list(set(sig_pts))))
+    maxwellian       = bte_utils.get_maxwellian_3d(vth, 1.0)
+    
+    dg_nodes         = np.sqrt(np.array(sig_pts)) * c_gamma / vth
+    ev_range         = (0, (float)(args["ev_max"])) #((0 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+    k_domain         = (np.sqrt(ev_range[0]) * c_gamma / vth, np.sqrt(ev_range[1]) * c_gamma / vth)
+    use_ee           = (int)(args["ee_collisions"])
+    bs_use_dg        = 0 
+    
+    if bs_use_dg==1:
+        print("DG boltzmann grid v-space ev=", ev_range, " v/vth=",k_domain)
+        print("DG points \n", sig_pts)
+    else:
+        print("CG boltzmann grid v-space ev=", ev_range, " v/vth=",k_domain)
+    
+    
+    sp_order    = (int)(args["sp_order"])
+    nr          = (int)(args["Nr"])
+    spline_qpts = (int)(args["spline_qpts"])
+    l_max       = (int)(args["l_max"])
+    
+    bs_lm       = [(l, 0) for l in range(l_max+1)]
+    ev_extend   = 2
+    verbose     = 1 
+    
+    # construct the spectral class 
+    if (ev_extend==0):
+        bb                     = basis.BSpline(k_domain, sp_order, nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=bs_use_dg, verbose = verbose)
+    elif (ev_extend==1):
+        print("using uniform grid extention")
+        bb                     = basis.BSpline(k_domain, sp_order, nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=bs_use_dg, verbose = verbose, extend_domain=True)
+    else:
+        assert ev_extend==2
+        print("using log spaced grid extention")
+        bb                     = basis.BSpline(k_domain, sp_order, nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=bs_use_dg, verbose = verbose,extend_domain_with_log=True)
+    
+    spec_sp                = sp.SpectralExpansionSpherical(nr, bb, bs_lm)
+    spec_sp._num_q_radial  = bb._num_knot_intervals * spline_qpts
+    
+    return spec_sp, coll_list
+
+def compute_radial_components(args, bte_op, spec_sp, ev: np.array, ff):
+    
+    t_pts    = ff.shape[0]
+    
+    ff_lm    = np.array([np.dot(bte_op["po2sh"], ff[idx]) for idx in range(t_pts)])
+    Te       = (float)(args["Te"])
+    vth      = collisions.electron_thermal_velocity(Te * (scipy.constants.elementary_charge / scipy.constants.Boltzmann))
+    c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    
+    vth      = vth
+    spec_sp  = spec_sp
+    
+    vr       = np.sqrt(ev) * c_gamma / vth
+    num_p    = spec_sp._p +1 
+    num_sh   = len(spec_sp._sph_harm_lm)
+    n_pts    = ff.shape[2]
+    
+    output   = np.zeros((t_pts, n_pts, num_sh, len(vr)))
+    Vqr      = spec_sp.Vq_r(vr,0,1)
+    
+    
+    mm_op    = bte_op["mass"]
+    mm_fac   = np.sqrt(4 * np.pi) 
+    
+    scale    = np.array([np.dot(mm_op / mm_fac, ff_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(t_pts)])
+    ff_lm_n  = np.array([ff_lm[idx]/scale[idx] for idx in range(t_pts)])
+    
+    for idx in range(t_pts):
+        ff_lm_T  = ff_lm_n[idx].T
+        for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
+            output[idx, :, l_idx, :] = np.dot(ff_lm_T[:,l_idx::num_sh], Vqr)
+
+    return output
     
     

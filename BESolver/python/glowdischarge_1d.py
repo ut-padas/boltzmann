@@ -14,6 +14,15 @@ import scipy.interpolate
 np.seterr(divide='ignore', invalid='ignore', over='ignore')
 #np.seterr(all=='raise')
 
+try:
+  import cupy as cp
+  #CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
+except ImportError:
+  print("Please install CuPy for GPU use")
+  #sys.exit(0)
+except:
+  print("CUDA not configured properly !!!")
+  sys.exit(0)
 
 class state_idx():
   electron_idx        = 0
@@ -25,100 +34,22 @@ class glow1d_fluid():
       self.args  = args
       
       dir            = args.dir
-      if os.path.exists(dir):
-        print("run directory exists, data will be overwritten")
-        #sys.exit(0)
-      else:
-        os.makedirs(dir)
-        print("directory %s created"%(dir))
+      if (dir!=""):
+        if (os.path.exists(dir)):
+          print("run directory exists, data will be overwritten")
+          #sys.exit(0)
+        else:
+          os.makedirs(dir)
+          print("directory %s created"%(dir))
       
-      args.fname=str(dir)+"/"+args.fname
+        args.fname=str(dir)+"/"+args.fname
+      
       with open("%s_args.txt"%(args.fname), "w") as ff:
         ff.write("args: %s"%(args))
         ff.close()
       
       self.param = glow1d_utils.parameters()
       
-      if(args.use_tab_data==1):
-        ki   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Ionization.300K.txt" , delimiter=",", skip_header=True) # m^3/s
-        mu_e = np.genfromtxt("Ar3species/Ar_1Torr_300K/Mobility.300K.txt"   , delimiter=",", skip_header=True) # mu * n0 (1/(Vms))
-        De   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Diffusivity.300K.txt", delimiter=",", skip_header=True) # D  * n0 (1/(ms))
-        
-        # non-dimentionalized QoIs
-        ki  [:, 0]  *= (1/self.param.ev_to_K)
-        mu_e[:, 0]  *= (1/self.param.ev_to_K)
-        De [:, 0]   *= (1/self.param.ev_to_K)
-        
-        ki  [:, 1]  *= (self.param.np0 * self.param.tau)
-        mu_e[:, 1]  *= (self.param.V0 * self.param.tau / (self.param.L**2 * self.param.n0 * self.param.np0))
-        De [:, 1]   *= (self.param.tau / (self.param.L**2 *self.param.n0 * self.param.np0) )
-        
-        ki_data   = ki
-        mu_e_data = mu_e
-        De_data   = De
-        
-        # non-dimensional QoI interpolations and their derivatives, w.r.t., ne, nTe
-        ki                  = scipy.interpolate.UnivariateSpline(ki[:,0],  ki  [:,1], k=1, s=0, ext="const")
-        ki_d                = ki.derivative(n=1)
-        
-        self.param.ki       =  lambda nTe, ne : ki(nTe/ne)
-        self.param.ki_ne    =  lambda nTe, ne : ki_d(nTe/ne) * (-nTe/(ne**2))
-        self.param.ki_nTe   =  lambda nTe, ne : ki_d(nTe/ne) * (1/ne)
-        
-        mu_e                = scipy.interpolate.UnivariateSpline(mu_e[:,0],  mu_e[:,1], k=1, s=0, ext="const")
-        mu_e_d              = mu_e.derivative(n=1)
-        self.param.mu_e     = lambda nTe, ne : mu_e(nTe/ne)
-        self.param.mu_e_ne  = lambda nTe, ne : mu_e_d(nTe/ne) * (-nTe/(ne**2))
-        self.param.mu_e_nTe = lambda nTe, ne : mu_e_d(nTe/ne) * (1/ne)
-        
-        De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
-        De_d                = De.derivative(n=1)
-        self.param.De       = lambda nTe, ne : De(nTe/ne)
-        self.param.De_ne    = lambda nTe, ne : De_d(nTe/ne) * (-nTe/(ne**2))
-        self.param.De_nTe   = lambda nTe, ne : De_d(nTe/ne) * (1/ne)
-        
-        Te = ki_data[:,0]#np.linspace(ki_data[0,0], ki_data[-1,0], 100)
-        plt.figure(figsize=(16, 6), dpi=300)
-        
-        plt.subplot(1, 3, 1)
-        plt.loglog(Te, self.param.mu_e(Te, 1)/((self.param.V0 * self.param.tau/(self.param.L**2))) ,  ".-",             label ="0D-BTE")
-        plt.loglog(Te, np.ones_like(Te) * self.param._mu_e/((self.param.V0 * self.param.tau/(self.param.L**2))), "--", label ="Liu")
-        plt.loglog(mu_e_data[:,0], mu_e_data[:,1]/((self.param.V0 * self.param.tau/(self.param.L**2))), ".--", label ="data")
-        plt.grid(visible=True)
-        plt.xlabel(r"$T_e$(eV)")
-        plt.ylabel(r"$\mu_e$ ($V^{-1} m^2 s^{-1} $)")
-        plt.legend()
-        
-        plt.subplot(1, 3, 2)
-        plt.loglog(Te, self.param.De(Te, 1)/(self.param.tau/(self.param.L**2)) ,             ".-", label   = "0D-BTE")
-        plt.loglog(Te, np.ones_like(Te) * self.param._De/((self.param.tau/(self.param.L**2))), "--", label = "Liu")
-        plt.loglog(De_data[:,0], De_data[:,1]/((self.param.tau/(self.param.L**2))), ".--", label           = "data")
-        plt.grid(visible=True)
-        plt.xlabel(r"$T_e$(eV)")
-        plt.ylabel(r"$D_e$ ($m^{2}s^{-1}$)")
-        plt.legend()
-        
-        ki_arr       = lambda nTe,ne : self.param.np0 * self.param.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))   
-        plt.subplot(1, 3, 3)
-        plt.loglog(Te, self.param.ki(Te, 1) / (self.param.np0 * self.param.tau) ,             ".-", label ="0D-BTE")
-        plt.loglog(Te, ki_arr(Te, 1)/(self.param.np0 * self.param.tau),                     "--", label ="Liu")
-        plt.loglog(Te, ki_data[:,1]/(self.param.np0 * self.param.tau),                     ".--", label ="data")
-        plt.grid(visible=True)
-        plt.legend()
-        plt.xlabel(r"$T_e$(eV)")
-        plt.ylabel(r"$k_i$ ($m^{3}s^{-1}$)")
-        
-        plt.tight_layout()
-        plt.savefig(args.fname+"_kinetic_coefficients.png")
-        plt.close()
-        
-        # plt.loglog(Te, np.abs(De_d(Te)),label="De_d")
-        # plt.loglog(Te, np.abs(mu_e_d(Te)), label="mu_e_d")
-        # plt.loglog(Te, np.abs(ki_d(Te)), label="ki_d")
-        # plt.legend()
-        # plt.show()
-        
-        
       self.Ns = self.args.Ns                   # Number of species
       self.NT = self.args.NT                   # Number of temperatures
       self.Nv = self.args.Ns + self.args.NT    # Total number of 'state' variables
@@ -204,8 +135,114 @@ class glow1d_fluid():
       
       self.xp_module = np
     
-    def initialize(self,type=0):
+    def initialize_kinetic_coefficients(self, mode):
+      xp = self.xp_module
+      
+      if mode == "tabulated":
+        """
+        kinetic-coefficient initialization from tabulated data
+        """
+        
+        ki   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Ionization.300K.txt" , delimiter=",", skip_header=True) # m^3/s
+        mu_e = np.genfromtxt("Ar3species/Ar_1Torr_300K/Mobility.300K.txt"   , delimiter=",", skip_header=True) # mu * n0 (1/(Vms))
+        De   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Diffusivity.300K.txt", delimiter=",", skip_header=True) # D  * n0 (1/(ms))
+        
+        # non-dimentionalized QoIs
+        ki  [:, 0]  *= (1/self.param.ev_to_K)
+        mu_e[:, 0]  *= (1/self.param.ev_to_K)
+        De [:, 0]   *= (1/self.param.ev_to_K)
+        
+        ki  [:, 1]  *= (self.param.np0 * self.param.tau)
+        mu_e[:, 1]  *= (self.param.V0 * self.param.tau / (self.param.L**2 * self.param.n0 * self.param.np0))
+        De [:, 1]   *= (self.param.tau / (self.param.L**2 *self.param.n0 * self.param.np0) )
+        
+        ki_data   = ki
+        mu_e_data = mu_e
+        De_data   = De
+        
+        # non-dimensional QoI interpolations and their derivatives, w.r.t., ne, nTe
+        ki                  = scipy.interpolate.UnivariateSpline(ki[:,0],  ki  [:,1], k=1, s=0, ext="const")
+        ki_d                = ki.derivative(n=1)
+        
+        self.param.ki       =  lambda nTe, ne : ki(nTe/ne)
+        self.param.ki_ne    =  lambda nTe, ne : ki_d(nTe/ne) * (-nTe/(ne**2))
+        self.param.ki_nTe   =  lambda nTe, ne : ki_d(nTe/ne) * (1/ne)
+        
+        mu_e                = scipy.interpolate.UnivariateSpline(mu_e[:,0],  mu_e[:,1], k=1, s=0, ext="const")
+        mu_e_d              = mu_e.derivative(n=1)
+        self.param.mu_e     = lambda nTe, ne : mu_e(nTe/ne)
+        self.param.mu_e_ne  = lambda nTe, ne : mu_e_d(nTe/ne) * (-nTe/(ne**2))
+        self.param.mu_e_nTe = lambda nTe, ne : mu_e_d(nTe/ne) * (1/ne)
+        
+        # De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
+        # De_d                = De.derivative(n=1)
+        # self.param.De       = lambda nTe, ne : De(nTe/ne)
+        # self.param.De_ne    = lambda nTe, ne : De_d(nTe/ne) * (-nTe/(ne**2))
+        # self.param.De_nTe   = lambda nTe, ne : De_d(nTe/ne) * (1/ne)
+        
+        # De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
+        # De_d                = De.derivative(n=1)
+        a1                  = (self.param.V0 * self.param.tau / (self.param.L**2 * self.param.n0 * self.param.np0))
+        a2                  = (self.param.tau / (self.param.L**2 *self.param.n0 * self.param.np0) )
+        a3                  = a2/a1
+        self.param.De       = lambda nTe, ne : a3 * (mu_e(nTe/ne) * (nTe/ne))
+        self.param.De_ne    = lambda nTe, ne : a3 * ((nTe/ne) * self.param.mu_e_ne(nTe, ne)  + mu_e(nTe/ne) * (-nTe/(ne**2)))
+        self.param.De_nTe   = lambda nTe, ne : a3 * ((nTe/ne) * self.param.mu_e_nTe(nTe, ne) + mu_e(nTe/ne) * (1/ne))
+        
+        Te = ki_data[:,0]#np.linspace(ki_data[0,0], ki_data[-1,0], 100)
+        plt.figure(figsize=(16, 6), dpi=300)
+        
+        plt.subplot(1, 3, 1)
+        plt.loglog(Te, self.param.mu_e(Te, 1)/((self.param.V0 * self.param.tau/(self.param.L**2))) ,  ".-",             label ="0D-BTE")
+        plt.loglog(Te, np.ones_like(Te) * self.param._mu_e/((self.param.V0 * self.param.tau/(self.param.L**2))), "--", label ="Liu")
+        plt.loglog(mu_e_data[:,0], mu_e_data[:,1]/((self.param.V0 * self.param.tau/(self.param.L**2))), ".--", label ="data")
+        plt.grid(visible=True)
+        plt.xlabel(r"$T_e$(eV)")
+        plt.ylabel(r"$\mu_e$ ($V^{-1} m^2 s^{-1} $)")
+        plt.legend()
+        
+        plt.subplot(1, 3, 2)
+        plt.loglog(Te, self.param.De(Te, 1)/(self.param.tau/(self.param.L**2)) ,             ".-", label   = "0D-BTE")
+        plt.loglog(Te, np.ones_like(Te) * self.param._De/((self.param.tau/(self.param.L**2))), "--", label = "Liu")
+        plt.loglog(De_data[:,0], De_data[:,1]/((self.param.tau/(self.param.L**2))), ".--", label           = "data")
+        plt.grid(visible=True)
+        plt.xlabel(r"$T_e$(eV)")
+        plt.ylabel(r"$D_e$ ($m^{2}s^{-1}$)")
+        plt.legend()
+        
+        ki_arr       = lambda nTe,ne : self.param.np0 * self.param.tau * 1.235e-13 * np.exp(-18.687 * np.abs(ne / nTe))   
+        plt.subplot(1, 3, 3)
+        plt.loglog(Te, self.param.ki(Te, 1) / (self.param.np0 * self.param.tau) ,             ".-", label ="0D-BTE")
+        plt.loglog(Te, ki_arr(Te, 1)/(self.param.np0 * self.param.tau),                     "--", label ="Liu")
+        plt.loglog(Te, ki_data[:,1]/(self.param.np0 * self.param.tau),                     ".--", label ="data")
+        plt.grid(visible=True)
+        plt.legend()
+        plt.xlabel(r"$T_e$(eV)")
+        plt.ylabel(r"$k_i$ ($m^{3}s^{-1}$)")
+        
+        plt.tight_layout()
+        plt.savefig(args.fname+"_kinetic_coefficients.png")
+        plt.close()
+      
+      elif mode == "fixed-0":
+        self.param.ki       = lambda nTe,ne : self.param.np0 * self.param.tau * 1.235e-13 * xp.exp(-18.687 * xp.abs(ne / nTe))   
+        self.param.ki_ne    = lambda nTe,ne : self.param.np0 * self.param.tau * 1.235e-13 * xp.exp(-18.687 * xp.abs(ne / nTe))  * (-18.687 / nTe)
+        self.param.ki_nTe   = lambda nTe,ne : self.param.np0 * self.param.tau * 1.235e-13 * xp.exp(-18.687 * xp.abs(ne / nTe))  * (18.687 * ne / nTe**2)  
+        
+        self.param.mu_e     = lambda nTe,ne : self.param._mu_e * xp.ones_like(ne)
+        self.param.mu_e_ne  = lambda nTe,ne : ne * 0
+        self.param.mu_e_nTe = lambda nTe,ne : ne * 0
+        
+        self.param.De       = lambda nTe,ne : self.param._De * xp.ones_like(ne)
+        self.param.De_ne    = lambda nTe,ne : ne * 0
+        self.param.De_nTe   = lambda nTe,ne : ne * 0
+      
+      else:
+        raise NotImplementedError
+    
+    def initial_condition(self, type=0):
       xp      = self.xp_module
+      args    = self.args
       ele_idx = self.ele_idx
       ion_idx = self.ion_idx
       Te_idx  = self.Te_idx
@@ -215,23 +252,6 @@ class glow1d_fluid():
         if self.args.restore==1:
           print("~~~restoring solver from ", "%s_%04d_u.npy"%(args.fname, args.rs_idx))
           Uin = xp.load("%s_%04d.npy"%(args.fname, args.rs_idx))
-        
-          # D = np.load('newton_3spec_CN_Np100.npy')
-          # Np=  self.Np
-          # ne  = D[0:Np]
-          # ni  = D[Np:2*Np]
-          # nb  = D[2*Np:3*Np]
-          # neE = D[3*Np:]
-          # Te  = (2./3) * neE / ne
-          
-          # Uin[:, ele_idx] = ne[:,0]
-          # Uin[:, ion_idx] = ni[:,0]
-          # Uin[:, Te_idx]  = Te[:,0]
-          
-          # Uin[0, Te_idx]  = self.param.Teb0
-          # Uin[-1, Te_idx] = self.param.Teb1
-          # Uin[:, Te_idx] *= Uin[:, ele_idx]
-          
         else:
           xx = self.param.L * (self.xp + 1)
           Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
@@ -243,22 +263,73 @@ class glow1d_fluid():
           Uin[:, Te_idx] *= Uin[:, ele_idx]
           
           #print(Uin[:, Te_idx]/Uin[:, ele_idx])
-        
-        
+      
         nTe = Uin[:, Te_idx]
         ne  = Uin[:, ele_idx]
-                
-        self.mu[:, ele_idx] = self.param.mu_e(nTe, ne)
-        self.mu[:, ion_idx] = self.param.mu_i
-        
-        self.D[:, ele_idx] = self.param.De(nTe, ne)
-        self.D[:, ion_idx] = self.param.Di
-        
       else:
         raise NotImplementedError
-      
+        
       return Uin
     
+    def initialize(self,type=0):
+      xp      = self.xp_module
+      args    = self.args
+      ele_idx = self.ele_idx
+      ion_idx = self.ion_idx
+      Te_idx  = self.Te_idx
+      
+      if(args.use_tab_data==1):
+        self.initialize_kinetic_coefficients(mode="tabulated")
+      else:
+        self.initialize_kinetic_coefficients(mode="fixed-0")
+      
+      self.mu[:, ele_idx] = 0.0
+      self.mu[:, ion_idx] = self.param.mu_i
+      
+      self.D[:, ele_idx] = 0.0
+      self.D[:, ion_idx] = self.param.Di
+    
+    def copy_operators_H2D(self, dev_id):
+      
+      if self.args.use_gpu==0:
+        return
+      
+      with cp.cuda.Device(dev_id):
+        self.Dp             = cp.asarray(self.Dp)
+        self.LpD            = cp.asarray(self.LpD)
+        self.Lp             = cp.asarray(self.Lp)
+        self.LpD_inv        = cp.asarray(self.LpD_inv)
+        self.Zp             = cp.asarray(self.Zp)
+        self.E_ne           = cp.asarray(self.E_ne)
+        self.E_ni           = cp.asarray(self.E_ni)
+        self.mu             = cp.asarray(self.mu)
+        self.D              = cp.asarray(self.D)
+        self.Zp             = cp.asarray(self.Zp)
+        self.I_Np           = cp.asarray(self.I_Np)
+        self.I_NpNv         = cp.asarray(self.I_NpNv)
+        
+      return
+    
+    def copy_operators_D2H(self, dev_id):
+
+      if self.args.use_gpu==0:
+        return
+
+      with cp.cuda.Device(dev_id):
+        self.Dp             = cp.asnumpy(self.Dp)
+        self.LpD_inv        = cp.asnumpy(self.DpT)
+        self.Zp             = cp.asnumpy(self.Zp)
+        self.E_ne           = cp.asnumpy(self.E_ne)
+        self.E_ni           = cp.asnumpy(self.E_ni)
+        self.mu             = cp.asnumpy(self.mu)
+        self.D              = cp.asnumpy(self.D)
+        self.Zp             = cp.asnumpy(self.Zp)
+        self.I_Np           = cp.asnumpy(self.I_Np)
+        self.I_NpNv         = cp.asnumpy(self.I_NpNv)
+        
+        
+      return  
+        
     def electron_bdy_temperature(self, Uin: np.array, time, dt):
       xp  = self.xp_module
       
@@ -1019,12 +1090,29 @@ class glow1d_fluid():
     def plot(self, Uin, time, fname):
       fig       = plt.figure(figsize=(18,8), dpi=300)
       
-      ne = Uin[:, self.ele_idx]
-      ni = Uin[:, self.ion_idx]
-      Te = Uin[:, self.Te_idx]/ne
+      def asnumpy(x):
+        if self.xp_module==cp:
+          return self.xp_module.asnumpy(x)
+        else:
+          return x
+      
+      Uin = asnumpy(Uin)
+      ne  = Uin[:, self.ele_idx]
+      ni  = Uin[:, self.ion_idx]
+      Te  = Uin[:, self.Te_idx]/ne
+      
+      if self.args.use_gpu==1:
+        self.LpD_inv = asnumpy(self.LpD_inv)
+        self.Dp      = asnumpy(self.Dp)
+      
+      phi = self.solve_poisson(Uin[:,0], Uin[:,1], time)
+      E   = -np.dot(self.Dp, phi)
+      
+      if self.args.use_gpu==1:
+        self.LpD_inv = cp.asarray(self.LpD_inv)
+        self.Dp      = cp.asarray(self.Dp)
       
       label_str = "T=%.4f cycles"%(time)
-      
       plt.subplot(2, 3, 1)
       plt.plot(self.xp, self.param.np0 * ne, label=label_str)
       plt.xlabel(r"x/L")
@@ -1047,9 +1135,6 @@ class glow1d_fluid():
       
       
       plt.subplot(2, 3, 4)
-      phi = self.solve_poisson(Uin[:,0], Uin[:,1], time)
-      E   = -np.dot(self.Dp, phi)
-      
       plt.plot(self.xp, E * ((self.param.V0 / self.param.L)), label=label_str)
       plt.xlabel(r"x/L")
       plt.ylabel(r"$E (V/m)$")
@@ -1306,32 +1391,112 @@ class glow1d_fluid():
       #     break
       
       return u
+    
+    def fft_analysis(self, u, dt, atol, rtol, max_iter):
+      """
+      perform steady state solution fft analysis. 
+      """
+      
+      xp              = self.xp_module 
+      time            = 1.0
+      steps           = (int)(time/dt)
+      cycle_freq      = (int)(1/dt)
+      
+      assert steps * dt == time
+      
+      tb              = 0
+      u0              = xp.copy(u)
+      du              = xp.zeros_like(u)
+      
+      assert self.weak_bc_ne==False
+      assert self.weak_bc_ni==False
+      assert self.weak_bc_Te==False
+      
+      um              = xp.copy(u)
+      
+      ut              = xp.zeros((self.Np * self.Nv, steps + 1))
+
+      for ts_idx in range(steps + 1):
+        tn            = tb + ts_idx* dt
+        ut[:, ts_idx] = u.reshape((-1))
         
-    
-    
-parser = argparse.ArgumentParser()
-parser.add_argument("-Ns", "--Ns"                         , help="number of species"      , type=int, default=2)
-parser.add_argument("-NT", "--NT"                         , help="number of temperatures" , type=int, default=1)
-parser.add_argument("-Np", "--Np"                         , help="number of collocation points" , type=int, default=100)
-parser.add_argument("-cfl", "--cfl"                       , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
-parser.add_argument("-cycles", "--cycles"                 , help="number of cycles to run" , type=float, default=10)
-parser.add_argument("-ts_type", "--ts_type"               , help="ts mode" , type=str, default="BE")
-parser.add_argument("-atol", "--atol"                     , help="abs. tolerance" , type=float, default=1e-6)
-parser.add_argument("-rtol", "--rtol"                     , help="rel. tolerance" , type=float, default=1e-6)
-parser.add_argument("-fname", "--fname"                   , help="file name to store the solution" , type=str, default="1d_glow")
-parser.add_argument("-restore", "--restore"               , help="restore the solver from previous solution" , type=int, default=0)
-parser.add_argument("-rs_idx",  "--rs_idx"                , help="restore file_idx"   , type=int, default=0)
-parser.add_argument("-checkpoint", "--checkpoint"         , help="store the checkpoints every 250 cycles" , type=int, default=1)
-parser.add_argument("-max_iter", "--max_iter"             , help="max iterations for Newton solver" , type=int, default=1000)
-parser.add_argument("-dir"  , "--dir"                     , help="file name to store the solution" , type=str, default="glow1d_dir")
-parser.add_argument("-use_tab_data"  , "--use_tab_data"   , help="use Te based tabulated electron kinetic coefficients" , type=int, default=1)
-parser.add_argument("-bc_dirichlet_e", "--bc_dirichlet_e" , help="use fixed Dirichlet BC for the electron energy equation" , type=int, default=1)
+        if (ts_idx % cycle_freq == 0):
+          
+          self.plot(u, tn, "%s_%04d.png" %(args.fname, ts_idx//cycle_freq))
+          if (ts_idx > 0):
+            a1 = np.linalg.norm(u-um)
+            r1 = a1/np.linalg.norm(u)
+            print("time = %.4E ||u1-u0|| = %.4E ||u1-u0||/||u0|| = %.4E"%(tn, a1, r1))
+            um = np.copy(u)
+        
+        if ts_idx==steps:
+          break
+        
+        v, status     = self.solve_step(u, du, tn, dt, atol, rtol, max_iter)
+        du            = v-u
+        u             = v
+        
+        if status == False:
+          print("!!! solver failed.... :(")
+          sys.exit(0)
+      
+      return ut
+      
+      
+        
 
-args      = parser.parse_args()
-glow_1d   = glow1d_fluid(args)
+if (__name__ == "__main__"):
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-Ns", "--Ns"                         , help="number of species"      , type=int, default=2)
+  parser.add_argument("-NT", "--NT"                         , help="number of temperatures" , type=int, default=1)
+  parser.add_argument("-Np", "--Np"                         , help="number of collocation points" , type=int, default=100)
+  parser.add_argument("-cfl", "--cfl"                       , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
+  parser.add_argument("-cycles", "--cycles"                 , help="number of cycles to run" , type=float, default=10)
+  parser.add_argument("-ts_type", "--ts_type"               , help="ts mode" , type=str, default="BE")
+  parser.add_argument("-atol", "--atol"                     , help="abs. tolerance" , type=float, default=1e-6)
+  parser.add_argument("-rtol", "--rtol"                     , help="rel. tolerance" , type=float, default=1e-6)
+  parser.add_argument("-fname", "--fname"                   , help="file name to store the solution" , type=str, default="1d_glow")
+  parser.add_argument("-restore", "--restore"               , help="restore the solver from previous solution" , type=int, default=0)
+  parser.add_argument("-rs_idx",  "--rs_idx"                , help="restore file_idx"   , type=int, default=0)
+  parser.add_argument("-checkpoint", "--checkpoint"         , help="store the checkpoints every 250 cycles" , type=int, default=1)
+  parser.add_argument("-max_iter", "--max_iter"             , help="max iterations for Newton solver" , type=int, default=1000)
+  parser.add_argument("-dir"  , "--dir"                     , help="file name to store the solution" , type=str, default="glow1d_dir")
+  parser.add_argument("-use_tab_data"  , "--use_tab_data"   , help="use Te based tabulated electron kinetic coefficients" , type=int, default=1)
+  parser.add_argument("-bc_dirichlet_e", "--bc_dirichlet_e" , help="use fixed Dirichlet BC for the electron energy equation" , type=int, default=1)
+  parser.add_argument("-use_gpu",         "--use_gpu"       , help="enable GPU accerleration (not compatible with tabulated kinetics)" , type=int, default=0)
+  parser.add_argument("-gpu_device_id", "--gpu_device_id"   , help="GPU device id to use", type=int, default=0)
+  
+  args      = parser.parse_args()
+  glow_1d   = glow1d_fluid(args)
+  glow_1d.initialize()
+  
 
-u         = glow_1d.initialize()
-v         = glow_1d.solve(u, ts_type=args.ts_type)
-#v         = glow_1d.time_periodic_shooting(u, args.atol, args.rtol, args.max_iter)
-#python3 glowdischarge_1d.py -Np 240 -cycles 11 -ts_type BE -atol 1e-14 -rtol 1e-14 -dir glow1d_liu_N240_dt5e-4 -cfl 5e-4
+  u         = glow_1d.initial_condition()
+  if args.use_gpu==1:
+    assert args.use_tab_data==0
+    dev_id = args.gpu_device_id
+    d1 = cp.cuda.Device(dev_id)
+    d1.use()
+    
+    glow_1d.copy_operators_H2D(dev_id)
+    
+    d1 = cp.cuda.Device(dev_id)
+    d1.use()
+    
+    u  = cp.asarray(u)
+    glow_1d.xp_module = cp
+    
+    glow_1d.initialize_kinetic_coefficients(mode="fixed-0")
+    print(type(glow_1d.param.ki(u[:,2], u[:, 0])))
+    
+  
+  #v      = glow_1d.solve(u, ts_type=args.ts_type)
+  #ut     = glow_1d.fft_analysis(u, args.cfl, args.atol, args.rtol, args.max_iter)
+  #np.save("ut.npy", ut)
+  
+  #v         = glow_1d.time_periodic_shooting(u, args.atol, args.rtol, args.max_iter)
+  #python3 glowdischarge_1d.py -Np 240 -cycles 11 -ts_type BE -atol 1e-14 -rtol 1e-14 -dir glow1d_liu_N240_dt5e-4 -cfl 5e-4
+  
+  
+
 

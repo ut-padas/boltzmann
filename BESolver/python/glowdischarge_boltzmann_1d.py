@@ -7,6 +7,8 @@ import scipy.constants
 import argparse
 import matplotlib.pyplot as plt
 import sys
+
+import scipy.interpolate
 import glow1d_utils
 import basis
 import collisions
@@ -20,6 +22,7 @@ import cupyx.scipy.sparse.linalg
 import scipy.sparse.linalg
 import cross_section
 from time import perf_counter, sleep
+import glowdischarge_1d
 
 CUDA_NUM_DEVICES      = 0
 PROFILE_SOLVERS       = 0
@@ -43,6 +46,27 @@ class gmres_counter(object):
       if self._disp:
           print('iter %3i\trk = %s' % (self.niter, str(rk)))
 
+class glow1d_fluid_args():
+  def __init__(self, args) -> None:
+    self.Ns             = args.Ns
+    self.NT             = args.NT
+    self.Np             = args.Np
+    self.cfl            = args.cfl
+    self.cycles         = 30
+    self.ts_type        = "BE"
+    self.atol           = args.atol
+    self.rtol           = args.rtol
+    self.fname          = args.fname+"_f_"
+    self.restore        = 0
+    self.rs_idx         = 0
+    self.checkpoint     = 0
+    self.max_iter       = 400
+    self.dir            = ""
+    self.use_tab_data   = 0
+    self.bc_dirichlet_e = 0
+    self.use_gpu        = 0#args.use_gpu
+    self.gpu_device_id  = args.gpu_device_id
+    
 class glow1d_boltzmann():
     """
     perform glow discharge simulation with electron Boltzmann solver
@@ -543,16 +567,19 @@ class glow1d_boltzmann():
       Uin     = xp.zeros((self.Np, self.Nv))
       Vin     = xp.zeros((self.Nr * self.Nvt, self.Np))
       
-      if type==0:
-        if self.args.restore==1:
-          print("~~~restoring solver from %s.npy"%(args.fname))
-          Uin = xp.load("%s_%04d_u.npy"%(args.fname, args.rs_idx))
-          Vin = xp.load("%s_%04d_v.npy"%(args.fname, args.rs_idx))
-        else:
+      if self.args.restore == 1:
+        
+        print("~~~restoring solver from %s.npy"%(args.fname))
+        Uin = xp.load("%s_%04d_u.npy"%(args.fname, args.rs_idx))
+        Vin = xp.load("%s_%04d_v.npy"%(args.fname, args.rs_idx))
+        
+      else:
+        if (type == 0):
+          
           xx = self.param.L * (self.xp + 1)
-          read_from_file   = True 
+          read_from_file   = False
           if read_from_file==True:
-            fname = "1dglow/1d_glow_1000_fluid.npy"
+            fname = "1dglow/r2/1d_glow_fluid.npy"
             print("loading initial conditoin from ", fname)
             fluid_U         = xp.load(fname)
             Uin[:, ele_idx] = fluid_U[:, ele_idx] 
@@ -561,61 +588,125 @@ class glow1d_boltzmann():
           else:
             Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
             Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
-            Uin[:, Te_idx]  = self.param.Teb
-          
-          spec_sp     = self.op_spec_sp
-          mmat        = spec_sp.compute_mass_matrix()
-          mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
-          vth         = self.bs_vth
-          mw          = bte_utils.get_maxwellian_3d(vth, 1)
+            Uin[:, Te_idx]  = 4.0 #self.param.Teb
+            
+            spec_sp     = self.op_spec_sp
+            mmat        = spec_sp.compute_mass_matrix()
+            mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
+            vth         = self.bs_vth
+            mw          = bte_utils.get_maxwellian_3d(vth, 1)
 
-          mass_op     = self.op_mass
-          temp_op     = self.op_temp
+            mass_op     = self.op_mass
+            temp_op     = self.op_temp
+            
+            [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+            Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
+            
+            num_p       = spec_sp._p +1
+            num_sh      = len(spec_sp._sph_harm_lm)
+            h_init      = xp.zeros(num_p * num_sh)
+            
+            ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
+            print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
+            for i in range(self.Np):
+              v_ratio           = (self.c_gamma * xp.sqrt(Uin[i, Te_idx])/vth)
+              hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+              h_init[0::num_sh] = xp.sqrt(4 * xp.pi) * xp.dot(mmat_inv[0::num_sh,0::num_sh], xp.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
+              m0                = xp.dot(mass_op, h_init)
+              
+              h_init            = h_init/m0
+              
+              hh1               = self.bte_eedf_normalization(h_init)
+              num_sh            = len(spec_sp._sph_harm_lm)
+              
+              print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Uin[i, self.Te_idx], m0, (xp.dot(temp_op, h_init)/m0)), end='')
+              print(" k_elastic [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])), end='')
+              if (len(self.op_rate) > 1):
+                self.r_rates[i, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
+                print("k_ionization [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
+            
+              Vin[:, i] = xp.dot(self.op_psh2o, h_init)
+              
+            Vin = Vin * Uin[:,ele_idx]
+        else:
+          raise NotImplementedError    
+        
+        
+        enforce_bc = True
+        if (enforce_bc == True):
+          fl  = Vin[:,0]
+          fr  = Vin[:,-1]
           
-          [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
-          Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
-          
-          num_p       = spec_sp._p +1
-          num_sh      = len(spec_sp._sph_harm_lm)
-          h_init      = xp.zeros(num_p * num_sh)
-          
-          ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
-          print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
-          for i in range(self.Np):
-            v_ratio           = (self.c_gamma * xp.sqrt(Uin[i, Te_idx])/vth)
-            hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
-            h_init[0::num_sh] = xp.sqrt(4 * xp.pi) * xp.dot(mmat_inv[0::num_sh,0::num_sh], xp.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
-            m0                = xp.dot(mass_op, h_init)
-            
-            h_init            = h_init/m0
-            
-            hh1               = self.bte_eedf_normalization(h_init)
-            num_sh            = len(spec_sp._sph_harm_lm)
-            
-            print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Uin[i, self.Te_idx], m0, (xp.dot(temp_op, h_init)/m0)), end='')
-            print(" k_elastic [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])), end='')
-            if (len(self.op_rate) > 1):
-              self.r_rates[:, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
-              print("k_ionization [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
-            
-            Vin[:, i] = xp.dot(self.op_psh2o, h_init)
-            
-          # scale functions to have ne, at initial timestep
-          Vin = Vin * Uin[:,ele_idx]
+          fl[self.xp_vt_l]=0.0
+          fr[self.xp_vt_r]=0.0
+        
         
         self.mu[:, ele_idx] = self.param._mu_e
         self.D[: , ele_idx] = self.param._De
-        
+      
         self.mu[:, ion_idx] = self.param.mu_i
         self.D[: , ion_idx] = self.param.Di
         
         
           
-      else:
-        raise NotImplementedError
-      
       return Uin, Vin
     
+    def initialize_maxwellian_eedf(self, ne, Te):
+      xp          = self.xp_module
+      
+      temp_op     = self.op_temp
+      mass_op     = self.op_mass
+      op_rate     = self.op_rate
+      psh2o       = self.op_psh2o
+      mm_fac      = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
+      
+      if xp==cp:
+        temp_op     = xp.asnumpy(self.op_temp)
+        mass_op     = xp.asnumpy(self.op_mass)
+        op_rate     = [xp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
+        psh2o       = xp.asnumpy(self.op_psh2o)
+      
+      rates       = np.zeros_like(self.r_rates)
+      Vin         = np.zeros((self.Nr * self.Nvt, self.Np))
+      spec_sp     = self.op_spec_sp
+      mmat        = spec_sp.compute_mass_matrix()
+      mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
+      vth         = self.bs_vth
+      mw          = bte_utils.get_maxwellian_3d(vth, 1)
+
+      [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+      Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
+      
+      num_p       = spec_sp._p +1
+      num_sh      = len(spec_sp._sph_harm_lm)
+      h_init      = np.zeros(num_p * num_sh)
+      
+      ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
+      print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
+      for i in range(self.Np):
+        v_ratio           = (self.c_gamma * np.sqrt(Te[i])/vth)
+        hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+        h_init[0::num_sh] = np.sqrt(4 * np.pi) * np.dot(mmat_inv[0::num_sh,0::num_sh], np.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
+        m0                = np.dot(mass_op, h_init)
+        
+        h_init            = h_init/m0
+        
+        scale             = np.dot(mass_op / mm_fac, h_init) * (2 * (vth / self.c_gamma)**3)
+        hh1               = h_init/scale
+        num_sh            = len(spec_sp._sph_harm_lm)
+        
+        print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Te[i], m0, (np.dot(temp_op, h_init)/m0)), end='')
+        print(" k_elastic [m^3s^{-1}] = %.8E " %(np.dot(op_rate[0], hh1[0::num_sh])), end='')
+        if (len(op_rate) > 1):
+          rates[i, self.ion_idx] = np.dot(op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
+          print("k_ionization [m^3s^{-1}] = %.8E " %( rates[i, self.ion_idx] / self.param.np0 / self.param.tau))
+        
+        Vin[:, i] = np.dot(psh2o, h_init)
+        
+      # scale functions to have ne, at initial timestep
+      Vin = Vin * ne
+      return Vin
+      
     def initialize_bte_adv_x(self, dt):
       """initialize spatial advection operator"""
       xp = self.xp_module
@@ -805,6 +896,8 @@ class glow1d_boltzmann():
         self.op_mass        = cp.asarray(self.op_mass)
         self.op_temp        = cp.asarray(self.op_temp)
         self.op_rate        = [cp.asarray(self.op_rate[i]) for i in range(len(self.op_rate))]
+        self.op_mobility    = cp.asarray(self.op_mobility)
+        self.op_diffusion   = cp.asarray(self.op_diffusion)
         
       return
     
@@ -847,6 +940,8 @@ class glow1d_boltzmann():
         self.op_temp        = cp.asnumpy(self.op_temp)
         
         self.op_rate        = [cp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
+        self.op_mobility    = cp.asnumpy(self.op_mobility)
+        self.op_diffusion   = cp.asnumpy(self.op_diffusion)
       
       return  
     
@@ -1496,19 +1591,7 @@ class glow1d_boltzmann():
       v       = self.step_bte_x(v, tt_bte + 0.5 * dt_bte, dt_bte * 0.5)
       return v
     
-    def solve(self, Uin, Vin, output_cycle_averaged_qois=False):
-      tT              = self.args.cycles
-      tt              = 0
-      
-      dt              = self.args.cfl 
-      # dt_bte          = self.args.cfl 
-      # dt_fluid        = self.args.cfl 
-      
-      # bte_steps       = int(dt/dt_bte)
-      # fluid_steps     = int(dt/dt_fluid)
-      steps           = max(1,int(tT/dt))
-      print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
-      
+    def step_init(self, Uin, Vin, dt):
       if self.args.use_gpu == 1: 
         Uin1 = cp.asarray(Uin)
         Vin1 = cp.asarray(Vin)
@@ -1522,40 +1605,7 @@ class glow1d_boltzmann():
       else:
         self.xp_module = np
         
-      xp             = self.xp_module
-      u = xp.copy(Uin1)
-      v = xp.copy(Vin1)
-      
-      du    = xp.zeros_like(u)
-      dv    = xp.zeros_like(v)
-      dv_lm = xp.zeros((self.dof_v, self.Np))
-      
-      io_cycle = 1.00
-      io_freq  = int(io_cycle/dt)
-      
-      dg_qmat  = self.op_diag_dg
-      dg_qmatT = xp.transpose(self.op_diag_dg)
-      
-      ts_idx_b  = 0 
-      if args.restore==1:
-        ts_idx_b = int(args.rs_idx * io_freq)
-        tt       = ts_idx_b * dt
-        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
-        
-      if(self.ts_type_bte_v == "IMEX"):
-        lmat = self.I_Nv - dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT)
-        self.bte_imex_lmat_inv = xp.linalg.inv(lmat)
-      else:
-        self.bte_imex_lmat_inv = None
-      
-      if(self.ts_type_fluid == "IMEX"):
-        lmat = self.I_Nx - dt * self.Lp * self.param.Di
-        lmat[0, :]  = self.I_Nx[0,:]
-        lmat[-1, :] = self.I_Nx[-1,:]
-        self.ns_imex_lmat_inv = xp.linalg.inv(lmat)
-      else:
-        self.ns_imex_lmat_inv = None
-      
+      xp            = self.xp_module
       num_pc_evals  = 20
       ep            = xp.logspace(xp.log10(1e2), xp.log10(6e5), num_pc_evals//2, base=10)
       self.Evals    = -xp.flip(ep)
@@ -1581,8 +1631,56 @@ class glow1d_boltzmann():
       assert len(self.PmatE) == num_pc_evals + 1
       assert len(self.Evals) == num_pc_evals
       print("v-space advection mat preconditioner gird : \n", self.Evals)
+      self.initialize_bte_adv_x(dt * 0.5)
       
+      return Uin1, Vin1
+    
+    def step(self, u, v, du, dv , time, dt, scheme="strang-splitting", verbose=0):
+      tt = time 
       
+      if scheme=="strang-splitting":
+        # second-order split scheme
+        u = self.step_fluid(u, du, tt, dt * 0.5,  self.ts_type_fluid, verbose=verbose)
+        self.fluid_to_bte(u, v, tt, dt)
+        v = self.step_bte(v, dv, tt, dt, None, verbose=verbose)
+        self.bte_to_fluid(u, v, tt + 0.5 * dt, dt)
+        u = self.step_fluid(u, du, tt + 0.5 * dt, dt * 0.5,  self.ts_type_fluid, verbose=verbose)
+        
+      elif scheme=="first-order":
+      
+        # first order split scheme
+        u = self.step_fluid(u, du, tt, dt, self.ts_type_fluid, verbose=verbose)
+        self.fluid_to_bte(u, v, tt, dt)
+        v = self.step_bte(v, dv, tt, dt, None, verbose=verbose)
+        self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
+        
+      return u, v
+        
+    def solve(self, Uin, Vin, output_cycle_averaged_qois=False):
+      tT              = self.args.cycles
+      tt              = 0
+      
+      dt              = self.args.cfl 
+      steps           = max(1,int(tT/dt))
+      
+      print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
+      Uin1, Vin1     = self.step_init(Uin, Vin, dt)
+      xp             = self.xp_module
+      u              = xp.copy(Uin1)
+      v              = xp.copy(Vin1)
+      
+      du    = xp.zeros_like(u)
+      dv    = xp.zeros_like(v)
+      
+      io_cycle = 1.00
+      io_freq  = int(io_cycle/dt)
+      
+      ts_idx_b  = 0 
+      if args.restore==1:
+        ts_idx_b = int(args.rs_idx * io_freq)
+        tt       = ts_idx_b * dt
+        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+        
       if (output_cycle_averaged_qois == True):
         cycle_avg_u       = xp.zeros_like(u)
         cycle_avg_v       = xp.zeros_like(v)
@@ -1593,7 +1691,6 @@ class glow1d_boltzmann():
       num_p             = self.op_spec_sp._p + 1
       num_sh            = len(self.op_spec_sp._sph_harm_lm)
       
-      self.initialize_bte_adv_x(dt * 0.5)
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
@@ -1619,34 +1716,23 @@ class glow1d_boltzmann():
               xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
               xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
           
-          Vin_lm   = xp.dot(self.op_po2sh, v)
-          Vin_lm1  = self.bte_eedf_normalization(Vin_lm)
-          Vin_lm1  = xp.asnumpy(Vin_lm1)
+          # Vin_lm   = xp.dot(self.op_po2sh, v)
+          # Vin_lm1  = self.bte_eedf_normalization(Vin_lm)
+          # Vin_lm1  = xp.asnumpy(Vin_lm1)
       
-          vth       = self.bs_vth
-          kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
-          #ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6)
-          ev_range  = (self.ev_lim[0], self.ev_lim[1] *4)
-          ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)    
-          ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
-          xp.save("%s_%04d_v_eedf.npy"%(args.fname, ts_idx//io_freq), ff_v)
+          # vth       = self.bs_vth
+          # kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
+          # #ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6)
+          # ev_range  = (self.ev_lim[0], self.ev_lim[1] *4)
+          # ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)    
+          # ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
+          # xp.save("%s_%04d_v_eedf.npy"%(args.fname, ts_idx//io_freq), ff_v)
         
         if (output_cycle_averaged_qois == True):
           cycle_avg_u     += u
           cycle_avg_v     += (v/u[ : , ele_idx])
         
-        # second-order split scheme
-        u = self.step_fluid(u, du, tt, dt * 0.5,  self.ts_type_fluid, int(ts_idx % io_freq == 0))
-        self.fluid_to_bte(u, v, tt, dt)
-        v = self.step_bte(v, dv, tt, dt, None, int(ts_idx % io_freq == 0))
-        self.bte_to_fluid(u, v, tt + 0.5 * dt, dt)
-        u = self.step_fluid(u, du, tt + 0.5 * dt, dt * 0.5,  self.ts_type_fluid, int(ts_idx % io_freq == 0))
-        
-        # # first order split scheme
-        # u = self.step_fluid(u, du, tt, dt, self.ts_type_fluid, int(ts_idx % io_freq == 0))
-        # self.fluid_to_bte(u, v, tt, dt)
-        # v = self.step_bte(v, dv, tt, dt, None, int(ts_idx % io_freq == 0))
-        # self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
+        u , v  = self.step(u, v, du, dv, tt, dt)
         
         if (output_cycle_averaged_qois == True):
           cycle_avg_u     += u
@@ -2400,7 +2486,225 @@ class glow1d_boltzmann():
         
       return u, v
     
-    
+    def compute_qoi(self, u, v, time):
+      xp       = self.xp_module
+      
+      # phi      = self.solve_poisson(u[:,self.ele_idx], u[:, self.ion_idx], time)
+      # E        = -xp.dot(self.Dp, phi) * self.param.V0/self.param.L
+      # EbyN     = E/self.param.n0/self.param.np0
+      
+      mm_fac   = np.sqrt(4 * np.pi) 
+      c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+      vth      = self.bs_vth
+
+      v_lm     = xp.dot(self.op_po2sh, v)
+      
+      m0       = xp.dot(self.op_mass, v_lm)
+      Te       = xp.dot(self.op_temp,v_lm) / m0
+      scale    = xp.dot(self.op_mass / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
+      v_lm_n   = v_lm/scale
+      num_sh   = len(self.op_spec_sp._sph_harm_lm)
+      
+      num_collisions = len(self.bs_coll_list)
+      rr_rates = xp.array([xp.dot(self.op_rate[col_idx], v_lm_n[0::num_sh, :]) for col_idx in range(num_collisions)]).reshape((num_collisions, self.Np)).T
+      D_e      = xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma/3.)
+      #mu_e    = xp.dot(self.op_mobility, v_lm_n[1::num_sh]) *  (-(c_gamma / (3 * EbyN)))
+      mu_e     = D_e/Te
+      return {"rates": rr_rates, "mu": xp.abs(mu_e), "D": D_e}
+      
+    def solve_hybrid(self, Uin, Vin,  dt_bte, dt_fluid):
+      """
+      Hybrid solver to reach steady-state
+      Uin: macroscopic vars
+      Vin: BTE for electrons
+      
+      dt_bte  : glow with BTE timestep size
+      dt_fluid: glow with fluid model timestep size 
+      """
+      
+      fluid_args            = glow1d_fluid_args(self.args)
+      glow1d_macro_model    = glowdischarge_1d.glow1d_fluid(fluid_args)
+      glow1d_macro_model.initialize()
+      glow1d_macro_model.initialize_kinetic_coefficients(mode="tabulated")
+      
+      if (fluid_args.use_gpu==1):
+        assert fluid_args.use_tab_data == 0
+        glow1d_macro_model.copy_operators_H2D(fluid_args.gpu_device_id)
+        glow1d_macro_model.xp_module = cp
+        glow1d_macro_model.initialize_kinetic_coefficients(mode="fixed-0")
+        
+      
+      u, v                  = self.step_init(Uin, Vin, dt_bte)
+      bte_steps_per_cycle   = (int)(1/dt_bte)
+      bte_cyles             = 1
+      
+      fluid_steps_per_cycle = (int)(1/dt_fluid)
+      fluid_cyles           = 100
+      
+      
+      while(1):
+        
+        glow1d_macro_model.initialize_kinetic_coefficients(mode="tabulated")
+        xp                    = self.xp_module
+        
+        u                     = xp.asarray(u)
+        v                     = xp.asarray(v)
+        
+        u0                    = xp.copy(u)
+        v0                    = xp.copy(v)
+
+        du                    = xp.zeros_like(u)
+        dv                    = xp.zeros_like(v)
+
+        cycle_avg_u           = xp.zeros_like(u)
+        cycle_avg_v           = xp.zeros_like(v)
+        io_cycle              = 1.00
+        
+        num_t_pts             = 100
+        mobility_t            = xp.zeros((self.Np, num_t_pts + 1))
+        diffusion_t           = xp.zeros((self.Np, num_t_pts + 1))
+        rates_t               = xp.zeros((self.Np, len(self.bs_coll_list), num_t_pts + 1))
+        kinetic_freq          = bte_steps_per_cycle // num_t_pts
+        tt_grid               = np.linspace(0, 1, num_t_pts+1)         
+        
+        for ts_idx in range(bte_cyles * bte_steps_per_cycle + 1):
+          tt = ts_idx * dt_bte
+          
+          if (ts_idx % kinetic_freq == 0):
+            ele_kinetics          = self.compute_qoi(u, v, tt)
+            idx                   = ts_idx//kinetic_freq
+            mobility_t [:, idx]   = ele_kinetics["mu"]
+            diffusion_t[:, idx]   = ele_kinetics["D"]
+            rates_t    [:,:, idx] = ele_kinetics["rates"]
+          
+          if (ts_idx> 0 and ts_idx%bte_steps_per_cycle==0):
+            a1 = xp.linalg.norm(u-u0)
+            r1 = a1/xp.linalg.norm(u0)
+            print("GLOW-BTE time = %.4E T ||u1-u0|| = %.4E ||u1-u0||/||u0|| = %.4E "%(ts_idx * dt_bte, a1, r1))
+            
+            cycle_avg_u       *= 0.5 * dt_bte / io_cycle
+            cycle_avg_v       *= 0.5 * dt_bte / io_cycle
+            
+            self.plot(u, v,                     "%s_bte_%04d.png"%(self.args.fname, (int)(tt))    , tt)
+            self.plot(cycle_avg_u, cycle_avg_v, "%s_bte_avg_%04d.png"%(self.args.fname, (int)(tt)), tt)
+            
+            u0 = xp.copy(u)
+            v0 = xp.copy(v)
+
+          if (ts_idx == bte_cyles * bte_steps_per_cycle):
+            break
+          
+          cycle_avg_u     += u
+          cycle_avg_v     += (v/u[ : , self.ele_idx])
+          
+          u, v = self.step(u, v, du, dv, tt, dt_bte, scheme="strang-splitting", verbose=0)
+          
+          cycle_avg_u     += u
+          cycle_avg_v     += (v/u[ : , self.ele_idx])
+          
+        pp                = glow1d_macro_model.param
+        xp                = glow1d_macro_model.xp_module
+        
+        if (fluid_args.use_gpu==0):
+          u                     = cp.asnumpy(u)
+          # ele_kinetics["rates"] = cp.asnumpy(ele_kinetics["rates"])
+          # ele_kinetics["mu"]    = cp.asnumpy(ele_kinetics["mu"])
+          # ele_kinetics["D"]     = cp.asnumpy(ele_kinetics["D"])
+          
+          mobility_t  = cp.asnumpy(mobility_t)
+          diffusion_t = cp.asnumpy(diffusion_t)
+          rates_t     = cp.asnumpy(rates_t)
+          
+          mobility_t  = scipy.interpolate.interp1d(tt_grid, mobility_t)
+          diffusion_t = scipy.interpolate.interp1d(tt_grid, diffusion_t)
+          rates_t     = scipy.interpolate.interp1d(tt_grid, rates_t)
+          
+        nTe     = u[:, self.ele_idx] * u[:, self.Te_idx]
+        ne      = u[:, self.ele_idx]
+        Te      = nTe/ne
+        tt_inp  = np.linspace(0, 1, 10)
+        
+        plt.figure(figsize=(21, 8), dpi=200)
+        plt.subplot(1, 3, 1)
+        plt.semilogy(self.xp, cp.asnumpy(pp.ki(nTe, ne)), 'k--', label=r"0D-BTE")
+        
+        for i in range(len(tt_inp)):
+          plt.semilogy(self.xp, rates_t(tt_inp[i])[:,1] * pp.tau * pp.np0, label=r"ki @ (t=%.2E)"%(tt_inp[i]))
+
+        plt.grid(visible=True)
+        plt.title(r"ki")
+        plt.xlabel(r"x")
+        plt.legend()
+        
+        
+        plt.subplot(1, 3, 2)
+        plt.semilogy(self.xp, cp.asnumpy(pp.mu_e(nTe, ne)), 'k--', label="0D-BTE")
+        for i in range(len(tt_inp)):
+          plt.semilogy(self.xp, mobility_t(tt_inp[i]) * (1.0/pp.n0/pp.np0) * (pp.V0 * pp.tau/(pp.L**2)), label=r"$\mu_e$ @ (t=%.2E)"%(tt_inp[i]))
+        
+        plt.grid(visible=True)
+        plt.title(r"$\mu_e$")
+        plt.legend()
+        
+        plt.subplot(1, 3, 3)
+        plt.semilogy(self.xp, cp.asnumpy(pp.De(nTe, ne)), 'k--', label="0D-BTE")
+        for i in range(len(tt_inp)):
+          plt.semilogy(self.xp, diffusion_t(tt_inp[i]) * (1.0/pp.n0/pp.np0) * (pp.tau/(pp.L**2)), label=r"$D_e$ @ (t=%.2E)"%(tt_inp[i]))
+          
+        plt.grid(visible=True)
+        plt.title(r"$D_e$")
+        plt.legend()
+        
+        plt.savefig("%s_kinetics.png"%(self.args.fname))
+        plt.close()
+        
+        u[:, self.Te_idx] = u[:, self.ele_idx] * u[:, self.Te_idx]
+        du1 = xp.zeros_like(u)
+        u0  = xp.copy(u)
+        
+        for ts_idx in range(fluid_cyles * fluid_steps_per_cycle + 1):
+          tt                = ts_idx * dt_fluid
+          tt_inp            = (ts_idx % fluid_steps_per_cycle) * dt_fluid 
+          
+          pp.ki             = lambda nTe, ne : rates_t(tt_inp)[:,1] * pp.tau * pp.np0
+          pp.ki_nTe         = lambda nTe, ne : 0 * ne
+          pp.ki_ne          = lambda nTe, ne : 0 * ne
+          
+          pp.mu_e           = lambda nTe, ne : (mobility_t(tt_inp)/pp.n0/pp.np0) * (pp.V0 * pp.tau/(pp.L**2)) 
+          pp.mu_e_nTe       = lambda nTe, ne : 0 * ne
+          pp.mu_e_ne        = lambda nTe, ne : 0 * ne
+          
+          pp.De             = lambda nTe, ne : (diffusion_t(tt_inp)/pp.n0/pp.np0) * (pp.tau/(pp.L**2))
+          pp.De_nTe         = lambda nTe, ne : 0 * ne
+          pp.De_ne          = lambda nTe, ne : 0 * ne
+          
+          
+          if (ts_idx> 0 and ts_idx%fluid_steps_per_cycle==0):
+            
+            a1 = xp.linalg.norm(u-u0)
+            r1 = a1/xp.linalg.norm(u0)
+            
+            print("GLOW-FLUID time = %.4E T ||u1-u0|| = %.4E ||u1-u0||/||u0|| = %.4E "%(ts_idx * dt_fluid, a1, r1))
+            
+            glow1d_macro_model.plot(u   , tt, "%s_fluid_%04d.png"%(glow1d_macro_model.args.fname, (int)(tt)))
+            #glow1d_macro_model.plot(u-u0, tt, "%s_fluid_diff.png"%(glow1d_macro_model.args.fname))
+            u0 = xp.copy(u)
+          
+          if (ts_idx == fluid_cyles * fluid_steps_per_cycle):
+            break
+            
+          v, _ = glow1d_macro_model.solve_step(u, du1, tt, dt_fluid, fluid_args.atol, fluid_args.rtol, fluid_args.max_iter)
+          du1  = v-u
+          u    = v
+          # Te   = u[:, self.Te_idx]/u[:, self.ele_idx]
+          # Te[Te<0] = 1.5
+          # u[:, self.Te_idx] = Te * u[:, self.ele_idx]
+          
+          
+        
+        u[:, self.Te_idx] = u[:, self.Te_idx]/u[:, self.ele_idx]
+        v  = self.initialize_maxwellian_eedf(u[:, self.ele_idx], u[:, self.Te_idx])
+        
 parser = argparse.ArgumentParser()
 parser.add_argument("-threads", "--threads"                       , help="number of cpu threads (boltzmann operator assembly)", type=int, default=4)
 parser.add_argument("-out_fname", "--out_fname"                   , help="output file name for the qois", type=str, default="bte_glow1d")
@@ -2450,6 +2754,7 @@ if args.use_gpu==1:
   gpu_device.use()
 
 uu,vv   = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
+#uu,vv   = glow_1d.solve_hybrid(u, v, args.cfl, 5e-3)
 #uu,vv   = glow_1d.solve_unit_test2(u, v, 1)
 #uu,vv   = glow_1d.solve_unit_test3(u, v)
 

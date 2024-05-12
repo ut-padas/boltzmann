@@ -202,13 +202,9 @@ class glow1d_boltzmann():
       self.xp_vt         = np.append(np.arccos(gx_m1_0), np.arccos(gx_0_p1)) 
       self.xp_vt_qw      = np.append(gw_m1_0, gw_0_p1)
       
-      # print(self.xp_vt, self.xp_vt_qw) 
-      
       # self.xp_vt, self.xp_vt_qw = basis.Legendre().Gauss_Pn(self.Nvt)
       # self.xp_vt                = np.arccos(self.xp_vt) 
       
-      #print(self.xp_vt, self.xp_vt_qw) 
-
       self.xp_cos_vt     = np.cos(self.xp_vt)
       self.xp_vt_l       = np.array([i * self.Nvt + j for i in range(self.Nr) for j in list(np.where(self.xp_vt <= 0.5 * np.pi)[0])])
       self.xp_vt_r       = np.array([i * self.Nvt + j for i in range(self.Nr) for j in list(np.where(self.xp_vt > 0.5 * np.pi)[0])])
@@ -579,60 +575,66 @@ class glow1d_boltzmann():
           xx = self.param.L * (self.xp + 1)
           read_from_file   = False
           if read_from_file==True:
-            fname = "1dglow/r2/1d_glow_fluid.npy"
+            fname = "1dglow/r1/1d_glow_ss.npy"
             print("loading initial conditoin from ", fname)
             fluid_U         = xp.load(fname)
-            Uin[:, ele_idx] = fluid_U[:, ele_idx] 
-            Uin[:, ion_idx] = fluid_U[:, ion_idx] 
-            Uin[:, Te_idx]  = fluid_U[:, Te_idx]  / Uin[:, ele_idx]
+            npts            = fluid_U.shape[0]
+            xx1             = -np.cos(np.pi*np.linspace(0,npts-1, npts)/(npts-1))
+            P1              = np.dot(np.polynomial.chebyshev.chebvander(self.xp, npts-1), self.V0pinv)
+            u1              = np.dot(fluid_U.T, P1).T
+            u1[:, Te_idx]   = u1[:, Te_idx] * u1[:, ele_idx]
+            
+            Uin[:, ele_idx] = u1[:, ele_idx] 
+            Uin[:, ion_idx] = u1[:, ion_idx] 
+            Uin[:, Te_idx]  = u1[:, Te_idx]  / u1[:, ele_idx]
           else:
             Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
             Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
             Uin[:, Te_idx]  = 4.0 #self.param.Teb
             
-            spec_sp     = self.op_spec_sp
-            mmat        = spec_sp.compute_mass_matrix()
-            mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
-            vth         = self.bs_vth
-            mw          = bte_utils.get_maxwellian_3d(vth, 1)
+          spec_sp     = self.op_spec_sp
+          mmat        = spec_sp.compute_mass_matrix()
+          mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
+          vth         = self.bs_vth
+          mw          = bte_utils.get_maxwellian_3d(vth, 1)
 
-            mass_op     = self.op_mass
-            temp_op     = self.op_temp
+          mass_op     = self.op_mass
+          temp_op     = self.op_temp
+          
+          [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+          Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
+          
+          num_p       = spec_sp._p +1
+          num_sh      = len(spec_sp._sph_harm_lm)
+          h_init      = xp.zeros(num_p * num_sh)
+          
+          ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
+          print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
+          for i in range(self.Np):
+            v_ratio           = (self.c_gamma * xp.sqrt(Uin[i, Te_idx])/vth)
+            hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+            h_init[0::num_sh] = xp.sqrt(4 * xp.pi) * xp.dot(mmat_inv[0::num_sh,0::num_sh], xp.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
+            m0                = xp.dot(mass_op, h_init)
             
-            [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
-            Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
+            h_init            = h_init/m0
             
-            num_p       = spec_sp._p +1
-            num_sh      = len(spec_sp._sph_harm_lm)
-            h_init      = xp.zeros(num_p * num_sh)
+            hh1               = self.bte_eedf_normalization(h_init)
+            num_sh            = len(spec_sp._sph_harm_lm)
             
-            ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
-            print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
-            for i in range(self.Np):
-              v_ratio           = (self.c_gamma * xp.sqrt(Uin[i, Te_idx])/vth)
-              hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
-              h_init[0::num_sh] = xp.sqrt(4 * xp.pi) * xp.dot(mmat_inv[0::num_sh,0::num_sh], xp.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
-              m0                = xp.dot(mass_op, h_init)
+            print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Uin[i, self.Te_idx], m0, (xp.dot(temp_op, h_init)/m0)), end='')
+            print(" k_elastic [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])), end='')
+            if (len(self.op_rate) > 1):
+              self.r_rates[i, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
+              print("k_ionization [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
+          
+            Vin[:, i] = xp.dot(self.op_psh2o, h_init)
               
-              h_init            = h_init/m0
-              
-              hh1               = self.bte_eedf_normalization(h_init)
-              num_sh            = len(spec_sp._sph_harm_lm)
-              
-              print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Uin[i, self.Te_idx], m0, (xp.dot(temp_op, h_init)/m0)), end='')
-              print(" k_elastic [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[0], hh1[0::num_sh])), end='')
-              if (len(self.op_rate) > 1):
-                self.r_rates[i, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
-                print("k_ionization [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
-            
-              Vin[:, i] = xp.dot(self.op_psh2o, h_init)
-              
-            Vin = Vin * Uin[:,ele_idx]
+          Vin = Vin * Uin[:,ele_idx]
         else:
           raise NotImplementedError    
         
         
-        enforce_bc = True
+        enforce_bc = False
         if (enforce_bc == True):
           fl  = Vin[:,0]
           fr  = Vin[:,-1]
@@ -736,46 +738,46 @@ class glow1d_boltzmann():
       self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
       #self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
       
-      adv_mat = cp.asnumpy(self.bte_x_shift)
-      v1 = -self.xp**2 + 1.2
-      plt.figure(figsize=(10,4), dpi=300)
-      plt.subplot(1, 2 , 1)
-      plt.semilogy(self.xp, v1,"-b",label="t=0")
-      y1 = np.copy(v1)
-      for i in range(100):
-        #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
-        y1[0]=0
-        y1=xp.dot(adv_mat[-1,-1],y1)
-      plt.semilogy(self.xp, y1,"-r", label="left to right")
-      y1 = np.copy(v1)
-      for i in range(100):
-        #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
-        y1[-1]=0
-        y1=xp.dot(adv_mat[-1,0],y1)
-      plt.semilogy(self.xp, y1,"-y", label="right to left ")
-      plt.legend()
-      plt.grid()
+      # adv_mat = cp.asnumpy(self.bte_x_shift)
+      # v1 = -self.xp**2 + 1.2
+      # plt.figure(figsize=(10,4), dpi=300)
+      # plt.subplot(1, 2 , 1)
+      # plt.semilogy(self.xp, v1,"-b",label="t=0")
+      # y1 = np.copy(v1)
+      # for i in range(50):
+      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
+      #   y1[0]=0
+      #   y1=xp.dot(adv_mat[-1,-1],y1)
+      # plt.semilogy(self.xp, y1,"-r", label="left to right")
+      # y1 = np.copy(v1)
+      # for i in range(50):
+      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
+      #   y1[-1]=0
+      #   y1=xp.dot(adv_mat[-1,0],y1)
+      # plt.semilogy(self.xp, y1,"-y", label="right to left ")
+      # plt.legend()
+      # plt.grid()
       
-      plt.subplot(1, 2 , 2)
-      plt.plot(self.xp, v1,"-b",label="t=0")
-      y1 = np.copy(v1)
-      for i in range(100):
-        #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
-        y1[0]=0
-        y1=xp.dot(adv_mat[-1,-1],y1)
-      plt.plot(self.xp, y1,"-r", label="left to right")
-      y1 = np.copy(v1)
-      for i in range(100):
-        #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
-        y1[-1]=0
-        y1=xp.dot(adv_mat[-1,0],y1)
-      plt.plot(self.xp, y1,"-y", label="right to left ")
-      plt.legend()
-      plt.grid()
+      # plt.subplot(1, 2 , 2)
+      # plt.plot(self.xp, v1,"-b",label="t=0")
+      # y1 = np.copy(v1)
+      # for i in range(50):
+      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
+      #   y1[0]=0
+      #   y1=xp.dot(adv_mat[-1,-1],y1)
+      # plt.plot(self.xp, y1,"-r", label="left to right")
+      # y1 = np.copy(v1)
+      # for i in range(50):
+      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
+      #   y1[-1]=0
+      #   y1=xp.dot(adv_mat[-1,0],y1)
+      # plt.plot(self.xp, y1,"-y", label="right to left ")
+      # plt.legend()
+      # plt.grid()
       
-      #plt.show()
-      plt.savefig("test.png")
-      plt.close()
+      # #plt.show()
+      # plt.savefig("test.png")
+      # plt.close()
       return
           
     def initialize_bte_adv_x1(self, dt):
@@ -995,11 +997,6 @@ class glow1d_boltzmann():
         self.r_rates[:, ion_idx] = xp.dot(self.op_rate[1], v_lm1[0::num_sh,:]) * self.param.np0 * self.param.tau
       else:
         self.r_rates[:, ion_idx] = 0.0
-      
-      # treat the negative values. 
-      # self.r_rates[self.r_rates[:, ion_idx] <0, ion_idx]  = 0.0
-      # Uin[ Uin[:, ele_idx]< 0, ele_idx]                   = 0.0
-      # Uin[ Uin[:, Te_idx] < 0, Te_idx]                    = 0.0
       
       return
     
@@ -1303,6 +1300,35 @@ class glow1d_boltzmann():
         print("fluid solver step time = %.4E (s)" %(t2-t1), flush=True)
         
       return u1
+    
+    def vspace_pc_setup(self):
+      xp          = self.xp_module
+      E           = self.bs_E
+      pcEmat      = self.PmatE
+      pcEval      = self.Evals
+      pc_emat_idx = list()
+      idx         = xp.where(E<pcEval[0])[0]
+      
+      if (len(idx)>0):
+        pc_emat_idx.append((0, idx))
+        
+      for i in range(1, len(pcEval)):
+        idx  = xp.where((pcEval[i-1]<=E) & (E<pcEval[i]))[0]
+        if (len(idx)>0):
+          pc_emat_idx.append((i, idx))
+      
+      idx = xp.where(pcEval[-1]<=E)[0]
+      if (len(idx)>0):
+        print(E[idx], pcEval[-1])
+        pc_emat_idx.append((len(pcEval), idx))
+      
+      idx_set  = xp.array([],dtype=xp.int32)
+      for idx_id, idx in enumerate(pc_emat_idx):
+        idx_set = xp.append(idx_set, idx[1])
+        
+      assert (idx_set.shape[0]==self.Np), "!!! Error: preconditioner partitioning does not match the domain size"
+      
+      return pc_emat_idx
       
     def step_bte_v(self, u, du, time, dt, ts_type, verbose=0):
       xp      = self.xp_module
@@ -1337,24 +1363,13 @@ class glow1d_boltzmann():
         dof_v           = self.dof_v
         #Imat           = self.I_Nxv_stacked
         
-        # if (time==0.0):
-        #   self.bte_precond_mat = self.bte_assemble_precond(dt)
-        
         cp.cuda.runtime.deviceSynchronize()
         a_t1 = perf_counter()
-        # rhs_j , bc_j    = self.rhs_bte_v_jacobian(u, time, dt)
-        # Lmat            = Imat - dt * rhs_j
         
         steps_cycle     = int(1/dt)
         pmat_freq       = steps_cycle//50
         step            = int(time/dt)
         
-        # if use_gmres == True:
-        #   if (step % pmat_freq ==0):
-        #     print("resetting the precond mat")
-        #     self.bte_pmat = xp.linalg.inv(Lmat)
-        #   Pmat = self.bte_pmat   
-          
         cp.cuda.runtime.deviceSynchronize()
         a_t2 = perf_counter()
         
@@ -1362,50 +1377,9 @@ class glow1d_boltzmann():
         s_t1 = perf_counter()
         if use_gmres == True:
           
-          pcEmat = self.PmatE
-          pcEval = self.Evals
-          
-          pc_emat_idx = list()
-          
-          idx         = xp.where(E<pcEval[0])[0]
-          if (len(idx)>0):
-            pc_emat_idx.append((0, idx))
-            
-          for i in range(1, len(pcEval)):
-            #idx = xp.logical_and(pcEval[i-1]<=E, E<pcEval[i])
-            idx  = xp.where((pcEval[i-1]<=E) & (E<pcEval[i]))[0]
-            if (len(idx)>0):
-              pc_emat_idx.append((i, idx))
-          
-          idx = xp.where(pcEval[-1]<=E)[0]
-          if (len(idx)>0):
-            print(E[idx], pcEval[-1])
-            pc_emat_idx.append((len(pcEval), idx))
-          
-          len_vec = np.array([len(idx[1]) for idx_id, idx in enumerate(pc_emat_idx)], dtype=xp.int32)
-          px = xp.zeros((len(pc_emat_idx), pcEmat.shape[2], np.max(len_vec)))
-          pcEmatActive = list()
-          for idx_id, idx in enumerate(pc_emat_idx):
-            pcEmatActive.append(pcEmat[idx[0]])
-          pcEmatActive = xp.array(pcEmatActive) 
-          
-          idx_set  = xp.array([],dtype=xp.int32)
-          for idx_id, idx in enumerate(pc_emat_idx):
-            idx_set = xp.append(idx_set, idx[1])
-            
-          assert (idx_set.shape[0]==self.Np), "!!! Error: preconditioner partitioning does not match the domain size"
-            
-          # num_gpu_streams = 4
-          # cuda_stream     = [xp.cuda.Stream() for i in range(num_gpu_streams)] 
-          
-          # print(E)
-          # for idx_id, idx in enumerate(pc_emat_idx):
-          #     if idx_id>0 and idx_id<len(pc_emat_idx)-1:
-          #       print(idx_id, E[idx], 0.5 * (pcEval[idx_id-1]+pcEval[idx_id]), " ( ",pcEval[idx_id-1], pcEval[idx_id]," )"  )
-          #     elif idx_id==0:
-          #       print(idx_id, E[idx], pcEval[idx_id])
-          #     else:
-          #       print(idx_id, E[idx], pcEval[idx_id-1])
+          pcEmat      = self.PmatE
+          pcEval      = self.Evals
+          pc_emat_idx = self.vspace_pc_setup()
           
           def Lmat_mvec(x):
             x      = x.reshape((self.dof_v, self.Np))
@@ -1416,15 +1390,6 @@ class glow1d_boltzmann():
           def Mmat_mvec(x):
             x      = x.reshape((self.dof_v, self.Np))
             y      = xp.copy(x)
-            
-            # px[:,:, :] = 0.0
-            # for idx_id, idx in enumerate(pc_emat_idx):
-            #   px[idx_id, : , idx[1]] = xp.transpose(y[:,idx[1]])
-              
-            # wx = xp.einsum("ijk,ikm->ijm", pcEmatActive, px)
-            
-            # for idx_id, idx in enumerate(pc_emat_idx):
-            #   y[:,idx[1]] = xp.transpose(wx[idx_id, : , idx[1]])
             
             for idx_id, idx in enumerate(pc_emat_idx):
               y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
@@ -1455,7 +1420,9 @@ class glow1d_boltzmann():
         
         cp.cuda.runtime.deviceSynchronize()
         s_t2 = perf_counter()
+        #if (verbose==1):
         print("%08d Boltzmann step time = %.6E op. assembly =%.6E solve = %.6E ||res||=%.12E ||res||/||b||=%.12E"%(step, time, (a_t2-a_t1), (s_t2-s_t1), norm_res_abs, norm_res_rel))
+        
         return v 
         
         
@@ -1509,13 +1476,13 @@ class glow1d_boltzmann():
         #   print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
         #   return u
         
-        if PROFILE_SOLVERS==1:
-          if xp == cp:
-            cp.cuda.runtime.deviceSynchronize()
-          t2 = perf_counter()
-          print("BTE v-advection time = %.4E (s)" %(t2-t1), flush=True)
+        # if PROFILE_SOLVERS==1:
+        #   if xp == cp:
+        #     cp.cuda.runtime.deviceSynchronize()
+        #   t2 = perf_counter()
+        #   print("BTE v-advection time = %.4E (s)" %(t2-t1), flush=True)
         
-        return u + du
+        # return u + du
       elif ts_type == "IMEX":
         rhs_explicit  =  u + dt * self.param.tau * self.bs_E * xp.dot(self.op_adv_v, u)
         return xp.dot(self.bte_imex_lmat_inv, rhs_explicit)
@@ -1610,21 +1577,22 @@ class glow1d_boltzmann():
       ep            = xp.logspace(xp.log10(1e2), xp.log10(6e5), num_pc_evals//2, base=10)
       self.Evals    = -xp.flip(ep)
       self.Evals    = xp.append(self.Evals,ep)
-      self.PmatC    = xp.linalg.inv(self.I_Nv - 0.5 * dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT))
+      vmat          = self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT)
+      self.PmatC    = xp.linalg.inv(self.I_Nv - 0.5 * dt * self.param.tau * vmat)
       self.PmatE    = list()
       
       pmat          = self.PmatC
-      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v)
-      ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v - dt * self.param.tau * vmat)
+      ep_mat        = emat #xp.dot(pmat, xp.dot(emat, pmat))
       self.PmatE.append(ep_mat)
       
       for i in range(1, num_pc_evals):
-        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v)
-        ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v - dt * self.param.tau * vmat)
+        ep_mat        = emat #xp.dot(pmat, xp.dot(emat, pmat))
         self.PmatE.append(ep_mat)
       
-      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v)
-      ep_mat        = xp.dot(pmat, xp.dot(emat, pmat))
+      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v - dt * self.param.tau * vmat)
+      ep_mat        = emat #xp.dot(pmat, xp.dot(emat, pmat))
       self.PmatE.append(ep_mat)
       self.PmatE    = xp.array(self.PmatE)
       
@@ -2109,7 +2077,6 @@ class glow1d_boltzmann():
       kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
       #ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
       ev_range  = (self.ev_lim[0], self.ev_lim[1] * 4) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
-      print(ev_range)
       ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
       
       ff_v      = self.compute_radial_components(ev_grid, Vin_lm1)
@@ -2265,132 +2232,94 @@ class glow1d_boltzmann():
       fig.savefig(fname)
       plt.close()
     
-    def rhs_bte_vx(self, vd: np.array, time, dt, ts_type):
-      xp         = self.xp_module
-      E          = self.bs_E
+    def rhs_bte_vx(self, v: np.array, time, dt):
+      xp    = self.xp_module
+      E     = self.bs_E
+      Tg    = self.param.Tg
+      n0    = self.param.n0
       
-      # v  - (self.Nr * self.Nvt, self.Np)
-      # vd - diagonalized Vin
-      vd    = vd.reshape((self.Nr, self.Nvt , self.Np))
+      v     = v.reshape((self.Nr, self.Nvt, self.Np))
       
-      # vd    = vd.reshape((self.Nr * self.Nvt, self.Np))
-      # vd[self.xp_vt_l, 0]  = 0.0
-      # vd[self.xp_vt_r, -1] = 0.0
-      # vd    = vd.reshape((self.Nr, self.Nvt , self.Np))
+      Fv1   = xp.einsum('pq,ijq->ijp', self.Dp,          v)
+      Fv1   = xp.einsum('ik,kjq->ijq', self.op_adv_x,  Fv1)
+      Fv1   = xp.einsum('ijq,j->ijq' , Fv1, self.xp_cos_vt).reshape((-1))
       
-      vd_x  = xp.einsum('ia,jka->jki', self.Dp, vd)
-      Fv1   = xp.einsum('i,j,ijk->ijk', self.op_adv_x_d, self.xp_cos_vt, vd_x)
+      v_lm  = xp.dot(self.op_po2sh, v.reshape((self.Nr * self.Nvt, self.Np)))
+    
+      Fv2   = self.param.tau * (n0 * self.param.np0 * (xp.dot(self.op_col_en, v_lm) + Tg * xp.dot(self.op_col_gT, v_lm))  + E * xp.dot(self.op_adv_v, v_lm))
+      Fv2   = xp.dot(self.op_psh2o, Fv2).reshape((-1))
       
-      v     = xp.einsum('ia,ajk->ijk', self.op_adv_x_q, vd).reshape((self.Nr * self.Nvt, self.Np))
-      v_lm  = xp.dot(self.op_po2sh, v)
-      
-      Fv2   = self.param.tau * (self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, v_lm) + self.param.Tg * xp.dot(self.op_col_gT, v_lm))  + E * xp.dot(self.op_adv_v, v_lm))
-      Fv2   = xp.dot(self.op_psh2o, Fv2)
-      Fv2   = xp.einsum('ia,ajk->ijk', self.op_adv_x_qinv, Fv2.reshape((self.Nr, self.Nvt, self.Np)))
-      
-      Fv    = Fv1 - Fv2
-      
+      Fv    = Fv2 - Fv1
+    
       Fv    = Fv.reshape((self.Nr * self.Nvt, self.Np))
-      Fv[self.xp_vt_l, 0]  = 0.0
-      Fv[self.xp_vt_r, -1] = 0.0
-      return  Fv.reshape((-1))
+      return  Fv
     
-    def precond_bte_vx(self, vd:np.array, Mv_mat, time, dt, ts_type):
-      xp        = self.xp_module
-      tt_bte    = time
-      dt_bte    = dt
-      
-      vd        = xp.copy(vd)
-      vd        = vd.reshape((self.Nr * self.Nvt, self.Np))
-      
-      # vd[self.xp_vt_l, 0]  = 0.0
-      # vd[self.xp_vt_r, -1] = 0.0
-      # vd                   = xp.einsum('ijkl,ijl->ijk',self.bte_x_shift, vd.reshape((self.Nr, self.Nvt, self.Np)))
-      
-      vd                   = xp.einsum('il,ljk->ijk', self.op_adv_x_q, vd.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
-      v_lm                 = xp.dot(self.op_po2sh,vd)
-      v_lm                 = xp.einsum('ijk,ki->ji', Mv_mat, v_lm) #self.step_bte_v(v_lm, None, tt_bte, dt_bte, self.ts_type_bte_v , 0)
-      vd                   = xp.dot(self.op_psh2o,v_lm).reshape((self.Nr, self.Nvt, self.Np))
-      vd                   = xp.einsum('il,ljk->ijk', self.op_adv_x_qinv, vd).reshape((self.Nr * self.Nvt, self.Np))
-      
-      vd = vd.reshape((self.Nr *  self.Nvt, self.Np))
-      vd[self.xp_vt_l, 0]  = 0.0
-      vd[self.xp_vt_r, -1] = 0.0
-      vd                   = xp.einsum('ijkl,ijl->ijk',self.bte_x_shift, vd.reshape((self.Nr, self.Nvt, self.Np)))
-      
-      return vd.reshape((-1))
-    
-    def step_bte_implicit(self, u, du, time, dt, ts_type, verbose):
+    def step_bte_vx_imp(self, v0, du, time, dt, ts_type, verbose):
       xp        = self.xp_module
       Ndof      = self.Nr * self.Nvt * self.Np
       
-      Lmat_v     = self.I_Nxv_stacked - dt * self.rhs_bte_v_jacobian(None, time, dt)[0]
-      Lmat_v_inv = xp.linalg.inv(Lmat_v)
+      atol      = self.args.atol
+      rtol      = self.args.rtol
       
-      Lmat_mvec = lambda x : x + dt * self.rhs_bte_vx(x,  time, dt, None)
-      Mmat_mvec = lambda x : self.precond_bte_vx(x, Lmat_v_inv, time, dt, None)
-      
-      Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
-      Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
-      
-      u[self.xp_vt_l, 0]  = 0.0
-      u[self.xp_vt_r, -1] = 0.0
-      v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=1e-8, atol=1e-32, M=Mmat_op)
-      # v1 = xp.einsum('ijkl,ijl->ijk', self.bte_x_shift, u.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
-      # v  =  v.reshape((self.Nr * self.0Nvt, self.Np))
-      # v1 = v1.reshape((self.Nr * self.Nvt, self.Np))
-      
-      res0 = xp.linalg.norm(Lmat_op(v.reshape((-1))) - u.reshape((-1)))/xp.linalg.norm(u.reshape((-1)))
-      # res1 = xp.linalg.norm(Lmat_op(v1.reshape((-1))) - u.reshape((-1)))/xp.linalg.norm(u.reshape((-1)))
-      print(res0, status)
-      # print(xp.linalg.norm(v-v1))
-      
-      v=v.reshape((self.Nr * self.Nvt, self.Np))
-      # print(v[self.xp_vt_l, 0],status)
-      # print(v[self.xp_vt_r,-1])
-      # plt.figure(figsize=(10,10), dpi=300)
-      # plt.semilogy(np.abs(cp.asnumpy(1-v[:,0]/v1[:,0])),'x',label="")
-      # #plt.semilogy(np.abs(cp.asnumpy(v1[:,0])),'.',label="gmres")
-      # plt.grid()
-      # plt.legend()
-      # plt.savefig("./1d2v_bte/junk/t_%4E.png"%(time))
-      # plt.close()
-      if (status > 0) :
-        # res_vec = np.abs(cp.asnumpy(Lmat_op(v.reshape((-1))) - u.reshape((-1)))).reshape((self.Nr , self.Nvt, self.Np))
-        # from matplotlib.colors import LogNorm
+      def Lmat_mvec(x):
+        y                   = self.rhs_bte_vx(x, time, dt)
         
-        # plt.figure(figsize=(10,10), dpi=200)
-        # plt.imshow(res_vec[:,:,0],norm=LogNorm())
-        # # plt.semilogy(res_vec[:,0]   , 'x')
-        # # plt.semilogy(res_vec[:,100] , '.')
-        # # plt.semilogy(res_vec[:,-1]  , 'o')
-        # # plt.grid()
-        # plt.colorbar()
-        # plt.savefig("residual_x0.png")
+        y[self.xp_vt_l,  0] = 0.0 
+        y[self.xp_vt_r, -1] = 0.0 
         
-        # plt.figure(figsize=(10,10), dpi=200)
-        # plt.imshow(res_vec[:,:,100],norm=LogNorm())
-        # # plt.semilogy(res_vec[:,0]   , 'x')
-        # # plt.semilogy(res_vec[:,100] , '.')
-        # # plt.semilogy(res_vec[:,-1]  , 'o')
-        # # plt.grid()
-        # plt.colorbar()
-        # plt.savefig("residual_x100.png")
+        y                   = y.reshape((-1))
+        y                   = x - dt * y
+        return y.reshape((-1))
+      
+      def adv_x(v, time, dt): 
+        y   = v.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        y   = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
+
+        # enforce rhs BCs
+        y[self.xp_vt_l, 0]  = 0.0
+        y[self.xp_vt_r, -1] = 0.0
+
+        y = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np)))
+        y  = y.reshape((self.Nr, self.Nvt *  self.Np))
+        y  = xp.dot(self.op_adv_x_q, y).reshape((self.Nr , self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        return y
+      
+      def Mmat_mvec(x):
+        #@mfernando : I am not sure why but the order of the operator split scheme does matter here, 
+        # for some reason, doing v-space step followed by the advection step tend to be more accurate
+        xp   = self.xp_module
+        #y    = self.step_bte_x(x, time, 0.5 * dt)
         
-        # plt.figure(figsize=(10,10), dpi=200)
-        # plt.imshow(res_vec[:,:,-1],norm=LogNorm())
-        # # plt.semilogy(res_vec[:,0]   , 'x')
-        # # plt.semilogy(res_vec[:,100] , '.')
-        # # plt.semilogy(res_vec[:,-1]  , 'o')
-        # # plt.grid()
-        # plt.colorbar()
-        # plt.savefig("residual_xL.png")
+        y    = x.reshape((self.Nr * self.Nvt, self.Np))
+        y_lm = xp.dot(self.op_po2sh, y)
+        y_lm = xp.dot(self.PmatC, y_lm)
+        y    = xp.dot(self.op_psh2o, y_lm)
         
-        print("GMRES solver failed, using LU factored inverse")
-        #raise RuntimeError
-        #rr=Lmat_op(v.reshape((-1))) - u.reshape((-1))
-        #return rr.reshape((self.Nr * self.Nvt, self.Np))
-      return v.reshape((self.Nr * self.Nvt, self.Np))
+        y    = adv_x(y, time, dt)
+        
+        #y = self.step_bte(x, None, time, dt, None, verbose=0)
+        return y.reshape((-1))
+        
+      Lmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
+      Mmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
+      
+      b                   = xp.copy(v0).reshape((self.Nr * self.Nvt, self.Np))
+      b[self.xp_vt_l, 0]  = 0.0
+      b[self.xp_vt_r, -1] = 0.0
+      b                   = b.reshape((-1))
+      norm_b              = xp.linalg.norm(b)
+      
+      v1, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, b.reshape((-1)), x0=v0.reshape((-1)), tol=rtol/norm_b, atol=atol, M=Mmat_op, maxiter=1000)
+      #v1          = Mmat_mvec(b); status=0;
+      
+      res           = Lmat_mvec(v1) -  b
+      norm_res_abs  = xp.linalg.norm(res)
+      norm_res_rel  = norm_res_abs / norm_b
+      # if (status !=0) :
+      #     print("GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(status, norm_res_abs, norm_res_rel))
+      
+      print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E" %(time, norm_res_abs, norm_res_rel))
+      return v1.reshape((self.Nr * self.Nvt, self.Np)), norm_res_abs, norm_res_abs
     
     def solve_unit_test3(self, Uin, Vin):
       dt              = self.args.cfl
@@ -2402,20 +2331,7 @@ class glow1d_boltzmann():
       
       print("++++ Using backward Euler ++++")
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
-      
-      if self.args.use_gpu == 1: 
-        Uin1 = cp.asarray(Uin)
-        Vin1 = cp.asarray(Vin)
-      else:
-        Uin1 = Uin
-        Vin1 = Vin
-      
-      if self.args.use_gpu==1:
-        self.copy_operators_H2D(args.gpu_device_id)
-        self.xp_module = cp
-      else:
-        self.xp_module = np
-        
+      Uin1, Vin1     = self.step_init(Uin, Vin, dt)
       xp             = self.xp_module
       
       u = xp.copy(Uin1)
@@ -2425,13 +2341,10 @@ class glow1d_boltzmann():
       dv    = xp.zeros_like(v)
       dv_lm = xp.zeros((self.dof_v, self.Np))
       
-      io_freq  = int(0.1/dt)
-      
-      # dg_qmat  = self.op_diag_dg
-      # dg_qmatT = xp.transpose(self.op_diag_dg)
+      io_freq  = 1#int(0.1/dt)
       
       #self.bs_E       = 400 * xp.sin(2 * xp.pi * xp.asarray(self.xp)) #-xp.ones(len(self.xp)) * 400
-      Emax            = 1000
+      Emax            = 100
       self.bs_E       = xp.ones(len(self.xp)) * Emax
       
       # Et = xp.zeros((1000, self.Np))
@@ -2446,52 +2359,43 @@ class glow1d_boltzmann():
         ts_idx_b = int(args.rs_idx * io_freq)
         tt       = ts_idx_b * dt
         print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
-        
-      if(self.ts_type_bte_v == "IMEX"):
-        lmat = self.I_Nv - dt_bte * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT)
-        self.bte_imex_lmat_inv = xp.linalg.inv(lmat)
-      else:
-        self.bte_imex_lmat_inv = None
       
-      if(self.ts_type_fluid == "IMEX"):
-        lmat = self.I_Nx - dt * self.Lp * self.param.Di
-        lmat[0, :]  = self.I_Nx[0,:]
-        lmat[-1, :] = self.I_Nx[-1,:]
-        self.ns_imex_lmat_inv = xp.linalg.inv(lmat)
-      else:
-        self.ns_imex_lmat_inv = None
-        
+      
+      #self.PmatC = xp.linalg.inv(self.I_Nv -  dt * self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) - dt * self.param.tau * Emax * self.op_adv_v)        
       self.initialize_bte_adv_x(dt)
-      vd = xp.einsum('ia,ajk->ijk', self.op_adv_x_qinv, v.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
-        #self.bs_E       = Et[ts_idx % 1000]  #xp.ones(len(self.xp)) * Emax * xp.sin(2* xp.pi * tt)
-        #self.bs_E        = Emax * xp.sin(2* xp.pi * tt) * xp.ones(len(self.xp))
-        if (ts_idx % io_freq == 0):
-          print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-          
-        if (ts_idx % io_freq == 0):
-          v  = xp.einsum('ia,ajk->ijk', self.op_adv_x_q, vd.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
-          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
-          #self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=False)
-          xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
-          xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
-          #vd = xp.einsum('ia,ajk->ijk', self.op_adv_x_qinv, v.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
         
-        vd = self.step_bte_implicit(vd, None, tt, dt, None, 0)
+        self.bte_to_fluid(u, v, tt, dt)
+        #self.bs_E       = Et[ts_idx % 1000]  #xp.ones(len(self.xp)) * Emax * xp.sin(2* xp.pi * tt)
+        #self.bs_E       = Emax * xp.sin(2* xp.pi * tt) * xp.ones(len(self.xp))
+        
+        if (ts_idx % io_freq == 0):
+          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, (self.bs_E * self.param.L /self.param.V0), plot_ionization=True)
+          #xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
+          #xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
+          
+        v, _, _ = self.step_bte_vx_imp(v, None, tt, dt, None, 0)
+        
+        v       = v.reshape((self.Nr * self.Nvt, self.Np))
+        v_lm    = xp.dot(self.op_po2sh, v)
+        v       = xp.dot(self.op_psh2o, v_lm)
         tt+= dt
         
         
         
       return u, v
     
-    def compute_qoi(self, u, v, time):
+    def compute_qoi(self, Uin, Vin, time):
       xp       = self.xp_module
       
       # phi      = self.solve_poisson(u[:,self.ele_idx], u[:, self.ion_idx], time)
       # E        = -xp.dot(self.Dp, phi) * self.param.V0/self.param.L
       # EbyN     = E/self.param.n0/self.param.np0
+      
+      u        = Uin
+      v        = Vin
       
       mm_fac   = np.sqrt(4 * np.pi) 
       c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
@@ -2704,6 +2608,111 @@ class glow1d_boltzmann():
         
         u[:, self.Te_idx] = u[:, self.Te_idx]/u[:, self.ele_idx]
         v  = self.initialize_maxwellian_eedf(u[:, self.ele_idx], u[:, self.Te_idx])
+    
+    def fft_analysis(self, Uin, Vin, dt, atol, rtol, max_iter):
+      xp              = self.xp_module
+      tT              = 1
+      steps           = max(1,int(tT/dt))
+      
+      print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
+      Uin1, Vin1     = self.step_init(Uin, Vin, dt)
+      xp             = self.xp_module
+      u              = xp.copy(Uin1)
+      v              = xp.copy(Vin1)
+      
+      du             = xp.zeros_like(u)
+      dv             = xp.zeros_like(v)
+      
+      io_cycle       = 1.00
+      io_freq        = int(io_cycle/dt)
+      
+      ele_idx        = self.ele_idx
+      ion_idx        = self.ion_idx
+      Te_idx         = self.Te_idx
+      num_p          = self.op_spec_sp._p + 1
+      num_sh         = len(self.op_spec_sp._sph_harm_lm)
+      
+      extract_freq   = io_freq//io_freq
+      x_idx          = list(range(0, self.Np, 10))
+      ut             = xp.zeros(tuple(list(u.shape) + [steps//extract_freq +1]))
+      ut1            = xp.zeros(tuple(list(u.shape) + [steps//extract_freq +1]))
+      vt             = xp.zeros(tuple([num_p * num_sh, len(x_idx)] + [steps//extract_freq +1]))
+      tt             = 0
+      for ts_idx in range(0, steps+1):
+        
+        if (ts_idx % extract_freq == 0):
+          vlm                    = xp.dot(self.op_po2sh, v)
+          uu                     = xp.copy(u)
+          uu[:, ele_idx]         = xp.dot(self.op_mass[0::num_sh], vlm[0::num_sh,:])
+          uu[:, Te_idx]          = xp.dot(self.op_temp[0::num_sh], vlm[0::num_sh,:])/u[:,ele_idx]
+          
+          ut [:,:, ts_idx//extract_freq] = u
+          ut1[:,:, ts_idx//extract_freq] = uu
+          vt [:,:, ts_idx//extract_freq] = vlm[:, x_idx]
+          
+        
+        if (ts_idx % io_freq == 0):
+          print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+          self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt)
+          
+        if(ts_idx==steps):
+          break
+        
+        u , v  = self.step(u, v, du, dv, tt, dt)
+        # v      = v.reshape((self.Nr * self.Nvt, self.Np))
+        # v      = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, v))
+        tt    += dt
+      
+      return ut, ut1, vt
+    
+    def svd_analysis(self, Uin, Vin, dt, atol, rtol, max_iter):
+      xp              = self.xp_module
+      tT              = 10
+      steps           = max(1,int(tT/dt))
+      
+      print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
+      Uin1, Vin1     = self.step_init(Uin, Vin, dt)
+      xp             = self.xp_module
+      u              = xp.copy(Uin1)
+      v              = xp.copy(Vin1)
+      
+      du             = xp.zeros_like(u)
+      dv             = xp.zeros_like(v)
+      
+      io_cycle       = 1.00
+      io_freq        = int(io_cycle/dt)
+      
+      ele_idx        = self.ele_idx
+      ion_idx        = self.ion_idx
+      Te_idx         = self.Te_idx
+      num_p          = self.op_spec_sp._p + 1
+      num_sh         = len(self.op_spec_sp._sph_harm_lm)
+      
+      extract_freq   = io_freq//10
+      ut             = xp.zeros(tuple(list(u.shape) + [steps//extract_freq +1]))
+      x_idx          = list(range(0, self.Np, 10))
+      vt             = xp.zeros(tuple([num_p * num_sh, len(x_idx)] + [steps//extract_freq +1]))
+      tt             = 0
+      for ts_idx in range(0, steps+1):
+        
+        if (ts_idx % extract_freq == 0):
+          vlm = xp.dot(self.op_po2sh, v)
+          
+          ut[:,:, ts_idx//extract_freq] = u
+          vt[:,:, ts_idx//extract_freq] = vlm[:, x_idx]
+        
+        if (ts_idx % io_freq == 0):
+          print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+          self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt)
+          
+        if(ts_idx==steps):
+          break
+        
+        u , v  = self.step(u, v, du, dv, tt, dt)
+        tt    += dt
+      
+      return ut, vt
+    
         
 parser = argparse.ArgumentParser()
 parser.add_argument("-threads", "--threads"                       , help="number of cpu threads (boltzmann operator assembly)", type=int, default=4)
@@ -2753,7 +2762,20 @@ if args.use_gpu==1:
   gpu_device = cp.cuda.Device(args.gpu_device_id)
   gpu_device.use()
 
-uu,vv   = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
+xp        = glow_1d.xp_module 
+uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
+# ut, ut1, vt = glow_1d.fft_analysis(u, v, args.cfl, args.atol, args.rtol, args.max_iter)
+# xp.save("%s/ut_bte.npy"%(args.dir) , ut)
+# xp.save("%s/ut1_bte.npy"%(args.dir), ut1)
+# xp.save("%s/vt_bte.npy"%(args.dir) , vt)
+
+# ut, vt   = glow_1d.svd_analysis(u, v, args.cfl, args.atol, args.rtol, args.max_iter)
+# xp.save("%s/ut_bte_svd.npy"%(args.dir), ut)
+# xp.save("%s/vt_bte_svd.npy"%(args.dir), vt)
+
+# xp.save("ut_bte_svd.npy", ut)
+# xp.save("vt_bte_svd.npy", vt)
+
 #uu,vv   = glow_1d.solve_hybrid(u, v, args.cfl, 5e-3)
 #uu,vv   = glow_1d.solve_unit_test2(u, v, 1)
 #uu,vv   = glow_1d.solve_unit_test3(u, v)

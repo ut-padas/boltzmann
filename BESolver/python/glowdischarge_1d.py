@@ -174,20 +174,20 @@ class glow1d_fluid():
         self.param.mu_e_ne  = lambda nTe, ne : mu_e_d(nTe/ne) * (-nTe/(ne**2))
         self.param.mu_e_nTe = lambda nTe, ne : mu_e_d(nTe/ne) * (1/ne)
         
-        # De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
-        # De_d                = De.derivative(n=1)
-        # self.param.De       = lambda nTe, ne : De(nTe/ne)
-        # self.param.De_ne    = lambda nTe, ne : De_d(nTe/ne) * (-nTe/(ne**2))
-        # self.param.De_nTe   = lambda nTe, ne : De_d(nTe/ne) * (1/ne)
+        De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
+        De_d                = De.derivative(n=1)
+        self.param.De       = lambda nTe, ne : De(nTe/ne)
+        self.param.De_ne    = lambda nTe, ne : De_d(nTe/ne) * (-nTe/(ne**2))
+        self.param.De_nTe   = lambda nTe, ne : De_d(nTe/ne) * (1/ne)
         
         # De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
         # De_d                = De.derivative(n=1)
-        a1                  = (self.param.V0 * self.param.tau / (self.param.L**2 * self.param.n0 * self.param.np0))
-        a2                  = (self.param.tau / (self.param.L**2 *self.param.n0 * self.param.np0) )
-        a3                  = a2/a1
-        self.param.De       = lambda nTe, ne : a3 * (mu_e(nTe/ne) * (nTe/ne))
-        self.param.De_ne    = lambda nTe, ne : a3 * ((nTe/ne) * self.param.mu_e_ne(nTe, ne)  + mu_e(nTe/ne) * (-nTe/(ne**2)))
-        self.param.De_nTe   = lambda nTe, ne : a3 * ((nTe/ne) * self.param.mu_e_nTe(nTe, ne) + mu_e(nTe/ne) * (1/ne))
+        # a1                  = (self.param.V0 * self.param.tau / (self.param.L**2 * self.param.n0 * self.param.np0))
+        # a2                  = (self.param.tau / (self.param.L**2 *self.param.n0 * self.param.np0) )
+        # a3                  = a2/a1
+        # self.param.De       = lambda nTe, ne : a3 * (mu_e(nTe/ne) * (nTe/ne))
+        # self.param.De_ne    = lambda nTe, ne : a3 * ((nTe/ne) * self.param.mu_e_ne(nTe, ne)  + mu_e(nTe/ne) * (-nTe/(ne**2)))
+        # self.param.De_nTe   = lambda nTe, ne : a3 * ((nTe/ne) * self.param.mu_e_nTe(nTe, ne) + mu_e(nTe/ne) * (1/ne))
         
         Te = ki_data[:,0]#np.linspace(ki_data[0,0], ki_data[-1,0], 100)
         plt.figure(figsize=(16, 6), dpi=300)

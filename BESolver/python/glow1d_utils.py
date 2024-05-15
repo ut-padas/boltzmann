@@ -119,7 +119,7 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
     # solver failed !!!
     print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
     print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
-    print(rr.reshape(x.shape))
+    #print(rr.reshape(x.shape))
     ns_info["status"] = converged
     ns_info["x"]      = x
     ns_info["atol"]   = norm_rr

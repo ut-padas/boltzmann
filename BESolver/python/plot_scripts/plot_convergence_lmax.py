@@ -24,7 +24,7 @@ def plot_data1(data, fprefix, cycles, xloc, time_fac, plot_eedf=False, num_cols 
         dt    = (float)(args["cfl"])
         ev_max= (float)(args["ev_max"])
         op    = plot_utils.op(Np)
-        ki_d  = plot_utils.compute_rate_coefficients(args, d[3], d[2], collisions=["g2"])
+        ki_d  = plot_utils.compute_rate_coefficients(args, d[3], d[2], ["g2"])
         ki_all.append(ki_d)
         
         
@@ -176,7 +176,7 @@ def plot_data2(data, fprefix, cycles, xloc, time_fac, plot_eedf=False, num_cols 
         dt    = (float)(args["cfl"])
         ev_max= (float)(args["ev_max"])
         op    = plot_utils.op(Np)
-        ki_d  = plot_utils.compute_rate_coefficients(args, d[3], d[2], collisions=["g2"])
+        ki_d  = plot_utils.compute_rate_coefficients(args, d[3], d[2], ["g2"])
         ki_all.append(ki_d)
         
     for idx, cycle_id in enumerate(cycles):
@@ -253,7 +253,7 @@ def plot_data2(data, fprefix, cycles, xloc, time_fac, plot_eedf=False, num_cols 
         plt.subplot(2, 4, 1)    
         plt.ylabel(r"density$(m^{-3})$")
         plt.grid(visible=True)
-        plt.legend(fontsize="14", loc ="lower left")
+        plt.legend(fontsize="14", loc ="upper left")
         
         plt.subplot(2, 4, 2)
         plt.ylabel(r"E (V/m)")
@@ -345,7 +345,7 @@ def glow_plot(data, fprefix, cycles, xloc, num_cols = 4, num_rows=2):
     op    = plot_utils.op(Np)
     xp    = op.xp
     
-    ki    = plot_utils.compute_rate_coefficients(args, data[3], data[2], collisions=["g0", "g2"])
+    ki    = plot_utils.compute_rate_coefficients(args, data[3], data[2], ["g0", "g2"])
     
     u      = data[1]
     v      = data[2]
@@ -544,12 +544,15 @@ op          = plot_utils.op(200)
 idx         = (np.abs(op.xp - 0)).argmin()
 #eedf_idx   = [0,idx-1, -1]
 x_probe_loc = np.linspace(0.1,  0.9, 5)
-eedf_idx    = [(np.abs(op.xp - x_probe_loc[i])).argmin() for i in range(len(x_probe_loc))]
+eedf_idx    = None#[(np.abs(op.xp - x_probe_loc[i])).argmin() for i in range(len(x_probe_loc))]
 
 xloc        = op.xp[eedf_idx]
-d1          = plot_utils.load_data_bte("./../1dglow/r3" , range(1  , 21, 1), eedf_idx, read_cycle_avg=True)
-d2          = plot_utils.load_data_bte("./../1dglow/r5" , range(1  , 21 , 1), eedf_idx, read_cycle_avg=True)
-data        = [d1, d2]
+d1          = plot_utils.load_data_bte("./../1dglow/l2"  , range(1  , 2 , 1) , eedf_idx, read_cycle_avg=True)
+d2          = plot_utils.load_data_bte("./../1dglow/l4"  , range(1  , 2 , 1) , eedf_idx, read_cycle_avg=True)
+d3          = plot_utils.load_data_bte("./../1dglow/l8"  , range(1  , 2 , 1) , eedf_idx, read_cycle_avg=True)
+d4          = plot_utils.load_data_bte("./../1dglow/l16" , range(1  , 2 , 1) , eedf_idx, read_cycle_avg=True)
+
+data        = [d1, d2, d3, d4]
 
 plot_utils.make_dir("lmax_conv")
-plot_data2(data, "./lmax_conv/1d_glow", range(1, 21, 1) , xloc, time_fac = 1.0, plot_eedf=True, num_cols=3, num_rows=2)
+plot_data2(data, "./lmax_conv/1d_glow", range(1, 2, 1) , xloc, time_fac = 1.0, plot_eedf=False, num_cols=3, num_rows=2)

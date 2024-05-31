@@ -180,8 +180,8 @@ class glow1d_fluid():
         self.param.De_ne    = lambda nTe, ne : De_d(nTe/ne) * (-nTe/(ne**2))
         self.param.De_nTe   = lambda nTe, ne : De_d(nTe/ne) * (1/ne)
         
-        # De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
-        # De_d                = De.derivative(n=1)
+        # # De                  = scipy.interpolate.UnivariateSpline(De [:,0],   De [:,1], k=1, s=0, ext="const")
+        # # De_d                = De.derivative(n=1)
         # a1                  = (self.param.V0 * self.param.tau / (self.param.L**2 * self.param.n0 * self.param.np0))
         # a2                  = (self.param.tau / (self.param.L**2 *self.param.n0 * self.param.np0) )
         # a3                  = a2/a1
@@ -251,7 +251,13 @@ class glow1d_fluid():
       if type==0:
         if self.args.restore==1:
           print("~~~restoring solver from ", "%s_%04d_u.npy"%(args.fname, args.rs_idx))
-          Uin = xp.load("%s_%04d.npy"%(args.fname, args.rs_idx))
+          Uin             =  xp.load("%s_%04d.npy"%(args.fname, args.rs_idx))
+          npts            = Uin.shape[0]
+          xx1             = -np.cos(np.pi*np.linspace(0,npts-1, npts)/(npts-1))
+          v0pinv          = np.linalg.solve(np.polynomial.chebyshev.chebvander(xx1, npts-1), np.eye(npts))
+          P1              = np.dot(np.polynomial.chebyshev.chebvander(self.xp, npts-1), v0pinv)
+          Uin             = np.dot(P1, Uin)
+          
         else:
           xx = self.param.L * (self.xp + 1)
           Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
@@ -1011,6 +1017,7 @@ class glow1d_fluid():
           cycle_avg_u[:, self.Te_idx]  += u[:, self.Te_idx] / u[:, self.ele_idx] 
           
           def residual(du):
+            du       = du.reshape((self.Np, self.Nv))
             u1       = u + du
             rhs, bc  = self.rhs(u1, tt + dt, dt) 
             res      = du - dt * rhs
@@ -1030,6 +1037,7 @@ class glow1d_fluid():
             return res.reshape(-1)
         
           def jacobian(du):
+            du          = du.reshape((self.Np, self.Nv))
             rhs_j, j_bc = self.rhs_jacobian(u, tt, dt)
             jac         = Imat - dt * rhs_j
             
@@ -1061,8 +1069,9 @@ class glow1d_fluid():
               
               cycle_avg_u[:,:] = 0
               
-          
           ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
+          #jac_u = jacobian(0*du)
+          #ns_info = glow1d_utils.newton_solver_matfree(du, residual, lambda x: xp.dot(jac_u, x.reshape((-1))), lambda x: x, atol, rtol, iter_max ,xp)
           
           if ns_info["status"]==False:
             print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
@@ -1297,7 +1306,7 @@ class glow1d_fluid():
       Imat       = self.I_NpNv
       
       tt         = 0
-      du         = np.zeros_like(u)
+      du         = xp.zeros_like(u)
       
       alpha0     = 1.0
       alpha_min  = 1e-1
@@ -1308,8 +1317,8 @@ class glow1d_fluid():
         u0, u1, Js = self.evolve(u, 1, dt, sensitivity_mat=False)
         return (u1-u0)
       
-      u0, u1, Js = self.evolve(u, self.args.cycles, dt, sensitivity_mat=False)
-      print(np.linalg.norm(u1-u0), np.linalg.norm(u1-u0)/np.linalg.norm(u0))
+      u0, u1, Js = self.evolve(u, 1.0, dt, sensitivity_mat=False)
+      print(xp.linalg.norm(u1-u0), xp.linalg.norm(u1-u0)/xp.linalg.norm(u0))
       res        = (u1 - u0)
       
       count      = 0
@@ -1322,12 +1331,12 @@ class glow1d_fluid():
       while( not converged and (count < max_iter) ):
         u0, u1, Js = self.evolve(u, 1, dt, sensitivity_mat=True)
         jac        = (Js - self.I_NpNv)
-        jac_inv    = np.linalg.inv(jac)
+        jac_inv    = xp.linalg.inv(jac)
         
         rr         = (u1-u0)
         norm_rr    = xp.linalg.norm(rr)
         jinv_rr    = xp.dot(jac_inv, rr.reshape((-1))).reshape(u.shape)
-        alpha      = min(0.01, 0.01 * np.linalg.norm(u)/np.linalg.norm(jinv_rr))
+        alpha      = min(0.01, 0.01 * xp.linalg.norm(u)/xp.linalg.norm(jinv_rr))
         u          = u  - alpha * jinv_rr
         # while(1):
         #   ug         = u  + alpha * xp.dot(jac_inv, -rr).reshape(u.shape)
@@ -1494,7 +1503,7 @@ if (__name__ == "__main__"):
   #ut     = glow_1d.fft_analysis(u, args.cfl, args.atol, args.rtol, args.max_iter)
   #np.save("ut.npy", ut)
   
-  #v         = glow_1d.time_periodic_shooting(u, args.atol, args.rtol, args.max_iter)
+  v         = glow_1d.time_periodic_shooting(u, args.atol, args.rtol, args.max_iter)
   #python3 glowdischarge_1d.py -Np 240 -cycles 11 -ts_type BE -atol 1e-14 -rtol 1e-14 -dir glow1d_liu_N240_dt5e-4 -cfl 5e-4
   
   

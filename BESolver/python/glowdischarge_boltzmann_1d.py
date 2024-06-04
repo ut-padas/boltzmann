@@ -76,6 +76,7 @@ class glow1d_boltzmann():
       self.ts_type_fluid       = "BE"
       self.ts_type_bte_v       = "BE"
       self.ts_op_split_factor  = 1/1
+      self.heavies_freeze_E    = False
        
       dir            = args.dir
       if os.path.exists(dir):
@@ -1039,8 +1040,12 @@ class glow1d_boltzmann():
       De      = self.D[:, ele_idx]
       Di      = self.D[:, ion_idx]
       
-      phi     = self.solve_poisson(u[:,ele_idx], u[:, ion_idx], time)
-      E       = -xp.dot(self.Dp, phi)
+      if(self.heavies_freeze_E == False):
+        phi     = self.solve_poisson(u[:,ele_idx], u[:, ion_idx], time)
+        E       = -xp.dot(self.Dp, phi)
+      else:
+        E       = self.bs_E
+        
       ki      = self.r_rates[:, ion_idx]
       
       nf_var  = len(self.fluid_idx)   #number of fluid variables
@@ -1100,8 +1105,16 @@ class glow1d_boltzmann():
       
       Imat    = self.I_Nx
       
-      phi     = self.solve_poisson(ne, ni, time)
-      E       = -xp.dot(self.Dp, phi)
+      if(self.heavies_freeze_E == False):
+        phi     = self.solve_poisson(ne, ni, time)
+        E       = -xp.dot(self.Dp, phi)
+        E_ni    = self.E_ni
+        #E_ne   = self.E_ne
+      else:
+        E       = self.bs_E
+        E_ni    = 0 * self.E_ni
+        #E_ne   = 0 * self.E_ne
+      
       
       nf_vars = len(self.fluid_idx)
       Js_nk    = xp.zeros((nf_vars, self.Np, self.Np))
@@ -1625,25 +1638,40 @@ class glow1d_boltzmann():
       print("v-space advection mat preconditioner gird : \n", self.Evals)
       self.initialize_bte_adv_x(dt * 0.5)
       
+      self.bte_to_fluid(Uin1, Vin1, 0.0, dt)
+      self.fluid_to_bte(Uin1, Vin1, 0.0, dt)
+      
       return Uin1, Vin1
     
     def step(self, u, v, du, dv , time, dt, scheme="strang-splitting", verbose=0):
-      tt = time 
+      xp      = self.xp_module
+      tt      = time
       
       cp.cuda.runtime.deviceSynchronize()
       s_t1    = perf_counter()
       
       if scheme=="strang-splitting":
         # second-order split scheme
+        
+        if (self.heavies_freeze_E):
+          self.bs_E = xp.dot(self.Dp, -self.solve_poisson(u[:, self.ele_idx], u[:, self.ion_idx], tt))
+          
         u = self.step_fluid(u, du, tt, dt * 0.5,  self.ts_type_fluid, verbose=verbose)
         self.fluid_to_bte(u, v, tt, dt)
         v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)
         self.bte_to_fluid(u, v, tt + 0.5 * dt, dt)
+      
+        if (self.heavies_freeze_E):
+          self.bs_E = xp.dot(self.Dp, -self.solve_poisson(u[:, self.ele_idx], u[:, self.ion_idx], tt + 0.5 * dt))
+        
         u = self.step_fluid(u, du, tt + 0.5 * dt, dt * 0.5,  self.ts_type_fluid, verbose=verbose)
         
       elif scheme=="first-order":
       
         # first order split scheme
+        if (self.heavies_freeze_E):
+          self.bs_E = xp.dot(self.Dp, -self.solve_poisson(u[:, self.ele_idx], u[:, self.ion_idx], tt))
+          
         u = self.step_fluid(u, du, tt, dt, self.ts_type_fluid, verbose=verbose)
         self.fluid_to_bte(u, v, tt, dt)
         v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)

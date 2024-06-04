@@ -99,37 +99,35 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   
   ns_info  = dict()
   alpha    = 1.0e0
-  while(alpha > 1e-8):
-    x        = x0
-    count    = 0
-    r0       = residual(x)
+  x        = x0
+  count    = 0
+  r0       = residual(x)
+  rr       = xp.copy(r0)
+  norm_rr  = norm_r0 = xp.linalg.norm(r0)
+  converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
+  
+  while( not converged and (count < iter_max) ):
     
-    norm_rr  = norm_r0 = xp.linalg.norm(r0)
+    while ( alpha > 1e-10 ):
+      xk       = x  - alpha * xp.dot(jac_inv, rr).reshape(x.shape)
+      rk       = residual(xk)
+      norm_rk  = xp.linalg.norm(rk)
+      
+      if ( norm_rk < norm_rr ):
+        break
+      else:
+        alpha = 0.1 * alpha
+    
+    x        = xk
+    rr       = rk
+    norm_rr  = norm_rk
+    count   += 1
     converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
-    
-    while( not converged and (count < iter_max) ):
-      rr       = residual(x)
-      norm_rr  = xp.linalg.norm(rr)
-      x        = x  + alpha * xp.dot(jac_inv, -rr).reshape(x.shape)
-      
-      count   += 1
-      #if count%1000==0:
-      #print("{0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0), "alpha ", alpha)
-      converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
-    
-    if (not converged):
-      alpha *= 0.25
-      #print(alpha)
-      
-    else:
-      #print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
-      break
+  
+  #print("{0:d}: ||res|| = {1:.14e}, ||res||/||res0|| = {2:.14e}".format(count, norm_rr, norm_rr/norm_r0), "alpha ", alpha, xp.linalg.norm(xk))  
   
   if (not converged):
-    # solver failed !!!
-    print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, norm_rr, norm_rr/norm_r0))
-    print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
-    #print(rr.reshape(x.shape))
+    print("Newton solver failed !!!: {0:d}: ||res|| = {1:.14e}, ||res||/||res0|| = {2:.14e}".format(count, norm_rr, norm_rr/norm_r0), "alpha ", alpha, xp.linalg.norm(xk))
     ns_info["status"] = converged
     ns_info["x"]      = x
     ns_info["atol"]   = norm_rr

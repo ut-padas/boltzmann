@@ -999,4 +999,3 @@ def sample_distribution_with_uniform_prior(spec_sp, ss_sol, x_domain, vth, fname
     np.save("%s"%(fname), x_cart)
     return 0
     
-

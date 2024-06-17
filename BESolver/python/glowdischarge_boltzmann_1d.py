@@ -76,7 +76,7 @@ class glow1d_boltzmann():
       self.ts_type_fluid       = "BE"
       self.ts_type_bte_v       = "BE"
       self.ts_op_split_factor  = 1/1
-      self.heavies_freeze_E    = False
+      self.heavies_freeze_E    = True
        
       dir            = args.dir
       if os.path.exists(dir):
@@ -516,6 +516,10 @@ class glow1d_boltzmann():
       self.op_col_en            = FOp
       self.op_col_gT            = FOp_g
       
+      # sanity check for eigen decomposition
+      eig_rtol                  = np.linalg.norm(self.op_adv_x - np.dot(self.op_adv_x_q * self.op_adv_x_d, self.op_adv_x_qinv)) / np.linalg.norm(self.op_adv_x)
+      print("Adv_x : ||A - Q D Q^{-1}||/ ||A|| =%.8E"%(eig_rtol))
+      
       xp=np
       xp.save("%s_bte_mass_op.npy"   %(args.fname), self.op_mass)
       xp.save("%s_bte_temp_op.npy"   %(args.fname), self.op_temp)
@@ -735,7 +739,8 @@ class glow1d_boltzmann():
           for i in range(self.Nr):
             self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
             #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
-        
+      
+      #self.tmp1        = self.bte_x_shift   
       self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
       #self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
       
@@ -868,6 +873,7 @@ class glow1d_boltzmann():
         self.I_Nxv_stacked  = cp.asarray(self.I_Nxv_stacked)
         
         self.Dp             = cp.asarray(self.Dp)
+        self.DpT            = cp.asarray(self.DpT)
         self.LpD            = cp.asarray(self.LpD)
         self.Lp             = cp.asarray(self.Lp)
         self.LpD_inv        = cp.asarray(self.LpD_inv)
@@ -916,7 +922,8 @@ class glow1d_boltzmann():
         self.I_Nxv_stacked  = cp.asnumpy(self.I_Nxv_stacked)
         
         self.Dp             = cp.asnumpy(self.Dp)
-        self.LpD_inv        = cp.asnumpy(self.DpT)
+        self.DpT            = cp.asnumpy(self.DpT)
+        self.LpD_inv        = cp.asnumpy(self.LpD_inv)
         self.Zp             = cp.asnumpy(self.Zp)
         self.E_ne           = cp.asnumpy(self.E_ne)
         self.E_ni           = cp.asnumpy(self.E_ni)
@@ -1331,7 +1338,7 @@ class glow1d_boltzmann():
       
       idx = xp.where(pcEval[-1]<=E)[0]
       if (len(idx)>0):
-        print(E[idx], pcEval[-1])
+        #print(E[idx], pcEval[-1])
         pc_emat_idx.append((len(pcEval), idx))
       
       idx_set  = xp.array([],dtype=xp.int32)
@@ -1571,10 +1578,246 @@ class glow1d_boltzmann():
       dv = xp.dot(self.op_psh2o, dv_lm)
       return u, v + dv
     
+    def step_bte_vx_with_E(self, Uin, Vin, time, dt, verbose=0):
+      """
+      vx-space BTE solve coupled with E field
+      """
+      cp.cuda.runtime.deviceSynchronize()
+      s_t1    = perf_counter()
+      
+      num_p   = self.op_spec_sp._p + 1
+      num_sh  = len(self.op_spec_sp._sph_harm_lm)
+      num_vt  = self.Nvt
+      
+      xp      = self.xp_module
+      u       = Uin
+      v       = Vin
+      
+      ni      = u[:, self.ion_idx]
+      v       = v.reshape((self.Nr * self.Nvt, self.Np)) 
+      v_lm    = xp.dot(self.op_po2sh, v)
+      
+      ne0     = xp.dot(self.op_mass[0::num_sh], v_lm[0::num_sh])
+      E0      = -xp.dot(self.Dp, self.solve_poisson(ne0, ni, time + dt)) * (self.param.V0/self.param.L)
+      #E0      = cp.asarray(self.xp**7) * 4e4 * xp.sin(xp.pi * 2 * time)
+      
+      def adv_x(v0, time, dt): 
+        y   = v0.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        y   = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
+
+        # enforce rhs BCs
+        y[self.xp_vt_l, 0]  = 0.0
+        y[self.xp_vt_r, -1] = 0.0
+
+        y = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np)))
+        y  = y.reshape((self.Nr, self.Nvt *  self.Np))
+        y  = xp.dot(self.op_adv_x_q, y).reshape((self.Nr , self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        return y
+      
+      #return u, adv_x(v, time, dt)
+      
+      def adv_x_q_inv_vec(x):
+        y  = x.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        y  = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
+        return y
+      
+      def adv_x_q_vec(x):
+        y  = x.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        y  = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
+        return y
+      
+      vd   = adv_x_q_inv_vec(v)
+      
+      def residual(dv):
+        dv    = dv.reshape((self.Nr * self.Nvt, self.Np))
+        vp    = vd + dv
+        
+        Fx    = xp.dot(vp, self.DpT).reshape((self.Nr, self.Nvt, self.Np))
+        Fx    = xp.einsum("i,j,ijk->ijk", self.op_adv_x_d, self.xp_cos_vt, Fx).reshape((self.Nr * self.Nvt, self.Np))
+        
+        yp    = vp.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        yp    = xp.dot(self.op_adv_x_q, yp).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
+        yp    = xp.dot(self.op_po2sh, yp)
+        
+        ne    = xp.dot(self.op_mass[0::num_sh], yp[0::num_sh])
+        E     = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time + dt)) * (self.param.V0/self.param.L)
+        
+        Fv    = self.param.tau * (self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, yp) + self.param.Tg * xp.dot(self.op_col_gT, yp))  + E * xp.dot(self.op_adv_v, yp))
+        Fv    = xp.dot(self.op_psh2o, Fv)
+        
+        Fv    = Fv.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        Fv    = xp.dot(self.op_adv_x_qinv, Fv).reshape((self.Nr, self.Nvt, self.Np)).reshape(self.Nr * self.Nvt, self.Np)
+        
+        rhs                    = Fv - Fx
+        res                    = dv - dt * rhs
+        
+        res[self.xp_vt_l, 0 ]  = (vp[self.xp_vt_l, 0 ] - 0.0)
+        res[self.xp_vt_r, -1 ] = (vp[self.xp_vt_r, -1] - 0.0)
+        
+        #res = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, res))
+        
+        return res.reshape((-1))
+      
+      def jacobian(dv):
+        
+        dv    = dv.reshape((self.Nr * self.Nvt, self.Np))
+        
+        Jx    = xp.dot(dv, self.DpT).reshape((self.Nr, self.Nvt, self.Np))
+        Jx    = xp.einsum("i,j,ijk->ijk", self.op_adv_x_d, self.xp_cos_vt, Jx).reshape((self.Nr * self.Nvt, self.Np))
+        
+        yp    = dv.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        yp    = xp.dot(self.op_adv_x_q, yp).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
+        yp    = xp.dot(self.op_po2sh, yp)
+        
+        ne    = xp.dot(self.op_mass[0::num_sh], yp[0::num_sh])
+        dE    = -xp.dot(self.Dp, self.solve_poisson(ne, 0* ni, 0.0)) * (self.param.V0/self.param.L)
+        
+        Jv    = self.param.tau * (self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, yp) + self.param.Tg * xp.dot(self.op_col_gT, yp))  + E0 * xp.dot(self.op_adv_v, yp) + dE * xp.dot(self.op_adv_v, v_lm))
+        Jv    = xp.dot(self.op_psh2o, Jv)
+        
+        Jv    = Jv.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
+        Jv    = xp.dot(self.op_adv_x_qinv, Jv).reshape((self.Nr, self.Nvt, self.Np)).reshape(self.Nr * self.Nvt, self.Np)
+        
+        rhsJ  = Jv - Jx 
+        jac   = dv - dt * rhsJ
+        
+        jac[self.xp_vt_l, 0 ]  = dv[self.xp_vt_l, 0 ]
+        jac[self.xp_vt_r, -1 ] = dv[self.xp_vt_r, -1]
+        
+        #jac = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, jac))
+        
+        return jac.reshape((-1))
+      
+      
+      # pcEmat      = self.PmatE
+      # pcEval      = self.Evals
+      # self.bs_E   = E0
+      # pc_emat_idx = self.vspace_pc_setup()
+      
+      
+      def precond(x):
+        return x.reshape((-1))
+        x = x.reshape((self.Nr * self.Nvt, self.Np))
+        y = xp.copy(x)
+        
+        # y[self.xp_vt_l, 0 ]  = x[self.xp_vt_l,  0]
+        # y[self.xp_vt_r, -1 ] = x[self.xp_vt_r, -1]
+        # y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+        y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y           = xp.dot(self.op_po2sh, y)
+        for idx_id, idx in enumerate(pc_emat_idx):
+          y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+        
+        #y = xp.dot(self.PmatC, y)
+        y = xp.dot(self.op_psh2o, y)
+        
+        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+        y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y[self.xp_vt_l, 0 ]  = x[self.xp_vt_l,  0]
+        y[self.xp_vt_r, -1 ] = x[self.xp_vt_r, -1]
+        y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+        
+        return y.reshape((-1))
+      
+      """
+      
+      # linear scheme with lagging E term;
+      # 1). This does not allow us to take larger timesteps, because E lagging. 
+      
+      def precond(x):
+        #return x.reshape((-1))
+        x = x.reshape((self.Nr * self.Nvt, self.Np))
+        y = xp.copy(x)
+        
+        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+        y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y = xp.dot(self.op_po2sh, y)
+        for idx_id, idx in enumerate(pc_emat_idx):
+          y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+        
+        y = xp.dot(self.op_psh2o, y)
+        
+        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+        y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y[self.xp_vt_l, 0 ]  = 0 * x[self.xp_vt_l,  0]
+        y[self.xp_vt_r, -1 ] = 0 * x[self.xp_vt_r, -1]
+        y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+        
+        return y.reshape((-1))
+      
+      bd = xp.copy(vd) - 0.5 * residual(xp.zeros_like(vd)).reshape((self.Nr * self.Nvt, self.Np))
+      
+      bd[self.xp_vt_l, 0]  = 0.0
+      bd[self.xp_vt_r, -1] = 0.0
+      
+      #bd = -residual(xp.zeros_like(vd)).reshape((self.Nr * self.Nvt, self.Np)) + jacobian(vd).reshape((self.Nr * self.Nvt, self.Np))
+      
+      Ndof       = self.Nr * self.Nvt * self.Np
+      Lmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=jacobian)
+      Mmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=precond)
+      
+      gmres_restart       = 5
+      gmres_maxiter       = 1000
+      gmres_ctx           = glow1d_utils.gmres_counter(disp=False)
+      
+      v1, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, bd.reshape((-1)), x0=vd.reshape((-1)), tol=self.args.rtol, atol=self.args.atol, M=Mmat_op, callback=gmres_ctx, restart=gmres_restart, maxiter=gmres_maxiter)
+      
+      res           = jacobian(v1) -  bd.reshape((-1))
+      norm_b        = xp.linalg.norm(bd.reshape((-1)))
+      norm_res_abs  = xp.linalg.norm(res)
+      norm_res_rel  = norm_res_abs / norm_b
+      
+      
+      v1         = adv_x_q_vec(v1.reshape((self.Nr * self.Nvt, self.Np)))
+      
+      cp.cuda.runtime.deviceSynchronize()
+      s_t2    = perf_counter()
+      print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E solve time = %.4E gmres iterations: %d " %(time, norm_res_abs, norm_res_rel, (s_t2-s_t1), gmres_ctx.niter * gmres_restart))
+      return u, v1
+      
+      """
+      
+      dv       = xp.zeros_like(v)
+      ns_info  = glow1d_utils.newton_solver_matfree(dv.reshape((-1)), residual, jacobian, precond, self.args.atol, self.args.rtol, self.args.krylov_atol, self.args.krylov_rtol, self.args.max_iter, xp)
+      dv       = ns_info["x"].reshape((self.Nr * self.Nvt, self.Np))
+      
+      dv       = adv_x_q_vec(dv)
+      
+      v1       = v + dv
+      
+      ## filtering to denoise the ordinates to spherical projections
+      v1       = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, v1))
+      v1[v1<0] = 1e-16
+      
+      cp.cuda.runtime.deviceSynchronize()
+      s_t2    = perf_counter()
+      
+      if(verbose==1):
+        print("[BTE (vx-space)] solve time = %.4E simulation time = %.4E | Newton iter = %04d |  GMRES iter = %04d | ||res|| = %.4E | ||res||/||res0|| = %.4E | alpha=%.4E"%((s_t2 - s_t1), time, ns_info["iter"], ns_info["iter_gmres"], ns_info["atol"], ns_info["rtol"], ns_info["alpha"]))
+        
+        
+      if (ns_info["status"]==False):
+        if(verbose==0):
+          print("BTE (vx-space) time = %.4E | Newton iter = %04d |  GMRES iter = %04d | ||res|| = %.4E | ||res||/||res0|| = %.4E | alpha=%.4E"%(time, ns_info["iter"], ns_info["iter_gmres"], ns_info["atol"], ns_info["rtol"], ns_info["alpha"]))
+        print("BTE (vx-space) step non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
+        sys.exit(-1)
+        return u, v
+      
+      return u, v1
+      
     def step_bte(self, u, v, du, dv, time, dt, ts_type, verbose=0):
       xp     = self.xp_module
       tt_bte = time
       dt_bte = dt
+      
+      num_sh = len(self.op_spec_sp._sph_harm_lm)
+      ni     = u[:, self.ion_idx]
       
       # # First order splitting
       # v       = self.step_bte_x(v, tt_bte, dt_bte)
@@ -1584,14 +1827,16 @@ class glow1d_boltzmann():
       # v[v<0]  = 0
       
       # Strang-Splitting
-      v       = self.step_bte_x(v, tt_bte, dt_bte * 0.5)
+      v           = self.step_bte_x(v, tt_bte, dt_bte * 0.5)
+      ne          = xp.dot(self.op_mass[0::num_sh], xp.dot(self.op_po2sh, v)[0::num_sh])
+      self.bs_E   = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time)) * (self.param.V0/self.param.L)
       
-      if (self.args.glow_op_split_scheme==0):
-        v       = self.step_bte_v(v, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
-      elif (self.args.glow_op_split_scheme==1):
-        u, v    = self.step_bte_v2(u, v, tt_bte, dt_bte, verbose=1)
-      else:
-        raise NotImplementedError
+      v           = self.step_bte_v(v, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
+      
+      # # below is coupling E only to the v-space in non-linear solve, problem, this will cause E-field over prediction due to 
+      # # not accounting the electron loss due to spatial advection. 
+      # u, v    = self.step_bte_v2(u, v, tt_bte, dt_bte, verbose=1)
+      
       v       = self.step_bte_x(v, tt_bte + 0.5 * dt_bte, dt_bte * 0.5)
       return v
     
@@ -1608,35 +1853,128 @@ class glow1d_boltzmann():
         self.xp_module = cp
       else:
         self.xp_module = np
+      
+      if (self.args.glow_op_split_scheme == 0):
+        xp            = self.xp_module
+        num_pc_evals  = 20
+        ep            = xp.logspace(xp.log10(1e2), xp.log10(6e5), num_pc_evals//2, base=10)
+        self.Evals    = -xp.flip(ep)
+        self.Evals    = xp.append(self.Evals,ep)
+        vmat          = self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT)
+        self.PmatC    = xp.linalg.inv(self.I_Nv - 1.0 * dt * self.param.tau * vmat)
+        self.PmatE    = list()
         
-      xp            = self.xp_module
-      num_pc_evals  = 20
-      ep            = xp.logspace(xp.log10(1e2), xp.log10(6e5), num_pc_evals//2, base=10)
-      self.Evals    = -xp.flip(ep)
-      self.Evals    = xp.append(self.Evals,ep)
-      vmat          = self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT)
-      self.PmatC    = xp.linalg.inv(self.I_Nv - 0.5 * dt * self.param.tau * vmat)
-      self.PmatE    = list()
-      
-      pmat          = self.PmatC
-      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v - dt * self.param.tau * vmat)
-      ep_mat        = emat #xp.dot(pmat, xp.dot(emat, pmat))
-      self.PmatE.append(ep_mat)
-      
-      for i in range(1, num_pc_evals):
-        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v - dt * self.param.tau * vmat)
-        ep_mat        = emat #xp.dot(pmat, xp.dot(emat, pmat))
+        num_sh        = len(self.op_spec_sp._sph_harm_lm)
+        
+        pmat          = self.PmatC
+        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[0] * self.op_adv_v - dt * self.param.tau * vmat)
+        ep_mat        = emat 
         self.PmatE.append(ep_mat)
-      
-      emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v - dt * self.param.tau * vmat)
-      ep_mat        = emat #xp.dot(pmat, xp.dot(emat, pmat))
-      self.PmatE.append(ep_mat)
-      self.PmatE    = xp.array(self.PmatE)
-      
-      assert len(self.PmatE) == num_pc_evals + 1
-      assert len(self.Evals) == num_pc_evals
-      print("v-space advection mat preconditioner gird : \n", self.Evals)
-      self.initialize_bte_adv_x(dt * 0.5)
+        
+        for i in range(1, num_pc_evals):
+          emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v - dt * self.param.tau * vmat)
+          ep_mat        = emat 
+          self.PmatE.append(ep_mat)
+        
+        emat          = xp.linalg.inv(self.I_Nv - dt * self.param.tau * self.Evals[-1] * self.op_adv_v - dt * self.param.tau * vmat)
+        ep_mat        = emat 
+        self.PmatE.append(ep_mat)
+        self.PmatE    = xp.array(self.PmatE)
+        
+        assert len(self.PmatE) == num_pc_evals + 1
+        assert len(self.Evals) == num_pc_evals
+        print("v-space advection mat preconditioner gird : \n", self.Evals)
+        self.initialize_bte_adv_x(0.5 * dt)
+        print("================================================================")
+        print("                  adv_x initialization with 0.5 * dt                 ")
+        print("================================================================")
+        
+        
+        # self.initialize_bte_adv_x(dt)
+        # print("================================================================")
+        # print("                  adv_x initialization with 1dt                 ")
+        # print("================================================================")
+        
+        #self.op_precon_adv_x = xp.linalg.inv(xp.eye(self.Nr) + dt * self.op_adv_x)
+        
+        # DpL        = xp.zeros((self.Np, self.Np))
+        # DpR        = xp.zeros((self.Np, self.Np))
+
+        # DpL[1:,:]  = self.Dp[1:,:]
+        # DpR[:-1,:] = self.Dp[:-1,:]
+        
+        # adv_x_inv  = xp.empty((self.Nvt, self.Nr * self.Np, self.Nr * self.Np))
+        # I1         = xp.eye(self.Nr * self.Np)
+        
+        # self.xp_vt_L = self.xp_vt <= 0.5 * xp.pi
+        # self.xp_vt_R = self.xp_vt  > 0.5 * xp.pi
+        
+        # print(self.xp_vt[self.xp_vt_L])
+        # print(self.xp_vt[self.xp_vt_R])
+        
+        # tmp  = xp.empty((self.Nr * self.Np, self.Nr * self.Np))
+        # for i in range(self.Nr):
+        #     for j in range(self.Nr):
+        #       tmp[(i * self.Np) : ((i + 1) * self.Np)  , (j * self.Np) : ((j + 1) * self.Np)] = self.op_adv_x[i, j] * self.Dp
+        
+        # self.op_precon_adv_x  = tmp
+        
+        # A = xp.eye(self.Np) - dt * self.Dp
+        # Ainv = xp.linalg.inv(A)
+        # print("||I - A A^{-1}|| = ", xp.allclose(xp.dot(Ainv, A), xp.eye(self.Np), rtol=1e-10, atol=1e-12))
+        # print(xp.dot(Ainv, A))
+        
+        # self.op_precon_adv_xL = I1 + dt * tmp
+        # #self.op_precon_adv_xR = I1 - dt * tmp
+        # del tmp
+        
+        # v  = xp.copy(Vin1)
+        
+        # v1 = xp.einsum("ak,ijk->ija", self.Dp, v.reshape((self.Nr, self.Nvt, self.Np)))
+        # v1 = xp.einsum("al,ljk->ajk", self.op_adv_x, v1)
+        # v1 = xp.einsum("j,ijk->ijk" , xp.ones_like(self.xp_cos_vt), v1) 
+        # v1 = dt * v1 + v.reshape((self.Nr, self.Nvt, self.Np))
+        # v1 = v1.reshape((self.Nr * self.Nvt, self.Np))
+        
+        # #v1[self.xp_vt_l, 0 ] = v[self.xp_vt_l, 0]
+        # #v1[self.xp_vt_r, -1] = v[self.xp_vt_r, -1]
+        
+        
+        # v2 = xp.swapaxes(v.reshape((self.Nr, self.Nvt, self.Np)), 1, 2).reshape((self.Nr * self.Np, self.Nvt))
+        # v2 = xp.dot(self.op_precon_adv_xL, v2)
+        # v2 = xp.swapaxes(v2.reshape((self.Nr, self.Np, self.Nvt)), 1, 2).reshape((self.Nr * self.Nvt, self.Np))
+        
+        
+        # print("v2 vs. v1 ", xp.linalg.norm(v2-v1)/xp.linalg.norm(v1))
+        
+        
+        # A1 = xp.linalg.inv(self.op_precon_adv_xL)
+        # print("||I -A A^{-1}|| / ||I|| ", xp.linalg.norm(xp.dot(A1, self.op_precon_adv_xL) - I1)/xp.linalg.norm(I1))
+        # print(xp.dot(A1, self.op_precon_adv_xL))
+        # # self.op_precon_adv_xR = xp.linalg.inv(self.op_precon_adv_xR)
+        
+        # v3 = xp.swapaxes(v2.reshape((self.Nr, self.Nvt, self.Np)), 1, 2).reshape((self.Nr * self.Np, self.Nvt))
+        # v3 = xp.dot(self.op_precon_adv_xL, v3)
+        # v3 = xp.swapaxes(v2.reshape((self.Nr, self.Np, self.Nvt)), 1, 2).reshape((self.Nr * self.Nvt, self.Np))
+        
+        # print("v2 vs. v3 ", xp.linalg.norm(v2-v3)/xp.linalg.norm(v3))
+        # sys.exit(0)
+        
+        #print("adv mat cond : ", np.linalg.cond(xp.asnumpy(tmp)))
+        
+        # for theta_idx in range(self.Nvt):
+        #   for i in range(self.Nr):
+        #     for j in range(self.Nr):
+        #       adv_x_inv[theta_idx, (i * self.Np) : ((i + 1) * self.Np)  , (j * self.Np) : ((j + 1) * self.Np)] = dt * self.xp_cos_vt[theta_idx] * self.op_adv_x[i, j] * self.Dp
+          
+        #   adv_x_inv[theta_idx]+=I1
+        
+        
+        
+        # #adv_x_inv = xp.linalg.inv(adv_x_inv)
+              
+        # self.op_precon_adv_x_l = xp.linalg.inv(xp.eye(self.Nr * self.Np) + 0.5 * dt * self.op_precon_adv_x)
+        # self.op_precon_adv_x_r = xp.linalg.inv(xp.eye(self.Nr * self.Np) - 0.5 * dt * self.op_precon_adv_x)
       
       self.bte_to_fluid(Uin1, Vin1, 0.0, dt)
       self.fluid_to_bte(Uin1, Vin1, 0.0, dt)
@@ -1658,7 +1996,12 @@ class glow1d_boltzmann():
           
         u = self.step_fluid(u, du, tt, dt * 0.5,  self.ts_type_fluid, verbose=verbose)
         self.fluid_to_bte(u, v, tt, dt)
-        v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)
+        
+        if (self.args.glow_op_split_scheme==0):
+          v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)
+        elif (self.args.glow_op_split_scheme==1):          
+          u, v = self.step_bte_vx_with_E(u, v, time, dt, verbose=1)
+        
         self.bte_to_fluid(u, v, tt + 0.5 * dt, dt)
       
         if (self.heavies_freeze_E):
@@ -1674,7 +2017,13 @@ class glow1d_boltzmann():
           
         u = self.step_fluid(u, du, tt, dt, self.ts_type_fluid, verbose=verbose)
         self.fluid_to_bte(u, v, tt, dt)
-        v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)
+        
+        if (self.args.glow_op_split_scheme==0):
+          v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)
+        elif (self.args.glow_op_split_scheme==1):          
+          u, v = self.step_bte_vx_with_E(u, v, time, dt, verbose=1)
+          
+        
         self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
       
       cp.cuda.runtime.deviceSynchronize()
@@ -1698,7 +2047,7 @@ class glow1d_boltzmann():
       du    = xp.zeros_like(u)
       dv    = xp.zeros_like(v)
       
-      io_cycle = 1.00
+      io_cycle = 1.00e-3
       io_freq  = int(io_cycle/dt)
       cp_freq  = 1 * io_freq
       
@@ -1838,7 +2187,8 @@ class glow1d_boltzmann():
           cycle_avg_v     += (v/u[ : , ele_idx])
         
         self.bs_E = Et(tt)
-        v         = self.step_bte(u, v, du, dv, tt, dt, None)
+        #v         = self.step_bte(u, v, du, dv, tt, dt, None)
+        v, a1, a2  = self.step_bte_vx_imp(v,None, tt, dt, None, 1)
         self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
         
         
@@ -2007,8 +2357,8 @@ class glow1d_boltzmann():
       Te = asnumpy(Uin[:, self.Te_idx])
       
       plt.subplot(2, 4, 1)
-      plt.plot(self.xp, self.param.np0 * ne, 'b', label=r"$n_e$")
-      plt.plot(self.xp, self.param.np0 * ni, '--r', label=r"$n_i$")
+      plt.semilogy(self.xp, self.param.np0 * ne, 'b', label=r"$n_e$")
+      plt.semilogy(self.xp, self.param.np0 * ni, '--r', label=r"$n_i$")
       plt.xlabel(r"x/L")
       plt.ylabel(r"$density (m^{-3})$")
       plt.grid(visible=True)
@@ -2021,9 +2371,14 @@ class glow1d_boltzmann():
       plt.grid(visible=True)
       
       plt.subplot(2, 4, 3)
+      # plt.plot(self.xp, ne * Te * self.param.np0, 'b')
+      # plt.ylabel(r"$n_e T_e (eV m^{-3})$")
+      
       plt.plot(self.xp, Te, 'b')
-      plt.xlabel(r"x/L")
       plt.ylabel(r"$T_e (eV)$")
+      
+      plt.xlabel(r"x/L")
+      
       plt.grid(visible=True)
       
       plt.subplot(2, 4, 4)
@@ -2052,22 +2407,26 @@ class glow1d_boltzmann():
       
       plt.subplot(2, 4, 6)
       Vin_lm1      = self.bte_eedf_normalization(Vin_lm)
+      #r_elastic    = ne * self.param.np0 * asnumpy(xp.dot(self.op_rate[0], Vin_lm1[0::num_sh,:]))
       r_elastic    = asnumpy(xp.dot(self.op_rate[0], Vin_lm1[0::num_sh,:]))
       plt.semilogy(self.xp, r_elastic    , 'b', label="elastic")
       
       if (len(self.op_rate) > 1):
+        #r_ionization = ne * self.param.np0 * asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
         r_ionization = asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
         plt.semilogy(self.xp, r_ionization , 'r', label="ionization")
       
       plt.xlabel(r"x/L")
       plt.ylabel(r"rate coefficients ($m^3 s^{-1}$)")
+      #plt.ylabel(r"rate coefficients ($s^{-1}$)")
       plt.legend()
       plt.grid(visible=True)
       
       vth       = self.bs_vth
       kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
       #ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
-      ev_range  = (self.ev_lim[0], self.ev_lim[1] * 4) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      #ev_range  = (self.ev_lim[0], self.ev_lim[1] * 4) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+      ev_range  = (self.ev_lim[0], self.ev_lim[1])
       
       ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
       
@@ -2130,12 +2489,20 @@ class glow1d_boltzmann():
       Fv    = Fv.reshape((self.Nr * self.Nvt, self.Np))
       return  Fv
     
-    def step_bte_vx_imp(self, v0, du, time, dt, ts_type, verbose):
+    def step_bte_vx_imp(self, v0, dv, time, dt, ts_type, verbose):
+      
+      cp.cuda.runtime.deviceSynchronize()
+      s_t1    = perf_counter()
+      
       xp        = self.xp_module
       Ndof      = self.Nr * self.Nvt * self.Np
       
       atol      = self.args.atol
       rtol      = self.args.rtol
+      
+      gmres_restart  = 5
+      gmres_maxiter  = 1000
+      
       
       def Lmat_mvec(x):
         y                   = self.rhs_bte_vx(x, time, dt)
@@ -2160,6 +2527,13 @@ class glow1d_boltzmann():
         y  = xp.dot(self.op_adv_x_q, y).reshape((self.Nr , self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
         return y
       
+      pcEmat      = self.PmatE
+      pcEval      = self.Evals
+      pc_emat_idx = self.vspace_pc_setup()
+      spec_sp     = self.op_spec_sp
+      num_p       = spec_sp._p + 1
+      num_sh      = len(spec_sp._sph_harm_lm)
+      
       def Mmat_mvec(x):
         #@mfernando : I am not sure why but the order of the operator split scheme does matter here, 
         # for some reason, doing v-space step followed by the advection step tend to be more accurate
@@ -2167,10 +2541,17 @@ class glow1d_boltzmann():
         #y    = self.step_bte_x(x, time, 0.5 * dt)
         
         y    = x.reshape((self.Nr * self.Nvt, self.Np))
+        
+        # y_lm = xp.dot(self.op_po2sh, y)
+        # y_lm = xp.dot(self.PmatC, y_lm)
+        # y    = xp.dot(self.op_psh2o, y_lm)
+        
         y_lm = xp.dot(self.op_po2sh, y)
-        y_lm = xp.dot(self.PmatC, y_lm)
+        for idx_id, idx in enumerate(pc_emat_idx):
+          y_lm[:,idx[1]] = xp.dot(pcEmat[idx[0]], y_lm[:, idx[1]])
         y    = xp.dot(self.op_psh2o, y_lm)
         
+        # x-space operators. 
         y    = adv_x(y, time, dt)
         return y.reshape((-1))
         
@@ -2183,7 +2564,8 @@ class glow1d_boltzmann():
       b                   = b.reshape((-1))
       norm_b              = xp.linalg.norm(b)
       
-      v1, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, b.reshape((-1)), x0=v0.reshape((-1)), tol=rtol/norm_b, atol=atol, M=Mmat_op, maxiter=1000)
+      gmres_ctx           = glow1d_utils.gmres_counter(disp=False)
+      v1, status          = cupyx.scipy.sparse.linalg.gmres(Lmat_op, b.reshape((-1)), x0=v0.reshape((-1)), tol=rtol, atol=atol, M=Mmat_op, callback=gmres_ctx, restart=gmres_restart, maxiter=gmres_maxiter)
       #v1          = Mmat_mvec(b); status=0;
       
       res           = Lmat_mvec(v1) -  b
@@ -2192,7 +2574,14 @@ class glow1d_boltzmann():
       # if (status !=0) :
       #     print("GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(status, norm_res_abs, norm_res_rel))
       
-      print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E" %(time, norm_res_abs, norm_res_rel))
+      v1         = v1.reshape((self.Nr * self.Nvt, self.Np))
+      v_lm       = xp.dot(self.op_po2sh, v1)
+      v1         = xp.dot(self.op_psh2o, v_lm)
+      
+      cp.cuda.runtime.deviceSynchronize()
+      s_t2    = perf_counter()
+      
+      print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E solve time = %.4E gmres iterations: %d " %(time, norm_res_abs, norm_res_rel, (s_t2-s_t1), gmres_ctx.niter * gmres_restart))
       return v1.reshape((self.Nr * self.Nvt, self.Np)), norm_res_abs, norm_res_abs
     
     def solve_unit_test3(self, Uin, Vin):
@@ -2610,6 +2999,9 @@ parser.add_argument("-cycles", "--cycles"                         , help="number
 parser.add_argument("-ts_type", "--ts_type"                       , help="ts mode" , type=str, default="BE")
 parser.add_argument("-atol", "--atol"                             , help="abs. tolerance" , type=float, default=1e-10)
 parser.add_argument("-rtol", "--rtol"                             , help="rel. tolerance" , type=float, default=1e-10)
+parser.add_argument("-krylov_atol", "--krylov_atol"               , help="abs. tolerance for krylov-solve" , type=float, default=1e-20)
+parser.add_argument("-krylov_rtol", "--krylov_rtol"               , help="rel. tolerance for krylov-solve" , type=float, default=1e-1)
+
 parser.add_argument("-max_iter", "--max_iter"                     , help="max iterations for Newton solver" , type=int, default=1000)
 
 parser.add_argument("-profile", "--profile"                       , help="profile", type=int, default=0)
@@ -2638,7 +3030,7 @@ if args.use_gpu==1:
   gpu_device = cp.cuda.Device(args.gpu_device_id)
   gpu_device.use()
 
-# xp        = cp#glow_1d.xp_module 
+# xp        = cp #glow_1d.xp_module 
 # a0        = xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
 # Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
 # uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)

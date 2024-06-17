@@ -144,7 +144,7 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   ns_info["iter"]   = count
   return ns_info
 
-def newton_solver_matfree(x, residual, jacobian, precond, atol, rtol, iter_max, xp=np):
+def newton_solver_matfree(x, residual, jacobian, precond, newton_atol, newton_rtol, krylov_atol, krylov_rtol, iter_max, xp=np):
   x0        = xp.copy(x)
   Ndof      = x.size
   
@@ -155,6 +155,9 @@ def newton_solver_matfree(x, residual, jacobian, precond, atol, rtol, iter_max, 
   count    = 0
   r0       = residual(x)
   rr       = xp.copy(r0)
+  
+  atol     = newton_atol
+  rtol     = newton_rtol
   
   norm_rr  = norm_r0 = xp.linalg.norm(r0)
   converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
@@ -172,28 +175,37 @@ def newton_solver_matfree(x, residual, jacobian, precond, atol, rtol, iter_max, 
     Lmat_op    = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=jmat_mvec)
     Mmat_op    = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=pc_mvec)
   
-  gmres_rtol     = rtol
-  gmres_atol     = atol
-  gmres_restart  = 5
-  gmres_maxiter  = 1000
+  gmres_rtol     = krylov_rtol
+  gmres_atol     = krylov_atol
+  gmres_restart  = 40
+  gmres_maxiter  = iter_max
   
   gmres_iter = 0
   while( not converged and (count < iter_max) ):
     counter           = gmres_counter(disp=False)
     if xp == cp:
-      x1, status      = cupyx.scipy.sparse.linalg.gmres(Lmat_op, rr.reshape((-1)), x0=x.reshape((-1)), tol=gmres_rtol, atol=gmres_atol, M=Mmat_op, restart=gmres_restart, maxiter=gmres_maxiter, callback= counter)
+      x1, status      = cupyx.scipy.sparse.linalg.gmres(Lmat_op, rr.reshape((-1))/norm_rr, x0=x.reshape((-1)), tol=gmres_rtol, atol=gmres_atol, M=Mmat_op, restart=gmres_restart, maxiter=gmres_maxiter, callback= counter)
     else:
-      x1, status      = scipy.sparse.linalg.gmres(Lmat_op, rr.reshape((-1)), x0=x.reshape((-1)), tol=gmres_rtol, atol=gmres_atol, M=Mmat_op, restart=gmres_restart, maxiter=gmres_maxiter, callback= counter)
+      x1, status      = scipy.sparse.linalg.gmres(Lmat_op, rr.reshape((-1))/norm_rr, x0=x.reshape((-1)), tol=gmres_rtol, atol=gmres_atol, M=Mmat_op, restart=gmres_restart, maxiter=gmres_maxiter, callback= counter)
+    
+    x1 = x1 * norm_rr
       
     gmres_iter      +=counter.niter
     a1 = xp.linalg.norm(Lmat_op(x1) - rr.reshape((-1)))
     a2 = a1/norm_rr
-    #print("GMRES iterations %d ||Ax-b||=%.16E ||Ax-b||/||b||=%.16E ||b|| = %.16E "%(counter.niter, a1, a2, norm_rr))
+    #print("GMRES iterations %d ||Ax-b||=%.16E ||Ax-b||/||b||=%.16E ||b|| = %.16E "%(counter.niter * gmres_restart, a1, a2, norm_rr))
     
     if (status>0 or (a1> gmres_atol and a2 > gmres_rtol)):
       a1 = xp.linalg.norm(Lmat_op(x1) - rr.reshape((-1)))
       a2 = a1/norm_rr
-      print("GMRES solver failed with %d ||Ax-b||= %.4E ||Ax-b||/||b|| = %.4E"%(status, a1, a2))
+      print("GMRES solver failed with %d ||Ax-b||= %.4E ||Ax-b||/||b|| = %.4E"%(counter.niter * gmres_restart, a1, a2))
+      #res=Lmat_op(x1) - rr.reshape((-1))
+      # res=res.reshape((257 * 32 , 200))
+      # print(res[:, 0])
+      # print(res[:, -1])
+      #xp.save("res.npy", res)
+      #xp.save("rr.npy" , rr.reshape((-1)))
+      #print(Lmat_op(x1) - rr.reshape((-1)))
       break
     
     x1         = x1.reshape(x.shape)

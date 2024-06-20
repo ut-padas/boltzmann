@@ -144,7 +144,7 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   ns_info["iter"]   = count
   return ns_info
 
-def newton_solver_matfree(x, residual, jacobian, precond, newton_atol, newton_rtol, krylov_atol, krylov_rtol, iter_max, xp=np):
+def newton_solver_matfree(x, residual, jacobian, precond, newton_atol, newton_rtol, krylov_atol, krylov_rtol, n_restart, iter_max, xp=np):
   x0        = xp.copy(x)
   Ndof      = x.size
   
@@ -177,8 +177,8 @@ def newton_solver_matfree(x, residual, jacobian, precond, newton_atol, newton_rt
   
   gmres_rtol     = krylov_rtol
   gmres_atol     = krylov_atol
-  gmres_restart  = 40
-  gmres_maxiter  = iter_max
+  gmres_restart  = n_restart
+  gmres_maxiter  = n_restart * 20
   
   gmres_iter = 0
   while( not converged and (count < iter_max) ):
@@ -193,7 +193,7 @@ def newton_solver_matfree(x, residual, jacobian, precond, newton_atol, newton_rt
     gmres_iter      +=counter.niter
     a1 = xp.linalg.norm(Lmat_op(x1) - rr.reshape((-1)))
     a2 = a1/norm_rr
-    #print("GMRES iterations %d ||Ax-b||=%.16E ||Ax-b||/||b||=%.16E ||b|| = %.16E "%(counter.niter * gmres_restart, a1, a2, norm_rr))
+    print("GMRES iterations %d ||Ax-b||=%.16E ||Ax-b||/||b||=%.16E ||b|| = %.16E "%(counter.niter * gmres_restart, a1, a2, norm_rr))
     
     if (status>0 or (a1> gmres_atol and a2 > gmres_rtol)):
       a1 = xp.linalg.norm(Lmat_op(x1) - rr.reshape((-1)))

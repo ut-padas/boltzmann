@@ -7,6 +7,7 @@ import scipy.constants
 import argparse
 import matplotlib.pyplot as plt
 import sys
+import math
 
 import scipy.interpolate
 import glow1d_utils
@@ -1507,6 +1508,14 @@ class glow1d_boltzmann():
       cp.cuda.runtime.deviceSynchronize()
       s_t1    = perf_counter()
       
+      gmres_rs    = self.args.gmres_rsrt
+      gmres_rtol  = self.args.gmres_rtol
+      gmres_atol  = self.args.gmres_atol
+      
+      
+      newton_atol = self.args.atol
+      newton_rtol = self.args.rtol
+      
       num_p   = self.op_spec_sp._p + 1
       num_sh  = len(self.op_spec_sp._sph_harm_lm)
       
@@ -1558,7 +1567,7 @@ class glow1d_boltzmann():
         
       
       dv_lm   = xp.zeros_like(v_lm)
-      ns_info = glow1d_utils.newton_solver_matfree(dv_lm.reshape((-1)), residual, jacobian, precond, self.args.atol, self.args.rtol, self.args.max_iter, xp)
+      ns_info = glow1d_utils.newton_solver_matfree(dv_lm.reshape((-1)), residual, jacobian, precond, newton_atol, newton_rtol, gmres_atol, gmres_rtol, gmres_rs, gmres_rs * 50, xp)
       dv_lm   = ns_info["x"].reshape((num_p * num_sh, self.Np))
       
       cp.cuda.runtime.deviceSynchronize()
@@ -1599,7 +1608,15 @@ class glow1d_boltzmann():
       
       ne0     = xp.dot(self.op_mass[0::num_sh], v_lm[0::num_sh])
       E0      = -xp.dot(self.Dp, self.solve_poisson(ne0, ni, time + dt)) * (self.param.V0/self.param.L)
-      #E0      = cp.asarray(self.xp**7) * 4e4 * xp.sin(xp.pi * 2 * time)
+      
+      gmres_rs    = self.args.gmres_rsrt
+      gmres_rtol  = self.args.gmres_rtol
+      gmres_atol  = self.args.gmres_atol
+      
+      
+      newton_atol = self.args.atol
+      newton_rtol = self.args.rtol
+      
       
       def adv_x(v0, time, dt): 
         y   = v0.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
@@ -1654,7 +1671,7 @@ class glow1d_boltzmann():
         res[self.xp_vt_l, 0 ]  = (vp[self.xp_vt_l, 0 ] - 0.0)
         res[self.xp_vt_r, -1 ] = (vp[self.xp_vt_r, -1] - 0.0)
         
-        #res = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, res))
+        res = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, res))
         
         return res.reshape((-1))
       
@@ -1684,25 +1701,58 @@ class glow1d_boltzmann():
         jac[self.xp_vt_l, 0 ]  = dv[self.xp_vt_l, 0 ]
         jac[self.xp_vt_r, -1 ] = dv[self.xp_vt_r, -1]
         
-        #jac = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, jac))
+        jac = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, jac))
         
         return jac.reshape((-1))
       
-      
-      # pcEmat      = self.PmatE
-      # pcEval      = self.Evals
-      # self.bs_E   = E0
-      # pc_emat_idx = self.vspace_pc_setup()
-      
-      
-      def precond(x):
-        return x.reshape((-1))
+      def op_split(x):
         x = x.reshape((self.Nr * self.Nvt, self.Np))
         y = xp.copy(x)
         
-        # y[self.xp_vt_l, 0 ]  = x[self.xp_vt_l,  0]
-        # y[self.xp_vt_r, -1 ] = x[self.xp_vt_r, -1]
-        # y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+        y[self.xp_vt_l, 0 ]  = 0.0
+        y[self.xp_vt_r, -1 ] = 0.0
+        y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+        y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y           = xp.dot(self.op_po2sh, y)
+        ne          = xp.dot(self.op_mass[0::num_sh], y[0::num_sh])
+        E           = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time)) * (self.param.V0/self.param.L)
+        
+        pcEmat      = self.PmatE
+        pcEval      = self.Evals
+        self.bs_E   = E
+        pc_emat_idx = self.vspace_pc_setup()
+
+        for idx_id, idx in enumerate(pc_emat_idx):
+          y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+        
+        y = xp.dot(self.op_psh2o, y)
+
+        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+        y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+        
+        y[self.xp_vt_l, 0 ]  = 0.0
+        y[self.xp_vt_r, -1 ] = 0.0
+        y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+        
+        return y
+      
+      pcEmat      = self.PmatE
+      pcEval      = self.Evals
+      self.bs_E   = E0
+      pc_emat_idx = self.vspace_pc_setup()
+      
+      
+      def precond(x):
+        #return x.reshape((-1))
+        x = x.reshape((self.Nr * self.Nvt, self.Np))
+        y = xp.copy(x)
+        
+        y[self.xp_vt_l, 0 ]  = x[self.xp_vt_l,  0]
+        y[self.xp_vt_r, -1 ] = x[self.xp_vt_r, -1]
+        y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
         
         y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
         y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
@@ -1711,9 +1761,7 @@ class glow1d_boltzmann():
         for idx_id, idx in enumerate(pc_emat_idx):
           y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
         
-        #y = xp.dot(self.PmatC, y)
         y = xp.dot(self.op_psh2o, y)
-        
         y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
         y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
         
@@ -1721,70 +1769,74 @@ class glow1d_boltzmann():
         y[self.xp_vt_r, -1 ] = x[self.xp_vt_r, -1]
         y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
         
-        return y.reshape((-1))
-      
-      """
-      
-      # linear scheme with lagging E term;
-      # 1). This does not allow us to take larger timesteps, because E lagging. 
-      
-      def precond(x):
-        #return x.reshape((-1))
-        x = x.reshape((self.Nr * self.Nvt, self.Np))
-        y = xp.copy(x)
-        
-        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
-        y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
-        
-        y = xp.dot(self.op_po2sh, y)
-        for idx_id, idx in enumerate(pc_emat_idx):
-          y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
-        
-        y = xp.dot(self.op_psh2o, y)
-        
-        y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
-        y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
-        
-        y[self.xp_vt_l, 0 ]  = 0 * x[self.xp_vt_l,  0]
-        y[self.xp_vt_r, -1 ] = 0 * x[self.xp_vt_r, -1]
-        y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+        y = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, y))
         
         return y.reshape((-1))
       
-      bd = xp.copy(vd) - 0.5 * residual(xp.zeros_like(vd)).reshape((self.Nr * self.Nvt, self.Np))
       
-      bd[self.xp_vt_l, 0]  = 0.0
-      bd[self.xp_vt_r, -1] = 0.0
+      lagg_E = False
+      if (lagg_E == True):
+        # linear scheme with lagging E term;
+        # 1). This does not allow us to take larger timesteps, because E lagging. 
+        
+        def precond(x):
+          #return x.reshape((-1))
+          x = x.reshape((self.Nr * self.Nvt, self.Np))
+          y = xp.copy(x)
+          
+          y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+          y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+          
+          y = xp.dot(self.op_po2sh, y)
+          for idx_id, idx in enumerate(pc_emat_idx):
+            y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+          
+          y = xp.dot(self.op_psh2o, y)
+          
+          y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
+          y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+          
+          y[self.xp_vt_l, 0 ]  = 0 * x[self.xp_vt_l,  0]
+          y[self.xp_vt_r, -1 ] = 0 * x[self.xp_vt_r, -1]
+          y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
+          
+          return y.reshape((-1))
+        
+        bd = xp.copy(vd) - 0.5 * residual(xp.zeros_like(vd)).reshape((self.Nr * self.Nvt, self.Np))
+        
+        bd[self.xp_vt_l, 0]  = 0.0
+        bd[self.xp_vt_r, -1] = 0.0
+        
+        #bd = -residual(xp.zeros_like(vd)).reshape((self.Nr * self.Nvt, self.Np)) + jacobian(vd).reshape((self.Nr * self.Nvt, self.Np))
+        
+        Ndof       = self.Nr * self.Nvt * self.Np
+        Lmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=jacobian)
+        Mmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=precond)
+        
+        gmres_restart       = 5
+        gmres_maxiter       = 1000
+        gmres_ctx           = glow1d_utils.gmres_counter(disp=False)
+        
+        v1, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, bd.reshape((-1)), x0=vd.reshape((-1)), tol=self.args.rtol, atol=self.args.atol, M=Mmat_op, callback=gmres_ctx, restart=gmres_restart, maxiter=gmres_maxiter)
+        
+        res           = jacobian(v1) -  bd.reshape((-1))
+        norm_b        = xp.linalg.norm(bd.reshape((-1)))
+        norm_res_abs  = xp.linalg.norm(res)
+        norm_res_rel  = norm_res_abs / norm_b
+        
+        
+        v1         = adv_x_q_vec(v1.reshape((self.Nr * self.Nvt, self.Np)))
+        
+        cp.cuda.runtime.deviceSynchronize()
+        s_t2    = perf_counter()
+        print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E solve time = %.4E gmres iterations: %d " %(time, norm_res_abs, norm_res_rel, (s_t2-s_t1), gmres_ctx.niter * gmres_restart))
+        return u, v1
       
-      #bd = -residual(xp.zeros_like(vd)).reshape((self.Nr * self.Nvt, self.Np)) + jacobian(vd).reshape((self.Nr * self.Nvt, self.Np))
-      
-      Ndof       = self.Nr * self.Nvt * self.Np
-      Lmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=jacobian)
-      Mmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=precond)
-      
-      gmres_restart       = 5
-      gmres_maxiter       = 1000
-      gmres_ctx           = glow1d_utils.gmres_counter(disp=False)
-      
-      v1, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, bd.reshape((-1)), x0=vd.reshape((-1)), tol=self.args.rtol, atol=self.args.atol, M=Mmat_op, callback=gmres_ctx, restart=gmres_restart, maxiter=gmres_maxiter)
-      
-      res           = jacobian(v1) -  bd.reshape((-1))
-      norm_b        = xp.linalg.norm(bd.reshape((-1)))
-      norm_res_abs  = xp.linalg.norm(res)
-      norm_res_rel  = norm_res_abs / norm_b
+      #dv       = xp.zeros_like(v)
+      dv       = (op_split(vd).reshape((self.Nr * self.Nvt, self.Np)) - vd)
       
       
-      v1         = adv_x_q_vec(v1.reshape((self.Nr * self.Nvt, self.Np)))
-      
-      cp.cuda.runtime.deviceSynchronize()
-      s_t2    = perf_counter()
-      print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E solve time = %.4E gmres iterations: %d " %(time, norm_res_abs, norm_res_rel, (s_t2-s_t1), gmres_ctx.niter * gmres_restart))
-      return u, v1
-      
-      """
-      
-      dv       = xp.zeros_like(v)
-      ns_info  = glow1d_utils.newton_solver_matfree(dv.reshape((-1)), residual, jacobian, precond, self.args.atol, self.args.rtol, self.args.krylov_atol, self.args.krylov_rtol, self.args.max_iter, xp)
+      ns_info  = glow1d_utils.newton_solver_matfree(dv.reshape((-1)), residual, jacobian, precond, newton_atol, newton_rtol, gmres_atol, gmres_rtol, gmres_rs, gmres_rs * 50, xp)
       dv       = ns_info["x"].reshape((self.Nr * self.Nvt, self.Np))
       
       dv       = adv_x_q_vec(dv)
@@ -1854,9 +1906,9 @@ class glow1d_boltzmann():
       else:
         self.xp_module = np
       
-      if (self.args.glow_op_split_scheme == 0):
+      if (self.args.glow_op_split_scheme == 0 or True):
         xp            = self.xp_module
-        num_pc_evals  = 20
+        num_pc_evals  = 30
         ep            = xp.logspace(xp.log10(1e2), xp.log10(6e5), num_pc_evals//2, base=10)
         self.Evals    = -xp.flip(ep)
         self.Evals    = xp.append(self.Evals,ep)
@@ -2047,9 +2099,9 @@ class glow1d_boltzmann():
       du    = xp.zeros_like(u)
       dv    = xp.zeros_like(v)
       
-      io_cycle = 1.00e-3
+      io_cycle = 1.0e0
       io_freq  = int(io_cycle/dt)
-      cp_freq  = 1 * io_freq
+      cp_freq  = 10 * io_freq
       
       ts_idx_b  = 0 
       if args.restore==1:
@@ -2357,7 +2409,7 @@ class glow1d_boltzmann():
       Te = asnumpy(Uin[:, self.Te_idx])
       
       plt.subplot(2, 4, 1)
-      plt.semilogy(self.xp, self.param.np0 * ne, 'b', label=r"$n_e$")
+      plt.semilogy(self.xp, self.param.np0 * ne, 'b',   label=r"$n_e$")
       plt.semilogy(self.xp, self.param.np0 * ni, '--r', label=r"$n_i$")
       plt.xlabel(r"x/L")
       plt.ylabel(r"$density (m^{-3})$")
@@ -2365,9 +2417,12 @@ class glow1d_boltzmann():
       plt.legend()
       
       plt.subplot(2, 4, 2)
-      plt.plot(self.xp, self.param.np0 * (ni-ne), 'b')
+      plt.plot(self.xp, self.param.np0 * ne, 'b',  label=r"$n_e$")
+      plt.plot(self.xp, self.param.np0 * ni, '--r',label=r"$n_i$")
       plt.xlabel(r"x/L")
-      plt.ylabel(r"$(n_i -n_e)(m^{-3})$")
+      #plt.ylabel(r"$(n_i -n_e)(m^{-3})$")
+      plt.ylabel(r"$density (m^{-3})$")
+      plt.legend()
       plt.grid(visible=True)
       
       plt.subplot(2, 4, 3)
@@ -2999,8 +3054,9 @@ parser.add_argument("-cycles", "--cycles"                         , help="number
 parser.add_argument("-ts_type", "--ts_type"                       , help="ts mode" , type=str, default="BE")
 parser.add_argument("-atol", "--atol"                             , help="abs. tolerance" , type=float, default=1e-10)
 parser.add_argument("-rtol", "--rtol"                             , help="rel. tolerance" , type=float, default=1e-10)
-parser.add_argument("-krylov_atol", "--krylov_atol"               , help="abs. tolerance for krylov-solve" , type=float, default=1e-20)
-parser.add_argument("-krylov_rtol", "--krylov_rtol"               , help="rel. tolerance for krylov-solve" , type=float, default=1e-1)
+parser.add_argument("-gmres_atol", "--gmres_atol"                 , help="abs. tolerance for gmres-solve" , type=float, default=1e-20)
+parser.add_argument("-gmres_rtol", "--gmres_rtol"                 , help="rel. tolerance for gmres-solve" , type=float, default=1e-1)
+parser.add_argument("-gmres_rsrt", "--gmres_rsrt"                 , help="gmres restarts", type=int, default=10)
 
 parser.add_argument("-max_iter", "--max_iter"                     , help="max iterations for Newton solver" , type=int, default=1000)
 

@@ -1178,7 +1178,7 @@ class glow1d_boltzmann():
         if xp == cp:
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
-        print("BTE x-advection time = %.4E (s)" %(t2-t1), flush=True)
+        print("BTE x-advection cost = %.4E (s)" %(t2-t1), flush=True)
       Vin_adv_x[Vin_adv_x<0]=0.0
       return Vin_adv_x
       
@@ -1317,7 +1317,7 @@ class glow1d_boltzmann():
         if xp == cp:
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
-        print("fluid solver step time = %.4E (s)" %(t2-t1), flush=True)
+        print("fluid solver cost = %.4E (s)" %(t2-t1), flush=True)
         
       return u1
     
@@ -1325,22 +1325,40 @@ class glow1d_boltzmann():
       xp          = self.xp_module
       E           = self.bs_E
       pcEmat      = self.PmatE
-      pcEval      = self.Evals
+      pcEval      = self.Evals.reshape((-1,1))
+      E           = E.reshape((-1, 1))
+      
+      dist        = xp.linalg.norm(E[:, None, :] - pcEval[None, :, :], axis=2)
+      c_memship   = xp.argmin(dist, axis=1)
+      c_idx       = xp.arange(pcEval.shape[0])
+      p_idx       = xp.arange(len(E))
+      mask        = c_memship == c_idx[:, None]
+      
       pc_emat_idx = list()
-      idx         = xp.where(E<pcEval[0])[0]
-      
-      if (len(idx)>0):
-        pc_emat_idx.append((0, idx))
+      for i in range(len(pcEval)):
+        pc_emat_idx.append((i, p_idx[mask[i, :]]))
         
-      for i in range(1, len(pcEval)):
-        idx  = xp.where((pcEval[i-1]<=E) & (E<pcEval[i]))[0]
-        if (len(idx)>0):
-          pc_emat_idx.append((i, idx))
       
-      idx = xp.where(pcEval[-1]<=E)[0]
-      if (len(idx)>0):
-        #print(E[idx], pcEval[-1])
-        pc_emat_idx.append((len(pcEval), idx))
+      
+      # xp          = self.xp_module
+      # E           = self.bs_E
+      # pcEmat      = self.PmatE
+      # pcEval      = self.Evals
+      # pc_emat_idx = list()
+      # idx         = xp.where(E<pcEval[0])[0]
+      
+      # if (len(idx)>0):
+      #   pc_emat_idx.append((0, idx))
+        
+      # for i in range(1, len(pcEval)):
+      #   idx  = xp.where((pcEval[i-1]<=E) & (E<pcEval[i]))[0]
+      #   if (len(idx)>0):
+      #     pc_emat_idx.append((i, idx))
+      
+      # idx = xp.where(pcEval[-1]<=E)[0]
+      # if (len(idx)>0):
+      #   #print(E[idx], pcEval[-1])
+      #   pc_emat_idx.append((len(pcEval), idx))
       
       idx_set  = xp.array([],dtype=xp.int32)
       for idx_id, idx in enumerate(pc_emat_idx):
@@ -1382,18 +1400,11 @@ class glow1d_boltzmann():
         E               = self.bs_E
             
         dof_v           = self.dof_v
-        cp.cuda.runtime.deviceSynchronize()
-        a_t1 = perf_counter()
         
         steps_cycle     = int(1/dt)
         pmat_freq       = steps_cycle//50
         step            = int(time/dt)
         
-        cp.cuda.runtime.deviceSynchronize()
-        a_t2 = perf_counter()
-        
-        cp.cuda.runtime.deviceSynchronize()
-        s_t1 = perf_counter()
         if use_gmres == True:
           
           pcEmat      = self.PmatE
@@ -1419,7 +1430,8 @@ class glow1d_boltzmann():
           Ndof      = self.dof_v * self.Np
           Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
           Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
-          v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=rtol/norm_b, atol=atol, M=Mmat_op, maxiter=1000)
+          gmres_c   = glow1d_utils.gmres_counter(disp=False)
+          v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=rtol, atol=atol, M=Mmat_op, restart=self.args.gmres_rsrt, maxiter=self.args.gmres_rsrt * 50, callback=gmres_c)
           
           norm_res_abs  = xp.linalg.norm(Lmat_mvec(v) -  u.reshape((-1)))
           norm_res_rel  = xp.linalg.norm(Lmat_mvec(v) -  u.reshape((-1))) / norm_b
@@ -1435,12 +1447,18 @@ class glow1d_boltzmann():
         else:
           raise NotImplementedError
         
-        cp.cuda.runtime.deviceSynchronize()
-        s_t2 = perf_counter()
-        #if (verbose==1):
-        print("%08d Boltzmann step time = %.6E op. assembly =%.6E solve = %.6E ||res||=%.12E ||res||/||b||=%.12E"%(step, time, (a_t2-a_t1), (s_t2-s_t1), norm_res_abs, norm_res_rel))
-        
         v       = xp.dot(self.op_psh2o, v)
+        
+        if PROFILE_SOLVERS==1:
+          if xp == cp:
+            cp.cuda.runtime.deviceSynchronize()
+          t2 = perf_counter()
+          print("BTE (v-space) solve cost = %.6E " %(t2-t1), end=" ")
+          
+          
+        print("%08d Boltzmann (v-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(step, time, norm_res_abs, norm_res_rel, gmres_c.niter * self.args.gmres_rsrt))
+        
+        
         return v 
         
       elif ts_type == "IMEX":
@@ -1865,6 +1883,12 @@ class glow1d_boltzmann():
       
     def step_bte(self, u, v, du, dv, time, dt, ts_type, verbose=0):
       xp     = self.xp_module
+      
+      #if PROFILE_SOLVERS==1:
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+      t1 = perf_counter()
+        
       tt_bte = time
       dt_bte = dt
       
@@ -1890,6 +1914,13 @@ class glow1d_boltzmann():
       # u, v    = self.step_bte_v2(u, v, tt_bte, dt_bte, verbose=1)
       
       v       = self.step_bte_x(v, tt_bte + 0.5 * dt_bte, dt_bte * 0.5)
+      
+      #if PROFILE_SOLVERS==1:
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+      t2 = perf_counter()
+      print("BTE(vx-op-split) solver cost = %.4E (s)" %(t2-t1), flush=True)
+        
       return v
     
     def step_init(self, Uin, Vin, dt):
@@ -2099,9 +2130,9 @@ class glow1d_boltzmann():
       du    = xp.zeros_like(u)
       dv    = xp.zeros_like(v)
       
-      io_cycle = 1.0e0
+      io_cycle = 1.0e-1
       io_freq  = int(io_cycle/dt)
-      cp_freq  = 10 * io_freq
+      cp_freq  = 1 * io_freq
       
       ts_idx_b  = 0 
       if args.restore==1:

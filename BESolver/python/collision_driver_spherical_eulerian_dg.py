@@ -29,7 +29,7 @@ from   datetime import datetime
 import bte_0d3v_solver as bte_0d3v
 
 plt.rcParams.update({
-    "text.usetex": True,
+    "text.usetex": False,
     "font.size": 24,
     #"ytick.major.size": 3,
     #"font.family": "Helvetica",

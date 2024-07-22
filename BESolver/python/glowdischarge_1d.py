@@ -48,7 +48,7 @@ class glow1d_fluid():
         ff.write("args: %s"%(args))
         ff.close()
       
-      self.param = glow1d_utils.parameters()
+      self.param = glow1d_utils.parameters(args)
       
       self.Ns = self.args.Ns                   # Number of species
       self.NT = self.args.NT                   # Number of temperatures
@@ -146,6 +146,11 @@ class glow1d_fluid():
         ki   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Ionization.300K.txt" , delimiter=",", skip_header=True) # m^3/s
         mu_e = np.genfromtxt("Ar3species/Ar_1Torr_300K/Mobility.300K.txt"   , delimiter=",", skip_header=True) # mu * n0 (1/(Vms))
         De   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Diffusivity.300K.txt", delimiter=",", skip_header=True) # D  * n0 (1/(ms))
+        
+        #ki   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Ar_o_sp_Ar_P0_1.00Torr_T0_300.00K_Ionization_15.76_eV.txt" , delimiter=",", skip_header=True) # m^3/s
+        #mu_e = np.genfromtxt("Ar3species/Ar_1Torr_300K/Ar_o_sp_Ar_P0_1.00Torr_T0_300.00K_mobility.txt"            , delimiter=",", skip_header=True) # mu * n0 (1/(Vms))
+        #De   = np.genfromtxt("Ar3species/Ar_1Torr_300K/Ar_o_sp_Ar_P0_1.00Torr_T0_300.00K_diffusion.txt"           , delimiter=",", skip_header=True) # D  * n0 (1/(ms))
+        
         
         # non-dimentionalized QoIs
         ki  [:, 0]  *= (1/self.param.ev_to_K)
@@ -259,16 +264,32 @@ class glow1d_fluid():
           Uin             = np.dot(P1, Uin)
           
         else:
-          xx = self.param.L * (self.xp + 1)
-          Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
-          Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
-          Uin[:, Te_idx]  = self.param.Teb
-        
-          Uin[0, Te_idx]  = self.param.Teb0
-          Uin[-1, Te_idx] = self.param.Teb1
-          Uin[:, Te_idx] *= Uin[:, ele_idx]
           
-          #print(Uin[:, Te_idx]/Uin[:, ele_idx])
+          if (self.args.ic_file != ""):
+            print("reading IC from file %s "%(self.args.ic_file))
+            u1             =  xp.load(self.args.ic_file)
+            
+            npts            = u1.shape[0]
+            xx1             = -np.cos(np.pi*np.linspace(0,npts-1, npts)/(npts-1))
+            v0pinv          = np.linalg.solve(np.polynomial.chebyshev.chebvander(xx1, npts-1), np.eye(npts))
+            P1              = np.dot(np.polynomial.chebyshev.chebvander(self.xp, npts-1), v0pinv)
+              
+            u1              = np.dot(P1, u1)
+            Uin[:, ele_idx] = u1[:, ele_idx] 
+            Uin[:, ion_idx] = u1[:, ion_idx] 
+            Uin[:, Te_idx]  = u1[:, Te_idx]  
+            
+          else:
+            xx = self.param.L * (self.xp + 1)
+            Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+            Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
+            Uin[:, Te_idx]  = self.param.Teb
+          
+            Uin[0, Te_idx]  = self.param.Teb0
+            Uin[-1, Te_idx] = self.param.Teb1
+            Uin[:, Te_idx] *= Uin[:, ele_idx]
+          
+          
       
         nTe = Uin[:, Te_idx]
         ne  = Uin[:, ele_idx]
@@ -909,7 +930,11 @@ class glow1d_fluid():
         dt              = self.args.cfl 
         tT              = self.args.cycles
         
-        io_freq         = int(1/dt)
+        io_cycle        = self.args.io_cycle_freq
+        io_freq         = int(io_cycle/dt)
+      
+        cp_cycle        = self.args.cp_cycle_freq
+        cp_freq         = int(cp_cycle/dt)
         
         steps           = max(1,int(tT/dt))
         u               = xp.copy(Uin)
@@ -1063,7 +1088,7 @@ class glow1d_fluid():
               self.plot(cycle_avg_u, tt, "%s_avg_%04d.png"     %(args.fname, ts_idx//io_freq))
               self.plot(u,           tt, "%s_%04d.png" %(args.fname, ts_idx//io_freq))
               
-              if (ts_idx % (io_freq * 10)==0):
+              if (ts_idx % cp_freq ==0):
                 xp.save("%s_%04d_avg.npy"%(self.args.fname, ts_idx//io_freq), cycle_avg_u)
                 xp.save("%s_%04d.npy"%(self.args.fname, ts_idx//io_freq), u)
               
@@ -1100,8 +1125,11 @@ class glow1d_fluid():
       fig       = plt.figure(figsize=(18,8), dpi=300)
       
       def asnumpy(x):
-        if self.xp_module==cp:
-          return self.xp_module.asnumpy(x)
+        if self.args.use_gpu==1:
+          if self.xp_module==cp:
+            return self.xp_module.asnumpy(x)
+          else:
+            return x
         else:
           return x
       
@@ -1475,7 +1503,44 @@ if (__name__ == "__main__"):
   parser.add_argument("-use_gpu",         "--use_gpu"       , help="enable GPU accerleration (not compatible with tabulated kinetics)" , type=int, default=0)
   parser.add_argument("-gpu_device_id", "--gpu_device_id"   , help="GPU device id to use", type=int, default=0)
   
+  parser.add_argument("-ic_file"       , "--ic_file"        , help="initial condition file"                  , type=str, default="")
+  parser.add_argument("-io_cycle_freq" , "--io_cycle_freq"  , help="io output every k-th cycle"              , type=float, default=1e0)
+  parser.add_argument("-cp_cycle_freq" , "--cp_cycle_freq"  , help="checkpoint output every k-th cycle"      , type=float, default=1e1)
+  parser.add_argument("-par_file"     , "--par_file"        , help="toml par file to specify run parameters" , type=str, default="")
   args      = parser.parse_args()
+  
+  if args.par_file != "":
+    import toml
+    tp  = toml.load(args.par_file)
+    
+    tp0                 = tp["solver"]
+    args.atol           = tp0["atol"]
+    args.rtol           = tp0["rtol"]
+    args.max_iter       = tp0["max_iter"]
+    args.use_gpu        = tp0["use_gpu"]
+    args.gpu_device_id  = tp0["gpu_device_id"]
+    args.restore        = tp0["restore"]
+    args.rs_idx         = tp0["rs_idx"]
+    args.fname          = tp0["fname"]
+    args.dir            = tp0["dir"]
+    args.ic_file        = tp0["ic_file"]
+    args.io_cycle_freq  = tp0["io_cycle"]
+    args.cp_cycle_freq  = tp0["cp_cycle"]
+    args.cfl            = tp0["dt"]
+    args.cycles         = tp0["cycles"]
+    args.bc_dirichlet_e = tp0["dirichlet_Te"]
+    args.Np             = tp0["Np"]
+    
+    
+    tp0                 = tp["chemistry"]
+    args.Ns             = tp0["Ns"]
+    args.NT             = tp0["NT"]
+    args.use_tab_data   = tp0["use_tab_data"]
+    
+    
+    
+  
+  
   glow_1d   = glow1d_fluid(args)
   glow_1d.initialize()
   
@@ -1499,11 +1564,11 @@ if (__name__ == "__main__"):
     print(type(glow_1d.param.ki(u[:,2], u[:, 0])))
     
   
-  #v      = glow_1d.solve(u, ts_type=args.ts_type)
+  v      = glow_1d.solve(u, ts_type=args.ts_type)
   #ut     = glow_1d.fft_analysis(u, args.cfl, args.atol, args.rtol, args.max_iter)
   #np.save("ut.npy", ut)
   
-  v         = glow_1d.time_periodic_shooting(u, args.atol, args.rtol, args.max_iter)
+  #v         = glow_1d.time_periodic_shooting(u, args.atol, args.rtol, args.max_iter)
   #python3 glowdischarge_1d.py -Np 240 -cycles 11 -ts_type BE -atol 1e-14 -rtol 1e-14 -dir glow1d_liu_N240_dt5e-4 -cfl 5e-4
   
   

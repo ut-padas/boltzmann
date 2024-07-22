@@ -1,0 +1,64 @@
+["glow_1d"]
+L      = 2.54E-2   # m
+V0     = 100       # V 
+freq   = 13.56e6   # Hz
+Tg     = 300.0     # K
+p0     = 1.0       # Torr
+gamma  = 0.01      # only used in fluid model
+
+#                  # transport coefficients * n0
+De     = 3.86e24   # m^{-1}s^{-1}
+mu_e   = 9.66e23   # V^{-1} m^{-1} s^{-1} 
+
+Di     = 2.07e20   # m^{-1} s^{-1}
+mu_i   = 4.65e21   # V^{-1} m^{-1} s^{-1}
+
+[solver]
+atol           = 1e-12                      # absolute tolerance
+rtol           = 1e-10                      # relative tolerance
+gmres_atol     = 1e-12                      # tolerances (abs) used in GMRES solver
+gmres_rtol     = 1e-10                      # tolerances (abs) used in GMRES solver
+gmres_rsrt     = 20                         # number of iterations for GMRES
+max_iter       = 300                        # max iterations for the solver
+use_gpu        = 1                          # use GPUs 
+gpu_device_id  = 0                          # GPU device ID
+restore        = 0                          # [1-to restore solver]
+rs_idx         = 0                          # restore cycle id    
+ic_file        = ""                         # [""- default IC, file path to jump start]
+fname          = "1d_glow"                  # IO dump, file prefix
+dir            = "1dglow_hybrid/r1"         # IO dump, folder is created on the fly if not present
+plot_data      = 1                          # plot data  
+split_scheme   = 0                          # [0- op split scheme, 1- full implicit solve]
+io_cycle       = 1e0                        # io output every k-th cycle
+cp_cycle       = 1e0                        # checkpoint output every k-th cycle
+
+
+[chemistry]
+Ns             = 2
+NT             = 1
+
+[bte]
+threads        = 4                          # number of processes used during collision op. assembly 
+Np             = 200                        # number of Chebyshev points
+Nr             = 255                        # number of B-splines in v-radial   
+Nvt            = 32                         # number of ordinates in v-theta
+lmax           = 2                          # number of lmodes 
+dt             = 5e-5                       # dt/T where T is RF period
+collisions     = "lxcat_data/eAr_crs.Biagi.3sp2r" # collision cross-sections
+ev_max         = 80                         # eV
+ev_extend      = 2                          # [0 =  no extention, 1 = 1.2 ev_max, 2 = log extension (25 * ev_max)]
+sp_order       = 3                          # B-spline order
+spline_qpts    = 11                         # number of quadrature points to use
+Te             = 4                          # eV used to compute electron thermal velocity for v-space normalization
+cycles         = 100                        # number of cycles to evolve. 
+
+
+
+
+
+
+
+
+
+
+    

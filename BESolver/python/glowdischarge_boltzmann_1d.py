@@ -94,7 +94,7 @@ class glow1d_boltzmann():
         ff.close()
       
       self.args      = args
-      self.param     = glow1d_utils.parameters()
+      self.param     = glow1d_utils.parameters(self.args)
       
       self.Ns  = self.args.Ns                   # Number of species
       self.NT  = self.args.NT                   # Number of temperatures
@@ -579,9 +579,9 @@ class glow1d_boltzmann():
         if (type == 0):
           
           xx = self.param.L * (self.xp + 1)
-          read_from_file   = True
+          read_from_file   = (self.args.ic_file != "")
           if read_from_file==True:
-            fname = "1dglow/ss_fluid/1d_glow_0000.npy"
+            fname = self.args.ic_file
             print("loading initial conditoin from ", fname)
             u1              = xp.load(fname)
             npts            = u1.shape[0]
@@ -592,7 +592,8 @@ class glow1d_boltzmann():
             u1              = np.dot(P1, u1)
             Uin[:, ele_idx] = u1[:, ele_idx] 
             Uin[:, ion_idx] = u1[:, ion_idx] 
-            Uin[:, Te_idx]  = u1[:, Te_idx]  / u1[:, ele_idx]
+            Uin[:, Te_idx]  = u1[:, Te_idx]  
+            
           else:
             Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
             Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
@@ -1179,7 +1180,7 @@ class glow1d_boltzmann():
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
         print("BTE x-advection cost = %.4E (s)" %(t2-t1), flush=True)
-      Vin_adv_x[Vin_adv_x<0]=0.0
+      Vin_adv_x[Vin_adv_x<0] = 1e-16
       return Vin_adv_x
       
     def rhs_bte_v(self, v_lm: np.array, time, dt):
@@ -2130,9 +2131,11 @@ class glow1d_boltzmann():
       du    = xp.zeros_like(u)
       dv    = xp.zeros_like(v)
       
-      io_cycle = 1.0e-1
+      io_cycle = self.args.io_cycle_freq
       io_freq  = int(io_cycle/dt)
-      cp_freq  = 1 * io_freq
+      
+      cp_cycle = self.args.cp_cycle_freq
+      cp_freq  = int(cp_cycle/dt)
       
       ts_idx_b  = 0 
       if args.restore==1:
@@ -2219,8 +2222,11 @@ class glow1d_boltzmann():
       du             = xp.zeros_like(u)
       dv             = xp.zeros_like(v)
       
-      io_cycle = 1.00
-      io_freq  = int(io_cycle/dt)
+      io_cycle       = self.args.io_cycle_freq
+      io_freq        = int(io_cycle/dt)
+      
+      cp_cycle       = self.args.cp_cycle_freq
+      cp_freq        = int(cp_cycle/dt)
       
       ts_idx_b  = 0 
       if args.restore==1:
@@ -2254,14 +2260,19 @@ class glow1d_boltzmann():
               cycle_avg_v       *= 0.5 * dt / io_cycle
               #print(np.abs(1-cycle_avg_u[:, ion_idx]/u[:,ion_idx]))
               self.plot(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt)
-              xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
-              xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
+              
+              if (ts_idx % cp_freq == 0):
+                xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
+                xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
+              
               cycle_avg_u[:,:]       = 0
               cycle_avg_v[:,:]       = 0
             else:
               self.plot(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt)
-              xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
-              xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
+              
+              if (ts_idx % cp_freq == 0):
+                xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
+                xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
           
           
         
@@ -2269,9 +2280,12 @@ class glow1d_boltzmann():
           cycle_avg_u     += u
           cycle_avg_v     += (v/u[ : , ele_idx])
         
-        self.bs_E = Et(tt)
-        #v         = self.step_bte(u, v, du, dv, tt, dt, None)
-        v, a1, a2  = self.step_bte_vx_imp(v,None, tt, dt, None, 1)
+        v           = self.step_bte_x(v, tt, dt * 0.5)
+        self.bs_E   = Et(tt + 0.5 * dt)
+        v           = self.step_bte_v(v, None, tt, dt, self.ts_type_bte_v , verbose=0)
+        v           = self.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
+        
+        #v, a1, a2  = self.step_bte_vx_imp(v,None, tt, dt, None, 1)
         self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
         
         
@@ -3106,10 +3120,63 @@ parser.add_argument("-rs_idx",  "--rs_idx"                        , help="restor
 
 parser.add_argument("-fname", "--fname"                           , help="file name to store the solution" , type=str, default="1d_glow")
 parser.add_argument("-dir"  , "--dir"                             , help="file name to store the solution" , type=str, default="glow1d_dir")
-
 parser.add_argument("-glow_op_split_scheme"  , "--glow_op_split_scheme" , help="glow op. split scheme, 0- E field is frozen while BTE solve,1-E field is solved with BTE solve" , type=int, default=0)
 
-args = parser.parse_args()
+parser.add_argument("-par_file"        , "--par_file"                   , help="toml par file to specify run parameters" , type=str, default="")
+parser.add_argument("-ic_file"         , "--ic_file"                    , help="initial condition file"                  , type=str, default="")
+parser.add_argument("-io_cycle_freq"   , "--io_cycle_freq"              , help="io output every k-th cycle"              , type=float, default=1e0)
+parser.add_argument("-cp_cycle_freq"   , "--cp_cycle_freq"              , help="checkpoint output every k-th cycle"      , type=float, default=1e1)
+parser.add_argument("-bte_with_E"      , "--bte_with_E"                 , help="only do 1D-bte with E"                   , type=int, default=0)
+args  = parser.parse_args()
+
+if args.par_file != "":
+  import toml
+  tp  = toml.load(args.par_file)
+  
+  tp0                 = tp["bte"] 
+  args.Np             = tp0["Np"]
+  args.l_max          = tp0["lmax"]
+  args.collisions     = tp0["collisions"]
+  args.ev_max         = tp0["ev_max"]
+  args.ev_extend      = tp0["ev_extend"]
+  args.sp_order       = tp0["sp_order"]
+  args.spline_qpts    = tp0["spline_qpts"]
+  args.Te             = tp0["Te"]
+  args.Nr             = tp0["Nr"]
+  args.Nvt            = tp0["Nvt"]
+  args.Np             = tp0["Np"]
+  args.cfl            = tp0["dt"]
+  args.cycles         = tp0["cycles"]
+  
+  tp0                 = tp["glow_1d"] 
+  args.Tg             = tp0["Tg"]
+  
+  tp0                 = tp["solver"]
+  args.atol           = tp0["atol"]
+  args.rtol           = tp0["rtol"]
+  args.gmres_atol     = tp0["gmres_atol"]
+  args.gmres_rtol     = tp0["gmres_rtol"]
+  args.gmres_rsrt     = tp0["gmres_rsrt"]
+  args.max_iter       = tp0["max_iter"]
+  args.use_gpu        = tp0["use_gpu"]
+  args.gpu_device_id  = tp0["gpu_device_id"]
+  args.restore        = tp0["restore"]
+  args.rs_idx         = tp0["rs_idx"]
+  args.fname          = tp0["fname"]
+  args.dir            = tp0["dir"]
+  args.ic_file        = tp0["ic_file"]
+  args.io_cycle_freq  = tp0["io_cycle"]
+  args.cp_cycle_freq  = tp0["cp_cycle"]
+  
+  args.glow_op_split_scheme = tp0["split_scheme"]
+  
+  tp0                  = tp["chemistry"]
+  args.Ns             = tp0["Ns"]
+  args.NT             = tp0["NT"]
+  
+  print("intiailized solver using %s"%args.par_file)
+  
+
 glow_1d = glow1d_boltzmann(args)
 u, v    = glow_1d.initialize()
 
@@ -3117,13 +3184,14 @@ if args.use_gpu==1:
   gpu_device = cp.cuda.Device(args.gpu_device_id)
   gpu_device.use()
 
-# xp        = cp #glow_1d.xp_module 
-# a0        = xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
-# Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
-# uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
-
-
-uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
+if(args.bte_with_E == 1):
+  xp        = cp #glow_1d.xp_module 
+  a0        = xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
+  Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
+  uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
+else:
+  uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
+  
 # ut, ut1, vt = glow_1d.fft_analysis(u, v, args.cfl, args.atol, args.rtol, args.max_iter)
 # xp.save("%s/ut_bte.npy"%(args.dir) , ut)
 # xp.save("%s/ut1_bte.npy"%(args.dir), ut1)

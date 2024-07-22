@@ -282,7 +282,7 @@ def run_seris(args):
         f.write("0        / Reverse rate coefficients: 0=No; 1=Yes" + "\n")
         f.write("0        / Energy loss coefficients: 0=No; 1=Yes" + "\n")
         f.write("0        / Distribution function: 0=No; 1=Yes" + "\n")
-        f.write("1        / Skip failed runs: 0=No; 1=Yes" + "\n")
+        f.write("0        / Skip failed runs: 0=No; 1=Yes" + "\n")
         f.write("END" + "\n")
         
     
@@ -317,6 +317,7 @@ def run_seris(args):
         
         
         data = np.loadtxt("../../Bolsig/%smobility.lut"%(args.out_fname), comments="#").reshape((-1, 2))
+        data[:, 0] *= (collisions.TEMP_K_1EV/1.5)
         
         fname     = "../../Bolsig/%ssp_%s_P0_%.2fTorr_T0_%.2fK_%s.txt"%(args.out_fname, sp, args.P0, args.T0, "mobility")
         np.savetxt(fname, data, delimiter=",", header="Te(K),Mu*N(1/V-m-s)", comments="")

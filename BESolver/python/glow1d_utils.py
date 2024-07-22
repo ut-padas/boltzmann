@@ -24,30 +24,60 @@ class gmres_counter(object):
             print('iter %3i\trk = %s' % (self.niter, str(rk)))
             
 class parameters():
-  def __init__(self) -> None:
+  def __init__(self, args) -> None:
     xp         = np
     
-    self.L     = 0.5 * 2.54e-2             # m 
-    self.V0    = 1e2                       # V
-    self.f     = 13.56e6                   # Hz
-    self.tau   = (1/self.f)                # s
-    self.qe    = scipy.constants.e         # C
-    self.eps0  = scipy.constants.epsilon_0 # eps_0 
-    self.kB    = scipy.constants.Boltzmann # J/K
-    self.ev_to_K = scipy.constants.electron_volt / scipy.constants.Boltzmann
-    self.me    = scipy.constants.electron_mass
+    if args.par_file != "":
+      import toml
+      tp = toml.load(args.par_file)["glow_1d"]
+      self.L     = 0.5 * tp["L"]             # m 
+      self.V0    = tp["V0"]                  # V
+      self.f     = tp["freq"]                # Hz
+      self.tau   = (1/self.f)                # s
+      self.qe    = scipy.constants.e         # C
+      self.eps0  = scipy.constants.epsilon_0 # eps_0 
+      self.kB    = scipy.constants.Boltzmann # J/K
+      self.ev_to_K = scipy.constants.electron_volt / scipy.constants.Boltzmann
+      self.me    = scipy.constants.electron_mass
+      
+      self.Tg    = tp["Tg"]  #K
+      self.p0    = tp["p0"]  #Torr
     
-    self.n0    = 3.22e22                   #m^{-3}
-    self.np0   = 8e16                      #"nominal" electron density [1/m^3]
+      self.n0    = self.p0 * scipy.constants.torr / (scipy.constants.Boltzmann * self.Tg) #3.22e22                   #m^{-3}
+      self.np0   = 8e16                      #"nominal" electron density [1/m^3]
     
-    # raw transport coefficients 
-    self._De    = (3.86e22) * 1e2 / self.n0 #m^{2}s^{-1}
-    self._mu_e  = (9.66e21) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1} 
+      # raw transport coefficients 
+      self._De   = tp["De"]   / self.n0 #m^{2}s^{-1}
+      self._mu_e = tp["mu_e"] / self.n0 #V^{-1} m^{2} s^{-1} 
+      
+      self.Di    = tp["Di"]    / self.n0 #m^{2} s^{-1}
+      self.mu_i  = tp["mu_i"]  / self.n0 #V^{-1} m^{2} s^{-1}
+      
+    else:
+      
+      self.L     = 0.5 * 2.54e-2             # m 
+      self.V0    = 1e2                       # V
+      self.f     = 13.56e6                   # Hz
+      self.tau   = (1/self.f)                # s
+      self.qe    = scipy.constants.e         # C
+      self.eps0  = scipy.constants.epsilon_0 # eps_0 
+      self.kB    = scipy.constants.Boltzmann # J/K
+      self.ev_to_K = scipy.constants.electron_volt / scipy.constants.Boltzmann
+      self.me    = scipy.constants.electron_mass
+      
+      self.Tg    = 300.0  #K
+      self.p0    = 1.0    #Torr
     
-    self.Di    = (2.07e18) * 1e2 / self.n0 #m^{2} s^{-1}
-    self.mu_i  = (4.65e19) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1}
-    self.ks    = (1.19e7)  * 1e-2 #(1.366109824889323e7) * 1e-2          # m s^{-1}
+      self.n0    = self.p0 * scipy.constants.torr / (scipy.constants.Boltzmann * self.Tg) #3.22e22                   #m^{-3}
+      self.np0   = 8e16                      #"nominal" electron density [1/m^3]
     
+      # raw transport coefficients 
+      self._De    = (3.86e22) * 1e2 / self.n0 #m^{2}s^{-1}
+      self._mu_e  = (9.66e21) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1} 
+      
+      self.Di    = (2.07e18) * 1e2 / self.n0 #m^{2} s^{-1}
+      self.mu_i  = (4.65e19) * 1e2 / self.n0 #V^{-1} m^{2} s^{-1}
+      
     # non-dimensionalized transport coefficients
     
     # non-dimentionalized maxwellian flux. 
@@ -71,7 +101,7 @@ class parameters():
     self.Teb0  = self.Teb
     self.Teb1  = self.Teb
     
-    self.Tg    = 300.0
+    
     self.gamma = 0.01
     self.alpha = self.np0 * self.L**2 * self.qe / (self.eps0 * self.V0)
     

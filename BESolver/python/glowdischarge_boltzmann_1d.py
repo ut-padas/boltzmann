@@ -597,7 +597,7 @@ class glow1d_boltzmann():
           else:
             Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
             Uin[:, ion_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
-            Uin[:, Te_idx]  = 4.0 #self.param.Teb
+            Uin[:, Te_idx]  = self.args.Te
             
           spec_sp     = self.op_spec_sp
           mmat        = spec_sp.compute_mass_matrix()
@@ -773,12 +773,18 @@ class glow1d_boltzmann():
       #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
       #   y1[0]=0
       #   y1=xp.dot(adv_mat[-1,-1],y1)
+      #   # print(y1<0)
+      #   # print("L to R", y1[0])
+      #   y1[y1<0]=1e-16
+        
       # plt.plot(self.xp, y1,"-r", label="left to right")
       # y1 = np.copy(v1)
       # for i in range(50):
       #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
       #   y1[-1]=0
       #   y1=xp.dot(adv_mat[-1,0],y1)
+      #   # print("R to L", y1[-1])
+      #   # y1[y1<0]=1e-16
       # plt.plot(self.xp, y1,"-y", label="right to left ")
       # plt.legend()
       # plt.grid()
@@ -786,6 +792,7 @@ class glow1d_boltzmann():
       # #plt.show()
       # plt.savefig("test.png")
       # plt.close()
+      # #sys.exit(0)
       return
           
     def initialize_bte_adv_x1(self, dt):
@@ -2250,7 +2257,7 @@ class glow1d_boltzmann():
         
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
-          self.plot(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt)
+          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, Et(tt))
           xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
           xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
           
@@ -2259,7 +2266,7 @@ class glow1d_boltzmann():
               cycle_avg_u       *= 0.5 * dt / io_cycle
               cycle_avg_v       *= 0.5 * dt / io_cycle
               #print(np.abs(1-cycle_avg_u[:, ion_idx]/u[:,ion_idx]))
-              self.plot(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt)
+              self.plot_unit_test1(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, Et(tt))
               
               if (ts_idx % cp_freq == 0):
                 xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
@@ -2268,7 +2275,8 @@ class glow1d_boltzmann():
               cycle_avg_u[:,:]       = 0
               cycle_avg_v[:,:]       = 0
             else:
-              self.plot(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt)
+              self.plot_unit_test1(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, Et(tt))
+              
               
               if (ts_idx % cp_freq == 0):
                 xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
@@ -2281,7 +2289,8 @@ class glow1d_boltzmann():
           cycle_avg_v     += (v/u[ : , ele_idx])
         
         v           = self.step_bte_x(v, tt, dt * 0.5)
-        self.bs_E   = Et(tt + 0.5 * dt)
+        #self.bs_E   = Et(tt + 0.5 * dt)
+        self.bs_E   = Et(tt)
         v           = self.step_bte_v(v, None, tt, dt, self.ts_type_bte_v , verbose=0)
         v           = self.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
         
@@ -2320,6 +2329,8 @@ class glow1d_boltzmann():
     def plot_unit_test1(self, Uin, Vin, fname, time, E, plot_ionization=True):
       xp  = self.xp_module
       fig = plt.figure(figsize=(26,10), dpi=300)
+      
+      E   = E / (self.param.V0/self.param.L)
       
       ele_idx = self.ele_idx
       ion_idx = self.ion_idx
@@ -3186,7 +3197,7 @@ if args.use_gpu==1:
 
 if(args.bte_with_E == 1):
   xp        = cp #glow_1d.xp_module 
-  a0        = xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
+  a0        = xp.ones(glow_1d.Np) * 1e4  #xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
   Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
   uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
 else:

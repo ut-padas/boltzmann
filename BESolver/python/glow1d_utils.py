@@ -42,8 +42,12 @@ class parameters():
       
       self.Tg    = tp["Tg"]  #K
       self.p0    = tp["p0"]  #Torr
-    
-      self.n0    = self.p0 * scipy.constants.torr / (scipy.constants.Boltzmann * self.Tg) #3.22e22                   #m^{-3}
+
+      if self.Tg !=0: 
+        self.n0    = self.p0 * scipy.constants.torr / (scipy.constants.Boltzmann * self.Tg) #3.22e22                   #m^{-3}
+      else:
+        self.n0    = 3.22e22                   #m^{-3}
+        
       self.np0   = 8e16                      #"nominal" electron density [1/m^3]
     
       # raw transport coefficients 

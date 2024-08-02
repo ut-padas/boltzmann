@@ -137,100 +137,172 @@ def mass_op(spec_sp: spec_spherical.SpectralExpansionSpherical, scale=1.0):
 
 def mean_velocity_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
     
-    if NUM_Q_VR is None:
-        NUM_Q_VR=params.BEVelocitySpace.NUM_Q_VR
-
-    if NUM_Q_VT is None:
-        NUM_Q_VT     = params.BEVelocitySpace.NUM_Q_VT
-    
-    if NUM_Q_VP is None:
-        NUM_Q_VP     = params.BEVelocitySpace.NUM_Q_VP
-    
     num_p        = spec_sp._p +1
     sph_harm_lm  = spec_sp._sph_harm_lm
-    num_sph_harm = len(sph_harm_lm)
+    num_sh       = len(sph_harm_lm)
     
-    legendre     = basis.Legendre()
-    [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
-    VTheta_q     = np.arccos(glx)
-    VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
-
-    assert NUM_Q_VP>1
-    sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
-    WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
-
-    #trap. weights
-    WVPhi_q[0]  = 0.5 * WVPhi_q[0]
-    WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
-    l_modes      = list(set([l for l,_ in spec_sp._sph_harm_lm])) 
-
-    vrop_g         = np.array([])
-    vtop_g         = np.array([])
-    vpop_g         = np.array([])
-
-    for e_id, ele_domain in enumerate(spec_sp._r_grid):
-        spec_sp._basis_p = spec_sp._r_basis_p[e_id]
-        [gmx,gmw]    = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
-        quad_grid    = np.meshgrid(gmx,VTheta_q,VPhi_q,indexing='ij')
-        Y_lm = spec_sp.Vq_sph(quad_grid[1],quad_grid[2])
-
-        vx     = quad_grid[0] * np.sin(quad_grid[1]) * np.cos(quad_grid[2])
-        vy     = quad_grid[0] * np.sin(quad_grid[1]) * np.sin(quad_grid[2])
-        vz     = quad_grid[0] * np.cos(quad_grid[1]) 
-
-        if spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_POLY\
-            or spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE\
-            or spec_sp.get_radial_basis_type() == basis.BasisType.MAXWELLIAN_ENERGY_POLY:
-            Vr_klm = np.array([ vx * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-            Vt_klm = np.array([ vy * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-            Vp_klm = np.array([ vz * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-
-        elif spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-            mr    = (quad_grid[0]**(2))
-            Vr_klm = np.array([ vx * mr * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-            Vt_klm = np.array([ vy * mr * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-            Vp_klm = np.array([ vz * mr * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-
-        elif spec_sp.get_radial_basis_type() == basis.BasisType.CHEBYSHEV_POLY:
-            mr     = spec_sp._basis_p.Wx()(quad_grid[0])
-            Vr_klm = np.array([ vx * mr * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-            Vt_klm = np.array([ vy * mr * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
-            Vp_klm = np.array([ vz * mr * spec_sp.basis_eval_radial(quad_grid[0],p,l) * Y_lm[lm_idx,:] for lm_idx, (l,m) in enumerate(spec_sp._sph_harm_lm) for p in range(num_p)])
+    Vop          = np.zeros((3, num_p * num_sh))
+    
+    [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VT)
+    vt_q, vt_w   = np.arccos(glx), glw
+    
+    [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VP)
+    vp_q, vp_w   = np.pi * glx + np.pi , np.pi * glw
+    
+    def alpha_phi(m, x):
+        if m ==0 :
+            return np.ones_like(x)
+        elif m > 0:
+            return np.cos(m * x)
         else:
-            raise NotImplementedError
-
-        Vr_klm = np.dot(Vr_klm,WVPhi_q)
-        Vr_klm = np.dot(Vr_klm,glw)
-        Vr_klm = np.dot(Vr_klm,gmw)
-
-        Vt_klm = np.dot(Vt_klm,WVPhi_q)
-        Vt_klm = np.dot(Vt_klm,glw)
-        Vt_klm = np.dot(Vt_klm,gmw)
-
-        Vp_klm = np.dot(Vp_klm,WVPhi_q)
-        Vp_klm = np.dot(Vp_klm,glw)
-        Vp_klm = np.dot(Vp_klm,gmw)
-
-        Vr_klm = Vr_klm.reshape(num_sph_harm, num_p)
-        Vr_klm = np.transpose(Vr_klm)
-        Vr_klm = Vr_klm.reshape(num_p*num_sph_harm)
+            assert m < 0
+            return np.sin((-m) * x)
+    
+    angular_q = list()
+    for lm_idx, lm in enumerate(sph_harm_lm):
+        l = lm [0]
+        m = lm [1]
         
-        Vt_klm = Vt_klm.reshape(num_sph_harm, num_p)
-        Vt_klm = np.transpose(Vt_klm)
-        Vt_klm = Vt_klm.reshape(num_p*num_sph_harm)
+        sin_vt_l = np.dot(vt_w, np.sin(vt_q) * spec_sp.basis_eval_spherical(vt_q, 0 * vt_q, l, 0))
+        cos_vt_l = np.dot(vt_w, np.cos(vt_q) * spec_sp.basis_eval_spherical(vt_q, 0 * vt_q, l, 0))
+        
+        sin_vp_m = np.dot(vp_w, np.sin(vp_q) * alpha_phi(m, vp_q))
+        cos_vp_m = np.dot(vp_w, np.cos(vp_q) * alpha_phi(m, vp_q))
+        i1_m     = np.dot(vp_w, alpha_phi(m, vp_q))
+        
+        angular_q.append((cos_vt_l, sin_vt_l, cos_vp_m, sin_vp_m, i1_m))
+    
+    
+    gx_e, gw_e = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        k_vec        = spec_sp._basis_p._t
+        dg_idx       = spec_sp._basis_p._dg_idx
+        sp_order     = spec_sp._basis_p._sp_order
+        
+        for e_id in range(0,len(dg_idx),2):
+            ib = dg_idx[e_id]
+            ie = dg_idx[e_id+1]
 
-        Vp_klm = Vp_klm.reshape(num_sph_harm, num_p)
-        Vp_klm = np.transpose(Vp_klm)
-        Vp_klm = Vp_klm.reshape(num_p*num_sph_harm)
+            xb = k_vec[ib]
+            xe = k_vec[ie+sp_order+1]
+            
+            for idx in range(ib, ie):
+                k_min, k_max  = k_vec[idx], k_vec[idx + sp_order + 1]
+                
+                qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                gmx    = gx_e[qx_idx] 
+                gmw    = gw_e[qx_idx]
+                
+                radial_q = np.dot(gmw, gmx**3 * spec_sp.basis_eval_radial(gmx, idx, 0))
+                
+                for lm_idx , lm in enumerate(sph_harm_lm):
+                    tmp = angular_q[lm_idx]
+                    
+                    cos_vt_l = tmp[0]
+                    sin_vt_l = tmp[1]
+                    
+                    cos_vp_m = tmp[2]
+                    sin_vp_m = tmp[3]
+                    
+                    i1_m     = tmp[4]
+                    
+                    Vop[0, idx * num_sh + lm_idx ] = radial_q * sin_vt_l * cos_vp_m
+                    Vop[1, idx * num_sh + lm_idx ] = radial_q * sin_vt_l * sin_vp_m
+                    Vop[2, idx * num_sh + lm_idx ] = radial_q * cos_vt_l * i1_m
+        
+        return Vop
+                
+    else:
+        raise NotImplementedError
 
-        vrop_g = np.append(vrop_g, Vr_klm)
-        vtop_g = np.append(vtop_g, Vt_klm)
-        vpop_g = np.append(vpop_g, Vp_klm)
+def kinetic_stress_tensor_op(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, scale=1.0):
+    num_p        = spec_sp._p +1
+    sph_harm_lm  = spec_sp._sph_harm_lm
+    num_sh       = len(sph_harm_lm)
+    
+    Vop          = np.zeros((6, num_p * num_sh))
+    [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VT)
+    vt_q, vt_w   = np.arccos(glx), glw
+    
+    [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VP)
+    vp_q, vp_w   = np.pi * glx + np.pi , np.pi * glw
+    
+    def alpha_phi(m, x):
+        if m ==0 :
+            return np.ones_like(x)
+        elif m > 0:
+            return np.cos(m * x)
+        else:
+            assert m < 0
+            return np.sin((-m) * x)
+    
+    angular_q = list()
+    for lm_idx, lm in enumerate(sph_harm_lm):
+        l  = lm [0]
+        m  = lm [1]
+        
+        qq = dict()
+        alpha_phi_m               = alpha_phi(m, vp_q)
+        Y_l0                      = spec_sp.basis_eval_spherical(vt_q, 0 * vt_q, l, 0)
+        
+        qq["cos^2(vphi)"]         = np.dot(vp_w, np.cos(vp_q)**2                * alpha_phi_m)
+        qq["cos(vphi)sin(vphi)"]  = np.dot(vp_w, np.cos(vp_q)* np.sin(vp_q)     * alpha_phi_m)
+        qq["cos(vphi)"]           = np.dot(vp_w, np.cos(vp_q)                   * alpha_phi_m)
+        qq["sin^2(vphi)"]         = np.dot(vp_w, np.sin(vp_q)**2                * alpha_phi_m)
+        qq["sin(vphi)"]           = np.dot(vp_w, np.sin(vp_q)                   * alpha_phi_m)
+        qq["1_phi"]               = np.dot(vp_w, 1                              * alpha_phi_m)
+        
+        qq["sin^2(vtheta)"]                = np.dot(vt_w, np.sin(vt_q)**2                            * Y_l0)
+        qq["cos(vtheta)sin(vtheta)"]       = np.dot(vt_w, np.sin(vt_q)* np.cos(vt_q)                 * Y_l0)
+        qq["cos^2(vtheta)"]                = np.dot(vt_w, np.cos(vt_q)**2                            * Y_l0)
+        
+        
+        
+        
+        angular_q.append(qq)
+        
+    
+    gx_e, gw_e = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        k_vec        = spec_sp._basis_p._t
+        dg_idx       = spec_sp._basis_p._dg_idx
+        sp_order     = spec_sp._basis_p._sp_order
+        
+        for e_id in range(0,len(dg_idx),2):
+            ib = dg_idx[e_id]
+            ie = dg_idx[e_id+1]
 
-    Vr_klm = vrop_g
-    Vt_klm = vtop_g
-    Vp_klm = vpop_g
-    return [Vr_klm,Vt_klm, Vp_klm]
+            xb = k_vec[ib]
+            xe = k_vec[ie+sp_order+1]
+            
+            for idx in range(ib, ie):
+                k_min, k_max  = k_vec[idx], k_vec[idx + sp_order + 1]
+                
+                qx_idx = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                gmx    = gx_e[qx_idx] 
+                gmw    = gw_e[qx_idx]
+                
+                radial_q = np.dot(gmw, gmx**4 * spec_sp.basis_eval_radial(gmx, idx, 0))
+                
+                for lm_idx , lm in enumerate(sph_harm_lm):
+                    qq = angular_q[lm_idx]
+                    
+                    # xx, xy, xz
+                    Vop[0, idx * num_sh + lm_idx ] = radial_q * qq["sin^2(vtheta)"]          * qq["cos^2(vphi)"]
+                    Vop[1, idx * num_sh + lm_idx ] = radial_q * qq["sin^2(vtheta)"]          * qq["cos(vphi)sin(vphi)"]
+                    Vop[2, idx * num_sh + lm_idx ] = radial_q * qq["cos(vtheta)sin(vtheta)"] * qq["cos(vphi)"]
+                    
+                    # yy, yz
+                    Vop[3, idx * num_sh + lm_idx ] = radial_q * qq["sin^2(vtheta)"]          * qq["sin^2(vphi)"]
+                    Vop[4, idx * num_sh + lm_idx ] = radial_q * qq["cos(vtheta)sin(vtheta)"] * qq["sin(vphi)"]
+                    
+                    # zz 
+                    Vop[5, idx * num_sh + lm_idx ] = radial_q * qq["cos^2(vtheta)"] * qq["1_phi"]
+                    
+        return Vop
+                
+    else:
+        raise NotImplementedError
 
 def temp_op(spec_sp: spec_spherical.SpectralExpansionSpherical, scale=1.0):
     
@@ -968,8 +1040,6 @@ def mcmc_sampling(dist_pdf, prior, n_samples, burn_in=0.3, num_chains=4):
     samples = mcmc_chain(dist_pdf, prior, n_samples, burn_in)
     return samples
     
-
-
 def sample_distribution_with_uniform_prior(spec_sp, ss_sol, x_domain, vth, fname, n_samples):
     """
     @brief sample given distribution function with uniform prior.    

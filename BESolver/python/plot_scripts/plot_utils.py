@@ -124,8 +124,8 @@ class op():
         self.De_ne    = lambda nTe, ne : De_d(nTe/ne) * (-nTe/(ne**2))
         self.De_nTe   = lambda nTe, ne : De_d(nTe/ne) * (1/ne)
         
-        self.mu_fac   = (self.n0 * self.np0) / ( (self.V0 * self.tau/(self.L**2)) )
-        self.D_fac    = (self.n0 * self.np0) / (self.tau/(self.L**2))
+        self.mu_fac   = (1.0) / ( (self.V0 * self.tau/(self.L**2)) )
+        self.D_fac    = (1.0) / (self.tau/(self.L**2))
         self.r_fac    = 1/(self.np0 * self.tau)
       
     def solve_poisson(self, ne, ni, time):
@@ -359,4 +359,24 @@ def compute_radial_components(args, bte_op, spec_sp, ev: np.array, ff):
 
     return output
     
+def time_average(qoi, tt):
+    """
+    computes the time average on grids
+    """
     
+    # check if tt is uniform
+    nT   = len(tt)
+    T    = (tt[-1]-tt[0])
+    dt   = T/(nT-1)
+    
+    assert abs(tt[1] -tt[0] - dt) < 1e-10
+    
+    tw    = np.ones_like(tt) * dt
+    tw[0] = 0.5 * tw[0]; tw[-1] = 0.5 * tw[-1];
+    
+    assert (T-np.sum(tw)) < 1e-12
+    
+    return np.dot(tw, qoi)
+    
+    
+     

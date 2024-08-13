@@ -932,6 +932,7 @@ class glow1d_fluid():
         
         io_cycle        = self.args.io_cycle_freq
         io_freq         = int(io_cycle/dt)
+        cycle_freq      = int(1.0/dt)
       
         cp_cycle        = self.args.cp_cycle_freq
         cp_freq         = int(cp_cycle/dt)
@@ -1081,18 +1082,21 @@ class glow1d_fluid():
             return jac
           
           if(self.args.checkpoint==1 and (ts_idx % io_freq)==0):
-              print("time = %.6E step=%d/%d"%(tt, ts_idx, steps))
-              cycle_avg_u                 = cycle_avg_u * 0.5 * dt
-              cycle_avg_u[:, self.Te_idx] = cycle_avg_u[:, self.Te_idx] * cycle_avg_u[:, self.ele_idx]
+            print("time = %.6E step=%d/%d"%(tt, ts_idx, steps))
+            cycle_avg_u                 = cycle_avg_u * 0.5 * dt
+            cycle_avg_u[:, self.Te_idx] = cycle_avg_u[:, self.Te_idx] * cycle_avg_u[:, self.ele_idx]
+            
+            self.plot(cycle_avg_u, tt, "%s_avg_%04d.png"     %(args.fname, ts_idx//io_freq))
+            self.plot(u,           tt, "%s_%04d.png" %(args.fname, ts_idx//io_freq))
+            
+            if (ts_idx % cp_freq ==0):
+              xp.save("%s_%04d_avg.npy"%(self.args.fname, ts_idx//io_freq), cycle_avg_u)
+              xp.save("%s_%04d.npy"%(self.args.fname, ts_idx//io_freq), u)
+
+            cycle_avg_u[:,:] = 0
               
-              self.plot(cycle_avg_u, tt, "%s_avg_%04d.png"     %(args.fname, ts_idx//io_freq))
-              self.plot(u,           tt, "%s_%04d.png" %(args.fname, ts_idx//io_freq))
-              
-              if (ts_idx % cp_freq ==0):
-                xp.save("%s_%04d_avg.npy"%(self.args.fname, ts_idx//io_freq), cycle_avg_u)
-                xp.save("%s_%04d.npy"%(self.args.fname, ts_idx//io_freq), u)
-              
-              cycle_avg_u[:,:] = 0
+          if ((ts_idx % cycle_freq) ==0):  
+            cycle_avg_u[:,:] = 0
               
           ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
           #jac_u = jacobian(0*du)

@@ -5,6 +5,7 @@ freq   = 13.56e6   # Hz
 Tg     = 300.0     # K
 p0     = 1.0       # Torr
 gamma  = 0.01      # only used in fluid model
+Teb    = 0.5       # ev
 
 #                  # transport coefficients * n0
 De     = 3.86e24   # m^{-1}s^{-1}

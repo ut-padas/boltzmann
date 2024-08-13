@@ -39,6 +39,8 @@ class parameters():
       self.kB    = scipy.constants.Boltzmann # J/K
       self.ev_to_K = scipy.constants.electron_volt / scipy.constants.Boltzmann
       self.me    = scipy.constants.electron_mass
+      self.Teb   = tp["Teb"]
+      self.gamma = tp["gamma"]
       
       self.Tg    = tp["Tg"]  #K
       self.p0    = tp["p0"]  #Torr
@@ -94,7 +96,7 @@ class parameters():
     self._mu_e  *= (self.V0 * self.tau/(self.L**2)) 
     self.mu_i  *= (self.V0 * self.tau/(self.L**2))
     
-    self.Teb   = 1.5                                # eV
+    #self.Teb   = 1.5                                # eV
     self.Hi    = 15.76                              # eV
     #self.ks    *= (self.tau/self.L)
     self.ks    = self.mw_flux(self.Teb)
@@ -106,7 +108,7 @@ class parameters():
     self.Teb1  = self.Teb
     
     
-    self.gamma = 0.01
+    #self.gamma = 0.01
     self.alpha = self.np0 * self.L**2 * self.qe / (self.eps0 * self.V0)
     
     # self.ki    = lambda Te : self.np0 * self.tau * 1.235e-13 * np.exp(-18.687 / np.abs(Te))   
@@ -140,23 +142,44 @@ def newton_solver(x, residual, jacobian, atol, rtol, iter_max, xp=np):
   norm_rr  = norm_r0 = xp.linalg.norm(r0)
   converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
   
-  while( not converged and (count < iter_max) ):
+  while ( alpha > 1e-10 ):
+    count = 0
+    x     = x0
+    rr    = r0
     
-    while ( alpha > 1e-10 ):
+    while( not converged and (count < iter_max) ):
       xk       = x  - alpha * xp.dot(jac_inv, rr).reshape(x.shape)
       rk       = residual(xk)
       norm_rk  = xp.linalg.norm(rk)
       
-      if ( norm_rk < norm_rr ):
-        break
-      else:
-        alpha = 0.1 * alpha
+      x         = xk
+      rr        = rk
+      norm_rr   = norm_rk
+      count    += 1
+      converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
     
-    x        = xk
-    rr       = rk
-    norm_rr  = norm_rk
-    count   += 1
-    converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
+    if (not converged):
+      alpha = 0.25 * alpha
+    else:
+      break
+
+  # while( not converged and (count < iter_max) ):
+    
+  #   while ( alpha > 1e-10 ):
+  #     xk       = x  - alpha * xp.dot(jac_inv, rr).reshape(x.shape)
+  #     rk       = residual(xk)
+  #     norm_rk  = xp.linalg.norm(rk)
+      
+  #     if ( norm_rk < norm_rr ):
+  #       break
+  #     else:
+  #       alpha = 0.1 * alpha
+    
+  #   x        = xk
+  #   rr       = rk
+  #   norm_rr  = norm_rk
+  #   count   += 1
+  #   converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
   
   #print("{0:d}: ||res|| = {1:.14e}, ||res||/||res0|| = {2:.14e}".format(count, norm_rr, norm_rr/norm_r0), "alpha ", alpha, xp.linalg.norm(xk))  
   

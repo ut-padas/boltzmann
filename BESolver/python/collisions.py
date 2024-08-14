@@ -361,6 +361,8 @@ class Collisions(abc.ABC):
             y[ev>=200]   = 0
             
             return y
+        else:
+            raise NotImplementedError
 
     # @abc.abstractmethod
     # def get_cross_section_scaling():

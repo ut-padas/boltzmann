@@ -135,8 +135,8 @@ d1 = load_fluid_cycle_data()
 
 
 
-plt.figure(figsize=(16, 4), dpi=100)
-plt.subplot(1, 3, 1)
+plt.figure(figsize=(16, 16), dpi=100)
+plt.subplot(2, 2, 1)
 plt.plot(d0["op"].xp, plot_utils.time_average(d0["ne"],d0["tt"]) * d0["op"].np0, label=r"hybrid")
 plt.plot(d1["op"].xp, plot_utils.time_average(d1["ne"],d1["tt"]) * d1["op"].np0, label=r"fluid")
 
@@ -145,7 +145,7 @@ plt.ylabel(r"electron number density [$m^{-3}$]")
 plt.legend()
 plt.grid(visible=True)
 
-plt.subplot(1, 3, 2)
+plt.subplot(2, 2, 2)
 plt.plot(d0["op"].xp, plot_utils.time_average(d0["energy_density"],d0["tt"]), label=r"hybrid")
 plt.plot(d1["op"].xp, plot_utils.time_average(d1["energy_density"],d1["tt"]), label=r"fluid")
 
@@ -155,11 +155,23 @@ plt.ylabel(r"energy density [$eV Kg m^{-3}$]")
 plt.legend()
 plt.grid(visible=True)
 
-plt.subplot(1, 3, 3)
+plt.subplot(2, 2, 3)
 plt.semilogy(d0["op"].xp, plot_utils.time_average(d0["production"],d0["tt"]), label=r"hybrid")
 plt.semilogy(d1["op"].xp, plot_utils.time_average(d1["production"],d1["tt"]), label=r"fluid")
 plt.xlabel(r"x")
 plt.ylabel(r"ionization production [$s^{-1}$]")
+plt.legend()
+plt.grid(visible=True)
+
+plt.subplot(2, 2, 4)
+plt.semilogy(d0["op"].xp, plot_utils.time_average(d0["ionization"],d0["tt"]), label=r"hybrid")
+plt.semilogy(d1["op"].xp, plot_utils.time_average(d1["ionization"],d1["tt"]), label=r"fluid")
+
+ki = np.array([op.ki(d0["Te"][i],1)   * op.r_fac  for i in range(len(d0["tt"]))])
+plt.semilogy(d0["op"].xp, plot_utils.time_average(ki,d0["tt"]), label=r"fluid (using BTE temperature)")
+
+plt.xlabel(r"x")
+plt.ylabel(r"ionization rate [$m^{3}s^{-1}$]")
 plt.legend()
 plt.grid(visible=True)
 
@@ -174,14 +186,15 @@ xx   = d["op"].xp
 ne   = plot_utils.time_average(d["ne"] , d["tt"]) * d["op"].np0
 ni   = plot_utils.time_average(d["ni"] , d["tt"]) * d["op"].np0
 Te   = plot_utils.time_average(d["Te"] , d["tt"]) 
-pE   = plot_utils.time_average(d["energy_density"] , d["tt"]) 
+pE   = plot_utils.time_average(d["energy_density"] , d["tt"])
+ki   = plot_utils.time_average(d["ionization"], d["tt"]) 
 pp   = plot_utils.time_average(d["production"]     , d["tt"]) 
 E    = plot_utils.time_average(d["E"]     , d["tt"]) 
 phi  = plot_utils.time_average(d["phi"]   , d["tt"]) 
 mueE = plot_utils.time_average(d["mueE"]  , d["tt"]) 
 De   = plot_utils.time_average(d["De"]    , d["tt"]) 
-np.savetxt("%s_bte_ca.csv"%(fname), np.array([xx, ne, ni, Te, pE, pp, E, phi, mueE, De] , dtype=np.float64).T, 
-      header="x\tne\tni\tTe\tenergy_density\tion_production\tE\tphi\tmueE\tDe",comments="", delimiter="\t")
+np.savetxt("%s_bte_ca.csv"%(fname), np.array([xx, ne, ni, Te, pE, pp, E, phi, mueE, De, ki] , dtype=np.float64).T, 
+      header="x\tne\tni\tTe\tenergy_density\tion_production\tE\tphi\tmueE\tDe\tionization_rate",comments="", delimiter="\t")
 
 
 d    = d1
@@ -189,14 +202,15 @@ xx   = d["op"].xp
 ne   = plot_utils.time_average(d["ne"] , d["tt"]) * d["op"].np0
 ni   = plot_utils.time_average(d["ni"] , d["tt"]) * d["op"].np0
 Te   = plot_utils.time_average(d["Te"] , d["tt"]) 
-pE   = plot_utils.time_average(d["energy_density"] , d["tt"]) 
+pE   = plot_utils.time_average(d["energy_density"] , d["tt"])
+ki   = plot_utils.time_average(d["ionization"], d["tt"])  
 pp   = plot_utils.time_average(d["production"]     , d["tt"]) 
 E    = plot_utils.time_average(d["E"]     , d["tt"]) 
 phi  = plot_utils.time_average(d["phi"]   , d["tt"]) 
 mueE = plot_utils.time_average(d["mueE"]  , d["tt"]) 
 De   = plot_utils.time_average(d["De"]    , d["tt"]) 
-np.savetxt("%s_fluid_tab_ca.csv"%(fname), np.array([xx, ne, ni, Te, pE, pp, E, phi, mueE, De] , dtype=np.float64).T, 
-      header="x\tne\tni\tTe\tenergy_density\tion_production\tE\tphi\tmueE\tDe",comments="", delimiter="\t")
+np.savetxt("%s_fluid_tab_ca.csv"%(fname), np.array([xx, ne, ni, Te, pE, pp, E, phi, mueE, De, ki] , dtype=np.float64).T, 
+      header="x\tne\tni\tTe\tenergy_density\tion_production\tE\tphi\tmueE\tDe\tionization_rate",comments="", delimiter="\t")
 
 sys.exit(0)
 

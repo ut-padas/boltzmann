@@ -227,6 +227,7 @@ idx_range = list(range((int)(sys.argv[2]), (int)(sys.argv[3]), (int)(sys.argv[4]
 if (int)(sys.argv[5])==1:
     collisons.append("g2")
 n0        = float(sys.argv[6])
+print(n0)
 
 d         = load_data_bte(sys.argv[1], idx_range, None, read_cycle_avg=False)
 ki        = compute_rate_coefficients(d[0], d[3], d[2], collisons)

@@ -406,8 +406,8 @@ class glow1d_fluid():
       qe_mat[-1,:] = -1.5 * De[-1] * ne[-1] * self.Dp[-1,:] - 2.5 * mu_e[-1] * E[-1] * ne[-1] * Imat[-1, :] - De[-1] * ne_x * Imat[-1 , :]
       
       Te_new       = xp.linalg.solve(qe_mat, rhs) 
-      # print("old \n", Te)
-      # print("new \n", Te_new)
+      #print("old \n", Te)
+      #print("new \n", Te_new)
       return Te_new[0], Te_new[-1]
     
     def temperature_solve(self, Uin : np.array, time, dt):
@@ -926,6 +926,7 @@ class glow1d_fluid():
           tt+=dt
         return u 
       elif ts_type == "BE":
+        args            = self.args
         dx              = xp.min(self.xp[1:] - self.xp[0:-1])
         dt              = self.args.cfl 
         tT              = self.args.cycles
@@ -1023,7 +1024,7 @@ class glow1d_fluid():
         cycle_avg_u=xp.zeros_like(u)         
         for ts_idx in range(ts_idx_b, steps):
           
-          if (ts_idx % io_freq) == 0:
+          if ((ts_idx % cycle_freq) == 0):
             u1 = xp.copy(u)
             # print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
             # print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
@@ -1082,8 +1083,10 @@ class glow1d_fluid():
             return jac
           
           if(self.args.checkpoint==1 and (ts_idx % io_freq)==0):
+            
             print("time = %.6E step=%d/%d"%(tt, ts_idx, steps))
-            cycle_avg_u                 = cycle_avg_u * 0.5 * dt
+            
+            cycle_avg_u                 = cycle_avg_u * 0.5 * dt / io_cycle
             cycle_avg_u[:, self.Te_idx] = cycle_avg_u[:, self.Te_idx] * cycle_avg_u[:, self.ele_idx]
             
             self.plot(cycle_avg_u, tt, "%s_avg_%04d.png"     %(args.fname, ts_idx//io_freq))
@@ -1099,13 +1102,18 @@ class glow1d_fluid():
             cycle_avg_u[:,:] = 0
               
           ns_info = glow1d_utils.newton_solver(du, residual, jacobian, atol, rtol, iter_max ,xp)
-          #jac_u = jacobian(0*du)
-          #ns_info = glow1d_utils.newton_solver_matfree(du, residual, lambda x: xp.dot(jac_u, x.reshape((-1))), lambda x: x, atol, rtol, iter_max ,xp)
+          
+          # jac_u = jacobian(0*du)
+          # if(ts_idx % 10 ==0):
+          #   jac_u_inv = xp.linalg.inv(jac_u)
+
+          # ns_info = glow1d_utils.newton_solver_matfree(du, residual, lambda x: xp.dot(jac_u, x.reshape((-1))), lambda x: xp.dot(jac_u_inv, x), atol, rtol, 0.0, 1e-2, 20, iter_max ,xp)
           
           if ns_info["status"]==False:
             print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
             print("non-linear solver step FAILED!!! try with smaller time step size or increase max iterations")
             print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+            self.plot(u,           tt, "%s_%04d_failed.png" %(args.fname, ts_idx//io_freq))
             return u0
           
           du = ns_info["x"]
@@ -1115,10 +1123,11 @@ class glow1d_fluid():
           cycle_avg_u[:, self.ion_idx] += u[:, self.ion_idx]
           cycle_avg_u[:, self.Te_idx]  += u[:, self.Te_idx] / u[:, self.ele_idx] 
           
-          
-          # print("time = %.6E step=%d/%d"%(tt, ts_idx, steps))
-          # print("  Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+          if(ts_idx % 100 == 0 ):
+            print("time = %.6E step=%d/%d"%(tt, ts_idx, steps) + "--Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
+            
           tt+=dt
+          
         print("time = %.10E step=%d/%d"%(tt, ts_idx, steps))
         return u  
       

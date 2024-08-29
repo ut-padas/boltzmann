@@ -592,7 +592,7 @@ class glow1d_boltzmann():
             u1              = np.dot(P1, u1)
             Uin[:, ele_idx] = u1[:, ele_idx] 
             Uin[:, ion_idx] = u1[:, ion_idx] 
-            Uin[:, Te_idx]  = u1[:, Te_idx]  
+            Uin[:, Te_idx]  = u1[:, Te_idx] / u1[:, ele_idx] 
             
           else:
             Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
@@ -650,11 +650,11 @@ class glow1d_boltzmann():
           fr[self.xp_vt_r]=0.0
         
         
-        self.mu[:, ele_idx] = self.param._mu_e
-        self.D[: , ele_idx] = self.param._De
-      
-        self.mu[:, ion_idx] = self.param.mu_i
-        self.D[: , ion_idx] = self.param.Di
+      self.mu[:, ele_idx] = self.param._mu_e
+      self.D[: , ele_idx] = self.param._De
+    
+      self.mu[:, ion_idx] = self.param.mu_i
+      self.D[: , ion_idx] = self.param.Di
         
         
           
@@ -1461,10 +1461,11 @@ class glow1d_boltzmann():
           if xp == cp:
             cp.cuda.runtime.deviceSynchronize()
           t2 = perf_counter()
-          print("BTE (v-space) solve cost = %.6E " %(t2-t1), end=" ")
+          if (verbose==1):  
+            print("BTE (v-space) solve cost = %.6E " %(t2-t1), end=" ")
           
-          
-        print("%08d Boltzmann (v-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(step, time, norm_res_abs, norm_res_rel, gmres_c.niter * self.args.gmres_rsrt))
+        if (verbose==1):
+          print("%08d Boltzmann (v-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(step, time, norm_res_abs, norm_res_rel, gmres_c.niter * self.args.gmres_rsrt))
         
         
         return v 
@@ -1862,7 +1863,7 @@ class glow1d_boltzmann():
       dv       = (op_split(vd).reshape((self.Nr * self.Nvt, self.Np)) - vd)
       
       
-      ns_info  = glow1d_utils.newton_solver_matfree(dv.reshape((-1)), residual, jacobian, precond, newton_atol, newton_rtol, gmres_atol, gmres_rtol, gmres_rs, gmres_rs * 50, xp)
+      ns_info  = glow1d_utils.newton_solver_matfree_v1(dv.reshape((-1)), residual, jacobian, precond, newton_atol, newton_rtol, gmres_atol, gmres_rtol, gmres_rs, gmres_rs * 50, xp)
       dv       = ns_info["x"].reshape((self.Nr * self.Nvt, self.Np))
       
       dv       = adv_x_q_vec(dv)
@@ -1912,8 +1913,8 @@ class glow1d_boltzmann():
       
       # Strang-Splitting
       v           = self.step_bte_x(v, tt_bte, dt_bte * 0.5)
-      ne          = xp.dot(self.op_mass[0::num_sh], xp.dot(self.op_po2sh, v)[0::num_sh])
-      self.bs_E   = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time)) * (self.param.V0/self.param.L)
+      # ne          = xp.dot(self.op_mass[0::num_sh], xp.dot(self.op_po2sh, v)[0::num_sh])
+      # self.bs_E   = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time)) * (self.param.V0/self.param.L)
       
       v           = self.step_bte_v(v, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
       
@@ -1927,7 +1928,8 @@ class glow1d_boltzmann():
       if xp == cp:
         cp.cuda.runtime.deviceSynchronize()
       t2 = perf_counter()
-      print("BTE(vx-op-split) solver cost = %.4E (s)" %(t2-t1), flush=True)
+      if (verbose==1):
+        print("BTE(vx-op-split) solver cost = %.4E (s)" %(t2-t1), flush=True)
         
       return v
     
@@ -2091,7 +2093,7 @@ class glow1d_boltzmann():
         if (self.args.glow_op_split_scheme==0):
           v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)
         elif (self.args.glow_op_split_scheme==1):          
-          u, v = self.step_bte_vx_with_E(u, v, time, dt, verbose=1)
+          u, v = self.step_bte_vx_with_E(u, v, time, dt, verbose=verbose)
         
         self.bte_to_fluid(u, v, tt + 0.5 * dt, dt)
       
@@ -2112,14 +2114,17 @@ class glow1d_boltzmann():
         if (self.args.glow_op_split_scheme==0):
           v = self.step_bte(u, v, du, dv, tt, dt, None, verbose=verbose)
         elif (self.args.glow_op_split_scheme==1):          
-          u, v = self.step_bte_vx_with_E(u, v, time, dt, verbose=1)
+          u, v = self.step_bte_vx_with_E(u, v, time, dt, verbose=verbose)
           
         
         self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
       
       cp.cuda.runtime.deviceSynchronize()
       s_t2    = perf_counter()
-      print("[glow step] time = %.4E T solve time %.4E (s)"%(tt, s_t2-s_t1))
+      
+      if(verbose==1):
+        print("[glow step] time = %.4E T solve time %.4E (s)"%(tt, s_t2-s_t1))
+      
       return u, v
         
     def solve(self, Uin, Vin, output_cycle_averaged_qois=False):
@@ -2141,6 +2146,8 @@ class glow1d_boltzmann():
       io_cycle = self.args.io_cycle_freq
       io_freq  = int(io_cycle/dt)
       
+      cycle_freq = int(1/dt)
+      
       cp_cycle = self.args.cp_cycle_freq
       cp_freq  = int(cp_cycle/dt)
       
@@ -2160,9 +2167,20 @@ class glow1d_boltzmann():
       num_p             = self.op_spec_sp._p + 1
       num_sh            = len(self.op_spec_sp._sph_harm_lm)
       
+      u0                = xp.copy(u)
+      
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
+        
+        if (ts_idx % cycle_freq == 0):
+          u1 = xp.copy(u)
+          
+          a1 = xp.max(xp.abs(u1[:,0] -u0[:, 0]))
+          a2 = xp.max(xp.abs((u1[:,0]-u0[:,0]) / xp.max(xp.abs(u0[:,0]))))
+          print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
+          
+          u0=u1
         
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
@@ -2197,7 +2215,7 @@ class glow1d_boltzmann():
           cycle_avg_u     += u
           cycle_avg_v     += (v/u[ : , ele_idx])
         
-        u , v  = self.step(u, v, du, dv, tt, dt)
+        u , v  = self.step(u, v, du, dv, tt, dt, verbose=int(ts_idx % 100 == 0))
         
         if (output_cycle_averaged_qois == True):
           cycle_avg_u     += u

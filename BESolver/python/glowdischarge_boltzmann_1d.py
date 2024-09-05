@@ -2169,6 +2169,12 @@ class glow1d_boltzmann():
       
       u0                = xp.copy(u)
       
+      # 0  ,    1       ,  2          , 3          , 4 
+      # ne , 1.5 neTe me,  mue E ne   , k_ela n0 ne, k_ion n0 ne  
+      num_mc_qoi        = 5
+      self.macro_qoi    = xp.zeros((num_mc_qoi, self.args.Np))
+      output_macro_qoi  = bool(self.args.ca_macro_qoi)
+      
       for ts_idx in range(ts_idx_b, steps):
         du[:,:]=0
         dv[:,:]=0
@@ -2181,6 +2187,12 @@ class glow1d_boltzmann():
           print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
           
           u0=u1
+          if output_macro_qoi == True:
+            # macro_qoi 
+            self.macro_qoi = 0.5 * dt  * self.macro_qoi / 1.0
+            np.save("%s_macro_qoi_cycle_%04d.npy"%(args.fname, ts_idx//cycle_freq), self.macro_qoi)
+            self.macro_qoi[:, :] = 0.0
+          
         
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
@@ -2214,12 +2226,32 @@ class glow1d_boltzmann():
         if (output_cycle_averaged_qois == True):
           cycle_avg_u     += u
           cycle_avg_v     += (v/u[ : , ele_idx])
-        
+          
+          
+          if output_macro_qoi == True:
+            qoi = self.compute_qoi(u, v, tt)
+            self.macro_qoi[0] += u[:, 0]   * self.param.np0
+            self.macro_qoi[1] += u[:, 0]   * u[:, 2]   * scipy.constants.electron_mass * 1.5 * self.param.np0
+            self.macro_qoi[2] += qoi["mu"] * u[:, 0] * self.param.np0 
+            
+            self.macro_qoi[3] += qoi["rates"][:, 0]  * u[:, 0] * self.param.np0 * self.param.n0 * self.param.np0
+            self.macro_qoi[4] += qoi["rates"][:, 1]  * u[:, 0] * self.param.np0 * self.param.n0 * self.param.np0
+          
+          
         u , v  = self.step(u, v, du, dv, tt, dt, verbose=int(ts_idx % 100 == 0))
         
         if (output_cycle_averaged_qois == True):
           cycle_avg_u     += u
           cycle_avg_v     += (v/u[ : , ele_idx])
+          
+          if output_macro_qoi == True:
+            qoi = self.compute_qoi(u, v, tt)
+            self.macro_qoi[0] += u[:, 0]   * self.param.np0
+            self.macro_qoi[1] += u[:, 0]   * u[:, 2] * scipy.constants.electron_mass * 1.5 * self.param.np0
+            self.macro_qoi[2] += qoi["mu"] * u[:, 0] * self.param.np0 
+            
+            self.macro_qoi[3] += qoi["rates"][:, 0]  * u[:, 0] * self.param.np0 * self.param.n0 * self.param.np0
+            self.macro_qoi[4] += qoi["rates"][:, 1]  * u[:, 0] * self.param.np0 * self.param.n0 * self.param.np0
         
         tt+= dt
         
@@ -2801,12 +2833,15 @@ class glow1d_boltzmann():
       v_lm_n   = v_lm/scale
       num_sh   = len(self.op_spec_sp._sph_harm_lm)
       
+      n0       = self.param.np0 * self.param.n0
       num_collisions = len(self.bs_coll_list)
       rr_rates = xp.array([xp.dot(self.op_rate[col_idx], v_lm_n[0::num_sh, :]) for col_idx in range(num_collisions)]).reshape((num_collisions, self.Np)).T
-      D_e      = xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma/3.)
-      #mu_e    = xp.dot(self.op_mobility, v_lm_n[1::num_sh]) *  (-(c_gamma / (3 * EbyN)))
-      mu_e     = D_e/Te
-      return {"rates": rr_rates, "mu": xp.abs(mu_e), "D": D_e}
+      
+      # these are computed from SI units qoi/n0
+      D_e      = xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma / 3.) / n0 
+      mu_e     = xp.dot(self.op_mobility, v_lm_n[1::num_sh])  * ((c_gamma / (3 * ( 1 / n0)))) /n0
+      
+      return {"rates": rr_rates, "mu": mu_e, "D": D_e}
       
     def solve_hybrid(self, Uin, Vin,  dt_bte, dt_fluid):
       """
@@ -3146,6 +3181,8 @@ parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable
 parser.add_argument("-verbose", "--verbose"                       , help="verbose with debug information", type=int, default=0)
 parser.add_argument("-restore", "--restore"                       , help="restore the solver" , type=int, default=0)
 parser.add_argument("-rs_idx",  "--rs_idx"                        , help="restore file_idx"   , type=int, default=0)
+
+parser.add_argument("-ca_macro_qoi"  , "--ca_macro_qoi"   , help="use Te based tabulated electron kinetic coefficients" , type=int, default=0)
 
 parser.add_argument("-fname", "--fname"                           , help="file name to store the solution" , type=str, default="1d_glow")
 parser.add_argument("-dir"  , "--dir"                             , help="file name to store the solution" , type=str, default="glow1d_dir")

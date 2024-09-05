@@ -1021,7 +1021,14 @@ class glow1d_fluid():
           tt       = ts_idx_b * dt
           print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
           
-        cycle_avg_u=xp.zeros_like(u)         
+        cycle_avg_u=xp.zeros_like(u)
+        
+        # 0  ,    1       ,  2          , 3          , 4 
+        # ne , 1.5 neTe me,  mue E ne   , k_ela n0 ne, k_ion n0 ne  
+        num_mc_qoi        = 5
+        self.macro_qoi    = xp.zeros((num_mc_qoi, self.args.Np))
+        output_macro_qoi  = bool(self.args.ca_macro_qoi)
+        
         for ts_idx in range(ts_idx_b, steps):
           
           if ((ts_idx % cycle_freq) == 0):
@@ -1033,6 +1040,12 @@ class glow1d_fluid():
             print("ts_idx = %d, Teb0= %.10E, Teb1= %.10E" %(ts_idx, self.param.Teb0, self.param.Teb1))
             print("||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
             u0=u1
+            
+            if output_macro_qoi == True:
+              # macro_qoi 
+              self.macro_qoi = 0.5 * dt  * self.macro_qoi / 1.0
+              np.save("%s_macro_qoi_cycle_%04d.npy"%(args.fname, ts_idx//cycle_freq), self.macro_qoi)
+              self.macro_qoi[:, :] = 0.0
           
           if (self.args.bc_dirichlet_e == 0):
             self.param.Teb0 , self.param.Teb1 = self.electron_bdy_temperature(u, tt, dt) #self.temperature_solve(u, tt, dt)
@@ -1042,6 +1055,18 @@ class glow1d_fluid():
           cycle_avg_u[:, self.ele_idx] += u[:, self.ele_idx]
           cycle_avg_u[:, self.ion_idx] += u[:, self.ion_idx]
           cycle_avg_u[:, self.Te_idx]  += u[:, self.Te_idx] / u[:, self.ele_idx] 
+          
+          if output_macro_qoi == True:
+            
+            E  = -xp.dot(self.Dp,self.solve_poisson(u[:, self.ele_idx], u[:, self.ion_idx], tt)) * (self.param.V0/self.param.L)
+            a1 = 1.0 / (self.param.V0 * self.param.tau/(self.param.L**2))  
+            
+            self.macro_qoi[0] += u[:, self.ele_idx]  * self.param.np0
+            self.macro_qoi[1] += u[:, self.Te_idx ]  * scipy.constants.electron_mass * 1.5 * self.param.np0
+            self.macro_qoi[2] += self.param.mu_e(u[:, self.Te_idx], u[:, self.ele_idx]) * (a1) * u[:, self.ele_idx] * self.param.np0 * E
+            
+            self.macro_qoi[3] += 0.0
+            self.macro_qoi[4] += self.param.ki(u[:, self.Te_idx], u[:, self.ele_idx]) * (1/self.param.tau/self.param.np0) * self.param.n0 * self.param.np0 *  u[:, self.ele_idx] * self.param.np0
           
           def residual(du):
             du       = du.reshape((self.Np, self.Nv))
@@ -1122,6 +1147,18 @@ class glow1d_fluid():
           cycle_avg_u[:, self.ele_idx] += u[:, self.ele_idx]
           cycle_avg_u[:, self.ion_idx] += u[:, self.ion_idx]
           cycle_avg_u[:, self.Te_idx]  += u[:, self.Te_idx] / u[:, self.ele_idx] 
+          
+          if output_macro_qoi == True:
+            
+            E  = -xp.dot(self.Dp,self.solve_poisson(u[:, self.ele_idx], u[:, self.ion_idx], tt + dt)) * (self.param.V0/self.param.L)
+            a1 = 1.0 / (self.param.V0 * self.param.tau/(self.param.L**2))  
+            
+            self.macro_qoi[0] += u[:, self.ele_idx]  * self.param.np0
+            self.macro_qoi[1] += u[:, self.Te_idx ]  * scipy.constants.electron_mass * 1.5 * self.param.np0
+            self.macro_qoi[2] += self.param.mu_e(u[:, self.Te_idx], u[:, self.ele_idx]) * (a1) * u[:, self.ele_idx] * self.param.np0 * E
+            
+            self.macro_qoi[3] += 0.0
+            self.macro_qoi[4] += self.param.ki(u[:, self.Te_idx], u[:, self.ele_idx]) * (1/self.param.tau/self.param.np0) * self.param.n0 * self.param.np0 *  u[:, self.ele_idx] * self.param.np0
           
           if(ts_idx % 100 == 0 ):
             print("time = %.6E step=%d/%d"%(tt, ts_idx, steps) + "--Newton iter {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(ns_info["iter"], ns_info["atol"], ns_info["rtol"]))
@@ -1515,11 +1552,13 @@ if (__name__ == "__main__"):
   parser.add_argument("-bc_dirichlet_e", "--bc_dirichlet_e" , help="use fixed Dirichlet BC for the electron energy equation" , type=int, default=1)
   parser.add_argument("-use_gpu",         "--use_gpu"       , help="enable GPU accerleration (not compatible with tabulated kinetics)" , type=int, default=0)
   parser.add_argument("-gpu_device_id", "--gpu_device_id"   , help="GPU device id to use", type=int, default=0)
+  parser.add_argument("-ca_macro_qoi"  , "--ca_macro_qoi"   , help="use Te based tabulated electron kinetic coefficients" , type=int, default=1)
   
   parser.add_argument("-ic_file"       , "--ic_file"        , help="initial condition file"                  , type=str, default="")
   parser.add_argument("-io_cycle_freq" , "--io_cycle_freq"  , help="io output every k-th cycle"              , type=float, default=1e0)
   parser.add_argument("-cp_cycle_freq" , "--cp_cycle_freq"  , help="checkpoint output every k-th cycle"      , type=float, default=1e1)
   parser.add_argument("-par_file"     , "--par_file"        , help="toml par file to specify run parameters" , type=str, default="")
+  
   args      = parser.parse_args()
   
   if args.par_file != "":

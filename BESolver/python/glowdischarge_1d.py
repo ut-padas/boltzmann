@@ -1201,14 +1201,14 @@ class glow1d_fluid():
       
       label_str = "T=%.4f cycles"%(time)
       plt.subplot(2, 3, 1)
-      plt.plot(self.xp, self.param.np0 * ne, label=label_str)
+      plt.semilogy(self.xp, self.param.np0 * ne, label=label_str)
       plt.xlabel(r"x/L")
       plt.ylabel(r"$n_e (m^{-3})$")
       plt.legend()
       plt.grid(visible=True)
       
       plt.subplot(2, 3, 2)
-      plt.plot(self.xp, self.param.np0 * ni, label=label_str)
+      plt.semilogy(self.xp, self.param.np0 * ni, label=label_str)
       plt.xlabel(r"x/L")
       plt.ylabel(r"$n_i (m^{-3})$")
       plt.grid(visible=True)

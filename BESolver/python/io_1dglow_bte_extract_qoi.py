@@ -180,7 +180,6 @@ def compute_mean_velocity(spec_sp, args, bte_op, v):
     c_mom   = [c_mom_x, c_mom_y, c_mom_z]
     return u, c_mom
 
-
 def compute_kinetic_energy_tensor(spec_sp, args, bte_op, v):
     
     n_pts    = v.shape[0] 
@@ -201,7 +200,6 @@ def compute_kinetic_energy_tensor(spec_sp, args, bte_op, v):
     P        = np.array([np.einsum("l,ilk->ik",vop[i], v_lm) / ne for i in range(vop.shape[0])]) # [eV] 
     return P    
     
-
 def compute_diffusion_and_effective_mobility(args, bte_op, v, n0):
     n_pts    = v.shape[0] 
     mm_fac   = np.sqrt(4 * np.pi) 
@@ -221,13 +219,40 @@ def compute_diffusion_and_effective_mobility(args, bte_op, v, n0):
     
     return mue_E, De
 
+def compute_radial_components(args, spec_sp, bte_op, ev_grid, v, n0):
+    n_pts    = v.shape[0] 
+    mm_fac   = np.sqrt(4 * np.pi) 
+    mm_op    = bte_op["mass"]
+    c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    vth      = (float) (args["Te"])**0.5 * c_gamma
+    v_lm     = np.array([np.dot(bte_op["po2sh"], v[idx]) for idx in range(n_pts)])
+    scale    = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(n_pts)])
+    v_lm_n   = np.array([v_lm[idx]/scale[idx] for idx in range(n_pts)])
+    
+    vr       = np.sqrt(ev_grid) * c_gamma/ vth
+    num_p    = spec_sp._p +1 
+    num_sh   = len(spec_sp._sph_harm_lm)
+    n_xpts   = v_lm_n.shape[-1]
+        
+    output   = np.zeros((n_pts, n_xpts, num_sh, len(vr)))
+    Vqr      = spec_sp.Vq_r(vr, 0, 1)
+    
+    
+    for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
+        output [:, :, l_idx, :] = np.einsum("tvx,vu->txu",v_lm_n[:, l_idx::num_sh, :],  Vqr)
+
+    return output
+    
+store_radial_comp = 0    
+    
+
 col_names={"g0":"elastic", "g2":"ionization"}
 collisons=["g0"]
 idx_range = list(range((int)(sys.argv[2]), (int)(sys.argv[3]), (int)(sys.argv[4]) ))
 if (int)(sys.argv[5])==1:
     collisons.append("g2")
 n0        = float(sys.argv[6])
-print(n0)
+print("n0 = ", n0)
 
 d         = load_data_bte(sys.argv[1], idx_range, None, read_cycle_avg=False)
 ki        = compute_rate_coefficients(d[0], d[3], d[2], collisons)
@@ -237,11 +262,24 @@ u , Cu    = compute_mean_velocity(spec_sp,d[0], d[3], d[2])
 mueE, De  = compute_diffusion_and_effective_mobility(d[0], d[3], d[2], n0)
 P         = compute_kinetic_energy_tensor(spec_sp, d[0], d[3], d[2])
 
+Np        = int(d[0]["Np"])
+print("Nx= ", Np)
+ev_grid   = np.logspace(-3, np.math.log10(40), 300, base=10)
+xp        = -np.cos(np.pi*np.linspace(0,Np-1,Np) / (Np-1))
+
 for g_idx, g in enumerate(collisons):
     np.save("%s/rates_%s.npy"%(sys.argv[1], col_names[g]),ki[g_idx])
 
+np.save("%s/xx_grid.npy"%(sys.argv[1]), xp)
+
+
 np.save("%s/species_densities.npy"%(sys.argv[1]), d[1][:, :, 0:2])
 np.save("%s/Te.npy"%(sys.argv[1]), d[1][:,:, 2])
+
+if (store_radial_comp == 1):
+    fl_comp   = compute_radial_components(d[0], spec_sp, d[3], ev_grid , d[2], n0)
+    np.save("%s/fl_modes.npy"%(sys.argv[1]), fl_comp)
+    np.save("%s/ev_grid.npy"%(sys.argv[1]), ev_grid)
 
 np.save("%s/u_x.npy"%(sys.argv[1]), u[0])
 np.save("%s/u_y.npy"%(sys.argv[1]), u[1])
@@ -267,11 +305,17 @@ d         = load_data_bte(sys.argv[1], idx_range, None, read_cycle_avg=True)
 ki        = compute_rate_coefficients(d[0], d[3], d[2], collisons)
 u , Cu    = compute_mean_velocity(spec_sp,d[0], d[3], d[2])
 P         = compute_kinetic_energy_tensor(spec_sp, d[0], d[3], d[2])
+
+
 for g_idx, g in enumerate(collisons):
     np.save("%s/rates_avg_%s.npy"%(sys.argv[1], col_names[g]),ki[g_idx])
 
 np.save("%s/species_densities_avg.npy"%(sys.argv[1]), d[1][:, :, 0:2])
 np.save("%s/Te_avg.npy"%(sys.argv[1]), d[1][:,:, 2])
+
+if (store_radial_comp == 1):
+    fl_comp   = compute_radial_components(d[0], spec_sp, d[3], ev_grid, d[2], n0)
+    np.save("%s/fl_modes_avg.npy"%(sys.argv[1]), fl_comp)
 
 np.save("%s/u_x_avg.npy"%(sys.argv[1]), u[0])
 np.save("%s/u_y_avg.npy"%(sys.argv[1]), u[1])

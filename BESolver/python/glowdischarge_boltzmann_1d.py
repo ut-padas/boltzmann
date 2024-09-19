@@ -575,6 +575,15 @@ class glow1d_boltzmann():
         Uin = xp.load("%s_%04d_u.npy"%(args.fname, args.rs_idx))
         Vin = xp.load("%s_%04d_v.npy"%(args.fname, args.rs_idx))
         
+        if Uin.shape[0] != len(self.xp):
+          print("Using Chebyshev interpolation for the restore checkpoint")
+          npts            = Uin.shape[0]
+          xx1             = -np.cos(np.pi*np.linspace(0,npts-1, npts)/(npts-1))
+          v0pinv          = np.linalg.solve(np.polynomial.chebyshev.chebvander(xx1, npts-1), np.eye(npts))
+          P1              = np.dot(np.polynomial.chebyshev.chebvander(self.xp, npts-1), v0pinv)
+          Uin             = np.dot(P1, Uin)
+          Vin             = np.dot(P1, Vin.T).T
+        
       else:
         if (type == 0):
           
@@ -586,13 +595,23 @@ class glow1d_boltzmann():
             u1              = xp.load(fname)
             npts            = u1.shape[0]
             xx1             = -np.cos(np.pi*np.linspace(0,npts-1, npts)/(npts-1))
-            v0pinv          = np.linalg.solve(np.polynomial.chebyshev.chebvander(xx1, npts-1), np.eye(npts))
-            P1              = np.dot(np.polynomial.chebyshev.chebvander(self.xp, npts-1), v0pinv)
+            # v0pinv          = np.linalg.solve(np.polynomial.chebyshev.chebvander(xx1, npts-1), np.eye(npts))
+            # P1              = np.dot(np.polynomial.chebyshev.chebvander(self.xp, npts-1), v0pinv)
+            # u1              = np.dot(P1, u1)
             
-            u1              = np.dot(P1, u1)
+            u2                  = np.zeros((len(self.xp), self.Nv))
+            u2[:, self.ele_idx] = scipy.interpolate.interp1d(xx1, u1[:, ele_idx], kind="linear", bounds_error="True") (self.xp)
+            u2[:, self.ion_idx] = scipy.interpolate.interp1d(xx1, u1[:, ion_idx], kind="linear", bounds_error="True") (self.xp)
+            u2[:, self.Te_idx]  = scipy.interpolate.interp1d(xx1, u1[:, Te_idx] , kind="linear", bounds_error="True") (self.xp)
+            u1                  = u2
+            
             Uin[:, ele_idx] = u1[:, ele_idx] 
-            Uin[:, ion_idx] = u1[:, ion_idx] 
-            Uin[:, Te_idx]  = u1[:, Te_idx] / u1[:, ele_idx] 
+            Uin[:, ion_idx] = u1[:, ion_idx]
+            if (self.args.ic_neTe == 1):
+              print("!!!! resotring from glow fluid code")
+              Uin[:, Te_idx]  = u1[:, Te_idx] / u1[:, ele_idx] 
+            else:
+              Uin[:, Te_idx]  = u1[:, Te_idx]
             
           else:
             Uin[:, ele_idx] = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.param.L)**2 * (0.5 * xx/self.param.L)**2) / self.param.np0
@@ -2132,7 +2151,7 @@ class glow1d_boltzmann():
       tt              = 0
       
       dt              = self.args.cfl 
-      steps           = max(1,int(tT/dt))
+      steps           = int(max(1,np.round(tT/dt)))
       
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       Uin1, Vin1     = self.step_init(Uin, Vin, dt)
@@ -2144,12 +2163,14 @@ class glow1d_boltzmann():
       dv    = xp.zeros_like(v)
       
       io_cycle = self.args.io_cycle_freq
-      io_freq  = int(io_cycle/dt)
+      io_freq  = int(np.round(io_cycle/dt))
       
-      cycle_freq = int(1/dt)
+      cycle_freq = int(np.round(1/dt))
       
       cp_cycle = self.args.cp_cycle_freq
-      cp_freq  = int(cp_cycle/dt)
+      cp_freq  = int(np.round(cp_cycle/dt))
+      
+      print("io freq = %d cycle_freq = %d cp_freq = %d" %(io_freq, cycle_freq, cp_freq))
       
       ts_idx_b  = 0 
       if args.restore==1:
@@ -2268,7 +2289,7 @@ class glow1d_boltzmann():
       tt              = 0
       
       dt              = self.args.cfl 
-      steps           = max(1,int(tT/dt))
+      steps           = int(max(1,np.round(tT/dt)))
       
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       Uin1, Vin1     = self.step_init(Uin, Vin, dt)
@@ -2280,10 +2301,10 @@ class glow1d_boltzmann():
       dv             = xp.zeros_like(v)
       
       io_cycle       = self.args.io_cycle_freq
-      io_freq        = int(io_cycle/dt)
+      io_freq        = int(np.round(io_cycle/dt))
       
       cp_cycle       = self.args.cp_cycle_freq
-      cp_freq        = int(cp_cycle/dt)
+      cp_freq        = int(np.round(cp_cycle/dt))
       
       ts_idx_b  = 0 
       if args.restore==1:
@@ -3039,7 +3060,7 @@ class glow1d_boltzmann():
     def fft_analysis(self, Uin, Vin, dt, atol, rtol, max_iter):
       xp              = self.xp_module
       tT              = 1
-      steps           = max(1,int(tT/dt))
+      steps           = int(max(1,np.round(tT/dt)))
       
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       Uin1, Vin1     = self.step_init(Uin, Vin, dt)
@@ -3051,7 +3072,7 @@ class glow1d_boltzmann():
       dv             = xp.zeros_like(v)
       
       io_cycle       = 1.00
-      io_freq        = int(io_cycle/dt)
+      io_freq        = int(np.round(io_cycle/dt))
       
       ele_idx        = self.ele_idx
       ion_idx        = self.ion_idx
@@ -3095,7 +3116,7 @@ class glow1d_boltzmann():
     def svd_analysis(self, Uin, Vin, dt, atol, rtol, max_iter):
       xp              = self.xp_module
       tT              = 10
-      steps           = max(1,int(tT/dt))
+      steps           = int(max(1,np.round(tT/dt)))
       
       print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
       Uin1, Vin1     = self.step_init(Uin, Vin, dt)
@@ -3107,7 +3128,7 @@ class glow1d_boltzmann():
       dv             = xp.zeros_like(v)
       
       io_cycle       = 1.00
-      io_freq        = int(io_cycle/dt)
+      io_freq        = int(np.round(io_cycle/dt))
       
       ele_idx        = self.ele_idx
       ion_idx        = self.ion_idx
@@ -3182,7 +3203,8 @@ parser.add_argument("-verbose", "--verbose"                       , help="verbos
 parser.add_argument("-restore", "--restore"                       , help="restore the solver" , type=int, default=0)
 parser.add_argument("-rs_idx",  "--rs_idx"                        , help="restore file_idx"   , type=int, default=0)
 
-parser.add_argument("-ca_macro_qoi"  , "--ca_macro_qoi"   , help="use Te based tabulated electron kinetic coefficients" , type=int, default=0)
+parser.add_argument("-ic_neTe"  , "--ic_neTe"                     , help="ic file written with neTe" , type=int, default=0)
+parser.add_argument("-ca_macro_qoi"  , "--ca_macro_qoi"           , help="use Te based tabulated electron kinetic coefficients" , type=int, default=0)
 
 parser.add_argument("-fname", "--fname"                           , help="file name to store the solution" , type=str, default="1d_glow")
 parser.add_argument("-dir"  , "--dir"                             , help="file name to store the solution" , type=str, default="glow1d_dir")

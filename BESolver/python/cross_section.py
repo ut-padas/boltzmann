@@ -11,6 +11,7 @@ import scipy.constants
 import h5py
 import sys
 import os
+import datetime
 
 import scipy.interpolate
 import scipy.optimize
@@ -143,12 +144,14 @@ def compute_mw_reaction_rates(Te:np.array, cs_data:list):
             
     return rf
 
-def append_recomb_cs(cs_dict, eqc_fname):
+def append_recomb_cs(cs_in_file, cs_out_file, eqc_fname):
     """
     computes the pseudo cross-section for 3-body recombination collision
     - Assumes maxwellian EEDF for all species. 
     """
     import matplotlib.pyplot as plt
+    
+    cs_dict  = read_cross_section_data(cs_in_file)
     
     eqc_name = {
                 "E + Ar -> E + E + Ar(+)":     "Ground",
@@ -179,9 +182,9 @@ def append_recomb_cs(cs_dict, eqc_fname):
 
     #print(ff["Ground"][()][:, 0]/ev_to_K, (ff["Ground"][()][:, 0]/ev_to_K).shape)
     Te                    = ff["Ground"][()][:, 0]/ev_to_K
-    Te                    = np.logspace(np.log10(0.2), np.log10(Te[-1]), 128, base=10)
+    Te                    = np.logspace(np.log10(0.2), np.log10(Te[-1]), 64, base=10)
     num_ev_intervals      = 256
-    sigma_ev              = np.logspace(-4, 3, num_ev_intervals, base=10)
+    sigma_ev              = np.logspace(-8, 1, num_ev_intervals, base=10) 
     mvec                  = np.zeros((Te.shape[0], num_ev_intervals))
     
     vth = VTH(Te)
@@ -193,18 +196,18 @@ def append_recomb_cs(cs_dict, eqc_fname):
     
     rb      = rf / a1 / scipy.constants.Avogadro
     
-    with h5py.File("lxcat_data/rates.h5", 'w') as F:
-        F.create_dataset("Te[eV]", data=Te)
+    # with h5py.File("lxcat_data/rates.h5", 'w') as F:
+    #     F.create_dataset("Te[eV]", data=Te)
         
-        gf = F.create_group("forward[m^3s^-1]")
-        for i in range(rf.shape[1]):
-            gf.create_dataset(eqc_name[process[i]], data=rf[:, i])
+    #     gf = F.create_group("forward[m^3s^-1]")
+    #     for i in range(rf.shape[1]):
+    #         gf.create_dataset(eqc_name[process[i]], data=rf[:, i])
         
-        gf = F.create_group("backward[m^6s^-1]")
-        for i in range(rf.shape[1]):
-            gf.create_dataset(eqc_name[process[i]], data=rb[:, i])
+    #     gf = F.create_group("backward[m^6s^-1]")
+    #     for i in range(rf.shape[1]):
+    #         gf.create_dataset(eqc_name[process[i]], data=rb[:, i])
             
-        F.close()
+    #     F.close()
             
     
     # for i in range(len(process)):
@@ -219,7 +222,7 @@ def append_recomb_cs(cs_dict, eqc_fname):
     # plt.close()
     
     crs_idx = 0 
-    crs_rev = list()
+    crs_rev = dict()
     
     crs_idx=0
     
@@ -228,6 +231,8 @@ def append_recomb_cs(cs_dict, eqc_fname):
     atol    = 1e-200
     rtol    = 1e-4
     
+    
+    plt.figure(figsize=(12, 4), dpi=200)
     
     for key, cs_metadata in cs_dict.items():
         if cs_metadata["type"] == "IONIZATION":
@@ -314,35 +319,86 @@ def append_recomb_cs(cs_dict, eqc_fname):
             nlls_rel_e = np.linalg.norm(a1-rb[:, crs_idx])/np.linalg.norm(rb[:, crs_idx])
             print("process : %s NLLS fit relative error = %.4E"%(key, nlls_rel_e))
             
+            rev_process = key.split("->")[1] + " -> " + key.split("->")[0]
             
-            plt.figure(figsize=(8, 4), dpi=200)
             plt.subplot(121)
-            plt.loglog(Te, rf[:, crs_idx], 'r.', markersize=2, label="forward")
-            plt.loglog(Te, rb[:, crs_idx], 'bx', markersize=2, label="backward")
-            plt.loglog(Te, a1            , 'go', markersize=2, label="backward (NLLS fit)")
+            #plt.loglog(Te, rf[:, crs_idx], '.', markersize=2 , label=r"$k_f$ (%s)"%(key))
+            plt.loglog(Te, rb[:, crs_idx], 'x', markersize=2 , label=r"$k_b = k_f C_{eq}$")
+            plt.loglog(Te, a1            , 'o', markersize=2 , label=r"%s(NLLS fit)"%(rev_process))
             plt.xlabel(r"electron temperature (eV)")
+            plt.ylabel(r"rate coefficient [$m^6s^{-1}$]")
             plt.grid(visible=True)
-            plt.legend()
+            plt.legend(fontsize=4)
             
             plt.subplot(122)
-            plt.loglog(sigma_ev, cs_data[crs_idx] (sigma_ev), 'r.',  markersize=2, label="forward")
-            plt.loglog(sigma_ev, sigma_rev                  , 'bx',  markersize=2, label="backward")
+            #plt.loglog(sigma_ev, cs_data[crs_idx] (sigma_ev), '.',  markersize=2, label=r"%s "%(key))
+            plt.loglog(sigma_ev, sigma_rev                  , 'x',  markersize=2, label=r"%s "%(rev_process))
             plt.grid(visible=True)
-            plt.legend()
+            plt.xlabel(r"energy (eV)")
+            plt.ylabel(r"reference cross-section [$m^2$]")
+            plt.legend(fontsize=6)
             
-            plt.tight_layout()
-            #plt.show()
-            plt.savefig("lxcat_data/%s_reverse.png"%(key))
-            plt.close()
+            crs_rev[key]=(sigma_ev, sigma_rev)
             crs_idx+=1
     
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig("cs_reverse.png")
+    plt.close()
+            
     
+    with open(cs_out_file, "w") as f:
+        for key, cs_metadata in cs_dict.items():
+            f.write(cs_metadata["type"] + "\n")
+            f.write(cs_metadata["species"] + "\n")
+            if cs_metadata["mass_ratio"]==None:
+                f.write("%.6E"%cs_metadata["threshold"] + "\n")
+            else:
+                f.write("%.6E"%cs_metadata["mass_ratio"] + "\n")
             
+            info = cs_metadata["info"]
+            for k,v in info.items():
+                f.write("%s: %s"%(str(k),str(v)) + "\n")
+            f.write("------------------------------\n")    
             
-    
-    return crs_rev
+            ev_grid  = cs_metadata["energy"]
+            cs_data  = cs_metadata["cross section"]
             
-#cs_dict = read_cross_section_data("lxcat_data/eAr_crs.6sp_Tg_0.5eV")
-#crs_rev = append_recomb_cs(cs_dict, eqc_fname="lxcat_data/equilibrium_constants_eAr6sp.h5")
+            data_str = "\n".join(["%.6E\t%.6E"%(ev_grid[idx], cs_data[idx]) for idx in range(len(ev_grid))])
+            f.write(data_str+"\n")
+            f.write("------------------------------\n")
 
+        for key, rev_cs in crs_rev.items():
+            ctype   = "ATTACHMENT"
+            sp      = key.split("->")[1].split(" ")[-1]
+            process = (key.split("->")[1] + " -> " + key.split("->")[0]).strip()
+            f.write("%s"%(ctype) + "\n")
+            f.write(sp + "\n")
+            #f.write("%.6E"%(cs_dict[key]["threshold"]) + "\n")
+            f.write("SPECIES: e/%s"%(sp)+"\n")
+            f.write("PROCESS: %s, %s"%(process, ctype)+"\n")
+            f.write("FORWARD: %.6E"%(cs_dict[key]["threshold"]) + "\n")
+            f.write("COMMENT: reverse cross-sections based on the detailed balance\n")
+            f.write("UPDATED: %s\n"%(datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")))
+            f.write("COLUMNS: Energy (eV) | Cross section (m2)" + "\n")
+            f.write("------------------------------\n")
+            ev_grid = rev_cs[0]
+            cs_data = rev_cs[1]
+            
+            ev_grid = np.append(np.array([0]), ev_grid)
+            cs_data = np.append(np.array([0]), cs_data)
+            
+            data_str = "\n".join(["%.6E\t%.6E"%(ev_grid[idx], cs_data[idx]) for idx in range(len(ev_grid))])
+            f.write(data_str+"\n")
+            f.write("------------------------------\n")
+            
+    
+            
+            
+        
+    
+            
+    
+    #return crs_rev
+            
 CROSS_SECTION_DATA = "" #read_cross_section_data(os.path.dirname(os.path.abspath(__file__)) + "/lxcat_data/eAr_crs.nominal.Biagi_minimal.txt")

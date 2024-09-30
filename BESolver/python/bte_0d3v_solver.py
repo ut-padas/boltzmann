@@ -91,7 +91,7 @@ class bte_0d3v():
             print(col_str, col_data["type"])
             g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
             self._coll_list.append(g)
-            self._collision_names.append("C%d"%(collision_count)) 
+            self._collision_names.append("C%d"%(collision_count+1)) 
             collision_count+=1
         print("=====================================")
         print("number of total collisions = %d " %(len(self._coll_list)))
@@ -224,7 +224,11 @@ class bte_0d3v():
             g         = self._coll_list[col_idx]
             g.reset_scattering_direction_sp_mat()
             mole_idx  = self._avail_species.index(col_data["species"]) 
-            FOp       = FOp + args.ns_by_n0[mole_idx] * self._n0 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
+            if (col_data["type"]=="ATTACHMENT"):
+                FOp       = FOp + (args.ns_by_n0[mole_idx] * self._n0)**2 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
+            else:
+                FOp       = FOp + args.ns_by_n0[mole_idx] * self._n0 * collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)
+                
             sigma_m  += g.total_cross_section(gx_ev)
 
         t2 = time()

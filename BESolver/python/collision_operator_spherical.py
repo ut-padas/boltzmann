@@ -141,19 +141,24 @@ class CollisionOpSP():
                                 for k in range(num_p):
                                     cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
 
-                elif(g._type == collisions.CollisionType.EAR_G1 or g._type == collisions.CollisionType.EAR_G2):
+                elif(g._type == collisions.CollisionType.EAR_G1 or g._type == collisions.CollisionType.EAR_G2 or g._type == collisions.CollisionType.EAR_G3):
                     
                     energy_split = 1.0
                     if g._type == collisions.CollisionType.EAR_G2:
                         energy_split= 2.0
 
-                    check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
-                    gx_e             = gx_e[check_1]
-                    gw_e             = gw_e[check_1]
+                    if (g._type == collisions.CollisionType.EAR_G1 or g._type == collisions.CollisionType.EAR_G2):
+                        check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
+                        gx_e             = gx_e[check_1]
+                        gw_e             = gw_e[check_1]
+                        v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+                    
+                    elif (g._type == collisions.CollisionType.EAR_G3):
+                        v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  + g._attachment_energy)) / V_TH
+                    else:
+                        raise ValueError
 
                     total_cs         = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
-                    v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
-
                     def t1(p, k):
                         k_min   = k_vec[k]
                         k_max   = k_vec[k + sp_order + 1]
@@ -213,6 +218,7 @@ class CollisionOpSP():
                             for p in range(num_p):
                                 for k in range(num_p):
                                     cc_collision[p * num_sh + qs_idx , k * num_sh + qs_idx] =tmp_q1[p,k]
+
                 else:
                     raise NotImplementedError
             else:

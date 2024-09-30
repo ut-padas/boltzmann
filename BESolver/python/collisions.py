@@ -71,6 +71,10 @@ class Collisions(abc.ABC):
         self._energy             = cs_data["energy"]
         self._total_cs           = cs_data["cross section"]
         self._reaction_threshold = cs_data["threshold"]
+        self._attachment_energy  = 0.0
+        if cs_data["type"] == "ATTACHMENT":
+            self._attachment_energy = float(cs_data["info"]["FORWARD"])
+            
         self._mByM               = cross_section.CROSS_SECTION_DATA["E + Ar -> E + Ar"]["mass_ratio"]
         
         self._total_cs_interp1d = interpolate.interp1d(self._energy, self._total_cs, kind='linear', bounds_error=False,fill_value=(self._total_cs[0],self._total_cs[-1]))
@@ -373,16 +377,16 @@ class Collisions(abc.ABC):
     
 
 class CollisionType():
-    # electron-heavy elastic (momentum transfer)
+    # Elastic
     EAR_G0=0
     
-    # electron-heavy excitation
+    # Excitation
     EAR_G1=1
     
-    # electron-heavy ionization
+    # Ionization
     EAR_G2=2
     
-    # electron-heavy stepwise-ionization
+    # Attachment (Recombination)
     EAR_G3=3
     
 
@@ -400,6 +404,8 @@ class electron_heavy_binary_collision(Collisions):
             self._type = CollisionType.EAR_G1
         elif collision_type == "IONIZATION":
             self._type = CollisionType.EAR_G2
+        elif collision_type == "ATTACHMENT":
+            self._type = CollisionType.EAR_G3
         else:
             print("[Error]: unknown collision type")
             sys.exit(0)

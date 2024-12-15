@@ -186,6 +186,7 @@ if (sys.argv[2] == "bte"):
     ne          = np.load("%s/species_densities.npy"%(folder_name))[:, :, 0]    
     ni          = np.load("%s/species_densities.npy"%(folder_name))[:, :, 1]
     Te          = np.load("%s/Te.npy"%(folder_name))
+    ke          = np.load("%s/rates_elastic.npy" %(folder_name))
     ki          = np.load("%s/rates_ionization.npy" %(folder_name))
     tt          = np.linspace(0, 1, ne.shape[0])
     EF          = compute_E(ne, ni, tt)
@@ -226,15 +227,18 @@ with h5py.File("%s/macro.h5"%(folder_name), 'w') as F:
     F.create_dataset("ni[m^-3]"     , data = cheb.np0 * ni)
     F.create_dataset("Te[eV]"		, data = Te)
     F.create_dataset("ki[m^3s^{-1}]", data = ki)
+    F.create_dataset("ke[m^3s^{-1}]", data = ke)
     
     F.create_dataset("avg_E[Vm^-1]"     , data = time_average(EF , tt))
     F.create_dataset("avg_ne[m^-3]"     , data = time_average(cheb.np0 * ne , tt))
     F.create_dataset("avg_ni[m^-3]"     , data = time_average(cheb.np0 * ni , tt))
     F.create_dataset("avg_Te[eV]"		, data = time_average(Te , tt))
-    F.create_dataset("avg_ki[m^3s^{-1}]"             , data = time_average(ki , tt))
+    F.create_dataset("avg_ki[m^3s^{-1}]"  , data = time_average(ki , tt))
+    F.create_dataset("avg_ke[m^3s^{-1}]"  , data = time_average(ke , tt))
     
     F.create_dataset("avg_energy_density[eVkgm^{-3}]", data = 1.5 * cheb.np0 * scipy.constants.electron_mass * time_average(Te * ne, tt))
     F.create_dataset("avg_ion_prod[m^-3s^{-1}]"      , data = cheb.n0 * cheb.np0 **2 * time_average(ki * ne, tt))
+    F.create_dataset("avg_elastic [m^-3s^{-1}]"      , data = cheb.n0 * cheb.np0 **2 * time_average(ke * ne, tt))
     
     F.close()
 

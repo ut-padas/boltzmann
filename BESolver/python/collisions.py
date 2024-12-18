@@ -9,7 +9,6 @@ for a given binary collision
 """
 import abc
 import numpy as np
-from numpy.lib.function_base import diff
 import cross_section
 from scipy import interpolate
 import scipy.constants

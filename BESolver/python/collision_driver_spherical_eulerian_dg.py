@@ -27,6 +27,8 @@ import bolsig
 import csv
 from   datetime import datetime
 import bte_0d3v_solver as bte_0d3v
+import itertools
+import h5py
 
 plt.rcParams.update({
     "text.usetex": False,
@@ -40,7 +42,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-Nr", "--NUM_P_RADIAL"                       , help="Number of polynomials in radial direction", type=int, default=16)
 parser.add_argument("-T", "--T_END"                               , help="Simulation time", type=float, default=1e-4)
 parser.add_argument("-dt", "--T_DT"                               , help="Simulation time step size ", type=float, default=1e-7)
-parser.add_argument("-o",  "--out_fname"                          , help="output file name", type=str, default='pde_vs_bolsig')
+parser.add_argument("-o",  "--out_fname"                          , help="output file name", type=str, default='boltzsim')
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
 parser.add_argument("-c", "--collisions"                          , help="collisions included (g0, g0Const, g0NoLoss, g2, g2Const)", type=str, default="lxcat_data/eAr_crs.nominal.Biagi.3sp")
 parser.add_argument("-ev", "--electron_volt"                      , help="initial electron volt", type=float, default=0.25)
@@ -78,6 +80,7 @@ ion_deg_values      = np.array(args.ion_deg)
 
 SAVE_EEDF    = args.store_eedf
 SAVE_CSV     = args.store_csv
+SAVE_HDF5    = 1
 
 if not args.ee_collisions:
     ion_deg_values = np.array([0])
@@ -142,7 +145,8 @@ for run_id in range(len(run_params)):
             r_data    = bte_solver.steady_state_solver()
             #r_data   = bte_solver.steady_state_solver_two_term()
         else:
-            r_data    = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<(i)), num_time_samples=args.num_tsamples)
+            #r_data    = bte_solver.transient_solver(args.T_END, args.T_DT/(1<<(i)), num_time_samples=args.num_tsamples)
+            r_data    = bte_solver.transient_solver_time_harmonic_efield(args.T_END, args.T_DT, num_time_samples=args.num_tsamples)
         
         solver_data.append(r_data)
         spec_list.append(bte_solver._spec_sp)
@@ -202,7 +206,35 @@ for run_id in range(len(run_params)):
 
             np.savetxt(fname, sol_data, delimiter='\t',header=header_str,comments='')
 
-        
+        if (args.steady_state == 0 and SAVE_HDF5 and i == len(args.sweep_values)-1):
+            # currently store the last Nr run
+            data    = r_data['sol']
+            fr_comp = np.array([BEUtils.compute_radial_components(ev,spec_sp, data[i], mw, vth, 1) for i in range(data.shape[0])]).reshape((data.shape[0], num_sh, len(ev)))
+            
+            fname  = "%s_nr%d_lmax%d_E%.2E_id_%.2E_Tg%.2E_Eperiod%.2E_dt%.2E_T%.2E.h5"%(args.out_fname, spec_sp._p, spec_sp._sph_harm_lm[-1][0], args.E_field, args.ion_deg, args.Tg, args.efield_period, args.T_DT, args.T_END)
+            qois = bte_solver.compute_QoIs(data, r_data["tgrid"], effective_mobility=False)
+            
+            with h5py.File(fname, 'w') as F:
+
+                Te = qois["energy"]/1.5
+
+                F.create_dataset("time[s]"               , data = r_data['tgrid'])
+                F.create_dataset("evgrid[eV]"            , data = ev)
+                F.create_dataset("n0[m^-3]"              , data = np.array(args.n0))
+
+                for lm_idx in range(num_sh):
+                    F.create_dataset("f%d[eV^-1.5]"%(lm_idx), data = fr_comp[:, lm_idx, :])
+
+                F.create_dataset("Te[eV]"		             , data = Te)
+                F.create_dataset("D[m^2s^{-1}]"              , data = qois["diffusion"]/ args.n0)
+                F.create_dataset("mu[ms^{-1}]"               , data = qois["mobility"] / args.n0)
+                
+                rr = qois["rates"]
+                for col_idx, g in enumerate(collision_list):
+                    F.create_dataset("%s[m^3s^-1]"%(collision_names[col_idx]), data = rr[col_idx])
+                
+                F.close()
+            
     if SAVE_CSV:
         fname = "%s_lmax%d_Tg%.2E.csv"%(args.out_fname, spec_sp._sph_harm_lm[-1][0], args.Tg)
         with open("%s_qois.csv"%fname, 'a', encoding='UTF8') as f:
@@ -260,8 +292,6 @@ for run_id in range(len(run_params)):
                     data.append(l2_error)
 
                 writer.writerow(data)
-        
-
     if (1):
         maxwellian   = bte_solver._mw
         if args.steady_state == 0:
@@ -308,6 +338,7 @@ for run_id in range(len(run_params)):
         plt.legend()
         plt.grid(visible=True)
 
+        colors_iter = itertools.cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
         pde_vs_bolsig_L2 = list()
         for i, value in enumerate(args.sweep_values):
             qois      = qoi_list[i]
@@ -332,12 +363,11 @@ for run_id in range(len(run_params)):
             plt_idx=3
             for l_idx in range(num_sh):
                 plt.subplot(num_plt_rows, num_plt_cols, plt_idx)
-                color = next(plt.gca()._get_lines.prop_cycler)['color']
+                color = next(colors_iter)
                 plt.semilogy(ev,  abs(radial[i, l_idx]), '-', label=lbl, color=color)
 
                 # if args.steady_state == 0:
                 #     for t_idx, tt in enumerate(time_idx):
-                #         #color = next(plt.gca()._get_lines.prop_cycler)['color']
                 #         tt_time = tgrid[tt]    
                 #         plt.semilogy(ev,  abs(radial_tt[t_idx, l_idx]), '--', label=lbl+" t=%.2E"%(tt_time), color=color)
 
@@ -415,14 +445,14 @@ for run_id in range(len(run_params)):
         colfname = args.collisions.split("/")[-1].strip()
         if len(spec_sp._basis_p._dg_idx)==2:
             if args.steady_state == 1 : 
-                plt.savefig("pde_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("pde_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".png")
+                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +"_Eperiod_%.2E"%(args.efield_period) +".png")
         else:
             if args.steady_state == 1 : 
-                plt.savefig("pde_dg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("boltzsim_dg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("pde_dg_" + colfname + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +".png")
+                plt.savefig("boltzsim_dg_" + colfname + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) + "_Eperiod_%.2E"%(args.efield_period) +".png")
 
         plt.close()
 

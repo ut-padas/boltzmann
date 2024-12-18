@@ -896,7 +896,10 @@ class bte_0d3v():
         solution_vector[0,:] = h_pde
 
         E_max = args.E_field
-        Ef    = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
+        if args.efield_period == 0:
+            Ef    = lambda t : E_max 
+        else:
+            Ef    = lambda t : E_max * np.sin(np.pi * 2 * t / args.efield_period)
 
         Cmat        = np.dot(Minv, Cmat)
         Emat        = np.dot(Minv, Emat)
@@ -945,19 +948,22 @@ class bte_0d3v():
                     print("time = %.3E solution convergence dt=%.2E atol = %.8E rtol = %.8E mass %.10E"%(t_curr, dt, atol, rtol, np.dot(u,h_curr)))
         else:
             QT_f1             = np.dot(QT,f1)
-            emat_p , _, _     = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
-            emat_m , _, _     = spec_sp.compute_advection_matix_dg(advection_dir=1.0)
 
-            emat_p            = np.matmul(Minv, emat_p)
-            emat_m            = np.matmul(Minv, emat_m)
+            if (args.use_dg==1):
+                emat_p , _, _     = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
+                emat_m , _, _     = spec_sp.compute_advection_matix_dg(advection_dir=1.0)
+
+                emat_p            = np.matmul(Minv, emat_p)
+                emat_m            = np.matmul(Minv, emat_m)
 
             while t_curr < T:
                 E_field           = Ef(t_curr)
 
-                if E_field >= 0:
-                    Emat = emat_p
-                else:
-                    Emat = emat_m
+                if (args.use_dg==1):
+                    if E_field >= 0:
+                        Emat = emat_p
+                    else:
+                        Emat = emat_m
 
                 Cmat_p_Emat       = Cmat + Emat * (E_field / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
                 QT_Cmat_p_Emat_Q  = np.dot(QT, np.dot(Cmat_p_Emat,Q))
@@ -1014,7 +1020,7 @@ class bte_0d3v():
 
         E_max   = args.E_field
         if args.efield_period > 0:
-            Ef              = lambda t : E_max * np.cos(np.pi * 2 * t / args.efield_period)
+            Ef              = lambda t : E_max * np.sin(np.pi * 2 * t / args.efield_period)
             e_field_t       = Ef(tgrid)
             e_field_t[np.abs(e_field_t) < 1e-2] = 0 
         elif tgrid is None:

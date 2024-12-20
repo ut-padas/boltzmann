@@ -21,7 +21,7 @@ def load_data_bte(folder, cycles, eedf_idx=None, read_cycle_avg=False):
         kv = s.split("=")
         if len(kv)!=2 or kv[0].strip()=="collisions":
             continue
-        args[kv[0].strip()]=kv[1].strip()
+        args[kv[0].strip()]=kv[1].strip().replace("'", "")
     
     bte_op = dict()
     bte_op["mass"]      = np.load(folder+"/1d_glow_bte_mass_op.npy")
@@ -151,7 +151,7 @@ def gen_spec_sp(args):
     
     return spec_sp, coll_list
 
-def compute_mean_velocity(spec_sp, args, bte_op, v):
+def compute_mean_velocity(spec_sp, args, bte_op, v, n0):
     n_pts    = v.shape[0] 
     mm_fac   = np.sqrt(4 * np.pi) 
     mm_op    = bte_op["mass"]
@@ -170,7 +170,6 @@ def compute_mean_velocity(spec_sp, args, bte_op, v):
     
     u       = [vx, vy, vz]
     
-    n0      = float(sys.argv[6])
     cv_lm   = n0 * np.einsum("ml,ilk->imk",bte_op["cmat"], v_lm) # s^{-1}
     
     c_mom_x = np.einsum("l,ilk->ik",vop[0], cv_lm) * vth / ne / vx 
@@ -258,7 +257,7 @@ d         = load_data_bte(sys.argv[1], idx_range, None, read_cycle_avg=False)
 ki        = compute_rate_coefficients(d[0], d[3], d[2], collisons)
 
 spec_sp, coll_list = gen_spec_sp(d[0])
-u , Cu    = compute_mean_velocity(spec_sp,d[0], d[3], d[2])
+u , Cu    = compute_mean_velocity(spec_sp,d[0], d[3], d[2], n0)
 mueE, De  = compute_diffusion_and_effective_mobility(d[0], d[3], d[2], n0)
 P         = compute_kinetic_energy_tensor(spec_sp, d[0], d[3], d[2])
 
@@ -303,7 +302,7 @@ np.save("%s/E.npy"%(sys.argv[1])  , P)
     
 d         = load_data_bte(sys.argv[1], idx_range, None, read_cycle_avg=True)
 ki        = compute_rate_coefficients(d[0], d[3], d[2], collisons)
-u , Cu    = compute_mean_velocity(spec_sp,d[0], d[3], d[2])
+u , Cu    = compute_mean_velocity(spec_sp,d[0], d[3], d[2], n0)
 P         = compute_kinetic_energy_tensor(spec_sp, d[0], d[3], d[2])
 
 

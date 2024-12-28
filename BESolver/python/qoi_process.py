@@ -374,7 +374,7 @@ def compute_radial_components(args, spec_sp, bte_op, ev_grid, v, n0):
     for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
         output [:, :, l_idx, :] = np.einsum("tvx,vu->txu",v_lm_n[:, l_idx::num_sh, :],  Vqr)
 
-    return output
+    return output, v_lm, v_lm_n
 
 def compute_E(ne, ni, tt, cheb):
     phi  = np.array([cheb.solve_poisson(ne[i], ni[i], tt[i]) for i in range(len(tt))])
@@ -470,9 +470,10 @@ if (run_type == "bte"):
     F.create_dataset("P   [m2s^{-2}]"  , data = P)
 
     if (COMPUTE_RADIAL_COMP==1):
-        fl_comp   = compute_radial_components(d[0], spec_sp, d[3], ev_grid , d[2], N0)
+        fl_comp , f_lm, f_lm_n  = compute_radial_components(d[0], spec_sp, d[3], ev_grid , d[2], N0)
         F.create_dataset("evgrid[eV]" , data=ev_grid)
         F.create_dataset("fl[eV^-1.5]", data=fl_comp)
+        F.create_dataset("Ftvx"       , data=f_lm_n)
 
 
     F.create_dataset("avg_E[Vm^-1]"       , data = time_average(Ef , tt))

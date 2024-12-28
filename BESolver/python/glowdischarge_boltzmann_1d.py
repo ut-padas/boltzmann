@@ -3161,138 +3161,143 @@ class glow1d_boltzmann():
       
       return ut, vt
     
-        
-parser = argparse.ArgumentParser()
-parser.add_argument("-threads", "--threads"                       , help="number of cpu threads (boltzmann operator assembly)", type=int, default=4)
-parser.add_argument("-out_fname", "--out_fname"                   , help="output file name for the qois", type=str, default="bte_glow1d")
-parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
-parser.add_argument("-c", "--collisions"                          , help="collisions model", type=str, default="lxcat_data/eAr_crs.Biagi.3sp2r")
-parser.add_argument("-ev_max", "--ev_max"                         , help="energy max v-space grid (eV)" , type=float, default=50)
-parser.add_argument("-ev_extend", "--ev_extend"                   , help="energy max boundary extenstion (0 = no extention, 1= 1.2 ev_max, 2 = 25ev_max)", type=int, default=2)
-parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
-parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
-parser.add_argument("-steady", "--steady_state"                   , help="steady state or transient", type=int, default=1)
-parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)"  , type=float, default=0.5)
-parser.add_argument("-Tg", "--Tg"                                 , help="approximate gas temperature (eV)"       , type=float, default=0.0)
-parser.add_argument("-Nr", "--Nr"                                 , help="radial refinement"  , type=int, default=128)
-parser.add_argument("-Nvt", "--Nvt"                               , help="number of ordinates", type=int, default=3)
-parser.add_argument("-Ns", "--Ns"                                 , help="number of species (fluid solver)", type=int, default=2)
-parser.add_argument("-NT", "--NT"                                 , help="number of temperatures"          , type=int, default=1)
-parser.add_argument("-Np", "--Np"                                 , help="number of collocation points"    , type=int, default=100)
-parser.add_argument("-cfl", "--cfl"                               , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
-parser.add_argument("-cycles", "--cycles"                         , help="number of cycles to run" , type=float, default=10)
-parser.add_argument("-ts_type", "--ts_type"                       , help="ts mode" , type=str, default="BE")
-parser.add_argument("-atol", "--atol"                             , help="abs. tolerance" , type=float, default=1e-10)
-parser.add_argument("-rtol", "--rtol"                             , help="rel. tolerance" , type=float, default=1e-10)
-parser.add_argument("-gmres_atol", "--gmres_atol"                 , help="abs. tolerance for gmres-solve" , type=float, default=1e-20)
-parser.add_argument("-gmres_rtol", "--gmres_rtol"                 , help="rel. tolerance for gmres-solve" , type=float, default=1e-1)
-parser.add_argument("-gmres_rsrt", "--gmres_rsrt"                 , help="gmres restarts", type=int, default=10)
 
-parser.add_argument("-max_iter", "--max_iter"                     , help="max iterations for Newton solver" , type=int, default=1000)
+def args_parse():
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-threads", "--threads"                       , help="number of cpu threads (boltzmann operator assembly)", type=int, default=4)
+  parser.add_argument("-out_fname", "--out_fname"                   , help="output file name for the qois", type=str, default="bte_glow1d")
+  parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
+  parser.add_argument("-c", "--collisions"                          , help="collisions model", type=str, default="lxcat_data/eAr_crs.Biagi.3sp2r")
+  parser.add_argument("-ev_max", "--ev_max"                         , help="energy max v-space grid (eV)" , type=float, default=50)
+  parser.add_argument("-ev_extend", "--ev_extend"                   , help="energy max boundary extenstion (0 = no extention, 1= 1.2 ev_max, 2 = 25ev_max)", type=int, default=2)
+  parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
+  parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
+  parser.add_argument("-steady", "--steady_state"                   , help="steady state or transient", type=int, default=1)
+  parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)"  , type=float, default=0.5)
+  parser.add_argument("-Tg", "--Tg"                                 , help="approximate gas temperature (eV)"       , type=float, default=0.0)
+  parser.add_argument("-Nr", "--Nr"                                 , help="radial refinement"  , type=int, default=128)
+  parser.add_argument("-Nvt", "--Nvt"                               , help="number of ordinates", type=int, default=3)
+  parser.add_argument("-Ns", "--Ns"                                 , help="number of species (fluid solver)", type=int, default=2)
+  parser.add_argument("-NT", "--NT"                                 , help="number of temperatures"          , type=int, default=1)
+  parser.add_argument("-Np", "--Np"                                 , help="number of collocation points"    , type=int, default=100)
+  parser.add_argument("-cfl", "--cfl"                               , help="CFL factor (only used in explicit integrations)" , type=float, default=1e-1)
+  parser.add_argument("-cycles", "--cycles"                         , help="number of cycles to run" , type=float, default=10)
+  parser.add_argument("-ts_type", "--ts_type"                       , help="ts mode" , type=str, default="BE")
+  parser.add_argument("-atol", "--atol"                             , help="abs. tolerance" , type=float, default=1e-10)
+  parser.add_argument("-rtol", "--rtol"                             , help="rel. tolerance" , type=float, default=1e-10)
+  parser.add_argument("-gmres_atol", "--gmres_atol"                 , help="abs. tolerance for gmres-solve" , type=float, default=1e-20)
+  parser.add_argument("-gmres_rtol", "--gmres_rtol"                 , help="rel. tolerance for gmres-solve" , type=float, default=1e-1)
+  parser.add_argument("-gmres_rsrt", "--gmres_rsrt"                 , help="gmres restarts", type=int, default=10)
 
-parser.add_argument("-profile", "--profile"                       , help="profile", type=int, default=0)
-parser.add_argument("-warm_up", "--warm_up"                       , help="warm up", type=int, default=5)
-parser.add_argument("-runs", "--runs"                             , help="runs "  , type=int, default=10)
-parser.add_argument("-store_eedf", "--store_eedf"                 , help="store EEDF"          , type=int, default=0)
-parser.add_argument("-use_gpu", "--use_gpu"                       , help="use GPUs"            , type=int, default=0)
-parser.add_argument("-gpu_device_id", "--gpu_device_id"           , help="GPU device id to use", type=int, default=0)
-parser.add_argument("-store_csv", "--store_csv"                   , help="store csv format of QoI comparisons", type=int, default=1)
-parser.add_argument("-plot_data", "--plot_data"                   , help="plot data", type=int, default=1)
-parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable electron-electron collisions", type=float, default=0)
-parser.add_argument("-verbose", "--verbose"                       , help="verbose with debug information", type=int, default=0)
-parser.add_argument("-restore", "--restore"                       , help="restore the solver" , type=int, default=0)
-parser.add_argument("-rs_idx",  "--rs_idx"                        , help="restore file_idx"   , type=int, default=0)
+  parser.add_argument("-max_iter", "--max_iter"                     , help="max iterations for Newton solver" , type=int, default=1000)
 
-parser.add_argument("-ic_neTe"  , "--ic_neTe"                     , help="ic file written with neTe" , type=int, default=0)
-parser.add_argument("-ca_macro_qoi"  , "--ca_macro_qoi"           , help="use Te based tabulated electron kinetic coefficients" , type=int, default=0)
+  parser.add_argument("-profile", "--profile"                       , help="profile", type=int, default=0)
+  parser.add_argument("-warm_up", "--warm_up"                       , help="warm up", type=int, default=5)
+  parser.add_argument("-runs", "--runs"                             , help="runs "  , type=int, default=10)
+  parser.add_argument("-store_eedf", "--store_eedf"                 , help="store EEDF"          , type=int, default=0)
+  parser.add_argument("-use_gpu", "--use_gpu"                       , help="use GPUs"            , type=int, default=0)
+  parser.add_argument("-gpu_device_id", "--gpu_device_id"           , help="GPU device id to use", type=int, default=0)
+  parser.add_argument("-store_csv", "--store_csv"                   , help="store csv format of QoI comparisons", type=int, default=1)
+  parser.add_argument("-plot_data", "--plot_data"                   , help="plot data", type=int, default=1)
+  parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable electron-electron collisions", type=float, default=0)
+  parser.add_argument("-verbose", "--verbose"                       , help="verbose with debug information", type=int, default=0)
+  parser.add_argument("-restore", "--restore"                       , help="restore the solver" , type=int, default=0)
+  parser.add_argument("-rs_idx",  "--rs_idx"                        , help="restore file_idx"   , type=int, default=0)
 
-parser.add_argument("-fname", "--fname"                           , help="file name to store the solution" , type=str, default="1d_glow")
-parser.add_argument("-dir"  , "--dir"                             , help="file name to store the solution" , type=str, default="glow1d_dir")
-parser.add_argument("-glow_op_split_scheme"  , "--glow_op_split_scheme" , help="glow op. split scheme, 0- E field is frozen while BTE solve,1-E field is solved with BTE solve" , type=int, default=0)
+  parser.add_argument("-ic_neTe"  , "--ic_neTe"                     , help="ic file written with neTe" , type=int, default=0)
+  parser.add_argument("-ca_macro_qoi"  , "--ca_macro_qoi"           , help="use Te based tabulated electron kinetic coefficients" , type=int, default=0)
 
-parser.add_argument("-par_file"        , "--par_file"                   , help="toml par file to specify run parameters" , type=str, default="")
-parser.add_argument("-ic_file"         , "--ic_file"                    , help="initial condition file"                  , type=str, default="")
-parser.add_argument("-io_cycle_freq"   , "--io_cycle_freq"              , help="io output every k-th cycle"              , type=float, default=1e0)
-parser.add_argument("-cp_cycle_freq"   , "--cp_cycle_freq"              , help="checkpoint output every k-th cycle"      , type=float, default=1e1)
-parser.add_argument("-bte_with_E"      , "--bte_with_E"                 , help="only do 1D-bte with E"                   , type=int, default=0)
-args  = parser.parse_args()
+  parser.add_argument("-fname", "--fname"                           , help="file name to store the solution" , type=str, default="1d_glow")
+  parser.add_argument("-dir"  , "--dir"                             , help="file name to store the solution" , type=str, default="glow1d_dir")
+  parser.add_argument("-glow_op_split_scheme"  , "--glow_op_split_scheme" , help="glow op. split scheme, 0- E field is frozen while BTE solve,1-E field is solved with BTE solve" , type=int, default=0)
 
-if args.par_file != "":
-  import toml
-  tp  = toml.load(args.par_file)
-  
-  tp0                 = tp["bte"] 
-  args.Np             = tp0["Np"]
-  args.l_max          = tp0["lmax"]
-  args.collisions     = tp0["collisions"]
-  args.ev_max         = tp0["ev_max"]
-  args.ev_extend      = tp0["ev_extend"]
-  args.sp_order       = tp0["sp_order"]
-  args.spline_qpts    = tp0["spline_qpts"]
-  args.Te             = tp0["Te"]
-  args.Nr             = tp0["Nr"]
-  args.Nvt            = tp0["Nvt"]
-  args.Np             = tp0["Np"]
-  args.cfl            = tp0["dt"]
-  args.cycles         = tp0["cycles"]
-  
-  tp0                 = tp["glow_1d"] 
-  args.Tg             = tp0["Tg"]
-  
-  tp0                 = tp["solver"]
-  args.atol           = tp0["atol"]
-  args.rtol           = tp0["rtol"]
-  args.gmres_atol     = tp0["gmres_atol"]
-  args.gmres_rtol     = tp0["gmres_rtol"]
-  args.gmres_rsrt     = tp0["gmres_rsrt"]
-  args.max_iter       = tp0["max_iter"]
-  args.use_gpu        = tp0["use_gpu"]
-  args.gpu_device_id  = tp0["gpu_device_id"]
-  args.restore        = tp0["restore"]
-  args.rs_idx         = tp0["rs_idx"]
-  args.fname          = tp0["fname"]
-  args.dir            = tp0["dir"]
-  args.ic_file        = tp0["ic_file"]
-  args.io_cycle_freq  = tp0["io_cycle"]
-  args.cp_cycle_freq  = tp0["cp_cycle"]
-  
-  args.glow_op_split_scheme = tp0["split_scheme"]
-  
-  tp0                  = tp["chemistry"]
-  args.Ns             = tp0["Ns"]
-  args.NT             = tp0["NT"]
-  
-  print("intiailized solver using %s"%args.par_file)
-  
+  parser.add_argument("-par_file"        , "--par_file"                   , help="toml par file to specify run parameters" , type=str, default="")
+  parser.add_argument("-ic_file"         , "--ic_file"                    , help="initial condition file"                  , type=str, default="")
+  parser.add_argument("-io_cycle_freq"   , "--io_cycle_freq"              , help="io output every k-th cycle"              , type=float, default=1e0)
+  parser.add_argument("-cp_cycle_freq"   , "--cp_cycle_freq"              , help="checkpoint output every k-th cycle"      , type=float, default=1e1)
+  parser.add_argument("-bte_with_E"      , "--bte_with_E"                 , help="only do 1D-bte with E"                   , type=int, default=0)
+  args  = parser.parse_args()
 
-glow_1d = glow1d_boltzmann(args)
-u, v    = glow_1d.initialize()
+  if args.par_file != "":
+    import toml
+    tp  = toml.load(args.par_file)
+    
+    tp0                 = tp["bte"] 
+    args.Np             = tp0["Np"]
+    args.l_max          = tp0["lmax"]
+    args.collisions     = tp0["collisions"]
+    args.ev_max         = tp0["ev_max"]
+    args.ev_extend      = tp0["ev_extend"]
+    args.sp_order       = tp0["sp_order"]
+    args.spline_qpts    = tp0["spline_qpts"]
+    args.Te             = tp0["Te"]
+    args.Nr             = tp0["Nr"]
+    args.Nvt            = tp0["Nvt"]
+    args.Np             = tp0["Np"]
+    args.cfl            = tp0["dt"]
+    args.cycles         = tp0["cycles"]
+    
+    tp0                 = tp["glow_1d"] 
+    args.Tg             = tp0["Tg"]
+    
+    tp0                 = tp["solver"]
+    args.atol           = tp0["atol"]
+    args.rtol           = tp0["rtol"]
+    args.gmres_atol     = tp0["gmres_atol"]
+    args.gmres_rtol     = tp0["gmres_rtol"]
+    args.gmres_rsrt     = tp0["gmres_rsrt"]
+    args.max_iter       = tp0["max_iter"]
+    args.use_gpu        = tp0["use_gpu"]
+    args.gpu_device_id  = tp0["gpu_device_id"]
+    args.restore        = tp0["restore"]
+    args.rs_idx         = tp0["rs_idx"]
+    args.fname          = tp0["fname"]
+    args.dir            = tp0["dir"]
+    args.ic_file        = tp0["ic_file"]
+    args.io_cycle_freq  = tp0["io_cycle"]
+    args.cp_cycle_freq  = tp0["cp_cycle"]
+    
+    args.glow_op_split_scheme = tp0["split_scheme"]
+    
+    tp0                  = tp["chemistry"]
+    args.Ns             = tp0["Ns"]
+    args.NT             = tp0["NT"]
+    
+    print("intiailized solver using %s"%args.par_file)
 
-if args.use_gpu==1:
-  gpu_device = cp.cuda.Device(args.gpu_device_id)
-  gpu_device.use()
 
-if(args.bte_with_E == 1):
-  xp        = cp #glow_1d.xp_module 
-  a0        = xp.ones(glow_1d.Np) * 1e4  #xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
-  Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
-  uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
-else:
-  uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
-  
-# ut, ut1, vt = glow_1d.fft_analysis(u, v, args.cfl, args.atol, args.rtol, args.max_iter)
-# xp.save("%s/ut_bte.npy"%(args.dir) , ut)
-# xp.save("%s/ut1_bte.npy"%(args.dir), ut1)
-# xp.save("%s/vt_bte.npy"%(args.dir) , vt)
+  return args  
 
-# ut, vt   = glow_1d.svd_analysis(u, v, args.cfl, args.atol, args.rtol, args.max_iter)
-# xp.save("%s/ut_bte_svd.npy"%(args.dir), ut)
-# xp.save("%s/vt_bte_svd.npy"%(args.dir), vt)
+if __name__ == "__main__":
+  args    = args_parse()  
+  glow_1d = glow1d_boltzmann(args)
+  u, v    = glow_1d.initialize()
 
-# xp.save("ut_bte_svd.npy", ut)
-# xp.save("vt_bte_svd.npy", vt)
+  if args.use_gpu==1:
+    gpu_device = cp.cuda.Device(args.gpu_device_id)
+    gpu_device.use()
 
-#uu,vv   = glow_1d.solve_hybrid(u, v, args.cfl, 5e-3)
-#uu,vv   = glow_1d.solve_unit_test2(u, v, 1)
-#uu,vv   = glow_1d.solve_unit_test3(u, v)
+  if(args.bte_with_E == 1):
+    xp        = cp #glow_1d.xp_module 
+    a0        = xp.ones(glow_1d.Np) * 1e4  #xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
+    Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
+    uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
+  else:
+    uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
+    
+  # ut, ut1, vt = glow_1d.fft_analysis(u, v, args.cfl, args.atol, args.rtol, args.max_iter)
+  # xp.save("%s/ut_bte.npy"%(args.dir) , ut)
+  # xp.save("%s/ut1_bte.npy"%(args.dir), ut1)
+  # xp.save("%s/vt_bte.npy"%(args.dir) , vt)
+
+  # ut, vt   = glow_1d.svd_analysis(u, v, args.cfl, args.atol, args.rtol, args.max_iter)
+  # xp.save("%s/ut_bte_svd.npy"%(args.dir), ut)
+  # xp.save("%s/vt_bte_svd.npy"%(args.dir), vt)
+
+  # xp.save("ut_bte_svd.npy", ut)
+  # xp.save("vt_bte_svd.npy", vt)
+
+  #uu,vv   = glow_1d.solve_hybrid(u, v, args.cfl, 5e-3)
+  #uu,vv   = glow_1d.solve_unit_test2(u, v, 1)
+  #uu,vv   = glow_1d.solve_unit_test3(u, v)
 

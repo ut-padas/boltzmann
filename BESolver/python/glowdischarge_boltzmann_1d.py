@@ -935,7 +935,7 @@ class glow1d_boltzmann():
         self.op_rate        = [cp.asarray(self.op_rate[i]) for i in range(len(self.op_rate))]
         self.op_mobility    = cp.asarray(self.op_mobility)
         self.op_diffusion   = cp.asarray(self.op_diffusion)
-        
+
       return
     
     def copy_operators_D2H(self, dev_id):
@@ -980,7 +980,7 @@ class glow1d_boltzmann():
         self.op_rate        = [cp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
         self.op_mobility    = cp.asnumpy(self.op_mobility)
         self.op_diffusion   = cp.asnumpy(self.op_diffusion)
-      
+        
       return  
     
     def solve_poisson(self, ne, ni,time):
@@ -1961,7 +1961,7 @@ class glow1d_boltzmann():
         Vin1 = Vin
       
       if self.args.use_gpu==1:
-        self.copy_operators_H2D(args.gpu_device_id)
+        self.copy_operators_H2D(self.args.gpu_device_id)
         self.xp_module = cp
       else:
         self.xp_module = np

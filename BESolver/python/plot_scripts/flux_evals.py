@@ -47,11 +47,13 @@ def extract_flux_and_E(folder, xl, xr):
     num_l  = int(args["l_max"]) + 1
     vtheta = np.linspace(0, np.pi, 64)
     ff     = h5py.File("%s/macro.h5"%(folder), "r")
+    #print(ff.keys())
     
     xx        = np.array(ff["x[-1,1]"][()])
     tt        = np.array(ff["time[T]"][()])
     ne        = np.array(ff["ne[m^-3]"][()])
     fl        = np.array(ff["fl[eV^-1.5]"][()])
+    Ef        = np.array(ff["E[Vm^-1]"][()])
     evgrid    = np.array(ff["evgrid[eV]"][()])
     idx       = evgrid<20
     evgrid    = evgrid[idx]
@@ -59,7 +61,8 @@ def extract_flux_and_E(folder, xl, xr):
     Np   = len(xx)
     deg  = Np-1
     xp   = -np.cos(np.pi*np.linspace(0,deg,Np)/deg)
-    assert (xp == xx).all(), "Chebyshev point mismatch found"
+    assert np.linalg.norm(xp-xx)/np.linalg.norm(xx) < 1e-14, "Chebyshev point mismatch found"
+    
 
     V0p = np.polynomial.chebyshev.chebvander(xx, deg)
     # V0pinv: xp values to coefficients
@@ -99,21 +102,29 @@ def extract_flux_and_E(folder, xl, xr):
 
     plt.figure(figsize=(8, 4), dpi=200)
     plt.subplot(1, 2, 1)
+    #plt.imshow(np.abs(Sv_l[0]), aspect='auto', extent=extent, norm=LogNorm(vmin=1e16, vmax=1e21))
+    #plt.title(r"abs($v\cos(v_{\theta})f(x_L, v, v_{\theta})$)")
     plt.imshow(Sv_l[0], aspect='auto', extent=extent)
+    plt.title(r"$v\cos(v_{\theta})f(x_L, v, v_{\theta})$")
     plt.colorbar()
     plt.xlabel(r"energy (eV)")
     plt.ylabel(r"$v_{\theta}$")
-    plt.title(r"$x_L$")
+    
 
     plt.subplot(1, 2, 2)
+    #plt.imshow(np.abs(Sv_r[0]), aspect='auto', extent=extent, norm=LogNorm(vmin=1e16, vmax=1e21))
+    #plt.title(r"abs($v\cos(v_{\theta})f(x_R, v, v_{\theta})$)")
     plt.imshow(Sv_r[0], aspect='auto', extent=extent)
+    plt.title(r"$v\cos(v_{\theta})f(x_R, v, v_{\theta})$")
     plt.colorbar()
     plt.xlabel(r"energy (eV)")
     plt.ylabel(r"$v_{\theta}$")
-    plt.title(r"$x_R$")
+    
 
     plt.tight_layout()
     plt.show()
+
+    return {"ev": evgrid, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef}
     
     # flx_l         = flx[:, 0, :, :]
     # flx_r         = flx[:, 1, :, :]
@@ -133,8 +144,13 @@ def extract_flux_and_E(folder, xl, xr):
     # plt.show()
     
 
-extract_flux_and_E(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]))
-
+data   = extract_flux_and_E(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]))
+ev     = data["ev"]
+vtheta = data["vtheta"]
+tt     = data["time"]
+Fvt_L  = data["flux_left_bdy"] 
+Fvt_R  = data["flux_right_bdy"] 
+Ef     = data["Ef"]
 
 
 

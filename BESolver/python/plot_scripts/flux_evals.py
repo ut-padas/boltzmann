@@ -4,6 +4,7 @@ import sys
 import h5py
 from scipy.special import sph_harm
 import scipy.constants
+from matplotlib.colors import LogNorm
 
 def load_run_args(folder):
     args   = dict()
@@ -22,7 +23,7 @@ def load_run_args(folder):
         args[kv[0].strip()]=kv[1].strip().replace("'", "")
     return args
 
-def sph_harm_real(self, l, m, theta, phi):
+def sph_harm_real(l, m, theta, phi):
     # in python's sph_harm phi and theta are swapped
     Y = sph_harm(abs(m), l, phi, theta)
     if m < 0:
@@ -34,15 +35,27 @@ def sph_harm_real(self, l, m, theta, phi):
 
     return Y 
 
+def sph_vander(theta, num_l):
+    Yl = lambda l, theta : sph_harm(abs(0), l, 0.0, theta).real
+    V  = np.zeros((num_l, len(theta)))
+    for l in range(num_l):
+        V[l,:] = Yl(l, theta)
+
+    return V
 def extract_flux_and_E(folder, xl, xr):
-    args = load_run_args(folder)
-    ff   = h5py.File("%s/macro.h5"%(folder), "r")
+    args   = load_run_args(folder)
+    num_l  = int(args["l_max"]) + 1
+    vtheta = np.linspace(0, np.pi, 64)
+    ff     = h5py.File("%s/macro.h5"%(folder), "r")
     
     xx        = np.array(ff["x[-1,1]"][()])
     tt        = np.array(ff["time[T]"][()])
     ne        = np.array(ff["ne[m^-3]"][()])
     fl        = np.array(ff["fl[eV^-1.5]"][()])
     evgrid    = np.array(ff["evgrid[eV]"][()])
+    idx       = evgrid<20
+    evgrid    = evgrid[idx]
+    fl        = fl[:, :, :, idx]
     Np   = len(xx)
     deg  = Np-1
     xp   = -np.cos(np.pi*np.linspace(0,deg,Np)/deg)
@@ -70,21 +83,54 @@ def extract_flux_and_E(folder, xl, xr):
     flx_l         = flx[:, 0, :, :]
     flx_r         = flx[:, 1, :, :]
 
-    
-    plt.subplot(2, 1, 1)
-    plt.semilogy(evgrid, np.abs(flx_r[0::10, 0, :].T))
-    plt.grid(visible=True)
-    plt.xlabel(r"energy [eV]")
-    plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
-    plt.title(r"x=%.4E"%xr)
+    Vsh           = sph_vander(vtheta, num_l)
 
-    plt.subplot(2, 1, 2)
-    plt.semilogy(evgrid, np.abs(flx_l[0::10, 0, :].T))
-    plt.grid(visible=True)
-    plt.xlabel(r"energy [eV]")
-    plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
-    plt.title(r"x=%.4E"%xl)
+    flx_l         = np.einsum("iam,al->ilm", flx_l, Vsh)
+    flx_r         = np.einsum("iam,al->ilm", flx_r, Vsh)
+    vr            = np.sqrt(evgrid) * c_gamma 
+    cos_vt        = np.cos(vtheta)
+
+    dvt           = 0.5 * (vtheta[1] - vtheta[0])
+    dev           = 0.5 * (evgrid[1] - evgrid[0])
+    extent        = [evgrid[0]-dev , evgrid[-1] + dev, vtheta[0]-dvt, vtheta[-1] + dvt]
+    Sv_l          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_l)
+    Sv_r          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_r)
+
+
+    plt.figure(figsize=(8, 4), dpi=200)
+    plt.subplot(1, 2, 1)
+    plt.imshow(Sv_l[0], aspect='auto', extent=extent)
+    plt.colorbar()
+    plt.xlabel(r"energy (eV)")
+    plt.ylabel(r"$v_{\theta}$")
+    plt.title(r"$x_L$")
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(Sv_r[0], aspect='auto', extent=extent)
+    plt.colorbar()
+    plt.xlabel(r"energy (eV)")
+    plt.ylabel(r"$v_{\theta}$")
+    plt.title(r"$x_R$")
+
+    plt.tight_layout()
     plt.show()
+    
+    # flx_l         = flx[:, 0, :, :]
+    # flx_r         = flx[:, 1, :, :]
+    # plt.subplot(2, 1, 1)
+    # plt.semilogy(evgrid, np.abs(flx_r[0::10, 0, :].T))
+    # plt.grid(visible=True)
+    # plt.xlabel(r"energy [eV]")
+    # plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
+    # plt.title(r"x=%.4E"%xr)
+
+    # plt.subplot(2, 1, 2)
+    # plt.semilogy(evgrid, np.abs(flx_l[0::10, 0, :].T))
+    # plt.grid(visible=True)
+    # plt.xlabel(r"energy [eV]")
+    # plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
+    # plt.title(r"x=%.4E"%xl)
+    # plt.show()
     
 
 extract_flux_and_E(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]))

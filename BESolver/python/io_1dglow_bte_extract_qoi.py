@@ -263,7 +263,7 @@ P         = compute_kinetic_energy_tensor(spec_sp, d[0], d[3], d[2])
 
 Np        = int(d[0]["Np"])
 print("Nx= ", Np)
-ev_grid   = np.logspace(-3, np.math.log10(40), 300, base=10)
+ev_grid   = np.linspace(0, float(d[0]["ev_max"]), 512) #np.logspace(-3, np.math.log10(40), 300, base=10)
 xp        = -np.cos(np.pi*np.linspace(0,Np-1,Np) / (Np-1))
 
 for g_idx, g in enumerate(collisons):

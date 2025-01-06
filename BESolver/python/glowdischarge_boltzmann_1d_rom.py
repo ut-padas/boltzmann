@@ -71,7 +71,7 @@ class boltzmann_1d_rom():
         Vx  = list()
 
         for l in range(rom_modes):
-            uv, vx = svd(fl[l], threshold=threshold, xp=xp)
+            uv, vx = svd(fl[l], threshold=threshold[l], xp=xp)
             Uv.append(uv)
             Vx.append(vx)
             #Uv.append(xp.eye(num_p))
@@ -654,28 +654,86 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fpr
     Ps      = bte.op_po2sh
     Po      = bte.op_psh2o
 
+    spec_sp = bte.op_spec_sp
+    num_p   = spec_sp._p + 1
+    num_sh  = len(spec_sp._sph_harm_lm)
+    num_x   = len(bte.xp)
+
     F0_lm   = xp.dot(Ps, F0)
     F1_lm   = xp.dot(Ps, F1)
+
+    F0_lm_n = bte.bte_eedf_normalization(F0_lm)
+    F1_lm_n = bte.bte_eedf_normalization(F1_lm)
     
     ne0     = xp.dot(mass_op, F0_lm)
     ne1     = xp.dot(mass_op, F1_lm)
+
+    Te0     = xp.dot(temp_op, F0_lm) / ne0
+    Te1     = xp.dot(temp_op, F1_lm) / ne1
+
+    g0_0    = xp.dot(bte.op_rate[0], F0_lm_n[0::num_sh])
+    g0_1    = xp.dot(bte.op_rate[0], F1_lm_n[0::num_sh])
+
+    g2_0    = xp.dot(bte.op_rate[1], F0_lm_n[0::num_sh])
+    g2_1    = xp.dot(bte.op_rate[1], F1_lm_n[0::num_sh])
+
+
     xx      = bte.xp
 
     if xp == cp:
-        ne0 = xp.asnumpy(ne0)
-        ne1 = xp.asnumpy(ne1)
-        xx  = xp.asnumpy(xx)
-    
-    plt.figure(figsize=(10, 4), dpi=200)
-    plt.subplot(1, 4, 1)
+        ne0  = xp.asnumpy(ne0)
+        ne1  = xp.asnumpy(ne1)
 
-    plt.semilogy(xx, ne0 * param.np0, label=r"FOM (1D-BTE)")
+        Te0  = xp.asnumpy(Te0)
+        Te1  = xp.asnumpy(Te1)
+
+        g0_0 = xp.asnumpy(g0_0)
+        g0_1 = xp.asnumpy(g0_1)
+
+        g2_0 = xp.asnumpy(g2_0)
+        g2_1 = xp.asnumpy(g2_1)
+
+        xx   = xp.asnumpy(xx)
+
+        
+    
+    plt.figure(figsize=(16, 4), dpi=200)
+    plt.subplot(1, 4, 1)
+    plt.semilogy(xx, ne0 * param.np0, label=r"FOM")
     plt.semilogy(xx, ne1 * param.np0, label=r"ROM")
     plt.xlabel(r"$\hat{x}$")
     plt.ylabel(r"$n_e$ $[m^{-3}]$")
     plt.grid(visible=True)
     plt.legend()
-    plt.suptitle(r"time/T = %.4E"%(time))
+    
+    plt.subplot(1, 4, 2)
+    plt.plot(xx, Te0, label=r"FOM")
+    plt.plot(xx, Te1, label=r"ROM")
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"$T_e$ $[eV]$")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(1, 4, 3)
+    plt.semilogy(xx, g0_0, label=r"FOM")
+    plt.semilogy(xx, np.abs(g0_1), label=r"ROM")
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"rate coefficient $[m^{3}s^{-1}]$")
+    plt.title(r"momentum transfer")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(1, 4, 4)
+    plt.semilogy(xx, g2_0, label=r"FOM")
+    plt.semilogy(xx, np.abs(g2_1), label=r"ROM")
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"rate coefficient $[m^{3}s^{-1}]$")
+    plt.title(r"ionization")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.suptitle(r"time = %.4E [T]"%(time))
+    plt.tight_layout()
 
     plt.savefig("%s_rom_%s.png"%(args.fname, fprefix))
     plt.close()
@@ -696,10 +754,16 @@ if __name__ == "__main__":
     xp      = glow_1d.xp_module
 
     bte_rom = boltzmann_1d_rom(glow_1d)
-    Et      = lambda t: xp.ones_like(glow_1d.xp) * 1e3 * xp.sin(2 * xp.pi * t)
+    xxg     = xp.asarray(glow_1d.xp)
+    #Et      = lambda t: xp.ones_like(glow_1d.xp) * 1e4 * xp.sin(2 * xp.pi * t)
+    Et      = lambda t: (xxg**3) * 1e4 * xp.sin(2 * xp.pi * t)
     
-    bte_rom.construct_rom_basis(Et, v, 0, 1, dt, 30, 1e-4)
+    bte_rom.construct_rom_basis(Et, v, 0, 1, dt, 30, [1e-6, 1e-6])
     bte_rom.init()
+
+    with open("%s_rom_size.txt"%(glow_1d.args.fname), 'w') as f:
+        f.write(str(bte_rom.vec_shape)+"\n")
+    f.close()
 
     F       = xp.copy(v)
     Fo      = xp.copy(v)
@@ -708,7 +772,7 @@ if __name__ == "__main__":
     F1      = bte_rom.decode(Fr)
 
     tt      = 0
-    tT      = 2
+    tT      = 3
     idx     = 0
     io_freq = 100
     while tt < tT:

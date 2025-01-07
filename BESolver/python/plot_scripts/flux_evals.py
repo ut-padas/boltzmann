@@ -58,9 +58,9 @@ def extract_flux_and_E(folder, xl, xr):
     idx       = evgrid<20
     evgrid    = evgrid[idx]
     fl        = fl[:, :, :, idx]
-    Np   = len(xx)
-    deg  = Np-1
-    xp   = -np.cos(np.pi*np.linspace(0,deg,Np)/deg)
+    Np        = len(xx)
+    deg       = Np-1
+    xp        = -np.cos(np.pi*np.linspace(0,deg,Np)/deg)
     assert np.linalg.norm(xp-xx)/np.linalg.norm(xx) < 1e-14, "Chebyshev point mismatch found"
     
 
@@ -69,7 +69,13 @@ def extract_flux_and_E(folder, xl, xr):
     ident  = np.eye(Np)
     V0pinv = np.linalg.solve(V0p, ident)
 
-    xnew   = np.array([xl, xr])
+    xlidx  = np.argmin(np.abs(xx-xl))
+    xridx  = np.argmin(np.abs(xx-xr))
+
+    print(xl, xx[xlidx], xr, xx[xridx])
+
+    #xnew   = np.array([xl, xr])
+    xnew   = np.array([xx[xlidx], xx[xridx]])
     P1     = np.dot(np.polynomial.chebyshev.chebvander(xnew, deg), V0pinv)
 
     flx    = np.einsum("il,albc->aibc", P1, fl)
@@ -100,8 +106,8 @@ def extract_flux_and_E(folder, xl, xr):
     Sv_r          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_r)
 
 
-    plt.figure(figsize=(8, 4), dpi=200)
-    plt.subplot(1, 2, 1)
+    plt.figure(figsize=(12, 4), dpi=200)
+    plt.subplot(1, 3, 1)
     #plt.imshow(np.abs(Sv_l[0]), aspect='auto', extent=extent, norm=LogNorm(vmin=1e16, vmax=1e21))
     #plt.title(r"abs($v\cos(v_{\theta})f(x_L, v, v_{\theta})$)")
     plt.imshow(Sv_l[0], aspect='auto', extent=extent)
@@ -111,11 +117,18 @@ def extract_flux_and_E(folder, xl, xr):
     plt.ylabel(r"$v_{\theta}$")
     
 
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 3, 2)
     #plt.imshow(np.abs(Sv_r[0]), aspect='auto', extent=extent, norm=LogNorm(vmin=1e16, vmax=1e21))
     #plt.title(r"abs($v\cos(v_{\theta})f(x_R, v, v_{\theta})$)")
     plt.imshow(Sv_r[0], aspect='auto', extent=extent)
     plt.title(r"$v\cos(v_{\theta})f(x_R, v, v_{\theta})$")
+    plt.colorbar()
+    plt.xlabel(r"energy (eV)")
+    plt.ylabel(r"$v_{\theta}$")
+
+    plt.subplot(1, 3, 3)
+    plt.imshow((Sv_r[0] - Sv_l[0]), aspect='auto', extent=extent)
+    plt.title(r"net flux")
     plt.colorbar()
     plt.xlabel(r"energy (eV)")
     plt.ylabel(r"$v_{\theta}$")

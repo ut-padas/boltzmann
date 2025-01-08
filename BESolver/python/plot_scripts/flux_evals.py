@@ -101,7 +101,9 @@ def extract_flux_and_E(folder, xl, xr):
 
     dvt           = 0.5 * (vtheta[1] - vtheta[0])
     dev           = 0.5 * (evgrid[1] - evgrid[0])
+    dvr           = 0.5 * (vr[1] - vr[0])
     extent        = [evgrid[0]-dev , evgrid[-1] + dev, vtheta[0]-dvt, vtheta[-1] + dvt]
+    #extent        = [vr[0]-dvr , vr[-1] + dvr, vtheta[0]-dvt, vtheta[-1] + dvt]
     Sv_l          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_l)
     Sv_r          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_r)
 
@@ -137,7 +139,7 @@ def extract_flux_and_E(folder, xl, xr):
     plt.tight_layout()
     plt.show()
 
-    return {"ev": evgrid, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef}
+    return {"ev": evgrid, "vr": vr, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef}
     
     # flx_l         = flx[:, 0, :, :]
     # flx_r         = flx[:, 1, :, :]
@@ -159,6 +161,7 @@ def extract_flux_and_E(folder, xl, xr):
 
 data   = extract_flux_and_E(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]))
 ev     = data["ev"]
+vr     = data["vr"]
 vtheta = data["vtheta"]
 tt     = data["time"]
 Fvt_L  = data["flux_left_bdy"] 

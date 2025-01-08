@@ -139,7 +139,7 @@ def extract_flux_and_E(folder, xl, xr):
     plt.tight_layout()
     plt.show()
 
-    return {"ev": evgrid, "vr": vr, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef}
+    return {"ev": evgrid, "vr": vr/vth, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef, "vth": vth}
     
     # flx_l         = flx[:, 0, :, :]
     # flx_r         = flx[:, 1, :, :]

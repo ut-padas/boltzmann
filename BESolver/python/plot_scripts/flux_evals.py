@@ -42,12 +42,31 @@ def sph_vander(theta, num_l):
         V[l,:] = Yl(l, theta)
 
     return V
+
+def time_average(qoi, tt):
+    """
+    computes the time average on grids
+    """
+    # check if tt is uniform
+    nT   = len(tt)
+    T    = (tt[-1]-tt[0])
+    dt   = T/(nT-1)
+    
+    assert abs(tt[1] -tt[0] - dt) < 1e-10
+    
+    tw    = np.ones_like(tt) * dt
+    tw[0] = 0.5 * tw[0]; tw[-1] = 0.5 * tw[-1];
+    
+    assert (T-np.sum(tw)) < 1e-12
+    
+    return np.dot(tw, qoi)
+
 def extract_flux_and_E(folder, xl, xr):
     args   = load_run_args(folder)
     num_l  = int(args["l_max"]) + 1
     vtheta = np.linspace(0, np.pi, 64)
     ff     = h5py.File("%s/macro.h5"%(folder), "r")
-    #print(ff.keys())
+    print(ff.keys())
     
     xx        = np.array(ff["x[-1,1]"][()])
     tt        = np.array(ff["time[T]"][()])
@@ -55,6 +74,17 @@ def extract_flux_and_E(folder, xl, xr):
     fl        = np.array(ff["fl[eV^-1.5]"][()])
     Ef        = np.array(ff["E[Vm^-1]"][()])
     evgrid    = np.array(ff["evgrid[eV]"][()])
+    ki        = np.array(ff["ki[m^3s^{-1}]"][()])
+    ip_avg    = np.array(ff["avg_ion_prod[m^-3s^{-1}]"][()])
+    uz        = np.array(ff["uz[ms^{-1}]"][()])
+    ux        = np.array(ff["ux[ms^{-1}]"][()])
+    L         = (2.54e-2 / 2)
+    tau       = 1/13.56e6
+
+    neuz      = ne * uz 
+    neuz_avg  = time_average(neuz, tt)
+    ne_avg    = time_average(ne, tt)
+
     idx       = evgrid<20
     evgrid    = evgrid[idx]
     fl        = fl[:, :, :, idx]
@@ -73,6 +103,15 @@ def extract_flux_and_E(folder, xl, xr):
     xridx  = np.argmin(np.abs(xx-xr))
 
     print(xl, xx[xlidx], xr, xx[xridx])
+
+    dx      = (xx[xridx] - xx[xlidx]) * L
+    dne     = tau * np.abs(0.5 * dx * (ip_avg[xlidx] + ip_avg[xridx]) - (neuz_avg[xridx] - neuz_avg[xlidx])) / (0.5 * dx * (ne_avg[xlidx] + ne_avg[xridx]))
+    print("dne : %.4E"%(dne))
+    
+    #print(ne[-1,:] - ne[0,:])
+    plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.abs(ne[0,:]))
+    #plt.semilogy(xx, ne[-1,:])
+    plt.show()
 
     #xnew   = np.array([xl, xr])
     xnew   = np.array([xx[xlidx], xx[xridx]])

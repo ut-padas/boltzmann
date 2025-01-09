@@ -85,7 +85,7 @@ def extract_flux_and_E(folder, xl, xr):
     neuz_avg  = time_average(neuz, tt)
     ne_avg    = time_average(ne, tt)
 
-    idx       = evgrid<20
+    idx       = evgrid<80
     evgrid    = evgrid[idx]
     fl        = fl[:, :, :, idx]
     Np        = len(xx)
@@ -146,6 +146,9 @@ def extract_flux_and_E(folder, xl, xr):
     Sv_l          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_l)
     Sv_r          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_r)
 
+    gmx = vr/vth
+    print("ne =%.4E from trapz    = %.4E"%(ne[0, xlidx], np.trapezoid(mm_fac * (gmx)**2 * flx[0, 0, 0, :], gmx)))
+    print("ne uz =%.4E from trapz = %.4E"%(ne[0, xlidx] * uz[0, xlidx], vth * np.trapezoid(np.sqrt(4*np.pi/3) * (gmx)**3 * flx[0, 0, 1, :], gmx)))
 
     plt.figure(figsize=(12, 4), dpi=200)
     plt.subplot(1, 3, 1)

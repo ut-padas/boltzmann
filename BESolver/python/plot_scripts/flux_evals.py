@@ -108,10 +108,10 @@ def extract_flux_and_E(folder, xl, xr):
     dne     = tau * np.abs(0.5 * dx * (ip_avg[xlidx] + ip_avg[xridx]) - (neuz_avg[xridx] - neuz_avg[xlidx])) / (0.5 * dx * (ne_avg[xlidx] + ne_avg[xridx]))
     print("dne : %.4E"%(dne))
     
-    #print(ne[-1,:] - ne[0,:])
-    plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.abs(ne[0,:]))
-    #plt.semilogy(xx, ne[-1,:])
-    plt.show()
+    # #print(ne[-1,:] - ne[0,:])
+    # plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.abs(ne[0,:]))
+    # #plt.semilogy(xx, ne[-1,:])
+    # plt.show()
 
     #xnew   = np.array([xl, xr])
     xnew   = np.array([xx[xlidx], xx[xridx]])
@@ -146,9 +146,9 @@ def extract_flux_and_E(folder, xl, xr):
     Sv_l          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_l)
     Sv_r          = np.einsum("a,b,tba->tba", vr, cos_vt, flx_r)
 
-    gmx = vr/vth
-    print("ne =%.4E from trapz    = %.4E"%(ne[0, xlidx], np.trapezoid(mm_fac * (gmx)**2 * flx[0, 0, 0, :], gmx)))
-    print("ne uz =%.4E from trapz = %.4E"%(ne[0, xlidx] * uz[0, xlidx], vth * np.trapezoid(np.sqrt(4*np.pi/3) * (gmx)**3 * flx[0, 0, 1, :], gmx)))
+    # gmx = vr/vth
+    # print("ne =%.4E from trapz    = %.4E"%(ne[0, xlidx], np.trapezoid(mm_fac * (gmx)**2 * flx[0, 0, 0, :], gmx)))
+    # print("ne uz =%.4E from trapz = %.4E"%(ne[0, xlidx] * uz[0, xlidx], vth * np.trapezoid(np.sqrt(4*np.pi/3) * (gmx)**3 * flx[0, 0, 1, :], gmx)))
 
     plt.figure(figsize=(12, 4), dpi=200)
     plt.subplot(1, 3, 1)
@@ -181,7 +181,7 @@ def extract_flux_and_E(folder, xl, xr):
     plt.tight_layout()
     plt.show()
 
-    return {"ev": evgrid, "vr": vr/vth, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef, "vth": vth}
+    return {"tt": tt, "ev": evgrid, "vr": vr/vth, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef, "vth": vth, "xx":xx, "xlidx":xlidx, "xridx":xridx, "uz": uz, "ne": ne}
     
     # flx_l         = flx[:, 0, :, :]
     # flx_r         = flx[:, 1, :, :]
@@ -202,6 +202,7 @@ def extract_flux_and_E(folder, xl, xr):
     
 
 data   = extract_flux_and_E(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]))
+tt     = data["tt"]
 ev     = data["ev"]
 vr     = data["vr"]
 vtheta = data["vtheta"]
@@ -209,6 +210,29 @@ tt     = data["time"]
 Fvt_L  = data["flux_left_bdy"] 
 Fvt_R  = data["flux_right_bdy"] 
 Ef     = data["Ef"]
+xlidx  = data["xlidx"]
+xridx  = data["xridx"]
+xx     = data["xx"]
+uz     = data["uz"]
+ne     = data["ne"]
+
+for tidx in range(0, len(tt), 10):
+    # left boundary
+    r1     = ne[tidx, xlidx] * uz[tidx, xlidx]
+    a1     = 2*np.pi * np.trapezoid(np.trapezoid(np.einsum("ijk,j->ijk", Fvt_L, np.sin(vtheta))[tidx,:, :], vtheta, axis=0) * vr**2 , vr)
+    
+    # right boundary
+    r2     = ne[tidx, xridx] * uz[tidx, xridx] 
+    a2     = 2*np.pi * np.trapezoid(np.trapezoid(np.einsum("ijk,j->ijk", Fvt_R, np.sin(vtheta))[tidx,:, :], vtheta, axis=0) * vr**2 , vr)
+
+    print("t = %.4E [s] at left ||uzne - int(fvtL)||/||uzne|| = %.8E  and right ||uzne - int(fvtL)||/||uzne|| = %.8E"%(tt[tidx], np.abs(1-a1/r1), np.abs(1-a2/r2)))
+
+    
+    
+
+
+
+
 
 
 

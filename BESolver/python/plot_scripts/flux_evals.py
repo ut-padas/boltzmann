@@ -105,11 +105,13 @@ def extract_flux_and_E(folder, xl, xr):
     print(xl, xx[xlidx], xr, xx[xridx])
 
     dx      = (xx[xridx] - xx[xlidx]) * L
-    dne     = tau * np.abs(0.5 * dx * (ip_avg[xlidx] + ip_avg[xridx]) - (neuz_avg[xridx] - neuz_avg[xlidx])) / np.max(ne_avg) 
+    #dne     = tau * np.abs(0.5 * dx * (ip_avg[xlidx] + ip_avg[xridx]) - (neuz_avg[xridx] - neuz_avg[xlidx])) / np.max(ne_avg) 
+    dne     = tau * np.abs(0.5 * dx * (ip_avg[xlidx] + ip_avg[xridx]) - (neuz_avg[xridx] - neuz_avg[xlidx])) / (0.5 * dx * (ne_avg[xlidx] + ne_avg[xridx]))
     print("dne : %.4E"%(dne))
     
     #print(ne[-1,:] - ne[0,:])
-    plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.max(ne[0,:]))
+    #plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.max(ne[0,:]))
+    plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.abs(ne[0,:]))
     #plt.semilogy(xx, ne[-1,:])
     plt.show()
 

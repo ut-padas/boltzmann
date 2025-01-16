@@ -1,4 +1,4 @@
-# Eulerian electron Boltzmann solver for low-temperature plasmas (LTPs)
+# Boltzsim : Eulerian electron Boltzmann solver for low-temperature plasmas (LTPs)
 
 This repository contains Python based Eulerian electron Boltzmann solver based on Galerkin discretization. We expand the electron distribution function (EDF) using spherical coordinates, with B-splines in radial, and spherical harmonics in angular directions. The framework supports the following collision mechanisms. 
 

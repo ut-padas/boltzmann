@@ -71,10 +71,37 @@ def trapz_w(qx):
     assert np.abs((qx[-1] - qx[0])-np.sum(qw)) < 1e-12
     return qw
 
-def extract_flux_and_E(folder, xl, xr, ev_cutoff=80):
+def quad_on_grid(vr, vt, qoi):
+    '''
+    Note assumes, qoi axis (0-time, 1-vr, 2-vt)
+    '''
+    assert qoi.shape[1] == len(vr)
+    assert qoi.shape[2] == len(vt)
+
+    # evaluate v-space quad on v-space grid
+    # i - denotes vr cell index. 
+    # j - denotes vt cell index. 
+
+    dvr  = vr[1:] - vr[0:-1]
+    dvt  = vt[1:] - vt[0:-1]
+
+    iqoi = np.zeros((qoi.shape[0], len(dvr), len(dvt)))
+    iqoi = 0.5 * (qoi[:, 1:, :] * (vr[1:]**2)[np.newaxis, :, np.newaxis] + qoi[:, 0:-1, :] * (vr[0:-1]**2)[np.newaxis, :, np.newaxis]) * dvr[np.newaxis, :, np.newaxis]
+    iqoi = 0.5 * (iqoi[:, :, 1:] * np.sin(vt[1:]) + iqoi[:, :, 0:-1] * np.sin(vt[0:-1])) * dvt * np.pi * 2
+
+    return iqoi
+
+def extract_data(folder, xl, xr, num_vt=16, ev_cutoff=80):
     args   = load_run_args(folder)
     num_l  = int(args["l_max"]) + 1
-    vtheta = np.linspace(0, np.pi, 64)
+    
+    # vtheta = np.linspace(0, np.pi, 64)
+    # vthetaw= trapz_w(vtheta)
+
+    cvtq,vtqw = np.polynomial.legendre.leggauss(num_vt)
+    cvtq,vtqw = np.flip(cvtq), np.flip(vtqw)
+    vtq       = np.arccos(cvtq)
+    
     ff     = h5py.File("%s/macro.h5"%(folder), "r")
     print(ff.keys())
     
@@ -91,7 +118,7 @@ def extract_flux_and_E(folder, xl, xr, ev_cutoff=80):
     ux        = np.array(ff["ux[ms^{-1}]"][()])
     L         = (2.54e-2 / 2)
     tau       = 1/13.56e6
-    c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    c_gamma   = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
     # from : https://github.com/ut-padas/boltzmann/blob/main/BESolver/python/qoi_process.py - compute_radial_components
     vth           = (float) (args["Te"])**0.5 * c_gamma
     mm_fac        = np.sqrt(4 * np.pi) 
@@ -117,9 +144,8 @@ def extract_flux_and_E(folder, xl, xr, ev_cutoff=80):
     gmx       = vr/vth
     gmw       = trapz_w(gmx)
     evw       = trapz_w(evgrid)
-    vthetaw   = trapz_w(vtheta)
     eedf_const= 2 * (vth/c_gamma)**3  / mm_fac  
-    cos_vt    = np.cos(vtheta)
+    cos_vt    = cvtq
     assert np.linalg.norm(xp-xx)/np.linalg.norm(xx) < 1e-14, "Chebyshev point mismatch found"
     
 
@@ -151,108 +177,164 @@ def extract_flux_and_E(folder, xl, xr, ev_cutoff=80):
     nex    = np.einsum("il,al->ai"    , P1, ne)
     neuzx  = np.einsum("il,al->ai"    , P1, neuz)
     
-    #scale        = np.array([np.dot(mm_op / mm_fac, v_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(n_pts)])
     flx           = eedf_const * flx
 
     flx_l         = flx[:, 0, :, :]
     flx_r         = flx[:, 1, :, :]
 
-    Vsh           = sph_vander(vtheta, num_l)
+    Vsh           = sph_vander(vtq, num_l)
 
-    flx_l         = np.einsum("iam,al->ilm", flx_l, Vsh)
-    flx_r         = np.einsum("iam,al->ilm", flx_r, Vsh)
+    flx_l         = np.swapaxes(np.einsum("iam,al->ilm", flx_l, Vsh), 1, 2)
+    flx_r         = np.swapaxes(np.einsum("iam,al->ilm", flx_r, Vsh), 1, 2)
 
-    mx_l          = 2 * np.pi * np.dot(np.dot(flx_l * gmx**2 , gmw) * np.sin(vtheta), vthetaw) 
-    mx_r          = 2 * np.pi * np.dot(np.dot(flx_r * gmx**2 , gmw) * np.sin(vtheta), vthetaw)
+    mx_l          = 2 * np.pi * np.dot(np.dot(flx_l, vtqw) * gmx**2, gmw) 
+    mx_r          = 2 * np.pi * np.dot(np.dot(flx_r, vtqw) * gmx**2, gmw)
 
     flx_l         = np.einsum("t,tar->tar",(1 / mx_l), flx_l)
     flx_r         = np.einsum("t,tar->tar",(1 / mx_r), flx_r)
-    #print(flx_r.shape)
     
+    Fv_l          = flx_l * (nex[:, 0])[:, np.newaxis, np.newaxis]
+    Fv_r          = flx_r * (nex[:, 1])[:, np.newaxis, np.newaxis]
 
-    dvt           = 0.5 * (vtheta[1] - vtheta[0])
-    dev           = 0.5 * (evgrid[1] - evgrid[0])
-    dvr           = 0.5 * (vr[1] - vr[0])
-    extent        = [evgrid[0]-dev , evgrid[-1] + dev, vtheta[0]-dvt, vtheta[-1] + dvt]
-    #extent        = [vr[0]-dvr , vr[-1] + dvr, vtheta[0]-dvt, vtheta[-1] + dvt]
-    Sv_l          = np.einsum("a,b,tba->tba", gmx * vth, cos_vt, flx_l)
-    Sv_r          = np.einsum("a,b,tba->tba", gmx * vth, cos_vt, flx_r)
+    # norm_cl       = 2 * np.pi * np.dot(np.dot(Fv_l, vtqw) * gmx**2, gmw) /nex[:, 0]
+    # norm_cr       = 2 * np.pi * np.dot(np.dot(Fv_r, vtqw) * gmx**2, gmw) /nex[:, 1]
+
+    # for tidx in range(0, len(tt),10):
+    #     print("time = %.2E norm_const_left = %.8E norm_const_right = %.8E  with ev cutoff = %.2E"%(tt[tidx],norm_cl[tidx], norm_cr[tidx], ev_cutoff))
+
+    
+    Sv_l          = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_l)
+    Sv_r          = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_r)
 
 
-    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l * gmx**2 , gmw) * np.sin(vtheta), vthetaw) * nex[:, 0]
-    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r * gmx**2 , gmw) * np.sin(vtheta), vthetaw) * nex[:, 1]
+    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l, vtqw) * gmx**2, gmw) * nex[:, 0]
+    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r, vtqw) * gmx**2, gmw) * nex[:, 1]
 
     a2_l          = neuzx[:, 0]
     a2_r          = neuzx[:, 1]
 
+    norm_cl       = (a2_l/a1_l)
+    norm_cr       = (a2_r/a1_r)
+
+    # for tidx in range(0, len(tt),10):
+    #     print("time = %.2E norm_const_left = %.8E norm_const_right = %.8E  with ev cutoff = %.2E"%(tt[tidx],norm_cl[tidx], norm_cr[tidx], ev_cutoff))
+
     Sv_l          = np.einsum("t,tar->tar", (a2_l/a1_l) * nex[:, 0], Sv_l)
     Sv_r          = np.einsum("t,tar->tar", (a2_r/a1_r) * nex[:, 1], Sv_r)
 
-    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l * gmx**2 , gmw) * np.sin(vtheta), vthetaw) 
-    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r * gmx**2 , gmw) * np.sin(vtheta), vthetaw) 
+    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l, vtqw) * gmx**2, gmw) 
+    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r, vtqw) * gmx**2, gmw) 
 
     # for tidx in range(0, len(tt), 10):
     #     print("a1_l = %.8E a2_l = %.8E a1_r=%.8E a2_r=%.8E"%(a1_l[tidx], a2_l[tidx], a1_r[tidx], a2_r[tidx]))
 
-    plt.figure(figsize=(12, 4), dpi=200)
-    plt.subplot(1, 3, 1)
-    #plt.imshow(np.abs(Sv_l[0]), aspect='auto', extent=extent, norm=LogNorm(vmin=1e16, vmax=1e21))
-    #plt.title(r"abs($v\cos(v_{\theta})f(x_L, v, v_{\theta})$)")
-    plt.imshow(Sv_l[0], aspect='auto', extent=extent)
-    plt.title(r"$v\cos(v_{\theta})f(x_L, v, v_{\theta})$")
+    return {"tt": tt, 
+            "ev": evgrid, 
+            "vr": vr/vth, 
+            "vr_weights":gmw,
+            "vtheta": vtq,
+            "vtheta_weights": vtqw,
+            "time": tt,
+            "fv_left_bdy": Fv_l,
+            "fv_right_bdy": Fv_r,
+            "flux_left_bdy": Sv_l,
+            "flux_right_bdy": Sv_r,
+            "Ef": Ef, 
+            "vth": vth,
+            "xx":xx,
+            "xlidx":xlidx,
+            "xridx":xridx,
+            "uz": uz,
+            "ne": ne}
+    
+    
+    
+def plot_data(data, tidx):
+    c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    vth           = data["vth"] 
+    vr            = data["vr"]
+    vtheta        = data["vtheta"]
+    Sv_l          = data["flux_left_bdy"] 
+    Sv_r          = data["flux_right_bdy"] 
+
+    evgrid        = (vr * vth)**2 /c_gamma**2
+    iFvt_L        = quad_on_grid(vr, vtheta, Sv_l)
+    iFvt_R        = quad_on_grid(vr, vtheta, Sv_r)
+    iS            = (iFvt_R - iFvt_L)
+
+    
+    dvt           = 0.5 * (vtheta[1] - vtheta[0])
+    dev           = 0.5 * (evgrid[1] - evgrid[0])
+    extent        = [evgrid[0]-dev , evgrid[-1] + dev, vtheta[0]-dvt, vtheta[-1] + dvt]
+
+    plt.figure(figsize=(12, 6), dpi=200)
+    plt.subplot(2, 3, 1)
+    plt.imshow(np.abs(Sv_l[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e11, vmax=1e21))
+    plt.title(r"abs($v\cos(v_{\theta})f(x_L, v, v_{\theta})$)")
+    #plt.imshow(Sv_l[0], aspect='auto', extent=extent)
+    #plt.title(r"$v\cos(v_{\theta})f(x_L, v, v_{\theta})$")
     plt.colorbar()
     plt.xlabel(r"energy (eV)")
     plt.ylabel(r"$v_{\theta}$")
     
 
-    plt.subplot(1, 3, 2)
-    #plt.imshow(np.abs(Sv_r[0]), aspect='auto', extent=extent, norm=LogNorm(vmin=1e16, vmax=1e21))
-    #plt.title(r"abs($v\cos(v_{\theta})f(x_R, v, v_{\theta})$)")
-    plt.imshow(Sv_r[0], aspect='auto', extent=extent)
-    plt.title(r"$v\cos(v_{\theta})f(x_R, v, v_{\theta})$")
+    plt.subplot(2, 3, 2)
+    plt.imshow(np.abs(Sv_r[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e11, vmax=1e21))
+    plt.title(r"abs($v\cos(v_{\theta})f(x_R, v, v_{\theta})$)")
+    #plt.imshow(Sv_r[0], aspect='auto', extent=extent)
+    #plt.title(r"$v\cos(v_{\theta})f(x_R, v, v_{\theta})$")
     plt.colorbar()
     plt.xlabel(r"energy (eV)")
     plt.ylabel(r"$v_{\theta}$")
 
-    plt.subplot(1, 3, 3)
-    plt.imshow((Sv_r[0] - Sv_l[0]), aspect='auto', extent=extent)
-    plt.title(r"net flux")
+    plt.subplot(2, 3, 3)
+    plt.imshow(np.abs(Sv_r[tidx].T-Sv_l[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e10, vmax=1e19))
+    plt.title(r"abs(net flux)")
+    #plt.imshow((Sv_r[0] - Sv_l[0]), aspect='auto', extent=extent)
+    #plt.title(r"net flux")
+    plt.colorbar()
+    plt.xlabel(r"energy (eV)")
+    plt.ylabel(r"$v_{\theta}$")
+
+    plt.subplot(2, 3, 4)
+    plt.imshow((iFvt_L[tidx].T), aspect='auto', extent=extent)
+    plt.colorbar()
+    plt.title(r"$\int_{\Omega_v}v\cos(v_{\theta})f(x_L, v, v_{\theta}) d \Omega_v$")
+    plt.xlabel(r"energy (eV)")
+    plt.ylabel(r"$v_{\theta}$")
+
+    plt.subplot(2, 3, 5)
+    plt.imshow((iFvt_R[tidx].T), aspect='auto', extent=extent)
+    plt.colorbar()
+    plt.title(r"$\int_{\Omega_v}v\cos(v_{\theta})f(x_L, v, v_{\theta}) d \Omega_v$")
+    plt.xlabel(r"energy (eV)")
+    plt.ylabel(r"$v_{\theta}$")
+
+    plt.subplot(2, 3, 6)
+    plt.imshow((iS[tidx].T), aspect='auto', extent=extent)
+    plt.title(r"$\int_{\Omega_v} \text{net flux} d \Omega_v$")
     plt.colorbar()
     plt.xlabel(r"energy (eV)")
     plt.ylabel(r"$v_{\theta}$")
     
-
+    plt.suptitle("time = %.4E T"%(data["tt"][tidx]))
     plt.tight_layout()
+    
     plt.show()
+    plt.close()    
 
-    return {"tt": tt, "ev": evgrid, "vr": vr/vth, "vtheta": vtheta, "time": tt, "flux_left_bdy": Sv_l, "flux_right_bdy": Sv_r, "Ef": Ef, "vth": vth, "xx":xx, "xlidx":xlidx, "xridx":xridx, "uz": uz, "ne": ne}
-    
-    # flx_l         = flx[:, 0, :, :]
-    # flx_r         = flx[:, 1, :, :]
-    # plt.subplot(2, 1, 1)
-    # plt.semilogy(evgrid, np.abs(flx_r[0::10, 0, :].T))
-    # plt.grid(visible=True)
-    # plt.xlabel(r"energy [eV]")
-    # plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
-    # plt.title(r"x=%.4E"%xr)
-
-    # plt.subplot(2, 1, 2)
-    # plt.semilogy(evgrid, np.abs(flx_l[0::10, 0, :].T))
-    # plt.grid(visible=True)
-    # plt.xlabel(r"energy [eV]")
-    # plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
-    # plt.title(r"x=%.4E"%xl)
-    # plt.show()
-    
-
-data   = extract_flux_and_E(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]))
+data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), num_vt=64, ev_cutoff=30)
 tt     = data["tt"]
 ev     = data["ev"]
 vr     = data["vr"]
+vr_w   = data["vr_weights"]
 vtheta = data["vtheta"]
+vt_w   = data["vtheta_weights"]
 tt     = data["time"]
-Fvt_L  = data["flux_left_bdy"] 
-Fvt_R  = data["flux_right_bdy"] 
+Fv_L   = data["fv_left_bdy"]
+Fv_R   = data["fv_right_bdy"]
+Flux_L = data["flux_left_bdy"] 
+Flux_R = data["flux_right_bdy"] 
 Ef     = data["Ef"]
 xlidx  = data["xlidx"]
 xridx  = data["xridx"]
@@ -262,9 +344,6 @@ ne     = data["ne"]
 dx     = xx[xridx] - xx[xlidx]
 L      = 2.54e-2 / 2 
 
-vr_w   = trapz_w(vr)
-vt_w   = trapz_w(vtheta)
-
 print("\
 r1      = ne[tidx, xlidx] * uz[tidx, xlidx]\n\
 a1      = 2*np.pi * np.dot(np.dot(Fvt_L[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w)\n\
@@ -273,22 +352,32 @@ a2      = 2*np.pi * np.dot(np.dot(Fvt_R[tidx] * vr**2 , vr_w) * np.sin(vtheta), 
 S       = (a2-a1)\n\
 R       = (r2-r1)")
 
+#### Example on how to do the cell-wise quad. 
+# this will do the cell wise quad. for all time points, 
+# iFvt_R - (axis-0 is time, axis-1 vr_i, axis-2, vtheta_j) where vr_i in [0, len(vr)-1] vtheta_j in [0, len(vtheta)-1]
+iFvt_L  = quad_on_grid(vr, vtheta, Flux_L)
+iFvt_R  = quad_on_grid(vr, vtheta, Flux_R)
 
+plot_data(data, tidx=0)
 for tidx in range(0, len(tt), 10):
     # left boundary
     r1      = ne[tidx, xlidx] * uz[tidx, xlidx]
-    a1      = 2*np.pi * np.dot(np.dot(Fvt_L[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w)
+    a1      = 2*np.pi * np.dot(np.dot(Flux_L[tidx], vt_w) * vr**2, vr_w)
+    b1      = np.sum(iFvt_L[tidx])
     
     # right boundary
     r2      = ne[tidx, xridx] * uz[tidx, xridx] 
-    a2      = 2*np.pi * np.dot(np.dot(Fvt_R[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w) 
+    a2      = 2*np.pi * np.dot(np.dot(Flux_R[tidx], vt_w) * vr**2, vr_w) 
+    b2      = np.sum(iFvt_R[tidx])
 
     S       = (a2-a1)
     R       = (r2-r1)
 
-    print("a1 = %.8E r1 = %.8E a2 = %.8E r2 = %.8E S=%.8E R=%.8E np.abs(1-S/R) = %.8E"%(a1, r1, a2, r2, S, R, np.abs(1-R/S)))
+
+    print("np.abs(1-b1/a1) = %.4E , np.abs(1-b2/a2) = %.4E, a1 = %.8E r1 = %.8E a2 = %.8E r2 = %.8E S=%.8E R=%.8E np.abs(1-S/R) = %.8E"%(np.abs(1-b1/a1), np.abs(1-b1/a2), a1, r1, a2, r2, S, R, np.abs(1-R/S)))
     #print("t = %.4E [s] at left ||uzne - int(fvtL)||/||uzne|| = %.8E  and right ||uzne - int(fvtL)||/||uzne|| = %.8E net flux relative error=%.8E "%(tt[tidx], np.abs(1-a1/r1), np.abs(1-a2/r2), np.abs(1-(S/R))))
 
+    
     
     
 

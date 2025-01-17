@@ -355,20 +355,28 @@ R       = (r2-r1)")
 #### Example on how to do the cell-wise quad. 
 # this will do the cell wise quad. for all time points, 
 # iFvt_R - (axis-0 is time, axis-1 vr_i, axis-2, vtheta_j) where vr_i in [0, len(vr)-1] vtheta_j in [0, len(vtheta)-1]
-iFvt_L  = quad_on_grid(vr, vtheta, Flux_L)
-iFvt_R  = quad_on_grid(vr, vtheta, Flux_R)
+iFlux_L  = quad_on_grid(vr, vtheta, Flux_L)
+iFlux_R  = quad_on_grid(vr, vtheta, Flux_R)
+
+iFv_L    = quad_on_grid(vr, vtheta, Fv_L)
+iFv_R    = quad_on_grid(vr, vtheta, Fv_R)
+iFv_ic   = 0.5 * (iFv_L + iFv_R)
+#print(np.sum(iFv_L[0]), ne[0,xlidx])
+
+
+
 
 plot_data(data, tidx=0)
 for tidx in range(0, len(tt), 10):
     # left boundary
     r1      = ne[tidx, xlidx] * uz[tidx, xlidx]
     a1      = 2*np.pi * np.dot(np.dot(Flux_L[tidx], vt_w) * vr**2, vr_w)
-    b1      = np.sum(iFvt_L[tidx])
+    b1      = np.sum(iFlux_L[tidx])
     
     # right boundary
     r2      = ne[tidx, xridx] * uz[tidx, xridx] 
     a2      = 2*np.pi * np.dot(np.dot(Flux_R[tidx], vt_w) * vr**2, vr_w) 
-    b2      = np.sum(iFvt_R[tidx])
+    b2      = np.sum(iFlux_R[tidx])
 
     S       = (a2-a1)
     R       = (r2-r1)

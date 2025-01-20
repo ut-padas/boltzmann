@@ -6,6 +6,26 @@ from scipy.special import sph_harm
 import scipy.constants
 from matplotlib.colors import LogNorm
 
+def gauss_legendre_lobatto(n):
+    assert n>2, "quadrature order is less than 2"
+    xi, wi = np.zeros(n), np.zeros(n)
+    
+    c1      = np.zeros(n)
+    c1[n-1] = 1.0
+    
+    c1_x      = np.polynomial.legendre.legder(c1, 1)
+    xi[1:-1]  = np.polynomial.legendre.legroots(c1_x)
+    
+    xi[0]     = -1
+    xi[-1]    = 1
+    
+    wi[0]     = 2/n/(n-1)
+    wi[-1]    = 2/n/(n-1)
+    
+    wi[1:-1]  = 2/n/(n-1)/(np.polynomial.legendre.legval(xi[1:-1], c1)**2)
+    
+    return xi, wi
+
 def load_run_args(folder):
     args   = dict()
     
@@ -98,9 +118,10 @@ def extract_data(folder, xl, xr, num_vt=16, ev_cutoff=80):
     # vtheta = np.linspace(0, np.pi, 64)
     # vthetaw= trapz_w(vtheta)
 
-    cvtq,vtqw = np.polynomial.legendre.leggauss(num_vt)
+    cvtq,vtqw = gauss_legendre_lobatto(num_vt) #np.polynomial.legendre.leggauss(num_vt)
     cvtq,vtqw = np.flip(cvtq), np.flip(vtqw)
     vtq       = np.arccos(cvtq)
+    #print(vtq)
     
     ff     = h5py.File("%s/macro.h5"%(folder), "r")
     print(ff.keys())
@@ -247,8 +268,6 @@ def extract_data(folder, xl, xr, num_vt=16, ev_cutoff=80):
             "uz": uz,
             "ne": ne}
     
-    
-    
 def plot_data(data, tidx):
     c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
     vth           = data["vth"] 
@@ -323,7 +342,7 @@ def plot_data(data, tidx):
     plt.show()
     plt.close()    
 
-data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), num_vt=64, ev_cutoff=30)
+data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), num_vt=32, ev_cutoff=30)
 tt     = data["tt"]
 ev     = data["ev"]
 vr     = data["vr"]

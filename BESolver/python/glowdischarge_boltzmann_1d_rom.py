@@ -55,25 +55,25 @@ class boltzmann_1d_rom():
         Ps      = bte.op_po2sh
         Po      = bte.op_psh2o
 
-        # v       = xp.copy(v0) 
-        # v_all   = xp.zeros(tuple([n_samples]) + v0.shape)
+        v       = xp.copy(v0) 
+        v_all   = xp.zeros(tuple([n_samples]) + v0.shape)
 
-        # for iter in range(steps):
-        #     if (iter % io_freq == 0):
-        #         print(iter//io_freq, v_all.shape, type(v))
-        #         v_all[int(iter//io_freq), :, :] = v[:, :]
+        for iter in range(steps):
+            if (iter % io_freq == 0):
+                print(iter//io_freq, v_all.shape, type(v))
+                v_all[int(iter//io_freq), :, :] = v[:, :]
 
-        #     bte.bs_E            = Et(tt)
-        #     v                   = bte.step_bte_x(v, tt, dt * 0.5)
-        #     v                   = bte.step_bte_v(v, None, tt, dt, ts_type="BE", verbose=1)
-        #     v                   = bte.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
-        #     tt                 += dt
+            bte.bs_E            = Et(tt)
+            v                   = bte.step_bte_x(v, tt, dt * 0.5)
+            v                   = bte.step_bte_v(v, None, tt, dt, ts_type="BE", verbose=1)
+            v                   = bte.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
+            tt                 += dt
        
-        # v_all_lm               = xp.einsum("al,ilx->iax", bte.op_po2sh, v_all)
-        # xp.save("%s_v_all_lm.npy"%(bte.args.fname),v_all_lm)
-        # print("v_all_lm.shape = ", v_all_lm.shape)
+        v_all_lm               = xp.einsum("al,ilx->iax", bte.op_po2sh, v_all)
+        xp.save("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te),v_all_lm)
+        print("v_all_lm.shape = ", v_all_lm.shape)
 
-        v_all_lm = xp.load("1dbte_rom/1d_bte_v_all_lm_ex1.npy") #xp.load("%s_v_all_lm.npy"%(bte.args.fname))
+        v_all_lm = xp.load("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te))
         print("read - v_all_lm.shape = ", v_all_lm.shape)
 
         spec_sp                = bte.op_spec_sp
@@ -1270,9 +1270,10 @@ if __name__ == "__main__":
     cp_freq    = int(np.round(cp_cycle/dt))
     cycle_freq = int(np.round(1/dt))
     tio_freq   = 20
+    uv_freq    = int(np.round(30/dt))
 
       
-    print("io freq = %d cycle_freq = %d cp_freq = %d" %(io_freq, cycle_freq, cp_freq))
+    print("io freq = %d cycle_freq = %d cp_freq = %d uv_freq = %d" %(io_freq, cycle_freq, cp_freq, uv_freq))
     tT        = args.cycles
     idx       = 0
     flm_error = [list(), list()]
@@ -1280,8 +1281,9 @@ if __name__ == "__main__":
 
     tt        = 0
     restore   = 0
+    rs_idx    = 0
     if (restore==1):
-        F, Fr, tt = bte_rom.restore_checkpoint("%s_rom_%02d.h5"%(bte_fom.args.fname, args.rs_idx))
+        F, Fr, tt = bte_rom.restore_checkpoint("%s_rom_%02d.h5"%(bte_fom.args.fname, rs_idx))
         print("checkpoint restored time = %.4E (s)"%(tt))
 
     F0  = xp.copy(F)
@@ -1305,12 +1307,9 @@ if __name__ == "__main__":
             F0  = xp.copy(F)
             Fr0 = xp.copy(Fr)
 
-
-
         if (idx % cp_freq == 0):
             print("checkpoint time = %.4E (s)"%(tt))
             bte_rom.save_checkpoint(F, Fr, tt, "%s_rom_%02d.h5"%(bte_fom.args.fname, (idx//cp_freq) % 2))
-            
 
         if (idx % io_freq == 0):
             print("io output time = %.4E (s)"%(tt))
@@ -1319,7 +1318,13 @@ if __name__ == "__main__":
             #F1  = Fo
             plot_solution(bte_fom, bte_rom, F, F1, fprefix="%04d"%(idx//io_freq), time = tt)
 
-            
+        if(idx > 0 and (idx % uv_freq) == 0):
+            print("-----------------sampling adjust the rom basis------------------------")
+            v_fom = bte_rom.decode(Fr)
+            bte_rom.construct_rom_basis(Et, v_fom, tt, tt + 1, dt, 30, [1e-4 for l in range(num_sh)])
+            bte_rom.init()
+            Fr    = bte_rom.encode(v_fom)
+            print("---------------------------------------------------------------------") 
 
         Fr   = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, verbose=(idx % tio_freq))
         #Fo   = bte_rom.step_fom_ord(Et, Fo, tt, dt, type="BE", atol=1e-20, rtol=1e-3)

@@ -9,14 +9,13 @@ except ImportError:
 
 import matplotlib.pyplot as plt
 import numpy as np
-from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
 import glow1d_utils
 import sys
 from enum import Enum
 import h5py
 from profile_t import profile_t
 from matplotlib.colors import TABLEAU_COLORS, same_color
-
+from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
 class ROM_TYPE(Enum):
     POD = 0 
     DLR = 1
@@ -362,53 +361,7 @@ class boltzmann_1d_rom():
             F[l::num_sh, : ] = xp.dot(Uv[l], xp.dot(Frl, Vx[l].T))
         
         return xp.dot(Po, F)
-
-    def rhs_fom_sph(self, Fs, Ef, time, dt, type):
-        bte     = self.bte_solver
-        spec_sp = bte.op_spec_sp
-        param   = bte.param
-        xp      = bte.xp_module
-        Ps      = bte.op_po2sh
-        Po      = bte.op_psh2o
-
-        num_p   = spec_sp._p + 1
-        num_sh  = len(spec_sp._sph_harm_lm)
-        num_x   = len(bte.xp)
-
-        if (type == "BE"):
-            Fs               = Fs.reshape((num_p * num_sh, num_x))
-            rhs              = Fs + dt * xp.dot(self.Gx, xp.dot(Fs, self.Dx.T)) - dt * param.tau * xp.dot(self.Cop, Fs) - dt * param.tau * Ef * xp.dot(self.Av, Fs)  
-            Flo              = xp.dot(Po, Fs[: , 0])
-            Fro              = xp.dot(Po, Fs[:, -1])
-            
-            Flo[bte.xp_vt_l] = 0.0
-            Fro[bte.xp_vt_r] = 0.0
-
-            rhs[:,  0]       = Fs[:, 0 ] - xp.dot(Ps, Flo)
-            rhs[:, -1]       = Fs[:, -1] - xp.dot(Ps, Fro) 
-            return rhs.reshape((-1))
     
-    def rhs_fom_ord(self, Fo, Ef, time, dt, type):
-        bte     = self.bte_solver
-        spec_sp = bte.op_spec_sp
-        param   = bte.param
-        xp      = bte.xp_module
-        Ps      = bte.op_po2sh
-        Po      = bte.op_psh2o
-
-        num_p   = spec_sp._p + 1
-        num_vt  = len(bte.xp_vt)
-        num_sh  = len(spec_sp._sph_harm_lm)
-        num_x   = len(bte.xp)
-
-        if (type == "BE"):
-            Fo                         = Fo.reshape((num_p * num_vt, num_x))
-            rhs                        = Fo + dt * xp.dot(self.Ax, xp.dot(Fo, self.Dx.T)) #- dt * param.tau * xp.dot(self.Cop, Fs) - dt * param.tau * Ef * xp.dot(self.Av, Fs)  
-            
-            rhs[bte.xp_vt_l,  0]       = Fo[bte.xp_vt_l, 0 ] 
-            rhs[bte.xp_vt_r, -1]       = Fo[bte.xp_vt_r, -1] 
-            return rhs.reshape((-1))
-
     def rhs_rom_v(self, Xr, Ef, time, dt, type):
         bte     = self.bte_solver
         spec_sp = bte.op_spec_sp
@@ -920,101 +873,12 @@ class boltzmann_1d_rom():
         else:
             raise NotImplementedError
 
-    def step_fom_sph(self, Ef, Fs, time, dt, type, atol=1e-20, rtol=1e-10, verbose=1):
-        bte        = self.bte_solver
-        xp         = bte.xp_module
-        Ps         = bte.op_po2sh
-        Po         = bte.op_psh2o
 
-        rhs        = xp.copy(Fs)
-        rhs[:,  0] = 0
-        rhs[:, -1] = 0
+    #############################################################################################
+    ############################## FOM routines below ###########################################
+    #############################################################################################
 
-        norm_b     = xp.linalg.norm(rhs.reshape((-1)))
-        Ndof       = rhs.reshape((-1)).shape[0]
-        
-        x0         = Fs#xp.dot(Ps, self.step_fom(Et, xp.dot(Po, Fs), time, dt))
-        #return Fs0
-
-        def Ax(x):
-            return self.rhs_fom_sph(x, Ef, time, dt, type)
-
-        def Px(x):
-            return x#self.step_fom(Et, x, time, dt).reshape((-1))
-
-        if xp == cp:
-            Amat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Ax)
-            Pmat_op    = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Px)
-            gmres_c    = glow1d_utils.gmres_counter(disp=True)
-            gmres_rst  = 40
-            gmres_iter = 60
-            v, status  = cupyx.scipy.sparse.linalg.gmres(Amat_op, rhs.reshape((-1)), x0=x0.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
-
-            norm_res_abs  = xp.linalg.norm(Ax(v) -  rhs.reshape((-1)))
-            norm_res_rel  = xp.linalg.norm(Ax(v) -  rhs.reshape((-1))) / norm_b
-          
-            if (status !=0) :
-                print("time = %.8E T GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, status, norm_res_abs, norm_res_rel))
-                sys.exit(-1)
-
-            else:
-
-                if (verbose == 1):
-                    print("[FOM-SPH]  time = %.8E T GMRES  iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, gmres_c.niter * gmres_rst, norm_res_abs, norm_res_rel))
-                
-                return v.reshape(Fs.shape)
-
-        else:
-            raise NotImplementedError
-
-    def step_fom_ord(self, Ef, Fo, time, dt, type, atol=1e-20, rtol=1e-10, verbose=1):
-        bte        = self.bte_solver
-        xp         = bte.xp_module
-        Ps         = bte.op_po2sh
-        Po         = bte.op_psh2o
-
-        rhs                  = xp.copy(Fo) #Fo + 0.5 * dt * xp.dot(self.Ax, xp.dot(Fo, self.Dx.T))
-        rhs[bte.xp_vt_l,  0] = 0
-        rhs[bte.xp_vt_r, -1] = 0
-
-        norm_b     = xp.linalg.norm(rhs.reshape((-1)))
-        Ndof       = rhs.reshape((-1)).shape[0]
-        
-        x0         = self.step_fom(Et, Fo, time, dt).reshape((-1))
-
-        def Ax(x):
-            return self.rhs_fom_ord(x, Ef, time, dt, type)
-
-        def Px(x):
-            return x#self.step_fom(Et, x, time, dt).reshape((-1))
-
-        if xp == cp:
-            Amat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Ax)
-            Pmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Px)
-            gmres_c   = glow1d_utils.gmres_counter(disp=True)
-            gmres_rst = 80
-            gmres_iter= 30
-            v, status = cupyx.scipy.sparse.linalg.gmres(Amat_op, rhs.reshape((-1)), x0=x0.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
-
-            norm_res_abs  = xp.linalg.norm(Ax(v) -  rhs.reshape((-1)))
-            norm_res_rel  = xp.linalg.norm(Ax(v) -  rhs.reshape((-1))) / norm_b
-          
-            if (status !=0) :
-                print("time = %.8E T GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, status, norm_res_abs, norm_res_rel))
-                #return v.reshape(Fs.shape)
-                sys.exit(-1)
-
-            else:
-
-                if (verbose == 1):
-                    print("[FOM-ORD]  time = %.8E T GMRES  iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, gmres_c.niter * gmres_rst, norm_res_abs, norm_res_rel))
-
-                return v.reshape(Fo.shape)
-
-        else:
-            raise NotImplementedError
-
-    def step_fom(self, Ef, F, time, dt, verbose=1):
+    def step_fom_op_split(self, Ef, F, time, dt, verbose=1):
         """
         full order model timestep
         """
@@ -1065,6 +929,75 @@ class boltzmann_1d_rom():
             print("")
 
         return v
+
+    def step_fom_vx(self, Ef, F, time, dt, atol=1e-20, rtol=1e-8, gmres_rst=20, gmres_iter =10, verbose=1):
+        bte     = self.bte_solver
+        xp      = bte.xp_module
+        param   = bte.param
+
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+        num_x   = len(bte.xp)
+        num_vt  = len(bte.xp_vt)
+
+        DxT     = self.Dx.T
+        po2sh   = bte.op_po2sh
+        psh2o   = bte.op_psh2o
+
+
+        def residual(dF, time, dt):
+            dF   = dF.reshape((num_p * num_vt, num_x))
+            Fp   = F + dF
+            Rv   = xp.dot(po2sh, Fp)
+            Rv   = param.tau * xp.dot(psh2o, (xp.dot(self.Cop, Rv) + Ef * xp.dot(self.Av, Rv)))
+            res  = dF + (dt * (xp.dot(self.Ax, xp.dot(Fp, DxT)) -  Rv))
+            
+            res[self.xp_vt_l,  0 ] = (Fp[self.xp_vt_l, 0  ] - 0.0)
+            res[self.xp_vt_l, -1 ] = (Fp[self.xp_vt_r, -1 ] - 0.0)
+            return res.reshape((-1))
+
+        def jacobian(dF, time, dt):
+            dF   = dF.reshape((num_p * num_vt, num_x))
+            Rv   = xp.dot(po2sh, dF)
+            Rv   = param.tau * xp.dot(psh2o, (xp.dot(self.Cop, Rv) + Ef * xp.dot(self.Av, Rv)))
+            jac  = dF + (dt * (xp.dot(self.Ax, xp.dot(dF, DxT)) -  Rv))
+
+            jac[self.xp_vt_l, 0 ]  = dF[self.xp_vt_l, 0 ]
+            jac[self.xp_vt_r, -1 ] = dF[self.xp_vt_r, -1]
+
+            return jac.reshape((-1))
+
+
+        if xp == cp:
+            Ndof          = num_p * num_x * num_vt
+            Amat_op       = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: residual(x, time, dt))
+            dF            = xp.zeros_like(F).reshape((-1))
+            Pmat_op       = None#cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Px)
+            gmres_c       = glow1d_utils.gmres_counter(disp=False)
+            rhs           = residual(dF, time, dt)
+            norm_b        = xp.linalg.norm(rhs)
+            v, status     = cupyx.scipy.sparse.linalg.gmres(Amat_op, rhs.reshape((-1)), x0=dF.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
+
+            norm_res_abs  = xp.linalg.norm(Amat_op(v) -  rhs.reshape((-1)))
+            norm_res_rel  = xp.linalg.norm(Amat_op(v) -  rhs.reshape((-1))) / norm_b
+
+            if (status !=0) :
+                print("time = %.8E T GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, status, norm_res_abs, norm_res_rel))
+                sys.exit(-1)
+            else:
+                if (verbose == 1):
+                    #print("[ROM v-space]  time = %.8E T GMRES  iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, gmres_c.niter * gmres_rst, norm_res_abs, norm_res_rel))
+                    print("ROM      Boltzmann (v-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(time, norm_res_abs, norm_res_rel, gmres_c.niter * gmres_rst))
+
+                return v.reshape(Fr.shape)
+        else:
+            raise NotImplementedError
+    
+
+    ########################### FOM OP END #####################################################
+
+
+
 
     def save_checkpoint(self, F, Fr, time, fname):
         bte = self.bte_solver
@@ -1291,6 +1224,7 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fpr
     return
 
 if __name__ == "__main__":
+    from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
     args         = args_parse()
     
     bte_fom      = glow1d_boltzmann(args)
@@ -1401,7 +1335,7 @@ if __name__ == "__main__":
         Fr   = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, verbose=(idx % tio_freq))
         #Fo   = bte_rom.step_fom_ord(Et, Fo, tt, dt, type="BE", atol=1e-20, rtol=1e-3)
         #Fs   = bte_rom.step_fom_sph(Et, Fs, tt, dt, type="BE", atol=1e-20, rtol=1e-2)
-        F    = bte_rom.step_fom(Ef, F, tt, dt, verbose = (idx % tio_freq))
+        F    = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
         
         tt  += dt
         idx +=1

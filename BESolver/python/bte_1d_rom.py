@@ -73,11 +73,12 @@ class boltzmann_1d_rom():
         v_all_lm               = xp.einsum("al,ilx->iax", bte.op_po2sh, v_all)
         # ne_all                 = xp.einsum("l,ilx->ix", bte.op_mass , v_all_lm)
         # v_all_lm               = xp.einsum("ix,ivx->ivx", (1/ne_all), v_all_lm)
-        # xp.save("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te),v_all_lm)
-        # print("v_all_lm.shape = ", v_all_lm.shape)
+        xp.save("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te),v_all_lm)
+        print("v_all_lm.shape = ", v_all_lm.shape)
 
-        # v_all_lm = xp.load("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te))
-        # print("read - v_all_lm.shape = ", v_all_lm.shape)
+
+        v_all_lm = xp.load("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te))
+        print("read - v_all_lm.shape = ", v_all_lm.shape)
 
         spec_sp                = bte.op_spec_sp
         num_p                  = spec_sp._p + 1
@@ -339,10 +340,10 @@ class boltzmann_1d_rom():
         Fr           = xp.array(Fr_lm[0].reshape((-1)))
         
         for l in range(1, rom_modes):
-            Fr = xp.append(Fr, Fr_lm[l].reshape((-1))) 
-        
+            Fr = xp.append(Fr, Fr_lm[l].reshape((-1)))
+
         return Fr
-        
+
     def decode(self, Fr):
         bte     = self.bte_solver
         spec_sp = bte.op_spec_sp
@@ -350,7 +351,7 @@ class boltzmann_1d_rom():
         Po      = bte.op_psh2o
         Uv      = self.Uv
         Vx      = self.Vx
-        
+
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
         num_x   = len(bte.xp)
@@ -359,15 +360,15 @@ class boltzmann_1d_rom():
         for l in range(self.rom_modes):
             Frl              = self.get_rom_lm(Fr, l, m=0)
             F[l::num_sh, : ] = xp.dot(Uv[l], xp.dot(Frl, Vx[l].T))
-        
+
         return xp.dot(Po, F)
-    
+
     def rhs_rom_v(self, Xr, Ef, time, dt, type):
         bte     = self.bte_solver
         spec_sp = bte.op_spec_sp
         param   = bte.param
         xp      = bte.xp_module
-        
+
         num_p   = spec_sp._p + 1
         num_sh  = len(spec_sp._sph_harm_lm)
         num_x   = len(bte.xp)
@@ -397,13 +398,13 @@ class boltzmann_1d_rom():
             # EV1    = xp.dot(E, self.Vx[1])
 
             # rhs[0] = Xr0 -dt * param.tau * (xp.dot(self.Cvr[0][0], Xr0)) - dt * param.tau * (
-            #                                 xp.dot(self.Avr[0][0], xp.dot(Xr0, xp.dot(self.Vx[0].T, EV0))) + 
-            #                                 xp.dot(self.Avr[0][1], xp.dot(Xr1, xp.dot(self.Vx[1].T, EV0))) 
+            #                                 xp.dot(self.Avr[0][0], xp.dot(Xr0, xp.dot(self.Vx[0].T, EV0))) +
+            #                                 xp.dot(self.Avr[0][1], xp.dot(Xr1, xp.dot(self.Vx[1].T, EV0)))
             #                                 )
 
             # rhs[1] = Xr1 -dt * param.tau * (xp.dot(self.Cvr[1][1], Xr1)) - dt * param.tau * (
-            #                                 xp.dot(self.Avr[1][0], xp.dot(Xr0, xp.dot(self.Vx[0].T, EV1))) + 
-            #                                 xp.dot(self.Avr[1][1], xp.dot(Xr1, xp.dot(self.Vx[1].T, EV1)))  
+            #                                 xp.dot(self.Avr[1][0], xp.dot(Xr0, xp.dot(self.Vx[0].T, EV1))) +
+            #                                 xp.dot(self.Avr[1][1], xp.dot(Xr1, xp.dot(self.Vx[1].T, EV1)))
             #                                 )
 
             # res = self.append_vec(rhs)
@@ -411,7 +412,7 @@ class boltzmann_1d_rom():
 
     def rhs_rom_x(sefl, Xr, Ef, time, dt, type):
         pass
-    
+
     def rhs_rom_vx(self, Xr, Ef, time, dt, type):
         bte     = self.bte_solver
         spec_sp = bte.op_spec_sp
@@ -445,13 +446,13 @@ class boltzmann_1d_rom():
             E11 = xp.dot(Vx1.T, xp.dot(xp.diag(E), Vx1))
 
             R0  = Xr0 + dt * (xp.dot(self.Gx00, xp.dot(Xr0, self.Dx00)) + xp.dot(self.Gx01, xp.dot(Xr1, self.Dx01))
-                              -param.tau * xp.dot(self.Cv00, Xr0) 
+                              -param.tau * xp.dot(self.Cv00, Xr0)
                               -param.tau * xp.dot(self.Av00, xp.dot(Xr0, E00)) - param.tau * xp.dot(self.Av01, xp.dot(Xr1, E01)))
-            
+
             R1  = Xr1 + dt * (xp.dot(self.Gx10, xp.dot(Xr0, self.Dx10)) + xp.dot(self.Gx11, xp.dot(Xr1, self.Dx11))
-                              -param.tau * xp.dot(self.Cv11, Xr1) 
+                              -param.tau * xp.dot(self.Cv11, Xr1)
                               -param.tau * xp.dot(self.Av10, xp.dot(Xr0, E10)) - param.tau * xp.dot(self.Av11, xp.dot(Xr1, E11)))
-            
+
 
             Fl               = xp.zeros((num_p * num_sh))
             Fr               = xp.zeros((num_p * num_sh))
@@ -470,7 +471,7 @@ class boltzmann_1d_rom():
 
             Fl               = xp.dot(Ps, Flo)
             Fr               = xp.dot(Ps, Fro)
-            
+
             R0[:, 0]         = Xr0[:, 0]  - xp.dot(Uv0.T, Fl[0::num_sh])
             R1[:, 0]         = Xr1[:, 0]  - xp.dot(Uv1.T, Fl[1::num_sh])
 
@@ -481,7 +482,7 @@ class boltzmann_1d_rom():
             return res
         else:
             raise NotImplementedError
-    
+
     def step_rom_v(self, Ef, Fr, time, dt, type, atol=1e-20, rtol=1e-8, gmres_rst=20, gmres_iter =10, verbose=1):
 
         if (self.rom_type == ROM_TYPE.DLR):
@@ -497,13 +498,13 @@ class boltzmann_1d_rom():
         rom_lm     = self.rom_modes
 
         pc_idx     = self.vspace_pc_setup(Ef, time, dt)
-        
+
         def Ax(x):
             return self.rhs_rom_v(x, Ef, time, dt, type)
 
         def Px(x):
             #return x
-            ## note - following precond. makes the code slow. 
+            ## note - following precond. makes the code slow.
             xp  = self.bte_solver.xp_module
             x0  = xp.dot(self.get_rom_lm(x, 0), self.Vx[0].T)
             x1  = xp.dot(self.get_rom_lm(x, 1), self.Vx[1].T)
@@ -522,7 +523,7 @@ class boltzmann_1d_rom():
 
             y[self.vec_idx[0]] = xp.dot(y0, self.Vx[0]).reshape((-1))
             y[self.vec_idx[1]] = xp.dot(y1, self.Vx[1]).reshape((-1))
-            
+
             return y
 
         if xp == cp:
@@ -569,7 +570,7 @@ class boltzmann_1d_rom():
 
         K_offset         = xp.zeros_like(K_counts)
         L_offset         = xp.zeros_like(L_counts)
-        
+
         for l in range(1, rom_lm):
             K_offset[l] = K_offset[l-1] + K_counts[l-1]
             L_offset[l] = L_offset[l-1] + L_counts[l-1]
@@ -592,7 +593,7 @@ class boltzmann_1d_rom():
             fom_rhs = param.tau * xp.dot(self.Cop, Fs) + param.tau * Ef * xp.dot(self.Av, Fs)
             rhs     = self.append_vec([xp.dot(Uv00[l].T, xp.dot(fom_rhs[l::num_sh], Vx00[l])) for l in range(rom_lm)])
             return (dF + dt * rhs).reshape((-1))
-        
+
         def jacF(dF, time, dt):
             Fs               = xp.zeros((num_p * num_sh, num_x))
 
@@ -602,17 +603,17 @@ class boltzmann_1d_rom():
             fom_rhs = param.tau * xp.dot(self.Cop, Fs) + param.tau * Ef * xp.dot(self.Av, Fs)
             rhs     = self.append_vec([xp.dot(Uv00[l].T, xp.dot(fom_rhs[l::num_sh], Vx00[l])) for l in range(rom_lm)])
             return (dF + dt * rhs).reshape((-1))
-        
+
         if xp == cp:
             Ndof      = Fr00.shape[0]
             RF_op     = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=lambda x: resF(x, time, dt))
             JF_op     = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=lambda x: jacF(x, time, dt))
             Fs        = glow1d_utils.newton_solver_matfree(dF0, RF_op, JF_op, lambda x: x, atol, rtol, atol, rtol, gmres_rst, gmres_iter * gmres_rst, xp)
-            
+
             if (verbose == 1):
                 print("[ROM basis - Fr solve] solve \
                     simulation time = %.4E | Newton iter = %04d |  GMRES iter = %04d | ||res|| = %.4E | ||res||/||res0|| = %.4E | alpha = %.4E"%(time, Fs["iter"], Fs["iter_gmres"], Fs["atol"], Fs["rtol"], Fs["alpha"]))
-            
+
             assert Fs["status"] == True
 
         Fr01             = Fr00 + Fs["x"]
@@ -633,7 +634,7 @@ class boltzmann_1d_rom():
             fom_rhs = param.tau * xp.dot(self.Cop, Fs) + param.tau * Ef * xp.dot(self.Av, Fs)
             rhs     = self.append_vec([xp.dot(fom_rhs[l::num_sh], Vx10[l]) for l in range(rom_lm)])
             return (dK - dt * rhs).reshape((-1))
-        
+
         def jacK(dK, time, dt):
             Fs               = xp.zeros((num_p * num_sh, num_x))
 
@@ -643,21 +644,21 @@ class boltzmann_1d_rom():
             fom_rhs = param.tau * xp.dot(self.Cop, Fs) + param.tau * Ef * xp.dot(self.Av, Fs)
             rhs     = self.append_vec([xp.dot(fom_rhs[l::num_sh], Vx10[l]) for l in range(rom_lm)])
             return (dK - dt * rhs).reshape((-1))
-        
+
         if xp == cp:
             Ndof      = K10.shape[0]
             RK_op     = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=lambda x: resK(x, time, dt))
             JK_op     = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=lambda x: jacK(x, time, dt))
             Ks        = glow1d_utils.newton_solver_matfree(dK1, RK_op, JK_op, lambda x: x, atol, rtol, atol, rtol, gmres_rst, gmres_iter * gmres_rst, xp)
-            
+
             if (verbose == 1):
                 print("[ROM basis - U solve] solve \
                     simulation time = %.4E | Newton iter = %04d |  GMRES iter = %04d | ||res|| = %.4E | ||res||/||res0|| = %.4E | alpha = %.4E"%(time, Ks["iter"], Ks["iter_gmres"], Ks["atol"], Ks["rtol"], Ks["alpha"]))
-            
+
             assert Ks["status"] == True
 
         K11        = K10 + Ks["x"]
-        
+
         # K11_svd    = [xp.linalg.svd(K_mode(K11, l)) for l in range(rom_lm)]
         # Uv11       = [K11_svd[l][0][:,0:rank_v[l]]  for l in range(rom_lm)]
         # Fr11       = self.append_vec([xp.dot(xp.diag(K11_svd[l][1][0:rank_v[l]]), K11_svd[l][2][0:rank_v[l], :])  for l in range(rom_lm)])
@@ -667,7 +668,7 @@ class boltzmann_1d_rom():
         Fr11       = self.append_vec([K11_qr[l][1]  for l in range(rom_lm)])
         Vx11       = Vx10
 
-        Fr20       = Fr11 
+        Fr20       = Fr11
         Uv20       = Uv11
         Vx20       = Vx11
 
@@ -677,35 +678,35 @@ class boltzmann_1d_rom():
         def resL(dL, time, dt):
             L   = L20 + dL
             Fs  = xp.zeros((num_p * num_sh, num_x))
-            
+
             for l in range(rom_lm):
                 Fs[l::num_sh, :] = xp.dot(Uv20[l], L_mode(L, l).T)
 
             fom_rhs = param.tau * xp.dot(self.Cop, Fs) + param.tau * Ef * xp.dot(self.Av, Fs)
             rhs     = self.append_vec([xp.dot(fom_rhs[l::num_sh].T, Uv20[l]) for l in range(rom_lm)])
             return (dL - dt * rhs).reshape((-1))
-        
+
         def jacL(dL, time, dt):
             Fs  = xp.zeros((num_p * num_sh, num_x))
-            
+
             for l in range(rom_lm):
                 Fs[l::num_sh, :] = xp.dot(Uv20[l], L_mode(dL, l).T)
 
             fom_rhs = param.tau * xp.dot(self.Cop, Fs) + param.tau * Ef * xp.dot(self.Av, Fs)
             rhs     = self.append_vec([xp.dot(fom_rhs[l::num_sh].T, Uv20[l]) for l in range(rom_lm)])
             return (dL - dt * rhs).reshape((-1))
-        
-    
+
+
         if xp == cp:
             Ndof      = L20.shape[0]
             RL_op     = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=lambda x: resL(x, time, dt))
             JL_op     = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=lambda x: jacL(x, time, dt))
             Ls        = glow1d_utils.newton_solver_matfree(dL2, RL_op, JL_op, lambda x: x, atol, rtol, atol, rtol * 1e-1, gmres_rst, gmres_iter * gmres_rst, xp)
-            
+
             if (verbose == 1):
                 print("[ROM basis - V solve] solve \
                     simulation time = %.4E | Newton iter = %04d |  GMRES iter = %04d | ||res|| = %.4E | ||res||/||res0|| = %.4E | alpha = %.4E"%(time, Ks["iter"], Ls["iter_gmres"], Ls["atol"], Ls["rtol"], Ls["alpha"]))
-            
+
             assert Ls["status"] == True
 
 
@@ -717,37 +718,37 @@ class boltzmann_1d_rom():
         Fr21       = self.append_vec([L21_qr[l][1].T  for l in range(rom_lm)])
 
         # L21_svd    = [xp.linalg.svd(L_mode(L21, l)) for l in range(rom_lm)]
-        
+
         # Uv21       = Uv20
         # Vx21       = [L21_svd[l][0][:, 0:rank_x[l]]   for l in range(rom_lm)]
         # #Fr21       = self.append_vec([xp.dot(xp.diag(L21_svd[l][1]), L21_svd[l][2]).T for l in range(rom_lm)])
         # Fr21        = [None for l in range(rom_lm)]
-        
+
         # for l in range(rom_lm):
         #     kr = rank_v[l]
         #     kx = rank_x[l]
         #     assert kx>=kr
-            
+
         #     W  = xp.zeros((kx, kr))
         #     W[0:kr,0:kr] = xp.dot(xp.diag(L21_svd[l][1]), L21_svd[l][2])
         #     Fr21[l] = W.T
 
         # Fr21        = self.append_vec(Fr21)
 
-        
+
         # for l in range(rom_lm):
         #     print(Uv21[l].shape, Vx21[l].shape, self.Uv[l].shape, self.Vx[l].shape)
 
         print("||I - U^t U|| = %.8E "%xp.linalg.norm(xp.dot(Uv21[0].T, Uv21[0]) - xp.eye(Uv21[0].shape[1])))
         print("||I - U^t U|| = %.8E "%xp.linalg.norm(xp.dot(Uv21[1].T, Uv21[1]) - xp.eye(Uv21[1].shape[1])))
-        
+
         print("||I - V^t V|| = %.8E "%xp.linalg.norm(xp.dot(Vx21[0].T, Vx21[0]) - xp.eye(Vx21[0].shape[1])))
         print("||I - V^t V|| = %.8E "%xp.linalg.norm(xp.dot(Vx21[1].T, Vx21[1]) - xp.eye(Vx21[1].shape[1])))
 
         self.Uv=Uv21
         self.Vx=Vx21
         return Fr21
-    
+
     def step_rom_x(self, Ef, Fr, time, dt, type, atol=1e-20, rtol=1e-8, verbose=1):
         bte        = self.bte_solver
         xp         = bte.xp_module
@@ -764,14 +765,14 @@ class boltzmann_1d_rom():
             Fo = bte.step_bte_x(Fo, time + 0.5 * dt, dt * 0.5)
             Fr = self.encode(Fo)
             return Fr.reshape((-1))
-            
+
         elif(type == "HALF-STEP"):
             Fo = self.decode(Fr)
             Fo = bte.step_bte_x(Fo, time, dt * 0.5)
 
             Fr = self.encode(Fo)
             return Fr.reshape((-1))
-            
+
         else:
             raise NotImplementedError
 
@@ -779,8 +780,8 @@ class boltzmann_1d_rom():
         bte            = self.bte_solver
         xp             = bte.xp_module
         gmres_rst      = 8
-        gmres_iter     = 30 
-        
+        gmres_iter     = 30
+
         #Frh            = self.step_rom_x(Ef, Fr, time, dt, "FOM-ADV-FULL-STEP", atol, rtol, verbose)
 
         #Frh           = self.step_rom_v(Et, Fr, time,            dt, "BE", atol, rtol, verbose)
@@ -804,17 +805,17 @@ class boltzmann_1d_rom():
             self.timer[TIMER.ROM_V].start()
 
         Frh            = self.step_rom_v(Ef, Frh, time,            dt, "BE", atol, rtol, gmres_rst, gmres_iter, verbose)
-        
+
         if (self.profile):
             cp.cuda.runtime.deviceSynchronize()
             self.timer[TIMER.ROM_V].stop()
-        
+
         if (self.profile):
             cp.cuda.runtime.deviceSynchronize()
             self.timer[TIMER.ROM_X].start()
-        
+
         Frh            = self.step_rom_x(Ef, Frh, time + 0.5 * dt, dt, "HALF-STEP", atol, rtol, verbose)
-        
+
         if (self.profile):
             cp.cuda.runtime.deviceSynchronize()
             self.timer[TIMER.ROM_X].stop()
@@ -834,19 +835,19 @@ class boltzmann_1d_rom():
         rhs0         = self.get_rom_lm(rhs, 0)
         rhs1         = self.get_rom_lm(rhs, 1)
 
-        rhs0[:,  0]  = 0 
-        rhs0[:, -1]  = 0 
-        rhs1[:,  0]  = 0 
-        rhs1[:, -1]  = 0 
+        rhs0[:,  0]  = 0
+        rhs0[:, -1]  = 0
+        rhs1[:,  0]  = 0
+        rhs1[:, -1]  = 0
 
         x0           = Fr
         rhs          = xp.append(rhs0.reshape((-1)), rhs1.reshape((-1)))
         norm_b       = xp.linalg.norm(rhs.reshape((-1)))
         Ndof         = rhs.shape[0]
-        
+
         def Ax(x):
             return self.rhs(x, Ef, time, dt, type)
-        
+
         def Px(x):
             return x
 
@@ -860,7 +861,7 @@ class boltzmann_1d_rom():
 
             norm_res_abs  = xp.linalg.norm(Ax(v) -  rhs.reshape((-1)))
             norm_res_rel  = xp.linalg.norm(Ax(v) -  rhs.reshape((-1))) / norm_b
-          
+
             if (status !=0) :
                 print("time = %.8E T GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, status, norm_res_abs, norm_res_rel))
                 sys.exit(-1)
@@ -895,7 +896,7 @@ class boltzmann_1d_rom():
             cp.cuda.runtime.deviceSynchronize()
             self.timer[TIMER.FOM_X].reset()
             self.timer[TIMER.FOM_X].start()
-            
+
         v                   = bte.step_bte_x(F, tt, dt * 0.5)
         #v=F
         if (self.profile):
@@ -915,9 +916,9 @@ class boltzmann_1d_rom():
         if (self.profile):
             cp.cuda.runtime.deviceSynchronize()
             self.timer[TIMER.FOM_X].start()
-        
+
         v                   = bte.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
-        
+
         if (self.profile):
             cp.cuda.runtime.deviceSynchronize()
             self.timer[TIMER.FOM_X].stop()
@@ -943,6 +944,8 @@ class boltzmann_1d_rom():
         DxT     = self.Dx.T
         po2sh   = bte.op_po2sh
         psh2o   = bte.op_psh2o
+        xp_vt_l = bte.xp_vt_l
+        xp_vt_r = bte.xp_vt_r
 
 
         def residual(dF, time, dt):
@@ -951,9 +954,9 @@ class boltzmann_1d_rom():
             Rv   = xp.dot(po2sh, Fp)
             Rv   = param.tau * xp.dot(psh2o, (xp.dot(self.Cop, Rv) + Ef * xp.dot(self.Av, Rv)))
             res  = dF + (dt * (xp.dot(self.Ax, xp.dot(Fp, DxT)) -  Rv))
-            
-            res[self.xp_vt_l,  0 ] = (Fp[self.xp_vt_l, 0  ] - 0.0)
-            res[self.xp_vt_l, -1 ] = (Fp[self.xp_vt_r, -1 ] - 0.0)
+
+            res[xp_vt_l,  0 ] = (Fp[xp_vt_l,  0 ] - 0.0)
+            res[xp_vt_r, -1 ] = (Fp[xp_vt_r, -1 ] - 0.0)
             return res.reshape((-1))
 
         def jacobian(dF, time, dt):
@@ -962,8 +965,8 @@ class boltzmann_1d_rom():
             Rv   = param.tau * xp.dot(psh2o, (xp.dot(self.Cop, Rv) + Ef * xp.dot(self.Av, Rv)))
             jac  = dF + (dt * (xp.dot(self.Ax, xp.dot(dF, DxT)) -  Rv))
 
-            jac[self.xp_vt_l, 0 ]  = dF[self.xp_vt_l, 0 ]
-            jac[self.xp_vt_r, -1 ] = dF[self.xp_vt_r, -1]
+            jac[xp_vt_l,  0 ]  = dF[xp_vt_l,  0]
+            jac[xp_vt_r, -1 ]  = dF[xp_vt_r, -1]
 
             return jac.reshape((-1))
 
@@ -974,12 +977,12 @@ class boltzmann_1d_rom():
             dF            = xp.zeros_like(F).reshape((-1))
             Pmat_op       = None#cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Px)
             gmres_c       = glow1d_utils.gmres_counter(disp=False)
-            rhs           = residual(dF, time, dt)
+            rhs           = -residual(F, time, dt)
             norm_b        = xp.linalg.norm(rhs)
-            v, status     = cupyx.scipy.sparse.linalg.gmres(Amat_op, rhs.reshape((-1)), x0=dF.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
+            dF, status    = cupyx.scipy.sparse.linalg.gmres(Amat_op, rhs.reshape((-1)), x0=dF.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
 
-            norm_res_abs  = xp.linalg.norm(Amat_op(v) -  rhs.reshape((-1)))
-            norm_res_rel  = xp.linalg.norm(Amat_op(v) -  rhs.reshape((-1))) / norm_b
+            norm_res_abs  = xp.linalg.norm(Amat_op(dF) -  rhs.reshape((-1)))
+            norm_res_rel  = xp.linalg.norm(Amat_op(dF) -  rhs.reshape((-1))) / norm_b
 
             if (status !=0) :
                 print("time = %.8E T GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, status, norm_res_abs, norm_res_rel))
@@ -987,12 +990,12 @@ class boltzmann_1d_rom():
             else:
                 if (verbose == 1):
                     #print("[ROM v-space]  time = %.8E T GMRES  iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, gmres_c.niter * gmres_rst, norm_res_abs, norm_res_rel))
-                    print("ROM      Boltzmann (v-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(time, norm_res_abs, norm_res_rel, gmres_c.niter * gmres_rst))
+                    print("FOM      Boltzmann (vx-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(time, norm_res_abs, norm_res_rel, gmres_c.niter * gmres_rst))
 
-                return v.reshape(Fr.shape)
+                return F + dF.reshape(F.shape)
         else:
             raise NotImplementedError
-    
+
 
     ########################### FOM OP END #####################################################
 
@@ -1015,12 +1018,12 @@ class boltzmann_1d_rom():
                 ff.create_dataset("Vx_%02d"%(l), data = xp.asnumpy(self.Vx[l]))
 
             ff.close()
-        return 
-    
+        return
+
     def restore_checkpoint(self, fname):
         bte = self.bte_solver
         xp  = bte.xp_module
-        
+
         assert xp == cp
 
         with h5py.File("%s"%(fname), "r") as ff:
@@ -1033,26 +1036,26 @@ class boltzmann_1d_rom():
             self.Vx        = [xp.array(ff["Vx_%02d"%(l)][()]) for l in range(self.rom_modes)]
 
             ff.close()
-        
+
         self.update_basis(self.Uv, self.Vx, basis_id="t=%.4E"%(time))
 
         return F, Fr, time
 
     def vspace_pc_setup(self, Ef, time, dt):
         bte         = self.bte_solver
-        xp          = bte.xp_module 
-      
+        xp          = bte.xp_module
+
         E           = Ef
         pcEmat      = bte.PmatE
         pcEval      = bte.Evals.reshape((-1,1))
         E           = E.reshape((-1, 1))
-      
+
         dist        = xp.linalg.norm(E[:, None, :] - pcEval[None, :, :], axis=2)
         c_memship   = xp.argmin(dist, axis=1)
         c_idx       = xp.arange(pcEval.shape[0])
         p_idx       = xp.arange(len(E))
         mask        = c_memship == c_idx[:, None]
-      
+
         pc_emat_idx = list()
         for i in range(len(pcEval)):
             pc_emat_idx.append((i, p_idx[mask[i, :]]))
@@ -1061,7 +1064,7 @@ class boltzmann_1d_rom():
         # for idx_id, idx in enumerate(pc_emat_idx):
         #   idx_set = xp.append(idx_set, idx[1])
         # assert (idx_set.shape[0]==bte.Np), "!!! Error: preconditioner partitioning does not match the domain size"
-      
+
         return pc_emat_idx
 
 
@@ -1071,7 +1074,7 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fpr
     F0 : FOM
     F1 : ROM
     """
-    
+
     xp      = bte.xp_module
     param   = bte.param
     args    = bte.args
@@ -1102,11 +1105,11 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fpr
 
     ev_range  = (bte.ev_lim[0], bte.ev_lim[1])
     ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
-    
+
     F0_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(F0_lm_n))
     F1_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(F1_lm_n))
-      
-    
+
+
     ne0     = xp.dot(mass_op, F0_lm)
     ne1     = xp.dot(mass_op, F1_lm)
     ne2     = xp.dot(mass_op, G0_lm)
@@ -1145,9 +1148,9 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fpr
 
         xx   = xp.asnumpy(xx)
 
-        
+
     cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    
+
     plt.figure(figsize=(16, 8), dpi=200)
     plt.subplot(2, 4, 1)
     citer = iter(cycle)
@@ -1158,7 +1161,7 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fpr
     plt.ylabel(r"$n_e$ $[m^{-3}]$")
     plt.grid(visible=True)
     plt.legend()
-    
+
     plt.subplot(2, 4, 2)
     citer = iter(cycle)
     plt.plot(xx, Te0,      label=r"FOM", color=next(citer))
@@ -1226,7 +1229,7 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fpr
 if __name__ == "__main__":
     from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
     args         = args_parse()
-    
+
     bte_fom      = glow1d_boltzmann(args)
     u, v         = bte_fom.initialize()
     args         = bte_fom.args
@@ -1252,8 +1255,8 @@ if __name__ == "__main__":
     if args.use_gpu==1:
         gpu_device = cp.cuda.Device(args.gpu_device_id)
         gpu_device.use()
-    
-    
+
+
     u, v    = bte_fom.step_init(u, v, dt)
     xp      = bte_fom.xp_module
 
@@ -1274,7 +1277,7 @@ if __name__ == "__main__":
     Fs      = xp.dot(bte_fom.op_po2sh, Fo)
     Fr      = bte_rom.encode(Fo).reshape((-1))
     F1      = bte_rom.decode(Fr)
-    
+
     print("io freq = %d cycle_freq = %d cp_freq = %d uv_freq = %d" %(io_freq, cycle_freq, cp_freq, uv_freq))
     tT        = args.cycles
     idx       = 0
@@ -1305,7 +1308,7 @@ if __name__ == "__main__":
             a2    = xp.linalg.norm((ne_0  - ne)   / xp.max(ne))
 
             print("time = %.4E [T] ROM : ||ne(T) - ne(0)||/||ne(0)|| = %.4E FOM : ||ne(T) - ne(0)||/||ne(0)|| = %.4E"%(tt, a1, a2))
-            
+
             F0  = xp.copy(F)
             Fr0 = xp.copy(Fr)
 
@@ -1330,26 +1333,27 @@ if __name__ == "__main__":
             # v_fom1 = bte_rom.decode(Fr1)
             # plot_solution(bte_fom, bte_rom, v_fom, v_fom1, fprefix="%04d_basis_change"%(idx//io_freq), time = tt)
             # Fr     = Fr1
-            print("---------------------------------------------------------------------") 
+            print("---------------------------------------------------------------------")
 
         Fr   = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, verbose=(idx % tio_freq))
         #Fo   = bte_rom.step_fom_ord(Et, Fo, tt, dt, type="BE", atol=1e-20, rtol=1e-3)
         #Fs   = bte_rom.step_fom_sph(Et, Fs, tt, dt, type="BE", atol=1e-20, rtol=1e-2)
-        F    = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
-        
+        #F    = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
+        F     = bte_rom.step_fom_vx(Ef, F, tt, dt, atol=bte_fom.args.atol, rtol=1e-4, gmres_rst=400, gmres_iter=5, verbose = (idx % tio_freq))
+
         tt  += dt
         idx +=1
-    
-    
-    
-   
-   
-
-   
 
 
 
 
 
 
-   
+
+
+
+
+
+
+
+

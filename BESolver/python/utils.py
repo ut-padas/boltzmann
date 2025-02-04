@@ -6,7 +6,7 @@ import parameters as params
 import spec_spherical
 import basis
 import scipy.constants
-from numba import jit
+#from numba import jit
 
 MAX_GMX_Q_VR_PTS=278
 

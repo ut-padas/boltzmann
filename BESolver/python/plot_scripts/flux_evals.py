@@ -6,7 +6,7 @@ from scipy.special import sph_harm
 import scipy.constants
 from matplotlib.colors import LogNorm
 
-def gauss_legendre_lobatto(n):
+def gauss_legendre_lobatto(n, domain=(-1, 1)):
     assert n>2, "quadrature order is less than 2"
     xi, wi = np.zeros(n), np.zeros(n)
     
@@ -23,6 +23,11 @@ def gauss_legendre_lobatto(n):
     wi[-1]    = 2/n/(n-1)
     
     wi[1:-1]  = 2/n/(n-1)/(np.polynomial.legendre.legval(xi[1:-1], c1)**2)
+
+    a, b      = domain[0], domain[1]
+    
+    xi        = 0.5 * (b-a) * xi + 0.5 * (b+a)
+    wi        = 0.5 * (b-a) * wi
     
     return xi, wi
 
@@ -118,10 +123,27 @@ def extract_data(folder, xl, xr, num_vt=16, ev_cutoff=80):
     # vtheta = np.linspace(0, np.pi, 64)
     # vthetaw= trapz_w(vtheta)
 
-    cvtq,vtqw = gauss_legendre_lobatto(num_vt) #np.polynomial.legendre.leggauss(num_vt)
-    cvtq,vtqw = np.flip(cvtq), np.flip(vtqw)
-    vtq       = np.arccos(cvtq)
+    # cvtq,vtqw = gauss_legendre_lobatto(num_vt, domain=(-1, 1)) 
+    # cvtq,vtqw = np.flip(cvtq), np.flip(vtqw)
+    # vtq       = np.arccos(cvtq)
+    # print(vtq)
+
+    cvtq,vtqw     = gauss_legendre_lobatto(num_vt//2, domain=(-1, 0)) 
+    cvtq_0,vtqw_0 = np.flip(cvtq), np.flip(vtqw)
+    
+
+    cvtq,vtqw     = gauss_legendre_lobatto(num_vt//2, domain=(0, 1)) 
+    cvtq_1,vtqw_1 = np.flip(cvtq), np.flip(vtqw)
+    
+    
+    cvtq          = np.append(cvtq_1 , cvtq_0)
+    vtq           = np.arccos(cvtq)
+    vtqw          = np.append(vtqw_1 , vtqw_0)
+
     #print(vtq)
+
+
+    
     
     ff     = h5py.File("%s/macro.h5"%(folder), "r")
     print(ff.keys())
@@ -342,67 +364,140 @@ def plot_data(data, tidx):
     plt.show()
     plt.close()    
 
-data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), num_vt=32, ev_cutoff=30)
-tt     = data["tt"]
-ev     = data["ev"]
-vr     = data["vr"]
-vr_w   = data["vr_weights"]
-vtheta = data["vtheta"]
-vt_w   = data["vtheta_weights"]
-tt     = data["time"]
-Fv_L   = data["fv_left_bdy"]
-Fv_R   = data["fv_right_bdy"]
-Flux_L = data["flux_left_bdy"] 
-Flux_R = data["flux_right_bdy"] 
-Ef     = data["Ef"]
-xlidx  = data["xlidx"]
-xridx  = data["xridx"]
-xx     = data["xx"]
-uz     = data["uz"]
-ne     = data["ne"]
-dx     = xx[xridx] - xx[xlidx]
-L      = 2.54e-2 / 2 
 
-print("\
-r1      = ne[tidx, xlidx] * uz[tidx, xlidx]\n\
-a1      = 2*np.pi * np.dot(np.dot(Fvt_L[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w)\n\
-r2      = ne[tidx, xridx] * uz[tidx, xridx] \n\
-a2      = 2*np.pi * np.dot(np.dot(Fvt_R[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w) \n\
-S       = (a2-a1)\n\
-R       = (r2-r1)")
+if __name__ == "__main__":
+    data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), num_vt=128, ev_cutoff=30)
+    tt     = data["tt"]
+    ev     = data["ev"]
+    vr     = data["vr"]
+    vr_w   = data["vr_weights"]
+    vtheta = data["vtheta"]
+    vt_w   = data["vtheta_weights"]
+    tt     = data["time"]
+    Fv_L   = data["fv_left_bdy"]
+    Fv_R   = data["fv_right_bdy"]
+    Flux_L = data["flux_left_bdy"] 
+    Flux_R = data["flux_right_bdy"] 
+    Ef     = data["Ef"]
+    xlidx  = data["xlidx"]
+    xridx  = data["xridx"]
+    xx     = data["xx"]
+    uz     = data["uz"]
+    ne     = data["ne"]
+    dx     = xx[xridx] - xx[xlidx]
+    L      = 2.54e-2 / 2 
 
-#### Example on how to do the cell-wise quad. 
-# this will do the cell wise quad. for all time points, 
-# iFvt_R - (axis-0 is time, axis-1 vr_i, axis-2, vtheta_j) where vr_i in [0, len(vr)-1] vtheta_j in [0, len(vtheta)-1]
-iFlux_L  = quad_on_grid(vr, vtheta, Flux_L)
-iFlux_R  = quad_on_grid(vr, vtheta, Flux_R)
+    print("\
+    r1      = ne[tidx, xlidx] * uz[tidx, xlidx]\n\
+    a1      = 2*np.pi * np.dot(np.dot(Fvt_L[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w)\n\
+    r2      = ne[tidx, xridx] * uz[tidx, xridx] \n\
+    a2      = 2*np.pi * np.dot(np.dot(Fvt_R[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w) \n\
+    S       = (a2-a1)\n\
+    R       = (r2-r1)")
 
-iFv_L    = quad_on_grid(vr, vtheta, Fv_L)
-iFv_R    = quad_on_grid(vr, vtheta, Fv_R)
-iFv_ic   = 0.5 * (iFv_L + iFv_R)
-#print(np.sum(iFv_L[0]), ne[0,xlidx])
+    #### Example on how to do the cell-wise quad. 
+    # this will do the cell wise quad. for all time points, 
+    # iFvt_R - (axis-0 is time, axis-1 vr_i, axis-2, vtheta_j) where vr_i in [0, len(vr)-1] vtheta_j in [0, len(vtheta)-1]
+    iFlux_L  = quad_on_grid(vr, vtheta, Flux_L)
+    iFlux_R  = quad_on_grid(vr, vtheta, Flux_R)
 
-
-
-
-plot_data(data, tidx=0)
-for tidx in range(0, len(tt), 10):
-    # left boundary
-    r1      = ne[tidx, xlidx] * uz[tidx, xlidx]
-    a1      = 2*np.pi * np.dot(np.dot(Flux_L[tidx], vt_w) * vr**2, vr_w)
-    b1      = np.sum(iFlux_L[tidx])
+    iFv_L    = quad_on_grid(vr, vtheta, Fv_L)
+    iFv_R    = quad_on_grid(vr, vtheta, Fv_R)
+    iFv_ic   = 0.5 * (iFv_L + iFv_R)
+    #print(np.sum(iFv_L[0]), ne[0,xlidx])
     
-    # right boundary
-    r2      = ne[tidx, xridx] * uz[tidx, xridx] 
-    a2      = 2*np.pi * np.dot(np.dot(Flux_R[tidx], vt_w) * vr**2, vr_w) 
-    b2      = np.sum(iFlux_R[tidx])
+    vtheta_bins = 0.5 * (vtheta[0:-1] + vtheta[1:])
+    iFlux_Lp    = iFlux_L[:, :, vtheta_bins <= 0.5 * np.pi]
+    iFlux_Ln    = iFlux_L[:, :, vtheta_bins >  0.5 * np.pi]
 
-    S       = (a2-a1)
-    R       = (r2-r1)
+    iFlux_Rp    = iFlux_R[:, :, vtheta_bins <= 0.5 * np.pi]
+    iFlux_Rn    = iFlux_R[:, :, vtheta_bins >  0.5 * np.pi]
+    
+    plt.figure(figsize=(12,8), dpi=200)
+
+    plt.subplot(3, 2, 1)
+    plt.title(r"$x_L=%.4E$"%(xx[xlidx]))
+    plt.plot(tt, np.abs(np.sum(iFlux_Lp.reshape((len(tt), -1)), axis=1)), label=r'S_L > 0 (incoming)')
+    plt.plot(tt, np.abs(np.sum(iFlux_Ln.reshape((len(tt), -1)), axis=1)), label=r'S_L < 0 (outgoing)')
+    #plt.plot(tt, np.sum(iFlux_Rp.reshape((len(tt), -1)), axis=1), label=r'S_R < 0')
+    plt.ylabel(r"")
+    plt.xlabel(r"time [T]")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(3, 2, 2)
+    plt.title(r"$x_L=%.4E$"%(xx[xridx]))
+    plt.semilogy(tt, np.abs(np.sum(iFlux_Rp.reshape((len(tt), -1)), axis=1)), label=r'S_R > 0 (outgoing)')
+    plt.semilogy(tt, np.abs(np.sum(iFlux_Rn.reshape((len(tt), -1)), axis=1)), label=r'S_R < 0 (incoming)')
+    plt.ylabel(r"")
+    plt.xlabel(r"time [T]")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(3, 2, 3)
+    plt.semilogy(tt, np.abs(np.sum(iFlux_Lp.reshape((len(tt), -1)), axis=1) + np.sum(iFlux_Ln.reshape((len(tt), -1)), axis=1)), label=r'|S_L|')
+    plt.ylabel(r"")
+    plt.xlabel(r"time [T]")
+    plt.grid(visible=True)
+    plt.legend()
+    
+    plt.subplot(3, 2, 4)
+    plt.semilogy(tt, np.abs(np.sum(iFlux_Rp.reshape((len(tt), -1)), axis=1) + np.sum(iFlux_Rn.reshape((len(tt), -1)), axis=1)), label=r'|S_R|')
+    plt.ylabel(r"")
+    plt.xlabel(r"time [T]")
+    plt.grid(visible=True)
+    plt.legend()
 
 
-    print("np.abs(1-b1/a1) = %.4E , np.abs(1-b2/a2) = %.4E, a1 = %.8E r1 = %.8E a2 = %.8E r2 = %.8E S=%.8E R=%.8E np.abs(1-S/R) = %.8E"%(np.abs(1-b1/a1), np.abs(1-b1/a2), a1, r1, a2, r2, S, R, np.abs(1-R/S)))
-    #print("t = %.4E [s] at left ||uzne - int(fvtL)||/||uzne|| = %.8E  and right ||uzne - int(fvtL)||/||uzne|| = %.8E net flux relative error=%.8E "%(tt[tidx], np.abs(1-a1/r1), np.abs(1-a2/r2), np.abs(1-(S/R))))
+    plt.subplot(3, 2, 5)
+    plt.plot(tt, (np.sum(iFlux_Lp.reshape((len(tt), -1)), axis=1) + np.sum(iFlux_Ln.reshape((len(tt), -1)), axis=1)), label=r'S_L')
+    plt.ylabel(r"total incoming flux")
+    plt.xlabel(r"time [T]")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(3, 2, 6)
+    plt.plot(tt, (-np.sum(iFlux_Rp.reshape((len(tt), -1)), axis=1) - np.sum(iFlux_Rn.reshape((len(tt), -1)), axis=1)), label=r'S_R')
+    plt.ylabel(r"total incoming flux")
+    plt.xlabel(r"time [T]")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig("flux_eulerian_xl_%.4E_xr_%.4E.png"%(float(sys.argv[2]), float(sys.argv[3])))
+    plt.close()
+
+    plt.figure(figsize=(10, 6), dpi=300)
+    plt.plot(tt, Ef[:, 0] , label=r"E(x=-1)")
+    plt.plot(tt, Ef[:, -1], label=r"E(x= 1)")
+    plt.legend()
+    plt.xlabel(r"time [T]")
+    plt.ylabel(r"E [V/m]")
+    plt.grid(visible=True)
+    plt.savefig("electric_field.png")
+    plt.close()
+
+    
+
+    plot_data(data, tidx=0)
+    for tidx in range(0, len(tt), 10):
+        # left boundary
+        r1      = ne[tidx, xlidx] * uz[tidx, xlidx]
+        a1      = 2*np.pi * np.dot(np.dot(Flux_L[tidx], vt_w) * vr**2, vr_w)
+        b1      = np.sum(iFlux_L[tidx])
+        
+        # right boundary
+        r2      = ne[tidx, xridx] * uz[tidx, xridx] 
+        a2      = 2*np.pi * np.dot(np.dot(Flux_R[tidx], vt_w) * vr**2, vr_w) 
+        b2      = np.sum(iFlux_R[tidx])
+
+        S       = (a2-a1)
+        R       = (r2-r1)
+
+
+        print("np.abs(1-b1/a1) = %.4E , np.abs(1-b2/a2) = %.4E, a1 = %.8E r1 = %.8E a2 = %.8E r2 = %.8E S=%.8E R=%.8E np.abs(1-S/R) = %.8E"%(np.abs(1-b1/a1), np.abs(1-b1/a2), a1, r1, a2, r2, S, R, np.abs(1-R/S)))
+        #print("t = %.4E [s] at left ||uzne - int(fvtL)||/||uzne|| = %.8E  and right ||uzne - int(fvtL)||/||uzne|| = %.8E net flux relative error=%.8E "%(tt[tidx], np.abs(1-a1/r1), np.abs(1-a2/r2), np.abs(1-(S/R))))
 
     
     

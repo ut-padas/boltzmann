@@ -737,7 +737,8 @@ class glow1d_boltzmann():
       
     def initialize_bte_adv_x(self, dt):
       """initialize spatial advection operator"""
-      xp = self.xp_module
+      xp                = self.xp_module
+      self.adv_setup_dt = dt 
       #assert xp == np
       
       self.bte_x_shift      = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
@@ -1181,6 +1182,7 @@ class glow1d_boltzmann():
     def step_bte_x(self, v, time, dt):
       "perform the bte x-advection analytically"
       xp        = self.xp_module
+      assert self.adv_setup_dt == dt
       
       if PROFILE_SOLVERS==1:
         if xp == cp:

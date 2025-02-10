@@ -16,6 +16,10 @@ import h5py
 from profile_t import profile_t
 from matplotlib.colors import TABLEAU_COLORS, same_color
 from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
+import scipy
+import scipy.constants
+import scipy.sparse.linalg
+
 class ROM_TYPE(Enum):
     POD = 0
     DLR = 1
@@ -29,7 +33,174 @@ class TIMER:
 
     LAST  = 4
 
+def assemble_mat(op_dim:tuple, Lop:scipy.sparse.linalg.LinearOperator, xp=np):
+    assert len(op_dim) == 2
+    Imat = xp.eye(op_dim[1])
 
+    Aop  = Lop.matmat(Imat)
+
+    assert Aop.shape == op_dim
+    return Aop
+
+def plot_solution(bte : glow1d_boltzmann, bte_rom, F0, F1, fprefix, time):
+    """
+    F0 : FOM
+    F1 : ROM
+    """
+
+    p_F0    = True
+    p_F1    = True
+
+    xp      = bte.xp_module
+    param   = bte.param
+    args    = bte.args
+    mass_op = bte.op_mass
+    temp_op = bte.op_temp
+    Ps      = bte.op_po2sh
+    Po      = bte.op_psh2o
+
+    spec_sp = bte.op_spec_sp
+    num_p   = spec_sp._p + 1
+    num_sh  = len(spec_sp._sph_harm_lm)
+    num_x   = len(bte.xp)
+
+    F0_lm   = xp.dot(Ps, F0)
+    F1_lm   = xp.dot(Ps, F1)
+
+    rom_lm  = bte_rom.rom_modes
+    PUv     = [xp.dot(bte_rom.Uv[l], bte_rom.Uv[l].T) for l in range(rom_lm)]
+    PVx     = [xp.dot(bte_rom.Vx[l], bte_rom.Vx[l].T) for l in range(rom_lm)]
+
+    G0_lm            = xp.zeros((num_p* num_sh, num_x))
+    for l in range(rom_lm):
+        G0_lm[l::num_sh] = xp.dot(PUv[l], xp.dot(F0_lm[0::num_sh], PVx[l]))
+
+    F0_lm_n = bte.bte_eedf_normalization(F0_lm)
+    F1_lm_n = bte.bte_eedf_normalization(F1_lm)
+    G0_lm_n = bte.bte_eedf_normalization(G0_lm)
+
+    ev_range  = (bte.ev_lim[0], bte.ev_lim[1])
+    ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
+
+    F0_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(F0_lm_n))
+    F1_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(F1_lm_n))
+
+
+    ne0     = xp.dot(mass_op, F0_lm)
+    ne1     = xp.dot(mass_op, F1_lm)
+    ne2     = xp.dot(mass_op, G0_lm)
+
+    Te0     = xp.dot(temp_op, F0_lm) / ne0
+    Te1     = xp.dot(temp_op, F1_lm) / ne1
+    Te2     = xp.dot(temp_op, G0_lm) / ne2
+
+    g0_0    = xp.dot(bte.op_rate[0], F0_lm_n[0::num_sh])
+    g0_1    = xp.dot(bte.op_rate[0], F1_lm_n[0::num_sh])
+    g0_2    = xp.dot(bte.op_rate[0], G0_lm_n[0::num_sh])
+
+    g2_0    = xp.dot(bte.op_rate[1], F0_lm_n[0::num_sh])
+    g2_1    = xp.dot(bte.op_rate[1], F1_lm_n[0::num_sh])
+    g2_2    = xp.dot(bte.op_rate[1], G0_lm_n[0::num_sh])
+
+
+    xx      = bte.xp
+
+    if xp == cp:
+        ne0  = xp.asnumpy(ne0)
+        ne1  = xp.asnumpy(ne1)
+        ne2  = xp.asnumpy(ne2)
+
+        Te0  = xp.asnumpy(Te0)
+        Te1  = xp.asnumpy(Te1)
+        Te2  = xp.asnumpy(Te2)
+
+        g0_0 = xp.asnumpy(g0_0)
+        g0_1 = xp.asnumpy(g0_1)
+        g0_2 = xp.asnumpy(g0_2)
+
+        g2_0 = xp.asnumpy(g2_0)
+        g2_1 = xp.asnumpy(g2_1)
+        g2_2 = xp.asnumpy(g2_2)
+
+        xx   = xp.asnumpy(xx)
+
+
+    cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    plt.figure(figsize=(16, 8), dpi=200)
+    plt.subplot(2, 4, 1)
+    citer = iter(cycle)
+    if(p_F0): plt.semilogy(xx, ne0 * param.np0,      label=r"FOM", color=next(citer))
+    if(p_F1): plt.semilogy(xx, ne1 * param.np0,'--', label=r"ROM", color=next(citer))
+    #plt.semilogy(xx, ne2 * param.np0, label=r"$P_{U}$ FOM $P_{V}$")
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"$n_e$ $[m^{-3}]$")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(2, 4, 2)
+    citer = iter(cycle)
+    if(p_F0): plt.plot(xx, Te0,      label=r"FOM", color=next(citer))
+    if(p_F1): plt.plot(xx, Te1,'--', label=r"ROM", color=next(citer))
+    #plt.plot(xx, Te2, label=r"$P_{U}$ FOM $P_{V}$")
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"$T_e$ $[eV]$")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(2, 4, 3)
+    citer = iter(cycle)
+    if(p_F0): plt.semilogy(xx, g0_0      , label=r"FOM", color=next(citer))
+    if(p_F1): plt.semilogy(xx, g0_1, '--', label=r"ROM", color=next(citer))
+    #plt.semilogy(xx, g0_2, label=r"$P_{U}$ FOM $P_{V}$")
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"rate coefficient $[m^{3}s^{-1}]$")
+    plt.title(r"momentum transfer")
+    plt.grid(visible=True)
+    plt.legend()
+
+    plt.subplot(2, 4, 4)
+    citer = iter(cycle)
+    if(p_F0): plt.semilogy(xx, g2_0,       label=r"FOM", color=next(citer))
+    if(p_F1): plt.semilogy(xx, g2_1, '--' ,label=r"ROM", color=next(citer))
+    #plt.semilogy(xx, g2_2, label=r"$P_{U}$ FOM $P_{V}$")
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"rate coefficient $[m^{3}s^{-1}]$")
+    plt.title(r"ionization")
+    plt.grid(visible=True)
+    plt.legend()
+
+
+    plt.subplot(2, 4, 5)
+    citer = iter(cycle)
+    for xidx in range(0, len(xx), len(xx)//3):
+        clr = next(citer)
+        if(p_F0): plt.semilogy(ev_grid, np.abs(F0_rc[xidx, 0])      , color=clr, label=r"FOM (x=%.2f)"%(xx[xidx]))
+        if(p_F1): plt.semilogy(ev_grid, np.abs(F1_rc[xidx, 0]),'--' , color=clr, label=r"ROM (x=%.2f)"%(xx[xidx]))
+
+    plt.grid(visible=True)
+    plt.legend()
+    plt.xlabel(r"energy [eV]")
+    plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
+
+    plt.subplot(2, 4, 6)
+    citer = iter(cycle)
+    for xidx in range(0, len(xx), len(xx)//3):
+        clr = next(citer)
+        if(p_F0): plt.semilogy(ev_grid, np.abs(F0_rc[xidx, 1])      , color=clr, label=r"FOM (x=%.2f)"%(xx[xidx]))
+        if(p_F1): plt.semilogy(ev_grid, np.abs(F1_rc[xidx, 1]),'--' , color=clr, label=r"ROM (x=%.2f)"%(xx[xidx]))
+
+    plt.grid(visible=True)
+    plt.legend()
+    plt.xlabel(r"energy [eV]")
+    plt.ylabel(r"$f_1$  [$eV^{-3/2}$]")
+
+    plt.suptitle(r"time = %.4E [T]"%(time))
+    plt.tight_layout()
+
+    plt.savefig("%s_rom_%s.png"%(args.fname, fprefix))
+    plt.close()
+    return
 
 class boltzmann_1d_rom():
 
@@ -59,7 +230,7 @@ class boltzmann_1d_rom():
         v       = xp.copy(v0)
         v_all   = xp.zeros(tuple([n_samples]) + v0.shape)
 
-        '''for iter in range(steps):
+        for iter in range(steps):
             if (iter % io_freq == 0):
                 print(iter//io_freq, v_all.shape, type(v))
                 v_all[int(iter//io_freq), :, :] = v[:, :]
@@ -74,7 +245,7 @@ class boltzmann_1d_rom():
         # ne_all                 = xp.einsum("l,ilx->ix", bte.op_mass , v_all_lm)
         # v_all_lm               = xp.einsum("ix,ivx->ivx", (1/ne_all), v_all_lm)
         xp.save("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te),v_all_lm)
-        print("v_all_lm.shape = ", v_all_lm.shape)'''
+        print("v_all_lm.shape = ", v_all_lm.shape)
 
 
         v_all_lm = xp.load("%s_v_all_lm_tb_%.2E_to_te_%.2E.npy"%(bte.args.fname, tb, te))
@@ -93,11 +264,14 @@ class boltzmann_1d_rom():
 
         def svd(fl, Uv_old, Vx_old, eps_x, eps_v, xp):
             num_t, num_p, num_x = fl.shape
+            print(num_t, num_p, num_x)
             Ux, Sx, Vhx = xp.linalg.svd(fl.reshape(num_t * num_p, -1)) # Nt Nr x Nx
             Uv, Sv, Vhv = xp.linalg.svd(np.swapaxes(fl, 0, 1).reshape((num_p, num_t * num_x))) # Nr x Nt Nx
 
-            kr  = Uv[:, Sv > Sv[0] * eps_v].shape[1]
-            kx  = Vhx[Sx > Sx[0] * eps_x, :].T.shape[1]
+            # kr  = Uv[:, Sv > Sv[0] * eps_v].shape[1]
+            # kx  = Vhx[Sx > Sx[0] * eps_x, :].T.shape[1]
+            kr  = len(Sv[Sv > Sv[0] * eps_v])
+            kx  = len(Sx[Sx > Sx[0] * eps_x])
 
             Vx  = Vhx[0:kx, :   ].T
             Uv  = Uv [:   , 0:kr]
@@ -127,7 +301,20 @@ class boltzmann_1d_rom():
         svalues=list()
         for l in range(rom_modes):
             if (self.rom_type == ROM_TYPE.POD):
-                uv, vx , s = svd(fl[l], self.Uv[l], self.Vx[l], eps_x, eps_v, xp=xp)
+                uv, vx , s       = svd(fl[l]             , self.Uv[l], self.Vx[l], eps_x, eps_v, xp=xp)
+                
+                # uv_l, vx_l , s_l = svd(fl[l][:, :,  0:1] , self.Uv[l], self.Vx[l], eps_x, eps_v, xp=xp)
+                # uv_r, vx_r , s_r = svd(fl[l][:, :, -1: ] , self.Uv[l], self.Vx[l], eps_x, eps_v, xp=xp)
+
+                # print(uv.shape, uv_l.shape, uv_r.shape)
+                # uv   = xp.append(uv, uv_l, axis=1)
+                # uv   = xp.append(uv, uv_r, axis=1)
+                # uv,_ = xp.linalg.qr(uv)
+
+                # vx = xp.append(vx, vx_l, axis=1)
+                # vx = xp.append(vx, vx_r, axis=1)
+
+
             elif (self.rom_type == ROM_TYPE.DLR):
                 Fs       = xp.dot(Ps, v0)
                 u, s, vt = xp.linalg.svd(Fs[l::num_sh])
@@ -294,6 +481,17 @@ class boltzmann_1d_rom():
         self.pAvr = [xp.dot(xp.dot(Po, self.Av) [:, l::num_sh], self.Uv[l]) for l in range(rom_lm)]
         self.pAxr = [xp.dot(xp.dot(self.Ax, Po) [:, l::num_sh], self.Uv[l]) for l in range(rom_lm)]
 
+
+        print("ROM dof ", self.dof_rom)
+
+
+        self.Lvx     = self.assemble_rom_vx_op(xp.ones_like(bte.xp) * 1e3)
+        print(self.Lvx.shape, ", cond %.8E "%(np.linalg.cond(np.eye(self.dof_rom) - dt * xp.asnumpy(self.Lvx))))
+        self.Lvx_inv = xp.linalg.inv(xp.eye(self.dof_rom) - dt * self.Lvx)
+
+        # self.Axr_inv   = xp.linalg.inv(xp.eye(self.dof_rom) - bte.adv_setup_dt * self.assemble_rom_x_op())
+        # xp.save("%s_rom_x_mat_dof_%d.npy"%(bte.args.fname, self.dof_rom), self.Axr_inv)
+        # self.Axr_inv = xp.load("%s_rom_x_mat_dof_%d.npy"%(bte.args.fname, self.dof_rom))
         return
 
     def get_rom_lm(self, Fr, l, m=0):
@@ -354,6 +552,70 @@ class boltzmann_1d_rom():
 
         return xp.dot(Po, F)
 
+    def assemble_rom_vx_op(self, Ef):
+        """
+        performs matassembly for the VX rom-space op.
+        """
+
+        bte     = self.bte_solver
+        xp      = bte.xp_module
+        param   = bte.param
+
+        spec_sp = bte.op_spec_sp
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+        num_x   = len(bte.xp)
+        num_vt  = len(bte.xp_vt)
+
+        DxT     = self.Dx.T
+        po2sh   = bte.op_po2sh
+        psh2o   = bte.op_psh2o
+        xp_vt_l = bte.xp_vt_l
+        xp_vt_r = bte.xp_vt_r
+
+        def rom_vx(Xr, Ef, xp=xp):
+            Fo   = self.decode(Xr)
+            Fs   = xp.dot(po2sh, Fo)
+            Qv   = param.tau * (xp.dot(self.Cop, Fs) + Ef * xp.dot(self.Av, Fs))
+            Qv   = xp.dot(psh2o, Qv)
+            Qv   = (-xp.dot(self.Ax, xp.dot(Fo, DxT)) +  Qv)
+
+            Qv[xp_vt_l,  0] = 0.0
+            Qv[xp_vt_r, -1] = 0.0
+
+            return self.encode(Qv)
+
+        Ndof = self.dof_rom
+        Lop  = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: rom_vx(x, Ef, xp=xp), dtype=xp.float64)
+
+        Lop_mat = assemble_mat((self.dof_rom, self.dof_rom),Lop, xp=xp)
+        #xp.save("%s_rom_mat.npy"%(bte.args.fname), Lop_mat)
+        return Lop_mat
+
+    def assemble_rom_x_op(self):
+        bte     = self.bte_solver
+        xp      = bte.xp_module
+        param   = bte.param
+
+        DxT     = self.Dx.T
+        # po2sh   = bte.op_po2sh
+        # psh2o   = bte.op_psh2o
+        xp_vt_l = bte.xp_vt_l
+        xp_vt_r = bte.xp_vt_r
+
+        def rom_x(Xr, xp=xp):
+            Fo   = self.decode(Xr)
+            Qv   = (-xp.dot(self.Ax, xp.dot(Fo, DxT)))
+
+            Qv[xp_vt_l,  0] = 0.0
+            Qv[xp_vt_r, -1] = 0.0
+            return self.encode(Qv)
+        
+        Ndof    = self.dof_rom
+        Lop     = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: rom_x(x, xp=xp), dtype=xp.float64)
+        Lop_mat = assemble_mat((self.dof_rom, self.dof_rom),Lop, xp=xp)
+        return Lop_mat
+    
     def rhs_rom_v(self, Xr, Ef, time, dt, type):
         bte     = self.bte_solver
         spec_sp = bte.op_spec_sp
@@ -685,10 +947,20 @@ class boltzmann_1d_rom():
             return Fr.reshape((-1))
 
         elif(type == "HALF-STEP"):
-            Fo = self.decode(Fr)
-            Fo = bte.step_bte_x(Fo, time, dt * 0.5)
+            Fr  = self.encode(bte.step_bte_x(self.decode(Fr), time, dt * 0.5))
+            # brhs                   = self.decode(Fr)
+            # brhs[bte.xp_vt_l, 0]   = 0.0
+            # brhs[bte.xp_vt_r, -1]  = 0.0
+            # brhs                   = self.encode(brhs)
+            # assert dt * 0.5 == bte.adv_setup_dt
+            # Fr                     = xp.dot(self.Axr_inv, brhs)
+            
+            # # explicit enforce BC
+            # Fo                     = self.decode(Fr)
+            # Fo[bte.xp_vt_l, 0 ]    = 0.0 
+            # Fo[bte.xp_vt_r, -1]    = 0.0 
+            # Fr                     = self.encode(Fo)
 
-            Fr = self.encode(Fo)
             return Fr.reshape((-1))
 
         else:
@@ -745,11 +1017,9 @@ class boltzmann_1d_rom():
             print("")
         return Frh
 
-    def step_rom_vx(self, Ef, F, time, dt, atol=1e-20, rtol=1e-8, gmres_rst=20, gmres_iter =10, verbose=1):
+    def step_rom_vx(self, Ef, F, time, dt, atol=1e-20, rtol=1e-10, gmres_rst=20, gmres_iter =10, verbose=1):
         bte     = self.bte_solver
         xp      = bte.xp_module
-        rom_lm  = self.rom_modes
-
         param   = bte.param
 
         spec_sp = bte.op_spec_sp
@@ -757,99 +1027,19 @@ class boltzmann_1d_rom():
         num_sh  = len(spec_sp._sph_harm_lm)
         num_x   = len(bte.xp)
         num_vt  = len(bte.xp_vt)
-
-        DxT     = self.Dx.T
-        Ps      = bte.op_po2sh
-        Po      = bte.op_psh2o
         xp_vt_l = bte.xp_vt_l
         xp_vt_r = bte.xp_vt_r
 
-        assert xp == cp, "assumes cupy backend"
+        brhs              = xp.copy(F)
+        #enforce BCs
+        brhs[xp_vt_l,  0] = 0.0
+        brhs[xp_vt_r, -1] = 0.0
 
-        VTDxT   = [xp.dot(self.Vx[l].T, DxT) for l in range(rom_lm)]
-        VTE     = [Ef * self.Vx[l].T for l in range(rom_lm)]
-        Fs      = xp.dot(Ps, F)
-        Fr      = [xp.dot(self.Uv[l].T, xp.dot(Fs[l::num_sh, :], self.Vx[l])) for l in range(rom_lm)]
-        PoU     = [xp.dot(Po[:, l::num_sh], self.Uv[l]) for l in range(rom_lm)]
-
-
-        # UUT     = [xp.dot(self.Uv[l], self.Uv[l].T) for l in range(rom_lm)]
-        # VVT     = [xp.dot(self.Vx[l], self.Vx[l].T) for l in range(rom_lm)]
-
-        # define residual and jacobian using reduced order approximation.
-
-        def residual(dF, time, dt):
-            dF   = dF.reshape((num_p * num_vt, num_x))
-            dFs  = xp.dot(Ps, dF)
-            dFr  = [xp.dot(self.Uv[l].T, xp.dot(dFs[l::num_sh], self.Vx[l])) for l in range(rom_lm)]
-            res  = xp.zeros((num_p * num_vt, num_x))
-
-            for l in range(rom_lm):
-                Fp_l = Fr[l] + dFr[l]
-                res += xp.dot(PoU[l], xp.dot(dFr[l], self.Vx[l].T)) \
-                       + dt * xp.dot(self.pAxr[l], xp.dot(Fp_l, VTDxT[l])) - \
-                       (dt * param.tau) * xp.dot(self.pCvr[l], xp.dot(Fp_l, self.Vx[l].T)) -\
-                       (dt * param.tau) * xp.dot(self.pAvr[l], xp.dot(Fp_l, VTE[l]))
-
-            Fp               = F + dF
-            res[xp_vt_l,  0] = (Fp[xp_vt_l, 0 ] - 0.0)
-            res[xp_vt_r, -1] = (Fp[xp_vt_r, -1] - 0.0)
-            return res.reshape((-1))
-
-        def jacobian(dF, time, dt):
-            dF   = dF.reshape((num_p * num_vt, num_x))
-            dFs  = xp.dot(Ps, dF)
-            dFr  = [xp.dot(self.Uv[l].T, xp.dot(dFs[l::num_sh], self.Vx[l])) for l in range(rom_lm)]
-            jac  = xp.zeros((num_p * num_vt, num_x))
-
-            for l in range(rom_lm):
-                Fp_l = dFr[l]
-                jac += xp.dot(PoU[l], xp.dot(dFr[l], self.Vx[l].T)) \
-                       + dt * xp.dot(self.pAxr[l], xp.dot(Fp_l, VTDxT[l])) - \
-                       (dt * param.tau) * xp.dot(self.pCvr[l], xp.dot(Fp_l, self.Vx[l].T)) -\
-                       (dt * param.tau) * xp.dot(self.pAvr[l], xp.dot(Fp_l, VTE[l]))
-
-            jac[xp_vt_l,  0] = dF[xp_vt_l, 0 ]
-            jac[xp_vt_r, -1] = dF[xp_vt_r, -1]
-            return jac.reshape((-1))
+        brhs_rom      = self.encode(brhs)
+        Fp            = self.decode(xp.dot(self.Lvx_inv, brhs_rom))
+        return Fp
 
 
-
-        if xp == cp:
-            Ndof          = num_p * num_x * num_vt
-            Amat_op       = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: jacobian(x, time, dt))
-            #dF            = (self.step_fom_op_split(Ef, F, time, dt) - F).reshape((-1)) #xp.zeros_like(F).reshape((-1))
-            #dF            = (self.decode(self.step_rom_op_split(Ef, self.encode(F), time, dt, None, atol, rtol, verbose)) - F).reshape((-1))
-            dF            = xp.zeros_like(F).reshape((-1))
-            Pmat_op       = None #cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Px)
-            gmres_c       = glow1d_utils.gmres_counter(disp=True)
-            rhs           = residual(dF, time, dt)
-            norm_b        = xp.linalg.norm(rhs)
-            dF1, status   = cupyx.scipy.sparse.linalg.gmres(Amat_op, rhs.reshape((-1)), x0=dF.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
-            dF            = dF - dF1
-
-            norm_res_abs  = xp.linalg.norm(Amat_op(dF1) -  rhs.reshape((-1)))
-            norm_res_rel  = xp.linalg.norm(Amat_op(dF1) -  rhs.reshape((-1))) / norm_b
-
-            if (status !=0) :
-                # print("time = %.8E T GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, status, norm_res_abs, norm_res_rel))
-                # #sys.exit(-1)
-                # G = F + dF.reshape(F.shape)
-                # print("l\n", G[xp_vt_l, 0])
-                # print("r\n", G[xp_vt_r,-1])
-                return F + dF.reshape(F.shape)
-            else:
-                if (verbose == 1):
-                    print("ROM      Boltzmann (vx-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(time, norm_res_abs, norm_res_rel, gmres_c.niter * gmres_rst))
-
-                # G = F + dF.reshape(F.shape)
-                # print("l\n", G[xp_vt_l, 0])
-                # print("r\n", G[xp_vt_r,-1])
-                return F + dF.reshape(F.shape)
-        else:
-            raise NotImplementedError
-
-        return
 
     #############################################################################################
     ############################## FOM routines below ###########################################
@@ -924,73 +1114,35 @@ class boltzmann_1d_rom():
         xp_vt_l = bte.xp_vt_l
         xp_vt_r = bte.xp_vt_r
 
-        #Qv      = xp.dot(psh2o,po2sh)
+        def rhs_op(F, time, dt):
+            F                 = F.reshape((num_p * num_vt, num_x))
+            Fs                = xp.dot(po2sh, F)
+            rhs               = (-xp.dot(self.Ax, xp.dot(F, DxT)) +  param.tau * xp.dot(psh2o, (xp.dot(self.Cop, Fs) + Ef * xp.dot(self.Av, Fs))))
 
+            rhs[xp_vt_l,  0 ] = 0.0
+            rhs[xp_vt_r, -1 ] = 0.0
 
-        def residual(dF, time, dt):
-            dF   = dF.reshape((num_p * num_vt, num_x))
-            Fp   = F + dF
-            Rv   = xp.dot(po2sh, Fp)
-            Rv   = param.tau * xp.dot(psh2o, (xp.dot(self.Cop, Rv) + Ef * xp.dot(self.Av, Rv)))
-            res  = dF + dt * (xp.dot(self.Ax, xp.dot(Fp, DxT)) -  Rv)
-
-            res[xp_vt_l,  0 ] = (Fp[xp_vt_l,  0 ] - 0.0)
-            res[xp_vt_r, -1 ] = (Fp[xp_vt_r, -1 ] - 0.0)
-
-            return res.reshape((-1))
-
-        def jacobian(dF, time, dt):
-            dF   = dF.reshape((num_p * num_vt, num_x))
-            Rv   = xp.dot(po2sh, dF)
-            Rv   = param.tau * xp.dot(psh2o, (xp.dot(self.Cop, Rv) + Ef * xp.dot(self.Av, Rv)))
-            jac  = dF + dt * (xp.dot(self.Ax, xp.dot(dF, DxT)) -  Rv)
-
-            jac[xp_vt_l,  0 ]  = dF[xp_vt_l,  0]
-            jac[xp_vt_r, -1 ]  = dF[xp_vt_r, -1]
-
-            return jac.reshape((-1))
-
-        def precond(dF, time, dt):
-            dF   = dF.reshape((num_p * num_vt, num_x))
-            return self.decode(self.step_rom_op_split(Ef, self.encode(dF), time, dt, None, atol, rtol, verbose=0)).reshape((-1))
-
+            return rhs.reshape((-1))
 
         if xp == cp:
             Ndof          = num_p * num_x * num_vt
-            Amat_op       = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: jacobian(x, time, dt))
-            #dF           = (self.step_fom_op_split(Ef, F, time, dt) - F).reshape((-1)) #xp.zeros_like(F).reshape((-1))
-            #dF           = (self.decode(self.step_rom_op_split(Ef, self.encode(F), time, dt, None, atol, rtol, verbose)) - F).reshape((-1))
-            #dF           = (self.step_rom_vx(Ef, F, tt, dt, atol=bte_fom.args.atol, rtol=1e-3, gmres_rst=30, gmres_iter=10, verbose = (idx % tio_freq)) - F).reshape((-1))
-            #dF           = xp.zeros_like(F).reshape((-1))
+            Amat_op       = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: x - dt * rhs_op(x, time, dt))
 
-            """Fr     = xp.copy(F)
-            psteps = 100
-            pdt    = dt/psteps
-            for ptidx in range(psteps):
-                Fr = self.step_rom_vx(Ef, Fr, tt, pdt, atol=bte_fom.args.atol, rtol=1e-3, gmres_rst=20, gmres_iter = 1, verbose = 0)"""
-            pdt           = dt/psteps
-            print("pdt, ", pdt, "dt", dt)
+            brhs              = xp.copy(F)
+            #enforce BCs
+            brhs[xp_vt_l,  0] = 0.0
+            brhs[xp_vt_r, -1] = 0.0
 
-            """Fr            = self.encode(F)
-            for ptidx in range(psteps):
-                Fr        = self.step_rom_op_split(Ef, Fr, time , pdt, None, atol, rtol, verbose=1)
-            dF            = (self.decode(Fr) - F).reshape((-1))
-            """
+            brhs_rom      = self.encode(brhs)
+            F_init        = self.decode(xp.dot(self.Lvx_inv, brhs_rom))
 
-            Fr            = xp.copy(F)
-            for ptidx in range(psteps):
-                Fr        =self.step_fom_op_split(Ef, Fr, time, pdt, verbose = 1)
-            dF            = (Fr - F).reshape((-1))
-
+            norm_b        = xp.linalg.norm(brhs)
             Pmat_op       = None #cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec= lambda x: precond(x, time, dt))
             gmres_c       = glow1d_utils.gmres_counter(disp=True)
-            rhs           = residual(dF, time, dt)
-            norm_b        = xp.linalg.norm(rhs)
-            dF1, status   = cupyx.scipy.sparse.linalg.gmres(Amat_op, rhs.reshape((-1)), x0=dF.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
-            dF            = dF - dF1
+            Fp, status    = cupyx.scipy.sparse.linalg.gmres(Amat_op, brhs.reshape((-1)), x0=F_init.reshape((-1)), tol=rtol, atol=atol, M=Pmat_op, restart=gmres_rst, maxiter= gmres_rst * gmres_iter, callback=gmres_c)
 
-            norm_res_abs  = xp.linalg.norm(Amat_op(dF1) -  rhs.reshape((-1)))
-            norm_res_rel  = xp.linalg.norm(Amat_op(dF1) -  rhs.reshape((-1))) / norm_b
+            norm_res_abs  = xp.linalg.norm(Amat_op(Fp) -  brhs.reshape((-1)))
+            norm_res_rel  = xp.linalg.norm(Amat_op(Fp) -  brhs.reshape((-1))) / norm_b
 
             if (status !=0) :
                 print("time = %.8E T GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(time, status, norm_res_abs, norm_res_rel))
@@ -999,11 +1151,10 @@ class boltzmann_1d_rom():
                 if (verbose == 1):
                     print("FOM      Boltzmann (vx-space) step time = %.6E ||res||=%.12E ||res||/||b||=%.12E gmres iter = %04d"%(time, norm_res_abs, norm_res_rel, gmres_c.niter * gmres_rst))
 
-                G = F + dF.reshape(F.shape)
-                print("l\n", G[xp_vt_l, 0])
-                print("r\n", G[xp_vt_r,-1])
-
-                return F + dF.reshape(F.shape)
+                Fp = Fp.reshape(F.shape)
+                print("l\n", Fp[xp_vt_l, 0])
+                print("r\n", Fp[xp_vt_r,-1])
+                return Fp
         else:
             raise NotImplementedError
 
@@ -1075,163 +1226,6 @@ class boltzmann_1d_rom():
 
         return pc_emat_idx
 
-def plot_solution(bte : glow1d_boltzmann, bte_rom: boltzmann_1d_rom, F0, F1, fprefix, time):
-    """
-    F0 : FOM
-    F1 : ROM
-    """
-
-    xp      = bte.xp_module
-    param   = bte.param
-    args    = bte.args
-    mass_op = bte.op_mass
-    temp_op = bte.op_temp
-    Ps      = bte.op_po2sh
-    Po      = bte.op_psh2o
-
-    spec_sp = bte.op_spec_sp
-    num_p   = spec_sp._p + 1
-    num_sh  = len(spec_sp._sph_harm_lm)
-    num_x   = len(bte.xp)
-
-    F0_lm   = xp.dot(Ps, F0)
-    F1_lm   = xp.dot(Ps, F1)
-
-    rom_lm  = bte_rom.rom_modes
-    PUv     = [xp.dot(bte_rom.Uv[l], bte_rom.Uv[l].T) for l in range(rom_lm)]
-    PVx     = [xp.dot(bte_rom.Vx[l], bte_rom.Vx[l].T) for l in range(rom_lm)]
-
-    G0_lm            = xp.zeros((num_p* num_sh, num_x))
-    for l in range(rom_lm):
-        G0_lm[l::num_sh] = xp.dot(PUv[l], xp.dot(F0_lm[0::num_sh], PVx[l]))
-
-    F0_lm_n = bte.bte_eedf_normalization(F0_lm)
-    F1_lm_n = bte.bte_eedf_normalization(F1_lm)
-    G0_lm_n = bte.bte_eedf_normalization(G0_lm)
-
-    ev_range  = (bte.ev_lim[0], bte.ev_lim[1])
-    ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
-
-    F0_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(F0_lm_n))
-    F1_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(F1_lm_n))
-
-
-    ne0     = xp.dot(mass_op, F0_lm)
-    ne1     = xp.dot(mass_op, F1_lm)
-    ne2     = xp.dot(mass_op, G0_lm)
-
-    Te0     = xp.dot(temp_op, F0_lm) / ne0
-    Te1     = xp.dot(temp_op, F1_lm) / ne1
-    Te2     = xp.dot(temp_op, G0_lm) / ne2
-
-    g0_0    = xp.dot(bte.op_rate[0], F0_lm_n[0::num_sh])
-    g0_1    = xp.dot(bte.op_rate[0], F1_lm_n[0::num_sh])
-    g0_2    = xp.dot(bte.op_rate[0], G0_lm_n[0::num_sh])
-
-    g2_0    = xp.dot(bte.op_rate[1], F0_lm_n[0::num_sh])
-    g2_1    = xp.dot(bte.op_rate[1], F1_lm_n[0::num_sh])
-    g2_2    = xp.dot(bte.op_rate[1], G0_lm_n[0::num_sh])
-
-
-    xx      = bte.xp
-
-    if xp == cp:
-        ne0  = xp.asnumpy(ne0)
-        ne1  = xp.asnumpy(ne1)
-        ne2  = xp.asnumpy(ne2)
-
-        Te0  = xp.asnumpy(Te0)
-        Te1  = xp.asnumpy(Te1)
-        Te2  = xp.asnumpy(Te2)
-
-        g0_0 = xp.asnumpy(g0_0)
-        g0_1 = xp.asnumpy(g0_1)
-        g0_2 = xp.asnumpy(g0_2)
-
-        g2_0 = xp.asnumpy(g2_0)
-        g2_1 = xp.asnumpy(g2_1)
-        g2_2 = xp.asnumpy(g2_2)
-
-        xx   = xp.asnumpy(xx)
-
-
-    cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
-    plt.figure(figsize=(16, 8), dpi=200)
-    plt.subplot(2, 4, 1)
-    citer = iter(cycle)
-    plt.semilogy(xx, ne0 * param.np0,      label=r"FOM", color=next(citer))
-    #plt.semilogy(xx, ne1 * param.np0,'--', label=r"ROM", color=next(citer))
-    #plt.semilogy(xx, ne2 * param.np0, label=r"$P_{U}$ FOM $P_{V}$")
-    plt.xlabel(r"$\hat{x}$")
-    plt.ylabel(r"$n_e$ $[m^{-3}]$")
-    plt.grid(visible=True)
-    plt.legend()
-
-    plt.subplot(2, 4, 2)
-    citer = iter(cycle)
-    plt.plot(xx, Te0,      label=r"FOM", color=next(citer))
-    #plt.plot(xx, Te1,'--', label=r"ROM", color=next(citer))
-    #plt.plot(xx, Te2, label=r"$P_{U}$ FOM $P_{V}$")
-    plt.xlabel(r"$\hat{x}$")
-    plt.ylabel(r"$T_e$ $[eV]$")
-    plt.grid(visible=True)
-    plt.legend()
-
-    plt.subplot(2, 4, 3)
-    citer = iter(cycle)
-    plt.semilogy(xx, g0_0      , label=r"FOM", color=next(citer))
-    #plt.semilogy(xx, g0_1, '--', label=r"ROM", color=next(citer))
-    #plt.semilogy(xx, g0_2, label=r"$P_{U}$ FOM $P_{V}$")
-    plt.xlabel(r"$\hat{x}$")
-    plt.ylabel(r"rate coefficient $[m^{3}s^{-1}]$")
-    plt.title(r"momentum transfer")
-    plt.grid(visible=True)
-    plt.legend()
-
-    plt.subplot(2, 4, 4)
-    citer = iter(cycle)
-    plt.semilogy(xx, g2_0,       label=r"FOM", color=next(citer))
-    #plt.semilogy(xx, g2_1, '--' ,label=r"ROM", color=next(citer))
-    #plt.semilogy(xx, g2_2, label=r"$P_{U}$ FOM $P_{V}$")
-    plt.xlabel(r"$\hat{x}$")
-    plt.ylabel(r"rate coefficient $[m^{3}s^{-1}]$")
-    plt.title(r"ionization")
-    plt.grid(visible=True)
-    plt.legend()
-
-
-    plt.subplot(2, 4, 5)
-    citer = iter(cycle)
-    for xidx in range(0, len(xx), len(xx)//3):
-        clr = next(citer)
-        plt.semilogy(ev_grid, np.abs(F0_rc[xidx, 0])      , color=clr, label=r"FOM (x=%.2f)"%(xx[xidx]))
-        #plt.semilogy(ev_grid, np.abs(F1_rc[xidx, 0]),'--' , color=clr, label=r"ROM (x=%.2f)"%(xx[xidx]))
-
-    plt.grid(visible=True)
-    plt.legend()
-    plt.xlabel(r"energy [eV]")
-    plt.ylabel(r"$f_0$  [$eV^{-3/2}$]")
-
-    plt.subplot(2, 4, 6)
-    citer = iter(cycle)
-    for xidx in range(0, len(xx), len(xx)//3):
-        clr = next(citer)
-        plt.semilogy(ev_grid, np.abs(F0_rc[xidx, 1])      , color=clr, label=r"FOM (x=%.2f)"%(xx[xidx]))
-        #plt.semilogy(ev_grid, np.abs(F1_rc[xidx, 1]),'--' , color=clr, label=r"ROM (x=%.2f)"%(xx[xidx]))
-
-    plt.grid(visible=True)
-    plt.legend()
-    plt.xlabel(r"energy [eV]")
-    plt.ylabel(r"$f_1$  [$eV^{-3/2}$]")
-
-    plt.suptitle(r"time = %.4E [T]"%(time))
-    plt.tight_layout()
-
-    plt.savefig("%s_rom_%s.png"%(args.fname, fprefix))
-    plt.close()
-    return
-
 if __name__ == "__main__":
     from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
     args         = args_parse()
@@ -1251,7 +1245,7 @@ if __name__ == "__main__":
     tio_freq     = 20
     uv_freq      = int(np.round(20/dt))
 
-    rom_eps_x    = 1e-4
+    rom_eps_x    = 1e-6
     rom_eps_v    = 1e-6
     restore      = 0
     rs_idx       = 0
@@ -1344,12 +1338,15 @@ if __name__ == "__main__":
             # Fr     = Fr1
             print("---------------------------------------------------------------------")'''
 
-        #Fr   = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, verbose=(idx % tio_freq))
+        #Fr    = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, verbose=(idx % tio_freq))
+        Fr    = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=1e-5, verbose=(idx % tio_freq))
         #Fo   = bte_rom.step_fom_ord(Et, Fo, tt, dt, type="BE", atol=1e-20, rtol=1e-3)
         #Fs   = bte_rom.step_fom_sph(Et, Fs, tt, dt, type="BE", atol=1e-20, rtol=1e-2)
-        #F    = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
-        F     = bte_rom.step_fom_vx(Ef, F, tt, psteps * dt, atol=bte_fom.args.atol,  rtol=1e-10, gmres_rst=300, gmres_iter=10, verbose = (idx % tio_freq))
-        #F     = bte_rom.step_rom_vx(Ef, F, tt, dt, atol=bte_fom.args.atol, rtol=1e-3, gmres_rst=20, gmres_iter= 20, verbose = (idx % tio_freq))
+        F     = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
+        #F    = bte_rom.step_fom_vx(Ef, F, tt, psteps * dt, atol=bte_fom.args.atol,  rtol=1e-10, gmres_rst=100, gmres_iter=50, verbose = (idx % tio_freq))
+        
+        #Fr    = bte_rom.step_rom_vx(Ef, F, tt, dt, atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, gmres_rst=20, gmres_iter= 20, verbose = (idx % tio_freq))
+        #Fr    = bte_rom.encode(Fr)
 
         tt  += dt
         idx +=1

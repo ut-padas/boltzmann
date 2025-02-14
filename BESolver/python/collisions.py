@@ -119,18 +119,35 @@ class Collisions(abc.ABC):
             self._bb      = bb  
 
         # import matplotlib.pyplot as plt
-        # fig=plt.figure(figsize=(8,8), dpi=300)
-        # plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated", markersize=5)
+        # fig=plt.figure(figsize=(16,8), dpi=300)
+        # plt.subplot(1, 2, 1)
+        # plt.loglog(self._energy, self._total_cs,'r-*',label=r"tabulated", markersize=0.8)
         # plt.loglog(self._energy, self.total_cross_section(self._energy),'b--^', label=r"interpolated", markersize=0.8)
-        # ext_ev = np.logspace(-4, 4, 1000, base=10)
-        # plt.loglog(ext_ev, self.total_cross_section(ext_ev),'g--^', label=r"interpolated + extended", markersize=0.8)
+        # # ext_ev = np.logspace(-4, 4, 1000, base=10)
+        # # plt.loglog(ext_ev, self.total_cross_section(ext_ev),'g--^', label=r"interpolated + extended", markersize=0.8)
         
         # plt.legend()
         # plt.grid(visible=True)
         # plt.xlabel(r"energy (eV)")
         # plt.ylabel(r"cross section ($m^2$)")
+
+        # plt.subplot(1, 2, 2)
+        # plt.loglog(self._energy, np.abs(1-self.total_cross_section(self._energy)/self._total_cs))
+        # #plt.loglog(self._energy, ,'b--^', label=r"interpolated", markersize=0.8)
+        # plt.xlabel(r"energy (eV)")
+        # plt.ylabel(r"relative error")
+        # plt.grid(visible=True)
+        # plt.tight_layout()
+
         # plt.savefig("col_%s.png"%(self._col_name))
         # plt.close()
+        # cs_data=np.zeros((len(self._energy), 3))
+        # cs_data[:, 0] = self._energy
+        # cs_data[:, 1] = self._total_cs
+        # cs_data[:, 2] = self.total_cross_section(self._energy)
+
+        # np.savetxt("col_%s.csv"%(self._col_name), cs_data, delimiter=',', header='energy[eV], tabulated[m^2], fitted[m^2]')
+
 
         return
 

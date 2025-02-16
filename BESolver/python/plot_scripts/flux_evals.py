@@ -116,9 +116,40 @@ def quad_on_grid(vr, vt, qoi):
 
     return iqoi
 
-def extract_data(folder, xl, xr, num_vt=16, ev_cutoff=80):
+def vt_coarsen(vr, vt, iqoi):
+    """
+    coarsening the vt grid - only vt coarsening
+    """
+    assert len(vt)-1 == iqoi.shape[2]
+    idx1  = np.argmin(np.abs(vt-np.pi/2)) + 1
+    idx2  = idx1
+
+    assert np.abs(vt[idx1-1] - 0.5 * np.pi)/(np.pi/2) < 1e-14
+    assert np.abs(vt[idx2]   - 0.5 * np.pi)/(np.pi/2) < 1e-14
+
+    # coarsen vt grid
+    vt_c = np.append(np.array(vt[0:idx1])[0::2], np.array(vt[idx2:])[0::2])
+    
+    # for i in range(0, idx1-1, 2):
+    #     print(i, i+1)
+    
+    # for i in range(idx2, len(vt)-1, 2):
+    #     print(i, i+1)
+
+    a1   = np.array([iqoi[:, :, i] + iqoi[:, :, i+1]  for i in range(0, idx1-1, 2)])
+    a2   = np.array([iqoi[:, :, i] + iqoi[:, :, i+1]  for i in range(idx2, len(vt)-1, 2)])
+
+    iqoi_c = np.append(a1, np.zeros((1, iqoi.shape[0], iqoi.shape[1])), axis=0)
+    iqoi_c = np.append(iqoi_c, a2, axis=0)
+    iqoi_c = (iqoi_c.reshape((iqoi_c.shape[0], -1)).T).reshape((iqoi.shape[0], iqoi.shape[1], -1))
+    return vt_c, iqoi_c
+
+def extract_data(folder, xl, xr, vt_k= 9, ev_cutoff=80):
     args   = load_run_args(folder)
     num_l  = int(args["l_max"]) + 1
+
+    assert vt_k %2 == 1
+    num_vt = 2 * vt_k 
     
     # vtheta = np.linspace(0, np.pi, 64)
     # vthetaw= trapz_w(vtheta)
@@ -294,16 +325,17 @@ def plot_data(data, tidx):
     c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
     vth           = data["vth"] 
     vr            = data["vr"]
+
     vtheta        = data["vtheta"]
     Sv_l          = data["flux_left_bdy"] 
     Sv_r          = data["flux_right_bdy"] 
-
+    
+    
     evgrid        = (vr * vth)**2 /c_gamma**2
     iFvt_L        = quad_on_grid(vr, vtheta, Sv_l)
     iFvt_R        = quad_on_grid(vr, vtheta, Sv_r)
     iS            = (iFvt_R - iFvt_L)
 
-    
     dvt           = 0.5 * (vtheta[1] - vtheta[0])
     dev           = 0.5 * (evgrid[1] - evgrid[0])
     extent        = [evgrid[0]-dev , evgrid[-1] + dev, vtheta[0]-dvt, vtheta[-1] + dvt]
@@ -366,7 +398,7 @@ def plot_data(data, tidx):
 
 
 if __name__ == "__main__":
-    data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), num_vt=128, ev_cutoff=30)
+    data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), vt_k=65, ev_cutoff=30)
     tt     = data["tt"]
     ev     = data["ev"]
     vr     = data["vr"]

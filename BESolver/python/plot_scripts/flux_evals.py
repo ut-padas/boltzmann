@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('tkagg')  # Or any other X11 back-end
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -116,9 +118,40 @@ def quad_on_grid(vr, vt, qoi):
 
     return iqoi
 
-def extract_data(folder, xl, xr, num_vt=16, ev_cutoff=80):
+def vt_coarsen(vr, vt, iqoi):
+    """
+    coarsening the vt grid - only vt coarsening
+    """
+    assert len(vt)-1 == iqoi.shape[2]
+    idx1  = np.argmin(np.abs(vt-np.pi/2)) + 1
+    idx2  = idx1
+
+    assert np.abs(vt[idx1-1] - 0.5 * np.pi)/(np.pi/2) < 1e-14
+    assert np.abs(vt[idx2]   - 0.5 * np.pi)/(np.pi/2) < 1e-14
+
+    # coarsen vt grid
+    vt_c = np.append(np.array(vt[0:idx1])[0::2], np.array(vt[idx2:])[0::2])
+    
+    # for i in range(0, idx1-1, 2):
+    #     print(i, i+1)
+    
+    # for i in range(idx2, len(vt)-1, 2):
+    #     print(i, i+1)
+
+    a1   = np.array([iqoi[:, :, i] + iqoi[:, :, i+1]  for i in range(0, idx1-1, 2)])
+    a2   = np.array([iqoi[:, :, i] + iqoi[:, :, i+1]  for i in range(idx2, len(vt)-1, 2)])
+
+    iqoi_c = np.append(a1, np.zeros((1, iqoi.shape[0], iqoi.shape[1])), axis=0)
+    iqoi_c = np.append(iqoi_c, a2, axis=0)
+    iqoi_c = (iqoi_c.reshape((iqoi_c.shape[0], -1)).T).reshape((iqoi.shape[0], iqoi.shape[1], -1))
+    return vt_c, iqoi_c
+
+def extract_data(folder, xl, xr, vt_k= 9, ev_cutoff=80, fname="macro.h5"):
     args   = load_run_args(folder)
     num_l  = int(args["l_max"]) + 1
+
+    assert vt_k %2 == 1
+    num_vt = 2 * vt_k 
     
     # vtheta = np.linspace(0, np.pi, 64)
     # vthetaw= trapz_w(vtheta)
@@ -145,7 +178,7 @@ def extract_data(folder, xl, xr, num_vt=16, ev_cutoff=80):
 
     
     
-    ff     = h5py.File("%s/macro.h5"%(folder), "r")
+    ff     = h5py.File("%s/%s"%(folder,fname), "r")
     print(ff.keys())
     
     xx        = np.array(ff["x[-1,1]"][()])
@@ -294,16 +327,17 @@ def plot_data(data, tidx):
     c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
     vth           = data["vth"] 
     vr            = data["vr"]
+
     vtheta        = data["vtheta"]
     Sv_l          = data["flux_left_bdy"] 
     Sv_r          = data["flux_right_bdy"] 
-
+    
+    
     evgrid        = (vr * vth)**2 /c_gamma**2
     iFvt_L        = quad_on_grid(vr, vtheta, Sv_l)
     iFvt_R        = quad_on_grid(vr, vtheta, Sv_r)
     iS            = (iFvt_R - iFvt_L)
 
-    
     dvt           = 0.5 * (vtheta[1] - vtheta[0])
     dev           = 0.5 * (evgrid[1] - evgrid[0])
     extent        = [evgrid[0]-dev , evgrid[-1] + dev, vtheta[0]-dvt, vtheta[-1] + dvt]
@@ -366,7 +400,12 @@ def plot_data(data, tidx):
 
 
 if __name__ == "__main__":
-    data   = extract_data(sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), num_vt=128, ev_cutoff=30)
+    folder_name = sys.argv[1]
+    macro_fname = sys.argv[2]
+    xl          = float(sys.argv[3])
+    xr          = float(sys.argv[4])
+
+    data   = extract_data(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vt_k=65, ev_cutoff=30)
     tt     = data["tt"]
     ev     = data["ev"]
     vr     = data["vr"]
@@ -417,8 +456,8 @@ if __name__ == "__main__":
 
     plt.subplot(3, 2, 1)
     plt.title(r"$x_L=%.4E$"%(xx[xlidx]))
-    plt.plot(tt, np.abs(np.sum(iFlux_Lp.reshape((len(tt), -1)), axis=1)), label=r'S_L > 0 (incoming)')
-    plt.plot(tt, np.abs(np.sum(iFlux_Ln.reshape((len(tt), -1)), axis=1)), label=r'S_L < 0 (outgoing)')
+    plt.semilogy(tt, np.abs(np.sum(iFlux_Lp.reshape((len(tt), -1)), axis=1)), label=r'S_L > 0 (incoming)')
+    plt.semilogy(tt, np.abs(np.sum(iFlux_Ln.reshape((len(tt), -1)), axis=1)), label=r'S_L < 0 (outgoing)')
     #plt.plot(tt, np.sum(iFlux_Rp.reshape((len(tt), -1)), axis=1), label=r'S_R < 0')
     plt.ylabel(r"")
     plt.xlabel(r"time [T]")
@@ -464,8 +503,8 @@ if __name__ == "__main__":
     plt.legend()
 
     plt.tight_layout()
-    #plt.show()
-    plt.savefig("flux_eulerian_xl_%.4E_xr_%.4E.png"%(float(sys.argv[2]), float(sys.argv[3])))
+    plt.savefig("flux_eulerian_xl_%.4E_xr_%.4E.png"%(float(sys.argv[3]), float(sys.argv[4])))
+    plt.show()
     plt.close()
 
     plt.figure(figsize=(10, 6), dpi=300)
@@ -476,6 +515,26 @@ if __name__ == "__main__":
     plt.ylabel(r"E [V/m]")
     plt.grid(visible=True)
     plt.savefig("electric_field.png")
+    plt.close()
+
+    plt.figure(figsize=(10, 6), dpi=300)
+    plt.plot(tt, uz[:, xlidx] , label=r"uz(x=%.4E)"%(xx[xlidx]))
+    plt.plot(tt, uz[:, xridx] , label=r"uz(x=%.4E)"%(xx[xridx]))
+    plt.legend()
+    plt.xlabel(r"time [T]")
+    plt.ylabel(r"uz [m/s]")
+    plt.grid(visible=True)
+    plt.savefig("uz.png")
+    plt.close()
+
+    plt.figure(figsize=(10, 6), dpi=300)
+    plt.plot(tt, ne[:, xlidx] , label=r"uz(x=%.4E)"%(xx[xlidx]))
+    plt.plot(tt, ne[:, xridx] , label=r"uz(x=%.4E)"%(xx[xridx]))
+    plt.legend()
+    plt.xlabel(r"time [T]")
+    plt.ylabel(r"ne [1/m^3]")
+    plt.grid(visible=True)
+    plt.savefig("ne.png")
     plt.close()
 
     

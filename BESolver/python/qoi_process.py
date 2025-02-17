@@ -428,7 +428,13 @@ Np        = int(args["Np"])
 cheb      = op(Np, args)
 N0        = cheb.n0 * cheb.np0
 xc        = cheb.xp
-print("Nx= ", Np, " n0 = %.8E"%(N0))
+dt        = float(args["cfl"])
+io_freq   = int(float(args["io_cycle_freq"])/dt)
+
+tb        = io_freq * idx_range[0] * dt
+te        = io_freq * idx_range[-1] * dt
+
+print("Nx= ", Np, " n0 = %.8E"%(N0), "t=(%.4E, %.4E)"%(tb, te))
 
 
 if (run_type == "bte"):
@@ -440,7 +446,7 @@ if (run_type == "bte"):
     u , Cu             = compute_mean_velocity(spec_sp,d[0], d[3], d[2], N0)
     mueE, De           = compute_diffusion_and_effective_mobility(d[0], d[3], d[2], N0)
     P                  = compute_kinetic_energy_tensor(spec_sp, d[0], d[3], d[2])
-    tt                 = np.linspace(0, 1, d[1][:, :, 0].shape[0])
+    tt                 = np.linspace(tb, te, d[1][:, :, 0].shape[0])
     ne                 = d[1][:, :, 0]
     ni                 = d[1][:, :, 1]
     Te                 = d[1][:, :, 2]
@@ -448,7 +454,7 @@ if (run_type == "bte"):
     assert Np == d[1][:, :, 0].shape[1]
 
     COMPUTE_RADIAL_COMP = 1
-    F = h5py.File("%s/macro.h5"%(folder_name), 'w')
+    F = h5py.File("%s/macro_idx_%04d_to_%04d.h5"%(folder_name, idx_range[0], idx_range[-1]), 'w')
     F.create_dataset("time[T]"      , data = tt)
     F.create_dataset("x[-1,1]"      , data = xc)
     F.create_dataset("E[Vm^-1]"     , data = Ef)
@@ -515,7 +521,7 @@ elif (run_type == "fluid"):
 else:
     raise NotImplementedError
 
-ff = h5py.File("%s/macro.h5"%(folder_name))
+ff = h5py.File("%s/macro_idx_%04d_to_%04d.h5"%(folder_name, idx_range[0], idx_range[-1]))
 xx     = ff["x[-1,1]"][()]
 avg_E  = ff["avg_energy_density[eVkgm^{-3}]"][()]
 avg_ne = ff["avg_ne[m^-3]"][()]
@@ -542,5 +548,5 @@ plt.ylabel(r"average temp [$eV$]")
 plt.grid(visible=True)
 
 plt.tight_layout()
-plt.savefig("%s/macro.png"%(folder_name))
+plt.savefig("%s/macro_idx_%04d_to_%04d.png"%(folder_name, idx_range[0], idx_range[-1]))
 plt.close()

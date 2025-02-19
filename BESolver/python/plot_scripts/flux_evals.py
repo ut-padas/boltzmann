@@ -1,5 +1,5 @@
-import matplotlib
-matplotlib.use('tkagg')  # Or any other X11 back-end
+# import matplotlib
+# matplotlib.use('tkagg')  # Or any other X11 back-end
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -426,6 +426,9 @@ if __name__ == "__main__":
     dx     = xx[xridx] - xx[xlidx]
     L      = 2.54e-2 / 2 
 
+    #print(xx[81], xx[82])
+    print(" xlidx = ", xlidx, " xridx = ",  xridx, "xl = ", xx[xlidx], "xr = ", xx[xridx])
+
     print("\
     r1      = ne[tidx, xlidx] * uz[tidx, xlidx]\n\
     a1      = 2*np.pi * np.dot(np.dot(Fvt_L[tidx] * vr**2 , vr_w) * np.sin(vtheta), vt_w)\n\
@@ -446,12 +449,22 @@ if __name__ == "__main__":
     #print(np.sum(iFv_L[0]), ne[0,xlidx])
     
     vtheta_bins = 0.5 * (vtheta[0:-1] + vtheta[1:])
-    iFlux_Lp    = iFlux_L[:, :, vtheta_bins <= 0.5 * np.pi]
-    iFlux_Ln    = iFlux_L[:, :, vtheta_bins >  0.5 * np.pi]
-
-    iFlux_Rp    = iFlux_R[:, :, vtheta_bins <= 0.5 * np.pi]
-    iFlux_Rn    = iFlux_R[:, :, vtheta_bins >  0.5 * np.pi]
     
+    pi_by_2_idx = np.argmin(np.abs(vtheta-np.pi/2))+1
+    assert np.abs(vtheta[pi_by_2_idx-1]   - np.pi/2) < 1e-15
+    assert np.abs(vtheta[pi_by_2_idx]     - np.pi/2) < 1e-15
+    vtheta_0    = vtheta[0:pi_by_2_idx]
+    vtheta_1    = vtheta[pi_by_2_idx:]
+
+    assert np.abs(vtheta_0[0]-0.0)< 1e-15         and np.abs(vtheta_0[-1] - np.pi/2) < 1e-15
+    assert np.abs(vtheta_1[0]-np.pi/2)< 1e-15     and np.abs(vtheta_1[-1] - np.pi  ) < 1e-15
+
+    iFlux_Lp    = quad_on_grid(vr, vtheta_0, Flux_L[:, :, 0:pi_by_2_idx]) 
+    iFlux_Ln    = quad_on_grid(vr, vtheta_1, Flux_L[:, :, pi_by_2_idx: ]) 
+
+    iFlux_Rp    = quad_on_grid(vr, vtheta_0, Flux_R[:, :, 0:pi_by_2_idx]) 
+    iFlux_Rn    = quad_on_grid(vr, vtheta_1, Flux_R[:, :, pi_by_2_idx: ]) 
+
     plt.figure(figsize=(12,8), dpi=200)
 
     plt.subplot(3, 2, 1)

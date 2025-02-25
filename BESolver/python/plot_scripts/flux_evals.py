@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('tkagg')  # Or any other X11 back-end
+#matplotlib.use('tkagg')  # Or any other X11 back-end
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -7,6 +7,16 @@ import h5py
 from scipy.special import sph_harm
 import scipy.constants
 from matplotlib.colors import LogNorm
+from matplotlib.colors import Colormap
+import os
+
+def make_dir(dir_name):
+    # Check whether the specified path exists or not
+    isExist = os.path.exists(dir_name)
+    if not isExist:
+       # Create a new directory because it does not exist
+       os.makedirs(dir_name)
+       print("directory %s is created!"%(dir_name))
 
 def gauss_legendre_lobatto(n, domain=(-1, 1)):
     assert n>2, "quadrature order is less than 2"
@@ -116,6 +126,22 @@ def quad_on_grid(vr, vt, qoi):
     iqoi = 0.5 * (qoi[:, 1:, :] * (vr[1:]**2)[np.newaxis, :, np.newaxis] + qoi[:, 0:-1, :] * (vr[0:-1]**2)[np.newaxis, :, np.newaxis]) * dvr[np.newaxis, :, np.newaxis]
     iqoi = 0.5 * (iqoi[:, :, 1:] * np.sin(vt[1:]) + iqoi[:, :, 0:-1] * np.sin(vt[0:-1])) * dvt * np.pi * 2
 
+    return iqoi
+
+def grid_to_cell(vr, vrw, vt, vtw, qoi, vr_p, vt_p):
+    assert vrw == None
+    vt       = vt.reshape((-1, vt_p))
+    vtw      = vtw.reshape((-1, vt_p))
+
+    nbins_vr = vr.shape[0]-1
+    nbins_vt = vt.shape[0]
+    num_vt   = nbins_vt + 1
+
+    iqoi  = np.array([ 0.5 * (vr[vr_idx+1]-vr[vr_idx]) * (vr[vr_idx]**2   * np.dot(qoi[:, vr_idx  , vt_idx * vt_p : (vt_idx+1) * vt_p], vtw[vt_idx]) + 
+                                                            vr[vr_idx+1]**2 * np.dot(qoi[:, vr_idx+1, vt_idx * vt_p : (vt_idx+1) * vt_p], vtw[vt_idx])) 
+                                                        for vr_idx in range(nbins_vr) for vt_idx in range(nbins_vt)]).T
+
+    iqoi  = 2 * np.pi * iqoi.reshape((qoi.shape[0], nbins_vr, nbins_vt))    
     return iqoi
 
 def vt_coarsen(vr, vt, iqoi):
@@ -322,7 +348,253 @@ def extract_data(folder, xl, xr, vt_k= 9, ev_cutoff=80, fname="macro.h5"):
             "xridx":xridx,
             "uz": uz,
             "ne": ne}
+
+def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macro.h5"):
+    args   = load_run_args(folder)
+    num_l  = int(args["l_max"]) + 1
+
+    assert num_vt % 2 == 0
     
+    nvt_by_2              = num_vt//2
+    cvtq_0, _             = gauss_legendre_lobatto(num_vt//2, domain=(-1, 0)) 
+    cvtq_1, _             = gauss_legendre_lobatto(num_vt//2, domain=(0, 1)) 
+    gll_vt , gll_vt_w     = gauss_legendre_lobatto(vt_p, domain=(-1, 1))
+
+
+    cvt_cell              = np.append(cvtq_0, cvtq_1)
+
+
+    cvtq                  = np.array([gll_vt   * 0.5 * (cvt_cell[i+1] - cvt_cell[i]) + 0.5 * (cvt_cell[i+1] + cvt_cell[i]) for i in range(len(cvt_cell)-1)]).reshape((-1))  
+    vtqw                  = np.array([gll_vt_w * 0.5 * (cvt_cell[i+1] - cvt_cell[i])                                       for i in range(len(cvt_cell)-1)]).reshape((-1))
+
+    vtq                   = np.flip(np.acos(cvtq))
+    cvtq                  = np.cos(vtq)
+    vtqw                  = np.flip(vtqw)
+
+    # print(vtq)
+    # print(vtq.reshape((-1,vt_p)))
+    # print(cvtq.reshape((-1,vt_p)))
+    # print(vtqw)
+    # print(vtqw.reshape((-1,vt_p)))
+    # print(np.sum(vtqw.reshape((-1,vt_p)), axis=1))
+    # sys.exit(0)
+
+    vt_cell               = np.flip(np.acos(cvt_cell))
+    cvt_cell              = np.cos(vt_cell)
+
+    
+    assert np.abs(np.dot(vtqw     , 2* np.pi* sph_harm_real(0, 0, vtq, 0)**2 )-1) < 1e-14 
+    assert np.abs(np.dot(gll_vt_w , 2* np.pi* sph_harm_real(0, 0, np.arccos(gll_vt), 0)**2 )-1) < 1e-14 
+
+    ff                    = h5py.File("%s/%s"%(folder,fname), "r")
+    print(ff.keys())
+    
+    xx        = np.array(ff["x[-1,1]"][()])
+    tt        = np.array(ff["time[T]"][()])
+    ne        = np.array(ff["ne[m^-3]"][()])
+    ni        = np.array(ff["ni[m^-3]"][()])
+    fl        = np.array(ff["fl[eV^-1.5]"][()])
+    Ef        = np.array(ff["E[Vm^-1]"][()])
+    evgrid    = np.array(ff["evgrid[eV]"][()])
+    ki        = np.array(ff["ki[m^3s^{-1}]"][()])
+    ip_avg    = np.array(ff["avg_ion_prod[m^-3s^{-1}]"][()])
+    uz        = np.array(ff["uz[ms^{-1}]"][()])
+    ux        = np.array(ff["ux[ms^{-1}]"][()])
+    L         = (2.54e-2 / 2)
+    tau       = 1/13.56e6
+    c_gamma   = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    # from : https://github.com/ut-padas/boltzmann/blob/main/BESolver/python/qoi_process.py - compute_radial_components
+    vth       = (float) (args["Te"])**0.5 * c_gamma
+    mm_fac    = np.sqrt(4 * np.pi) 
+
+    neuz      = ne * uz 
+    neuz_avg  = time_average(neuz, tt)
+    ne_avg    = time_average(ne, tt)
+    ni_avg    = time_average(ni, tt)
+    E_avg     = time_average(Ef, tt)
+
+    # charge_density = ((ni_avg - ne_avg) / ni_avg)
+    # sheath_tol     = 1e-3
+    # sidx           = np.argmin(np.abs(charge_density -sheath_tol))
+    # print("sheath begin for (ne-ni)/ni rtol = %.4E sheath = %.4E, E_avg = %.4E [V/m]"%(sheath_tol, xx[sidx], E_avg[sidx]))
+
+
+    idx       = evgrid<ev_cutoff
+    evgrid    = evgrid[idx]
+    fl        = fl[:, :, :, idx]
+    Np        = len(xx)
+    deg       = Np-1
+    xp        = -np.cos(np.pi*np.linspace(0,deg,Np)/deg)
+    vr        = np.sqrt(evgrid) * c_gamma 
+    gmx       = vr/vth
+    gmw       = trapz_w(gmx)
+
+    eedf_const= 2 * (vth/c_gamma)**3  / mm_fac  
+    cos_vt    = cvtq
+    assert np.linalg.norm(xp-xx)/np.linalg.norm(xx) < 1e-14, "Chebyshev point mismatch found"
+    
+    V0p = np.polynomial.chebyshev.chebvander(xx, deg)
+    # V0pinv: xp values to coefficients
+    ident  = np.eye(Np)
+    V0pinv = np.linalg.solve(V0p, ident)
+
+    xlidx  = np.argmin(np.abs(xx-xl))
+    xridx  = np.argmin(np.abs(xx-xr))
+
+    print(xl, xx[xlidx], xr, xx[xridx])
+
+    dx      = (xx[xridx] - xx[xlidx]) * L
+    dne     = tau * np.abs(0.5 * dx * (ip_avg[xlidx] + ip_avg[xridx]) - (neuz_avg[xridx] - neuz_avg[xlidx])) / (0.5 * dx * (ne_avg[xlidx] + ne_avg[xridx]))
+    print("(prod - flux)/ne_cell = %.8E"%(dne))
+    
+    #print(ne[-1,:] - ne[0,:])
+    #plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.max(ne[0,:]))
+    # plt.semilogy(xx, np.abs(ne[0,:]-ne[-1,:])/np.abs(ne[0,:]))
+    # #plt.semilogy(xx, ne[-1,:])
+    # plt.show()
+
+    #xnew   = np.array([xl, xr])
+    xnew   = np.array([xx[xlidx], xx[xridx]])
+    P1     = np.dot(np.polynomial.chebyshev.chebvander(xnew, deg), V0pinv)
+
+    flx    = np.einsum("il,albc->aibc", P1, fl)
+    nex    = np.einsum("il,al->ai"    , P1, ne)
+    neuzx  = np.einsum("il,al->ai"    , P1, neuz)
+    
+    flx           = eedf_const * flx
+
+    flx_l         = flx[:, 0, :, :]
+    flx_r         = flx[:, 1, :, :]
+
+    Vsh           = sph_vander(vtq, num_l)
+
+    flx_l         = np.swapaxes(np.einsum("iam,al->ilm", flx_l, Vsh), 1, 2)
+    flx_r         = np.swapaxes(np.einsum("iam,al->ilm", flx_r, Vsh), 1, 2)
+
+    mx_l          = 2 * np.pi * np.dot(np.dot(flx_l, vtqw) * gmx**2, gmw) 
+    mx_r          = 2 * np.pi * np.dot(np.dot(flx_r, vtqw) * gmx**2, gmw)
+
+    flx_l         = np.einsum("t,tar->tar",(1 / mx_l), flx_l)
+    flx_r         = np.einsum("t,tar->tar",(1 / mx_r), flx_r)
+    
+    Fv_l          = flx_l * (nex[:, 0])[:, np.newaxis, np.newaxis]
+    Fv_r          = flx_r * (nex[:, 1])[:, np.newaxis, np.newaxis]
+
+    # norm_cl       = 2 * np.pi * np.dot(np.dot(Fv_l, vtqw) * gmx**2, gmw) /nex[:, 0]
+    # norm_cr       = 2 * np.pi * np.dot(np.dot(Fv_r, vtqw) * gmx**2, gmw) /nex[:, 1]
+
+    # for tidx in range(0, len(tt),10):
+    #     print("time = %.2E norm_const_left = %.8E norm_const_right = %.8E  with ev cutoff = %.2E"%(tt[tidx],norm_cl[tidx], norm_cr[tidx], ev_cutoff))
+
+    
+    Sv_l          = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_l)
+    Sv_r          = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_r)
+
+
+    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l, vtqw) * gmx**2, gmw) * nex[:, 0]
+    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r, vtqw) * gmx**2, gmw) * nex[:, 1]
+
+    a2_l          = neuzx[:, 0]
+    a2_r          = neuzx[:, 1]
+
+    norm_cl       = (a2_l/a1_l)
+    norm_cr       = (a2_r/a1_r)
+
+    for tidx in range(0, len(tt),10):
+        print("time = %.2E norm_const_left = %.8E norm_const_right = %.8E  with ev cutoff = %.2E"%(tt[tidx],norm_cl[tidx], norm_cr[tidx], ev_cutoff))
+
+    Sv_l          = np.einsum("t,tar->tar", (a2_l/a1_l) * nex[:, 0], Sv_l)
+    Sv_r          = np.einsum("t,tar->tar", (a2_r/a1_r) * nex[:, 1], Sv_r)
+
+    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l, vtqw) * gmx**2, gmw) 
+    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r, vtqw) * gmx**2, gmw)
+
+    # for tidx in range(0, len(tt), 10):
+    #     print("a1_l = %.8E a2_l = %.8E a1_r=%.8E a2_r=%.8E"%(a1_l[tidx], a2_l[tidx], a1_r[tidx], a2_r[tidx]))
+
+    Fv_cell_l       = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_l, vr_p=1, vt_p=vt_p)
+    Fv_cell_r       = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_r, vr_p=1, vt_p=vt_p)
+    Sv_cell_l       = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_l, vr_p=1, vt_p=vt_p)
+    Sv_cell_r       = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_r, vr_p=1, vt_p=vt_p)
+
+    ne_cell_sum_l   = np.sum(Fv_cell_l.reshape((len(tt), -1)), axis=1)
+    ne_cell_sum_r   = np.sum(Fv_cell_r.reshape((len(tt), -1)), axis=1)
+
+    neuz_cell_sum_l = np.sum(Sv_cell_l.reshape((len(tt), -1)), axis=1)
+    neuz_cell_sum_r = np.sum(Sv_cell_r.reshape((len(tt), -1)), axis=1)
+
+    assert np.linalg.norm(nex[:, 0]-ne_cell_sum_l)/np.linalg.norm(nex[:, 0]) < 1e-13
+    assert np.linalg.norm(nex[:, 1]-ne_cell_sum_r)/np.linalg.norm(nex[:, 1]) < 1e-13
+
+    assert np.linalg.norm(neuzx[:, 0]-neuz_cell_sum_l)/np.linalg.norm(neuzx[:, 0]) < 1e-13
+    assert np.linalg.norm(neuzx[:, 1]-neuz_cell_sum_r)/np.linalg.norm(neuzx[:, 1]) < 1e-13
+    
+    uz_cell_l        = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_l / (nex[:, 0][:, np.newaxis, np.newaxis]), vr_p=1, vt_p=vt_p) 
+    uz_cell_r        = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_r / (nex[:, 1][:, np.newaxis, np.newaxis]), vr_p=1, vt_p=vt_p)
+
+    # uz_cell_l        = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.cos(vtq), flx_l) , vr_p=1, vt_p=vt_p) 
+    # uz_cell_r        = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.cos(vtq), flx_r) , vr_p=1, vt_p=vt_p)
+
+    # print(np.linalg.norm(a_l - uz_cell_l)/np.linalg.norm(a_l))
+    # assert np.linalg.norm(a_l - uz_cell_l)/np.linalg.norm(a_l) < 1e-12
+    # assert np.linalg.norm(a_r - uz_cell_r)/np.linalg.norm(a_r) < 1e-12
+
+    uzp_cell_l = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.sin(vtq), flx_l) , vr_p=1, vt_p=vt_p) 
+    uzp_cell_r = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.sin(vtq), flx_r) , vr_p=1, vt_p=vt_p)
+
+    
+    # print(np.sum(uz_cell_l.reshape((len(tt), -1)), axis=1)[0])
+    # print(neuzx[:, 0]/nex[:,0])
+    # print(neuzx[:, 0])
+    # print(np.sum(uzp_cell_l.reshape((len(tt), -1)), axis=1)[0])
+    # plt.figure()
+    # a = np.sum(uz_cell_l.reshape((len(tt), -1)), axis=1)/vth
+    # c = np.sum(uzp_cell_l.reshape((len(tt), -1)), axis=1)/vth
+    # d = np.sum(a_l.reshape((len(tt), -1)), axis=1)/vth
+    # plt.plot(tt, a , label="a")
+    # plt.plot(tt, c , label="c")
+    # plt.plot(tt, np.sqrt(a**2 + c**2), label=r"total")
+    # plt.plot(tt, d                   , label=r"total1")
+    # plt.legend()
+    # plt.grid(visible=True)
+    # plt.show()
+    # plt.close()
+    # sys.exit(0)
+    
+
+    return {"tt": tt, 
+            "ev": evgrid, 
+            "vr": vr/vth, 
+            "vr_weights":gmw,
+            "vtheta": vtq,
+            "vtheta_weights": vtqw,
+            "vt_p": vt_p,
+            "time": tt,
+            "fv_left_bdy": Fv_l,
+            "fv_right_bdy": Fv_r,
+            "flux_left_bdy": Sv_l,
+            "flux_right_bdy": Sv_r,
+            "Ef": Ef, 
+            "vth": vth,
+            "xx":xx,
+            "xlidx":xlidx,
+            "xridx":xridx,
+            "uz": uz,
+            "ne": ne,
+
+            "vr_cell"       : np.array([0.5 * (vr[i] + vr[i+1])/vth for i in range(len(vr)-1)]),
+            "vt_cell"       : np.array([0.5 * (vt_cell[i] + vt_cell[i+1]) for i in range(len(vt_cell)-1)]),
+            "Sv_cell_left"  : Sv_cell_l,
+            "Sv_cell_right" : Sv_cell_r,
+            "Fv_cell_left"  : Fv_cell_l,
+            "Fv_cell_right" : Fv_cell_r,
+            "uz_cell_left"  : uz_cell_l,
+            "uz_cell_right" : uz_cell_r,
+            "uzp_cell_left" : uzp_cell_l,
+            "uzp_cell_right": uzp_cell_r
+
+            }
+
 def plot_data(data, tidx):
     c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
     vth           = data["vth"] 
@@ -399,13 +671,8 @@ def plot_data(data, tidx):
     plt.close()    
 
 
-if __name__ == "__main__":
-    folder_name = sys.argv[1]
-    macro_fname = sys.argv[2]
-    xl          = float(sys.argv[3])
-    xr          = float(sys.argv[4])
-
-    data   = extract_data(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vt_k=65, ev_cutoff=30)
+def use_extract_data():
+    data   = extract_data(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vt_k=65, ev_cutoff=80)
     tt     = data["tt"]
     ev     = data["ev"]
     vr     = data["vr"]
@@ -558,6 +825,124 @@ if __name__ == "__main__":
         print("np.abs(1-b1/a1) = %.4E , np.abs(1-b2/a2) = %.4E, a1 = %.8E r1 = %.8E a2 = %.8E r2 = %.8E S=%.8E R=%.8E np.abs(1-S/R) = %.8E"%(np.abs(1-b1/a1), np.abs(1-b1/a2), a1, r1, a2, r2, S, R, np.abs(1-R/S)))
         #print("t = %.4E [s] at left ||uzne - int(fvtL)||/||uzne|| = %.8E  and right ||uzne - int(fvtL)||/||uzne|| = %.8E net flux relative error=%.8E "%(tt[tidx], np.abs(1-a1/r1), np.abs(1-a2/r2), np.abs(1-(S/R))))
 
+
+def use_extract_data_on_cell():
+    io_out_folder = "t1"
+    make_dir(io_out_folder)    
+    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, num_vt=64, vt_p=8, ev_cutoff=50)
+
+    tt            = data["tt"]
+    vr_cell       = data["vr_cell"      ] # vr bucket centers (unit : []) 
+    vt_cell       = data["vt_cell"      ] # vt bucket centers (unit : [])
+    Sv_cell_left  = data["Sv_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-2s^-1])
+    Sv_cell_right = data["Sv_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-2s^-1])
+    Fv_cell_left  = data["Fv_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-3])
+    Fv_cell_right = data["Fv_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-3])
+    uz_cell_left  = data["uz_cell_left" ] # vz_cell_left   (unit : [ms^-1])
+    uz_cell_right = data["uz_cell_right"] # vz_cell_right  (unit : [ms^-1])
+    uzp_cell_left = data["uzp_cell_left" ] # (perpendicular) vzp_cell_left   (unit : [ms^-1])
+    uzp_cell_right= data["uzp_cell_right"] # (perpendicular) vzp_cell_right  (unit : [ms^-1])
+    vth           = data["vth"]
+    c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+
+    ev_cell       = (vr_cell * vth)**2 /c_gamma**2
+    
+    dvt           = 0.5 * (vt_cell[1] - vt_cell[0])
+    dev           = 0.5 * (ev_cell[1]  - ev_cell[0])
+    extent        = [ev_cell[0]-dev , ev_cell[-1] + dev, vt_cell[-1] + dvt, vt_cell[0]-dvt]
+
+    # vt_mid_idx    = np.argmin(np.abs(vt_cell-np.pi/2)) +1
+    # print(vt_cell)
+    # print(vt_cell[vt_mid_idx-1]-np.pi/2)
+    
+    tstep   = 10
+    cmap_str="plasma"
+    for tidx in range(0, len(tt), tstep):
+        fig = plt.figure(figsize=(12, 6), dpi=200)
+        plt.subplot(2, 3, 1)
+        plt.imshow(np.abs(Fv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e6, vmax=np.max(Fv_cell_left)), cmap=cmap_str)
+        plt.colorbar()
+        plt.xlabel(r"energy [eV]")
+        plt.ylabel(r"$v_\theta$")
+        plt.title(r"$n_e(x_L)$")
+
+        plt.subplot(2, 3, 4)
+        plt.imshow(np.abs(Fv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e6, vmax=np.max(Fv_cell_right)), cmap=cmap_str)
+        plt.colorbar()
+        plt.xlabel(r"energy [eV]")
+        plt.ylabel(r"$v_\theta$")
+        plt.title(r"$n_e(x_R)$")
+
+        plt.subplot(2, 3, 2)
+        #m = np.copy(Sv_cell_left[tidx])
+        #m[:, vt_mid_idx:] = 0.0
+        #plt.imshow(np.abs(m.T), aspect='auto', extent=extent, vmin=np.min(Sv_cell_left), vmax=np.max(Sv_cell_left[:, :, 0:vt_mid_idx]))
+        #plt.imshow(Sv_cell_left[tidx].T, aspect='auto', extent=extent, vmin=np.min(Sv_cell_left), vmax=np.max(Sv_cell_left))
+        plt.imshow(np.abs(Sv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e15, vmax=np.max(np.abs(Sv_cell_left))), cmap=cmap_str)
+        plt.colorbar()
+        plt.xlabel(r"energy [eV]")
+        plt.ylabel(r"$v_\theta$")
+        plt.title(r"$flux(x_L)$")
+        #plt.xlim(0, 30)
+
+        plt.subplot(2, 3, 5)
+        #plt.imshow(Sv_cell_right[tidx].T, aspect='auto', extent=extent, vmin=np.min(Sv_cell_right), vmax=np.max(Sv_cell_right))
+        plt.imshow(np.abs(Sv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e15, vmax=np.max(np.abs(Sv_cell_right))), cmap=cmap_str)
+        plt.colorbar()
+        plt.xlabel(r"energy [eV]")
+        plt.ylabel(r"$v_\theta$")
+        plt.title(r"$flux(x_R)$")
+        #plt.xlim(0, 30)
+
+
+        plt.subplot(2, 3, 3)
+        vtotal  = np.sqrt(uz_cell_left[tidx]**2 + uzp_cell_left[tidx]**2)
+        a1      = uz_cell_left[tidx]/vtotal
+        plt.imshow(np.acos(a1.T), aspect='auto', extent=extent, cmap=cmap_str)
+        #plt.imshow(uz_cell_left[tidx].T, aspect='auto', extent=extent)
+        #plt.imshow(np.abs(uz_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e1, vmax=1e6))
+        plt.colorbar()
+        plt.xlabel(r"energy [eV]")
+        plt.ylabel(r"$v_\theta$")
+        #plt.title(r"$v_z(x_L)$")
+
+        plt.subplot(2, 3, 6)
+        vtotal  = np.sqrt(uz_cell_right[tidx]**2 + uzp_cell_right[tidx]**2)
+        a2      = uz_cell_right[tidx]/vtotal  
+        plt.imshow(np.acos(a2.T), aspect='auto', extent=extent, cmap=cmap_str)
+        #plt.imshow(uz_cell_right[tidx].T, aspect='auto', extent=extent)
+        #plt.imshow(np.abs(uz_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e1, vmax=1e6))
+        plt.colorbar()
+        plt.xlabel(r"energy [eV]")
+        plt.ylabel(r"$v_\theta$")
+        #plt.title(r"$v_z(x_R)$")
+        plt.suptitle("time = %.4E"%(tt[tidx]))
+
+        plt.tight_layout()
+
+        plt.savefig("%s/p_%04d.png"%(io_out_folder, tidx))
+        #plt.show()
+        plt.close()
+        #plt.show(block=False)
+        #plt.pause(2)
+        #os.system('read -p "a" ') 
+        #plt.close('all')
+        
+
+
+
+if __name__ == "__main__":
+    folder_name = sys.argv[1]
+    macro_fname = sys.argv[2]
+    xl          = float(sys.argv[3])
+    xr          = float(sys.argv[4])
+
+    #use_extract_data()
+    use_extract_data_on_cell()
+
+    
+
+    
     
     
     

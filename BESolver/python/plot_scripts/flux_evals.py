@@ -369,6 +369,7 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
 
     vtq                   = np.flip(np.acos(cvtq))
     cvtq                  = np.cos(vtq)
+    svtq                  = np.sin(vtq)
     vtqw                  = np.flip(vtqw)
 
     # print(vtq)
@@ -431,6 +432,7 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
 
     eedf_const= 2 * (vth/c_gamma)**3  / mm_fac  
     cos_vt    = cvtq
+    sin_vt    = svtq
     assert np.linalg.norm(xp-xx)/np.linalg.norm(xx) < 1e-14, "Chebyshev point mismatch found"
     
     V0p = np.polynomial.chebyshev.chebvander(xx, deg)
@@ -487,12 +489,15 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
     #     print("time = %.2E norm_const_left = %.8E norm_const_right = %.8E  with ev cutoff = %.2E"%(tt[tidx],norm_cl[tidx], norm_cr[tidx], ev_cutoff))
 
     
-    Sv_l          = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_l)
-    Sv_r          = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_r)
+    Svz_l         = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_l)
+    Svz_r         = np.einsum("a,b,tab->tab", gmx * vth, cos_vt, flx_r)
+
+    Svzp_l        = np.einsum("a,b,tab->tab", gmx * vth, sin_vt, flx_l)
+    Svzp_r        = np.einsum("a,b,tab->tab", gmx * vth, sin_vt, flx_r)
 
 
-    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l, vtqw) * gmx**2, gmw) * nex[:, 0]
-    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r, vtqw) * gmx**2, gmw) * nex[:, 1]
+    a1_l          = 2 * np.pi * np.dot(np.dot(Svz_l, vtqw) * gmx**2, gmw) * nex[:, 0]
+    a1_r          = 2 * np.pi * np.dot(np.dot(Svz_r, vtqw) * gmx**2, gmw) * nex[:, 1]
 
     a2_l          = neuzx[:, 0]
     a2_r          = neuzx[:, 1]
@@ -500,67 +505,68 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
     norm_cl       = (a2_l/a1_l)
     norm_cr       = (a2_r/a1_r)
 
-    for tidx in range(0, len(tt),10):
-        print("time = %.2E norm_const_left = %.8E norm_const_right = %.8E  with ev cutoff = %.2E"%(tt[tidx],norm_cl[tidx], norm_cr[tidx], ev_cutoff))
+    # for tidx in range(0, len(tt),10):
+    #     print("time = %.2E norm_const_left = %.8E norm_const_right = %.8E  with ev cutoff = %.2E"%(tt[tidx],norm_cl[tidx], norm_cr[tidx], ev_cutoff))
 
-    Sv_l          = np.einsum("t,tar->tar", (a2_l/a1_l) * nex[:, 0], Sv_l)
-    Sv_r          = np.einsum("t,tar->tar", (a2_r/a1_r) * nex[:, 1], Sv_r)
+    Svz_l         = np.einsum("t,tar->tar", (a2_l/a1_l) * nex[:, 0], Svz_l)
+    Svz_r         = np.einsum("t,tar->tar", (a2_r/a1_r) * nex[:, 1], Svz_r)
 
-    a1_l          = 2 * np.pi * np.dot(np.dot(Sv_l, vtqw) * gmx**2, gmw) 
-    a1_r          = 2 * np.pi * np.dot(np.dot(Sv_r, vtqw) * gmx**2, gmw)
+    Svzp_l        = Svzp_l * (nex[:, 0])[:, np.newaxis, np.newaxis]
+    Svzp_r        = Svzp_r * (nex[:, 1])[:, np.newaxis, np.newaxis]
+
+    # Svzp_l        = np.einsum("t,tar->tar", (a2_l/a1_l) * nex[:, 0], Svzp_l)
+    # Svzp_r        = np.einsum("t,tar->tar", (a2_r/a1_r) * nex[:, 1], Svzp_r)
+
+    a1_l          = 2 * np.pi * np.dot(np.dot(Svz_l, vtqw) * gmx**2, gmw) 
+    a1_r          = 2 * np.pi * np.dot(np.dot(Svz_r, vtqw) * gmx**2, gmw)
 
     # for tidx in range(0, len(tt), 10):
     #     print("a1_l = %.8E a2_l = %.8E a1_r=%.8E a2_r=%.8E"%(a1_l[tidx], a2_l[tidx], a1_r[tidx], a2_r[tidx]))
 
-    Fv_cell_l       = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_l, vr_p=1, vt_p=vt_p)
-    Fv_cell_r       = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_r, vr_p=1, vt_p=vt_p)
-    Sv_cell_l       = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_l, vr_p=1, vt_p=vt_p)
-    Sv_cell_r       = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_r, vr_p=1, vt_p=vt_p)
+    Fv_cell_l        = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_l, vr_p=1, vt_p=vt_p)
+    Fv_cell_r        = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_r, vr_p=1, vt_p=vt_p)
+    Svz_cell_l       = grid_to_cell(vr/vth, None, vtq, vtqw, Svz_l, vr_p=1, vt_p=vt_p)
+    Svz_cell_r       = grid_to_cell(vr/vth, None, vtq, vtqw, Svz_r, vr_p=1, vt_p=vt_p)
+
+    Svzp_cell_l      = grid_to_cell(vr/vth, None, vtq, vtqw, Svzp_l, vr_p=1, vt_p=vt_p)
+    Svzp_cell_r      = grid_to_cell(vr/vth, None, vtq, vtqw, Svzp_r, vr_p=1, vt_p=vt_p)
 
     ne_cell_sum_l   = np.sum(Fv_cell_l.reshape((len(tt), -1)), axis=1)
     ne_cell_sum_r   = np.sum(Fv_cell_r.reshape((len(tt), -1)), axis=1)
 
-    neuz_cell_sum_l = np.sum(Sv_cell_l.reshape((len(tt), -1)), axis=1)
-    neuz_cell_sum_r = np.sum(Sv_cell_r.reshape((len(tt), -1)), axis=1)
+    neuz_cell_sum_l = np.sum(Svz_cell_l.reshape((len(tt), -1)), axis=1)
+    neuz_cell_sum_r = np.sum(Svz_cell_r.reshape((len(tt), -1)), axis=1)
 
     assert np.linalg.norm(nex[:, 0]-ne_cell_sum_l)/np.linalg.norm(nex[:, 0]) < 1e-13
     assert np.linalg.norm(nex[:, 1]-ne_cell_sum_r)/np.linalg.norm(nex[:, 1]) < 1e-13
 
     assert np.linalg.norm(neuzx[:, 0]-neuz_cell_sum_l)/np.linalg.norm(neuzx[:, 0]) < 1e-13
     assert np.linalg.norm(neuzx[:, 1]-neuz_cell_sum_r)/np.linalg.norm(neuzx[:, 1]) < 1e-13
+
+    vt_mid_idx       = np.argmin(np.abs(vt_cell-np.pi/2))
+
+    uz_cell_l        = np.zeros_like(Svz_cell_l)
+    uz_cell_r        = np.zeros_like(Svz_cell_r)
+
+    uzp_cell_l       = np.zeros_like(Svzp_cell_l)
+    uzp_cell_r       = np.zeros_like(Svzp_cell_r)
+
+    uz_cell_l[:, :,    0 : vt_mid_idx]   = Svz_cell_l[:, :, 0 : vt_mid_idx]        / Fv_cell_l[:, :, 0 : vt_mid_idx]
+    uz_cell_r[:, :,    0 : vt_mid_idx]   = Svz_cell_r[:, :, 0 : vt_mid_idx]        / Fv_cell_r[:, :, 0 : vt_mid_idx]
+    uz_cell_l[:, :, (vt_mid_idx + 1):]   = Svz_cell_l[:, :, (vt_mid_idx + 1):]     / Fv_cell_l[:, :, (vt_mid_idx + 1):]
+    uz_cell_r[:, :, (vt_mid_idx + 1):]   = Svz_cell_r[:, :, (vt_mid_idx + 1):]     / Fv_cell_r[:, :, (vt_mid_idx + 1):]
+
+    uzp_cell_l[:, :,    0 : vt_mid_idx]  = Svzp_cell_l[:, :, 0 : vt_mid_idx]        / Fv_cell_l[:, :, 0 : vt_mid_idx]
+    uzp_cell_r[:, :,    0 : vt_mid_idx]  = Svzp_cell_r[:, :, 0 : vt_mid_idx]        / Fv_cell_r[:, :, 0 : vt_mid_idx]
+    uzp_cell_l[:, :, (vt_mid_idx + 1):]  = Svzp_cell_l[:, :, (vt_mid_idx + 1):]     / Fv_cell_l[:, :, (vt_mid_idx + 1):]
+    uzp_cell_r[:, :, (vt_mid_idx + 1):]  = Svzp_cell_r[:, :, (vt_mid_idx + 1):]     / Fv_cell_r[:, :, (vt_mid_idx + 1):]
+
     
-    uz_cell_l        = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_l / (nex[:, 0][:, np.newaxis, np.newaxis]), vr_p=1, vt_p=vt_p) 
-    uz_cell_r        = grid_to_cell(vr/vth, None, vtq, vtqw, Sv_r / (nex[:, 1][:, np.newaxis, np.newaxis]), vr_p=1, vt_p=vt_p)
+    # a = np.sqrt(uz_cell_l**2 + uzp_cell_l**2) /vth
+    # print(np.min(a), np.max(a))
 
-    # uz_cell_l        = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.cos(vtq), flx_l) , vr_p=1, vt_p=vt_p) 
-    # uz_cell_r        = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.cos(vtq), flx_r) , vr_p=1, vt_p=vt_p)
-
-    # print(np.linalg.norm(a_l - uz_cell_l)/np.linalg.norm(a_l))
-    # assert np.linalg.norm(a_l - uz_cell_l)/np.linalg.norm(a_l) < 1e-12
-    # assert np.linalg.norm(a_r - uz_cell_r)/np.linalg.norm(a_r) < 1e-12
-
-    uzp_cell_l = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.sin(vtq), flx_l) , vr_p=1, vt_p=vt_p) 
-    uzp_cell_r = grid_to_cell(vr/vth, None, vtq, vtqw, np.einsum("a,b,tab->tab", gmx * vth, np.sin(vtq), flx_r) , vr_p=1, vt_p=vt_p)
-
-    
-    # print(np.sum(uz_cell_l.reshape((len(tt), -1)), axis=1)[0])
-    # print(neuzx[:, 0]/nex[:,0])
-    # print(neuzx[:, 0])
-    # print(np.sum(uzp_cell_l.reshape((len(tt), -1)), axis=1)[0])
-    # plt.figure()
-    # a = np.sum(uz_cell_l.reshape((len(tt), -1)), axis=1)/vth
-    # c = np.sum(uzp_cell_l.reshape((len(tt), -1)), axis=1)/vth
-    # d = np.sum(a_l.reshape((len(tt), -1)), axis=1)/vth
-    # plt.plot(tt, a , label="a")
-    # plt.plot(tt, c , label="c")
-    # plt.plot(tt, np.sqrt(a**2 + c**2), label=r"total")
-    # plt.plot(tt, d                   , label=r"total1")
-    # plt.legend()
-    # plt.grid(visible=True)
-    # plt.show()
-    # plt.close()
-    # sys.exit(0)
-    
+    # a = np.sqrt(uz_cell_r**2 + uzp_cell_r**2) /vth
+    # print(np.min(a), np.max(a))
 
     return {"tt": tt, 
             "ev": evgrid, 
@@ -572,8 +578,8 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
             "time": tt,
             "fv_left_bdy": Fv_l,
             "fv_right_bdy": Fv_r,
-            "flux_left_bdy": Sv_l,
-            "flux_right_bdy": Sv_r,
+            "flux_left_bdy": Svz_l,
+            "flux_right_bdy": Svz_r,
             "Ef": Ef, 
             "vth": vth,
             "xx":xx,
@@ -584,8 +590,10 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
 
             "vr_cell"       : np.array([0.5 * (vr[i] + vr[i+1])/vth for i in range(len(vr)-1)]),
             "vt_cell"       : np.array([0.5 * (vt_cell[i] + vt_cell[i+1]) for i in range(len(vt_cell)-1)]),
-            "Sv_cell_left"  : Sv_cell_l,
-            "Sv_cell_right" : Sv_cell_r,
+            "Svz_cell_left" : Svz_cell_l,
+            "Svz_cell_right": Svz_cell_r,
+            # "Svz_cell_left" : Svz_cell_l,
+            # "Svz_cell_right": Svz_cell_r,
             "Fv_cell_left"  : Fv_cell_l,
             "Fv_cell_right" : Fv_cell_r,
             "uz_cell_left"  : uz_cell_l,
@@ -842,17 +850,21 @@ def use_extract_data():
 def use_extract_data_on_cell():
     io_out_folder = "t1"
     make_dir(io_out_folder)    
-    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, num_vt=64, vt_p=8, ev_cutoff=50)
+    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, num_vt=64, vt_p=16, ev_cutoff=50)
+    data_low      = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, num_vt=64, vt_p=8 , ev_cutoff=50)
+
+    for i in ["Fv_cell_left", "Svz_cell_left", "uz_cell_left", "uzp_cell_left", "Fv_cell_right", "Svz_cell_right", "uz_cell_right", "uzp_cell_right"]:
+        print("rel error [%s]= %.8E"%(i, np.linalg.norm(data[i]-data_low[i])/np.linalg.norm(data_low[i])))
 
     tt            = data["tt"]
-    vr_cell       = data["vr_cell"      ] # vr bucket centers (unit : []) 
-    vt_cell       = data["vt_cell"      ] # vt bucket centers (unit : [])
-    Sv_cell_left  = data["Sv_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-2s^-1])
-    Sv_cell_right = data["Sv_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-2s^-1])
-    Fv_cell_left  = data["Fv_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-3])
-    Fv_cell_right = data["Fv_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-3])
-    uz_cell_left  = data["uz_cell_left" ] # vz_cell_left   (unit : [ms^-1])
-    uz_cell_right = data["uz_cell_right"] # vz_cell_right  (unit : [ms^-1])
+    vr_cell       = data["vr_cell"      ]  # vr bucket centers (unit : []) 
+    vt_cell       = data["vt_cell"      ]  # vt bucket centers (unit : [])
+    Sv_cell_left  = data["Svz_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-2s^-1])
+    Sv_cell_right = data["Svz_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-2s^-1])
+    Fv_cell_left  = data["Fv_cell_left" ]  # Sv (left)  integrated on the cell centers (unit : [m^-3])
+    Fv_cell_right = data["Fv_cell_right"]  # Sv (right) integrated on the cell centers (unit : [m^-3])
+    uz_cell_left  = data["uz_cell_left" ]  # vz_cell_left   (unit : [ms^-1])
+    uz_cell_right = data["uz_cell_right"]  # vz_cell_right  (unit : [ms^-1])
     uzp_cell_left = data["uzp_cell_left" ] # (perpendicular) vzp_cell_left   (unit : [ms^-1])
     uzp_cell_right= data["uzp_cell_right"] # (perpendicular) vzp_cell_right  (unit : [ms^-1])
     vth           = data["vth"]
@@ -864,9 +876,7 @@ def use_extract_data_on_cell():
     dev           = 0.5 * (ev_cell[1]  - ev_cell[0])
     extent        = [ev_cell[0]-dev , ev_cell[-1] + dev, vt_cell[-1] + dvt, vt_cell[0]-dvt]
 
-    # vt_mid_idx    = np.argmin(np.abs(vt_cell-np.pi/2)) +1
-    # print(vt_cell)
-    # print(vt_cell[vt_mid_idx-1]-np.pi/2)
+    vt_mid_idx    = np.argmin(np.abs(vt_cell-np.pi/2))
     
     tstep   = 10
     cmap_str="plasma"
@@ -909,9 +919,13 @@ def use_extract_data_on_cell():
 
 
         plt.subplot(2, 3, 3)
-        vtotal  = np.sqrt(uz_cell_left[tidx]**2 + uzp_cell_left[tidx]**2)
-        a1      = uz_cell_left[tidx]/vtotal
+        vtotal                   = np.sqrt(uz_cell_left[tidx]**2 + uzp_cell_left[tidx]**2)
+        a1                       = np.zeros_like(vtotal) 
+        a1[:, 0:vt_mid_idx     ] = uz_cell_left[tidx, :, 0: vt_mid_idx  ]/vtotal[:, 0:vt_mid_idx   ]
+        a1[:, (vt_mid_idx+1):  ] = uz_cell_left[tidx, :, (vt_mid_idx+1):]/vtotal[:, (vt_mid_idx+1):]
+
         plt.imshow(np.acos(a1.T), aspect='auto', extent=extent, cmap=cmap_str)
+        #plt.imshow((vtotal.T), aspect='auto', extent=extent, cmap=cmap_str)
         #plt.imshow(uz_cell_left[tidx].T, aspect='auto', extent=extent)
         #plt.imshow(np.abs(uz_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e1, vmax=1e6))
         plt.colorbar()
@@ -920,9 +934,12 @@ def use_extract_data_on_cell():
         #plt.title(r"$v_z(x_L)$")
 
         plt.subplot(2, 3, 6)
-        vtotal  = np.sqrt(uz_cell_right[tidx]**2 + uzp_cell_right[tidx]**2)
-        a2      = uz_cell_right[tidx]/vtotal  
-        plt.imshow(np.acos(a2.T), aspect='auto', extent=extent, cmap=cmap_str)
+        vtotal                   = np.sqrt(uz_cell_right[tidx]**2 + uzp_cell_right[tidx]**2)
+        a1                       = np.zeros_like(vtotal) 
+        a1[:, 0:vt_mid_idx     ] = uz_cell_right[tidx, :, 0: vt_mid_idx  ]/vtotal[:, 0:vt_mid_idx   ]
+        a1[:, (vt_mid_idx+1):  ] = uz_cell_right[tidx, :, (vt_mid_idx+1):]/vtotal[:, (vt_mid_idx+1):]
+        plt.imshow(np.acos(a1.T), aspect='auto', extent=extent, cmap=cmap_str)
+        #plt.imshow((vtotal.T), aspect='auto', extent=extent, cmap=cmap_str)
         #plt.imshow(uz_cell_right[tidx].T, aspect='auto', extent=extent)
         #plt.imshow(np.abs(uz_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e1, vmax=1e6))
         plt.colorbar()

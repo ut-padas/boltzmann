@@ -443,7 +443,7 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
     xlidx  = np.argmin(np.abs(xx-xl))
     xridx  = np.argmin(np.abs(xx-xr))
 
-    print(xl, xx[xlidx], xr, xx[xridx])
+    print(xl, xx[xlidx], xr, xx[xridx], xlidx, xridx)
 
     dx      = (xx[xridx] - xx[xlidx]) * L
     dne     = tau * np.abs(0.5 * dx * (ip_avg[xlidx] + ip_avg[xridx]) - (neuz_avg[xridx] - neuz_avg[xlidx])) / (0.5 * dx * (ne_avg[xlidx] + ne_avg[xridx]))
@@ -562,6 +562,8 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
     uzp_cell_r[:, :, (vt_mid_idx + 1):]  = Svzp_cell_r[:, :, (vt_mid_idx + 1):]     / Fv_cell_r[:, :, (vt_mid_idx + 1):]
 
     
+    # print("%.8E " %np.sum(uzp_cell_l))
+    # print("%.8E " %np.sum(uzp_cell_r))
     # a = np.sqrt(uz_cell_l**2 + uzp_cell_l**2) /vth
     # print(np.min(a), np.max(a))
 
@@ -958,6 +960,84 @@ def use_extract_data_on_cell():
         #os.system('read -p "a" ') 
         #plt.close('all')
         
+def make_movie(xloc, movie_data_folder, tidx_step):
+    assert len(xloc)%2 == 0
+
+    io_out_folder = movie_data_folder
+    make_dir(io_out_folder)    
+    
+    data  = [extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xloc[i], xr=xloc[i+1], num_vt=64, vt_p=8, ev_cutoff=50) for i in range(0, len(xloc), 2)] 
+    nrows = 2
+    ncols = len(xloc)
+
+    tt    = data[0]["tt"]
+    xx    = data[0]["xx"] 
+    c_gamma = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+    cmap_str="plasma"
+    vr_cell       = data[0]  ["vr_cell"      ]  # vr bucket centers (unit : []) 
+    vt_cell       = data[0]  ["vt_cell"      ]  # vt bucket centers (unit : [])
+    vth           = data[0]  ["vth"]
+    ev_cell       = (vr_cell * vth)**2 /c_gamma**2
+    dvt           = 0.5 * (vt_cell[1] - vt_cell[0])
+    dev           = 0.5 * (ev_cell[1]  - ev_cell[0])
+    extent        = [ev_cell[0]-dev , ev_cell[-1] + dev, vt_cell[-1] + dvt, vt_cell[0]-dvt]
+    vt_mid_idx    = np.argmin(np.abs(vt_cell-np.pi/2))
+
+    for tidx in range(0, len(tt), tidx_step):
+        plt.figure(figsize=(ncols * 4 + 2, nrows*4 + 2), dpi=200)
+        for xidx in range(len(xloc)//2):
+            xlidx         = data[xidx]["xlidx"]
+            xridx         = data[xidx]["xridx"]
+            Sv_cell_left  = data[xidx]["Svz_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-2s^-1])
+            Sv_cell_right = data[xidx]["Svz_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-2s^-1])
+            Fv_cell_left  = data[xidx]["Fv_cell_left" ]  # Sv (left)  integrated on the cell centers (unit : [m^-3])
+            Fv_cell_right = data[xidx]["Fv_cell_right"]  # Sv (right) integrated on the cell centers (unit : [m^-3])
+            uz_cell_left  = data[xidx]["uz_cell_left" ]  # vz_cell_left   (unit : [ms^-1])
+            uz_cell_right = data[xidx]["uz_cell_right"]  # vz_cell_right  (unit : [ms^-1])
+            uzp_cell_left = data[xidx]["uzp_cell_left" ] # (perpendicular) vzp_cell_left   (unit : [ms^-1])
+            uzp_cell_right= data[xidx]["uzp_cell_right"] # (perpendicular) vzp_cell_right  (unit : [ms^-1])
+
+
+            plt.subplot(nrows, ncols, 0 * ncols + (2 * xidx + 1))
+            plt.title(r"$n_e(\hat{x} = %.4f, \varepsilon, v_\theta)[m^{-3}]$"%(xx[xlidx]))
+            plt.imshow(np.abs(Fv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e5, vmax=np.max(Fv_cell_left)), cmap=cmap_str)
+            plt.colorbar()
+            plt.xlabel(r"energy [eV]")
+            plt.ylabel(r"$v_\theta$")
+            
+            plt.subplot(nrows, ncols, 0 * ncols + (2 * xidx + 2))
+            plt.title(r"$n_e(\hat{x} = %.4f, \varepsilon, v_\theta) [m^{-3}]$"%(xx[xridx]))
+            plt.imshow(np.abs(Fv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e5, vmax=np.max(Fv_cell_right)), cmap=cmap_str)
+            plt.colorbar()
+            plt.xlabel(r"energy [eV]")
+            plt.ylabel(r"$v_\theta$")
+
+
+            plt.subplot(nrows, ncols, 1 * ncols + (2 * xidx + 1))
+            plt.title(r"electron flux$(\hat{x} = %.4f, \varepsilon, v_\theta) [m^{-2}s^{-1}]$"%(xx[xlidx]))
+            plt.imshow(np.abs(Sv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e12, vmax=np.max(Sv_cell_left)), cmap=cmap_str)
+            plt.colorbar()
+            plt.xlabel(r"energy [eV]")
+            plt.ylabel(r"$v_\theta$")
+            
+            plt.subplot(nrows, ncols, 1 * ncols + (2 * xidx + 2))
+            plt.title(r"electron flux$(\hat{x} = %.4f, \varepsilon, v_\theta) [m^{-2}s^{-1}]$"%(xx[xridx]))
+            plt.imshow(np.abs(Sv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e12, vmax=np.max(Sv_cell_right)), cmap=cmap_str)
+            plt.colorbar()
+            plt.xlabel(r"energy [eV]")
+            plt.ylabel(r"$v_\theta$")
+    
+        plt.tight_layout()
+        plt.savefig("%s/p_%04d.png"%(io_out_folder, tidx))
+        #plt.show()
+        plt.close()
+            
+
+            
+
+            
+    
+    
 
 
 
@@ -969,6 +1049,17 @@ if __name__ == "__main__":
 
     #use_extract_data()
     use_extract_data_on_cell()
+    
+    # q, _ = gauss_legendre_lobatto(12, domain=(-1, 1))
+    # # xloc = q[2:-2]
+    # # print(xloc)
+    # # make_movie(xloc, movie_data_folder="movie", tidx_step=1)
+
+
+    # xloc = np.array([q[2], q[3], -q[3], -q[2]])
+    # print(xloc)
+    # make_movie(xloc, movie_data_folder="movie1", tidx_step=1)
+
 
     
 

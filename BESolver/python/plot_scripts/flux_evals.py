@@ -128,20 +128,58 @@ def quad_on_grid(vr, vt, qoi):
 
     return iqoi
 
-def grid_to_cell(vr, vrw, vt, vtw, qoi, vr_p, vt_p):
-    assert vrw == None
+def vr_coarsen(vr, vr_p):
+    num_vr       = len(vr)
+    num_vr_cells = (num_vr -1) // (vr_p-1) +1 
+    num_vr0      = num_vr_cells * (vr_p-1) + 1
+    
+    
+    vrw          = np.zeros((num_vr_cells , vr_p))
+    vr_e2n       = np.array([range(i, num_vr0 - (vr_p-1-i), vr_p-1) for i in range(vr_p)]).T
+    vr_e2n[vr_e2n>=num_vr]= num_vr-1
+
+    vr1          = np.array([vr[vr_e2n[i]]  for i in range(num_vr_cells)])
+    vrw1         = np.array([trapz_w(vr1[i]) for i in range(num_vr_cells)])
+
+    a1 = np.sum(vrw1,axis=1)
+    a2 = (vr1[:, -1] - vr1[:, 0])
+    assert np.linalg.norm(a1-a2)/np.linalg.norm(a1) < 1e-14
+
+    return vr1.reshape((-1)), vrw1.reshape((-1)), vr_e2n
+
+
+def grid_to_cell(vr, vrw, vr_e2n, vt, vtw, qoi, vr_p, vt_p):
+    
+    vr       = vr.reshape((-1, vr_p))
+    vrw      = vrw.reshape((-1, vr_p))
     vt       = vt.reshape((-1, vt_p))
     vtw      = vtw.reshape((-1, vt_p))
 
-    nbins_vr = vr.shape[0]-1
+    nbins_vr = vr.shape[0]
     nbins_vt = vt.shape[0]
     num_vt   = nbins_vt + 1
 
-    iqoi  = np.array([ 0.5 * (vr[vr_idx+1]-vr[vr_idx]) * (vr[vr_idx]**2   * np.dot(qoi[:, vr_idx  , vt_idx * vt_p : (vt_idx+1) * vt_p], vtw[vt_idx]) + 
-                                                            vr[vr_idx+1]**2 * np.dot(qoi[:, vr_idx+1, vt_idx * vt_p : (vt_idx+1) * vt_p], vtw[vt_idx])) 
-                                                        for vr_idx in range(nbins_vr) for vt_idx in range(nbins_vt)]).T
+    iqoi     = np.array([qoi[:, vr_e2n[i], :] for i in range(nbins_vr)])
+    iqoi     = np.swapaxes(iqoi, 0, 1).reshape((qoi.shape[0], nbins_vr * vr_p, qoi.shape[2]))
+    #iqoi     = 2 * np.pi * np.dot(np.dot(iqoi, vtw), vrw)
 
-    iqoi  = 2 * np.pi * iqoi.reshape((qoi.shape[0], nbins_vr, nbins_vt))    
+    iqoi     = np.pi * 2 * np.array([ np.dot(np.dot((vr[vr_idx])[np.newaxis, :, np.newaxis]**2 *
+                                      iqoi[:, vr_idx * vr_p : (vr_idx+1) * vr_p, vt_idx * vt_p : (vt_idx+1) * vt_p ], vtw[vt_idx]), vrw[vr_idx])
+                                      for vr_idx in range(nbins_vr) for vt_idx in range(nbins_vt)]).T
+
+    iqoi     = iqoi.reshape((qoi.shape[0], nbins_vr , nbins_vt))    
+    
+
+
+
+    #print(iqoi.shape, qoi.shape)
+    #sys.exit(0)
+
+    # iqoi  = np.array([ 0.5 * (vr[vr_idx+1]-vr[vr_idx]) * (vr[vr_idx]**2   * np.dot(qoi[:, vr_idx  , vt_idx * vt_p : (vt_idx+1) * vt_p], vtw[vt_idx]) + 
+    #                                                         vr[vr_idx+1]**2 * np.dot(qoi[:, vr_idx+1, vt_idx * vt_p : (vt_idx+1) * vt_p], vtw[vt_idx])) 
+    #                                                     for vr_idx in range(nbins_vr) for vt_idx in range(nbins_vt)]).T
+
+    # iqoi  = 2 * np.pi * iqoi.reshape((qoi.shape[0], nbins_vr, nbins_vt))    
     return iqoi
 
 def vt_coarsen(vr, vt, iqoi):
@@ -349,10 +387,11 @@ def extract_data(folder, xl, xr, vt_k= 9, ev_cutoff=80, fname="macro.h5"):
             "uz": uz,
             "ne": ne}
 
-def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macro.h5"):
+def extract_data_on_cell(folder, xl, xr, vr_p, num_vt, vt_p, ev_cutoff=80, fname="macro.h5"):
     args   = load_run_args(folder)
     num_l  = int(args["l_max"]) + 1
 
+    assert vr_p > 1
     assert num_vt % 2 == 0
     
     nvt_by_2              = num_vt//2
@@ -523,19 +562,25 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
     # for tidx in range(0, len(tt), 10):
     #     print("a1_l = %.8E a2_l = %.8E a1_r=%.8E a2_r=%.8E"%(a1_l[tidx], a2_l[tidx], a1_r[tidx], a2_r[tidx]))
 
-    Fv_cell_l        = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_l, vr_p=1, vt_p=vt_p)
-    Fv_cell_r        = grid_to_cell(vr/vth, None, vtq, vtqw, Fv_r, vr_p=1, vt_p=vt_p)
-    Svz_cell_l       = grid_to_cell(vr/vth, None, vtq, vtqw, Svz_l, vr_p=1, vt_p=vt_p)
-    Svz_cell_r       = grid_to_cell(vr/vth, None, vtq, vtqw, Svz_r, vr_p=1, vt_p=vt_p)
+    gmx1, gmw1, vr_e2n = vr_coarsen(gmx, vr_p)
+    vr_cell            = np.append(gmx1[0::vr_p], np.array([gmx1[-1]]))
+    assert(len(vr_cell) == vr_e2n.shape[0] + 1)
 
-    Svzp_cell_l      = grid_to_cell(vr/vth, None, vtq, vtqw, Svzp_l, vr_p=1, vt_p=vt_p)
-    Svzp_cell_r      = grid_to_cell(vr/vth, None, vtq, vtqw, Svzp_r, vr_p=1, vt_p=vt_p)
+    vr_cell_width      = np.array([(-vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)])
+    
+    Fv_cell_l        = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Fv_l ,  vr_p=vr_p, vt_p=vt_p)
+    Fv_cell_r        = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Fv_r ,  vr_p=vr_p, vt_p=vt_p)
+    Svz_cell_l       = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Svz_l,  vr_p=vr_p, vt_p=vt_p)
+    Svz_cell_r       = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Svz_r,  vr_p=vr_p, vt_p=vt_p)
 
-    ne_cell_sum_l   = np.sum(Fv_cell_l.reshape((len(tt), -1)), axis=1)
-    ne_cell_sum_r   = np.sum(Fv_cell_r.reshape((len(tt), -1)), axis=1)
+    Svzp_cell_l      = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Svzp_l, vr_p=vr_p, vt_p=vt_p)
+    Svzp_cell_r      = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Svzp_r, vr_p=vr_p, vt_p=vt_p)
 
-    neuz_cell_sum_l = np.sum(Svz_cell_l.reshape((len(tt), -1)), axis=1)
-    neuz_cell_sum_r = np.sum(Svz_cell_r.reshape((len(tt), -1)), axis=1)
+    ne_cell_sum_l    = np.sum(Fv_cell_l.reshape((len(tt), -1)), axis=1)
+    ne_cell_sum_r    = np.sum(Fv_cell_r.reshape((len(tt), -1)), axis=1)
+
+    neuz_cell_sum_l  = np.sum(Svz_cell_l.reshape((len(tt), -1)), axis=1)
+    neuz_cell_sum_r  = np.sum(Svz_cell_r.reshape((len(tt), -1)), axis=1)
 
     assert np.linalg.norm(nex[:, 0]-ne_cell_sum_l)/np.linalg.norm(nex[:, 0]) < 1e-13
     assert np.linalg.norm(nex[:, 1]-ne_cell_sum_r)/np.linalg.norm(nex[:, 1]) < 1e-13
@@ -551,15 +596,15 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
     uzp_cell_l       = np.zeros_like(Svzp_cell_l)
     uzp_cell_r       = np.zeros_like(Svzp_cell_r)
 
-    uz_cell_l[:, :,    0 : vt_mid_idx]   = Svz_cell_l[:, :, 0 : vt_mid_idx]        / Fv_cell_l[:, :, 0 : vt_mid_idx]
-    uz_cell_r[:, :,    0 : vt_mid_idx]   = Svz_cell_r[:, :, 0 : vt_mid_idx]        / Fv_cell_r[:, :, 0 : vt_mid_idx]
-    uz_cell_l[:, :, (vt_mid_idx + 1):]   = Svz_cell_l[:, :, (vt_mid_idx + 1):]     / Fv_cell_l[:, :, (vt_mid_idx + 1):]
-    uz_cell_r[:, :, (vt_mid_idx + 1):]   = Svz_cell_r[:, :, (vt_mid_idx + 1):]     / Fv_cell_r[:, :, (vt_mid_idx + 1):]
+    uz_cell_l[:, vr_cell_width>0 ,    0 : vt_mid_idx]   = Svz_cell_l[:, vr_cell_width>0 , 0 : vt_mid_idx]        / Fv_cell_l[:, vr_cell_width>0 , 0 : vt_mid_idx]
+    uz_cell_r[:, vr_cell_width>0 ,    0 : vt_mid_idx]   = Svz_cell_r[:, vr_cell_width>0 , 0 : vt_mid_idx]        / Fv_cell_r[:, vr_cell_width>0 , 0 : vt_mid_idx]
+    uz_cell_l[:, vr_cell_width>0 , (vt_mid_idx + 1):]   = Svz_cell_l[:, vr_cell_width>0 , (vt_mid_idx + 1):]     / Fv_cell_l[:, vr_cell_width>0 , (vt_mid_idx + 1):]
+    uz_cell_r[:, vr_cell_width>0 , (vt_mid_idx + 1):]   = Svz_cell_r[:, vr_cell_width>0 , (vt_mid_idx + 1):]     / Fv_cell_r[:, vr_cell_width>0 , (vt_mid_idx + 1):]
 
-    uzp_cell_l[:, :,    0 : vt_mid_idx]  = Svzp_cell_l[:, :, 0 : vt_mid_idx]        / Fv_cell_l[:, :, 0 : vt_mid_idx]
-    uzp_cell_r[:, :,    0 : vt_mid_idx]  = Svzp_cell_r[:, :, 0 : vt_mid_idx]        / Fv_cell_r[:, :, 0 : vt_mid_idx]
-    uzp_cell_l[:, :, (vt_mid_idx + 1):]  = Svzp_cell_l[:, :, (vt_mid_idx + 1):]     / Fv_cell_l[:, :, (vt_mid_idx + 1):]
-    uzp_cell_r[:, :, (vt_mid_idx + 1):]  = Svzp_cell_r[:, :, (vt_mid_idx + 1):]     / Fv_cell_r[:, :, (vt_mid_idx + 1):]
+    uzp_cell_l[:, vr_cell_width>0,    0 : vt_mid_idx]   = Svzp_cell_l[:, vr_cell_width>0, 0 : vt_mid_idx]        / Fv_cell_l[:, vr_cell_width>0 , 0 : vt_mid_idx]
+    uzp_cell_r[:, vr_cell_width>0,    0 : vt_mid_idx]   = Svzp_cell_r[:, vr_cell_width>0, 0 : vt_mid_idx]        / Fv_cell_r[:, vr_cell_width>0 , 0 : vt_mid_idx]
+    uzp_cell_l[:, vr_cell_width>0, (vt_mid_idx + 1):]   = Svzp_cell_l[:, vr_cell_width>0, (vt_mid_idx + 1):]     / Fv_cell_l[:, vr_cell_width>0 , (vt_mid_idx + 1):]
+    uzp_cell_r[:, vr_cell_width>0, (vt_mid_idx + 1):]   = Svzp_cell_r[:, vr_cell_width>0, (vt_mid_idx + 1):]     / Fv_cell_r[:, vr_cell_width>0 , (vt_mid_idx + 1):]
 
     
     # print("%.8E " %np.sum(uzp_cell_l))
@@ -590,7 +635,8 @@ def extract_data_on_cell(folder, xl, xr, num_vt, vt_p, ev_cutoff=80, fname="macr
             "uz": uz,
             "ne": ne,
 
-            "vr_cell"       : np.array([0.5 * (vr[i] + vr[i+1])/vth for i in range(len(vr)-1)]),
+            "vr_cell_width" : np.array([(-vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)]),
+            "vr_cell"       : np.array([0.5 * (vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)]),
             "vt_cell"       : np.array([0.5 * (vt_cell[i] + vt_cell[i+1]) for i in range(len(vt_cell)-1)]),
             "Svz_cell_left" : Svz_cell_l,
             "Svz_cell_right": Svz_cell_r,
@@ -852,14 +898,15 @@ def use_extract_data():
 def use_extract_data_on_cell():
     io_out_folder = "t1"
     make_dir(io_out_folder)    
-    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, num_vt=64, vt_p=16, ev_cutoff=50)
-    data_low      = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, num_vt=64, vt_p=8 , ev_cutoff=50)
+    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=64, vt_p=16, ev_cutoff=50)
+    data_low      = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=64, vt_p=8 , ev_cutoff=50)
 
     for i in ["Fv_cell_left", "Svz_cell_left", "uz_cell_left", "uzp_cell_left", "Fv_cell_right", "Svz_cell_right", "uz_cell_right", "uzp_cell_right"]:
         print("rel error [%s]= %.8E"%(i, np.linalg.norm(data[i]-data_low[i])/np.linalg.norm(data_low[i])))
 
     tt            = data["tt"]
     vr_cell       = data["vr_cell"      ]  # vr bucket centers (unit : []) 
+    vr_cell_width = data["vr_cell_width"]  # vr cell width
     vt_cell       = data["vt_cell"      ]  # vt bucket centers (unit : [])
     Sv_cell_left  = data["Svz_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-2s^-1])
     Sv_cell_right = data["Svz_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-2s^-1])
@@ -879,7 +926,6 @@ def use_extract_data_on_cell():
     extent        = [ev_cell[0]-dev , ev_cell[-1] + dev, vt_cell[-1] + dvt, vt_cell[0]-dvt]
 
     vt_mid_idx    = np.argmin(np.abs(vt_cell-np.pi/2))
-    
     tstep   = 10
     cmap_str="plasma"
     for tidx in range(0, len(tt), tstep):
@@ -921,10 +967,10 @@ def use_extract_data_on_cell():
 
 
         plt.subplot(2, 3, 3)
-        vtotal                   = np.sqrt(uz_cell_left[tidx]**2 + uzp_cell_left[tidx]**2)
-        a1                       = np.zeros_like(vtotal) 
-        a1[:, 0:vt_mid_idx     ] = uz_cell_left[tidx, :, 0: vt_mid_idx  ]/vtotal[:, 0:vt_mid_idx   ]
-        a1[:, (vt_mid_idx+1):  ] = uz_cell_left[tidx, :, (vt_mid_idx+1):]/vtotal[:, (vt_mid_idx+1):]
+        vtotal                                  = np.sqrt(uz_cell_left[tidx]**2 + uzp_cell_left[tidx]**2)
+        a1                                      = np.zeros_like(vtotal) 
+        a1[vr_cell_width>0 , 0:vt_mid_idx     ] = uz_cell_left[tidx, vr_cell_width>0, 0: vt_mid_idx  ]/vtotal[vr_cell_width>0, 0:vt_mid_idx   ]
+        a1[vr_cell_width>0 , (vt_mid_idx+1):  ] = uz_cell_left[tidx, vr_cell_width>0, (vt_mid_idx+1):]/vtotal[vr_cell_width>0, (vt_mid_idx+1):]
 
         plt.imshow(np.acos(a1.T), aspect='auto', extent=extent, cmap=cmap_str)
         #plt.imshow((vtotal.T), aspect='auto', extent=extent, cmap=cmap_str)
@@ -936,10 +982,10 @@ def use_extract_data_on_cell():
         #plt.title(r"$v_z(x_L)$")
 
         plt.subplot(2, 3, 6)
-        vtotal                   = np.sqrt(uz_cell_right[tidx]**2 + uzp_cell_right[tidx]**2)
-        a1                       = np.zeros_like(vtotal) 
-        a1[:, 0:vt_mid_idx     ] = uz_cell_right[tidx, :, 0: vt_mid_idx  ]/vtotal[:, 0:vt_mid_idx   ]
-        a1[:, (vt_mid_idx+1):  ] = uz_cell_right[tidx, :, (vt_mid_idx+1):]/vtotal[:, (vt_mid_idx+1):]
+        vtotal                                  = np.sqrt(uz_cell_right[tidx]**2 + uzp_cell_right[tidx]**2)
+        a1                                      = np.zeros_like(vtotal) 
+        a1[vr_cell_width>0 , 0:vt_mid_idx     ] = uz_cell_right[tidx, vr_cell_width>0 , 0: vt_mid_idx  ]/vtotal[vr_cell_width>0 , 0:vt_mid_idx   ]
+        a1[vr_cell_width>0 , (vt_mid_idx+1):  ] = uz_cell_right[tidx, vr_cell_width>0 , (vt_mid_idx+1):]/vtotal[vr_cell_width>0 , (vt_mid_idx+1):]
         plt.imshow(np.acos(a1.T), aspect='auto', extent=extent, cmap=cmap_str)
         #plt.imshow((vtotal.T), aspect='auto', extent=extent, cmap=cmap_str)
         #plt.imshow(uz_cell_right[tidx].T, aspect='auto', extent=extent)

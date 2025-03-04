@@ -574,7 +574,10 @@ def extract_data_on_cell(folder, xl, xr, vr_p, num_vt, vt_p, ev_cutoff=80, fname
 
     vr_cell_width      = np.array([(-vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)])
     assert (vr_cell_width > 0).all() == True
-    
+    m_cell           = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, np.ones_like(Fv_l[0])[np.newaxis, :, :],  vr_p=vr_p, vt_p=vt_p) 
+    vz_cell          = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, np.einsum("a,b->ab", gmx * vth, cos_vt)[np.newaxis, :, :],  vr_p=vr_p, vt_p=vt_p)
+    vzp_cell         = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, np.einsum("a,b->ab", gmx * vth, sin_vt)[np.newaxis, :, :],  vr_p=vr_p, vt_p=vt_p)
+
     Fv_cell_l        = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Fv_l ,  vr_p=vr_p, vt_p=vt_p)
     Fv_cell_r        = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Fv_r ,  vr_p=vr_p, vt_p=vt_p)
     Svz_cell_l       = grid_to_cell(gmx1, gmw1, vr_e2n,  vtq, vtqw, Svz_l,  vr_p=vr_p, vt_p=vt_p)
@@ -613,6 +616,12 @@ def extract_data_on_cell(folder, xl, xr, vr_p, num_vt, vt_p, ev_cutoff=80, fname
     uzp_cell_l[:, :, (vt_mid_idx + 1):]   = Svzp_cell_l[:, :, (vt_mid_idx + 1):]     / Fv_cell_l[:, : , (vt_mid_idx + 1):]
     uzp_cell_r[:, :, (vt_mid_idx + 1):]   = Svzp_cell_r[:, :, (vt_mid_idx + 1):]     / Fv_cell_r[:, : , (vt_mid_idx + 1):]
 
+    vz_cell[:, :,    0 : vt_mid_idx]      = vz_cell[:, :, 0 : vt_mid_idx]        / m_cell[:, : , 0 : vt_mid_idx]
+    vz_cell[:, : , (vt_mid_idx + 1):]     = vz_cell[:, : , (vt_mid_idx + 1):]    / m_cell[:, : , (vt_mid_idx + 1):]
+
+    vzp_cell[:, :,    0 : vt_mid_idx]     = vzp_cell[:, :, 0 : vt_mid_idx]       / m_cell[:, : , 0 : vt_mid_idx]
+    vzp_cell[:, : , (vt_mid_idx + 1):]    = vzp_cell[:, : , (vt_mid_idx + 1):]   / m_cell[:, : , (vt_mid_idx + 1):]
+    
     
     # print("%.8E " %np.sum(uzp_cell_l))
     # print("%.8E " %np.sum(uzp_cell_r))
@@ -621,6 +630,12 @@ def extract_data_on_cell(folder, xl, xr, vr_p, num_vt, vt_p, ev_cutoff=80, fname
 
     # a = np.sqrt(uz_cell_r**2 + uzp_cell_r**2) /vth
     # print(np.min(a), np.max(a))
+
+    vz_cell          = vz_cell[0]
+    vzp_cell         = vzp_cell[0]
+    vr_c             = np.sqrt(vz_cell**2 + vzp_cell**2)
+    vt_c             = np.ones_like(vr_c) * np.pi/2 
+    vt_c[vr_c>0]     = np.arccos(vz_cell[vr_c>0]/vr_c[vr_c>0])
 
     return {"tt": tt, 
             "ev": evgrid, 
@@ -642,9 +657,13 @@ def extract_data_on_cell(folder, xl, xr, vr_p, num_vt, vt_p, ev_cutoff=80, fname
             "uz": uz,
             "ne": ne,
 
-            "vr_cell_width" : np.array([(-vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)]),
-            "vr_cell"       : np.array([0.5 * (vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)]),
-            "vt_cell"       : np.array([0.5 * (vt_cell[i] + vt_cell[i+1]) for i in range(len(vt_cell)-1)]),
+            #"vr_cell_width" : np.array([(-vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)]),
+            "vr_cell_coord"  : np.array([0.5 * (vr_cell[i] + vr_cell[i+1]) for i in range(len(vr_cell)-1)]),
+            "vt_cell_coord"  : np.array([0.5 * (vt_cell[i] + vt_cell[i+1]) for i in range(len(vt_cell)-1)]),
+            "vr_cell"        : vr_c,
+            "vt_cell"        : vt_c,
+            "vz_cell"        :  vz_cell,
+            "vzp_cell"       : vzp_cell,
             "Svz_cell_left" : Svz_cell_l,
             "Svz_cell_right": Svz_cell_r,
             # "Svz_cell_left" : Svz_cell_l,
@@ -905,36 +924,40 @@ def use_extract_data():
 def use_extract_data_on_cell():
     io_out_folder = "t1"
     make_dir(io_out_folder)    
-    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=8 , ev_cutoff=50)
-    data_low      = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=4 , ev_cutoff=50)
+    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=3 , ev_cutoff=50)
+    # data_low      = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=3 , ev_cutoff=50)
 
-    for i in ["Fv_cell_left", "Svz_cell_left", "uz_cell_left", "uzp_cell_left", "Fv_cell_right", "Svz_cell_right", "uz_cell_right", "uzp_cell_right"]:
-        print("rel error [%s]= %.8E"%(i, np.linalg.norm(data[i]-data_low[i])/np.linalg.norm(data_low[i])))
+    # for i in ["Fv_cell_left", "Svz_cell_left", "uz_cell_left", "uzp_cell_left", "Fv_cell_right", "Svz_cell_right", "uz_cell_right", "uzp_cell_right"]:
+    #     print("rel error [%s]= %.8E"%(i, np.linalg.norm(data[i]-data_low[i])/np.linalg.norm(data_low[i])))
 
     tt            = data["tt"]
-    vr_cell       = data["vr_cell"      ]  # vr bucket centers (unit : []) 
-    vr_cell_width = data["vr_cell_width"]  # vr cell width
-    vt_cell       = data["vt_cell"      ]  # vt bucket centers (unit : [])
+    vr_cell_coord = data["vr_cell_coord"]  # vr bucket centers (unit : []) 
+    vt_cell_coord = data["vt_cell_coord"]  # vt bucket centers (unit : [])
     Sv_cell_left  = data["Svz_cell_left" ] # Sv (left)  integrated on the cell centers (unit : [m^-2s^-1])
     Sv_cell_right = data["Svz_cell_right"] # Sv (right) integrated on the cell centers (unit : [m^-2s^-1])
     Fv_cell_left  = data["Fv_cell_left" ]  # Sv (left)  integrated on the cell centers (unit : [m^-3])
     Fv_cell_right = data["Fv_cell_right"]  # Sv (right) integrated on the cell centers (unit : [m^-3])
-    uz_cell_left  = data["uz_cell_left" ]  # vz_cell_left   (unit : [ms^-1])
-    uz_cell_right = data["uz_cell_right"]  # vz_cell_right  (unit : [ms^-1])
-    uzp_cell_left = data["uzp_cell_left" ] # (perpendicular) vzp_cell_left   (unit : [ms^-1])
-    uzp_cell_right= data["uzp_cell_right"] # (perpendicular) vzp_cell_right  (unit : [ms^-1])
+    uz_cell_left  = data["uz_cell_left" ]  # electron vz_cell_left   (unit : [ms^-1])
+    uz_cell_right = data["uz_cell_right"]  # electron vz_cell_right  (unit : [ms^-1])
+    uzp_cell_left = data["uzp_cell_left" ] # electron (perpendicular) vzp_cell_left   (unit : [ms^-1])
+    uzp_cell_right= data["uzp_cell_right"] # electron (perpendicular) vzp_cell_right  (unit : [ms^-1])
+
+    vz            = data["vz_cell"]        # vz mean velocity of the cell (without EDF weight) (unit: [ms^-1])
+    vzp           = data["vzp_cell"]       # (vz perpendicular) vzp mean velocity of the cell (without EDF weight) (unit: [ms^-1])
+    vr_cell       = data["vr_cell"]        # mean radial velocity of the cell (ms^{-1})
+    vt_cell       = data["vt_cell"]        # polar angle corresponds to the mean velocity of the cell. 
     vth           = data["vth"]
 
     c_gamma       = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
 
-    ev_cell       = (vr_cell * vth)**2 /c_gamma**2
+    ev_cell       = (vr_cell_coord * vth)**2 /c_gamma**2
     
-    dvt           = 0.5 * (vt_cell[1] - vt_cell[0])
+    dvt           = 0.5 * (vt_cell_coord[1] - vt_cell_coord[0])
     dev           = 0.5 * (ev_cell[1]  - ev_cell[0])
-    extent        = [ev_cell[0]-dev , ev_cell[-1] + dev, vt_cell[-1] + dvt, vt_cell[0]-dvt]
+    extent        = [ev_cell[0]-dev , ev_cell[-1] + dev, vt_cell_coord[-1] + dvt, vt_cell_coord[0]-dvt]
+    vt_mid_idx    = np.argmin(np.abs(vt_cell_coord-np.pi/2))
 
-    vt_mid_idx    = np.argmin(np.abs(vt_cell-np.pi/2))
-    tstep   = 4
+    tstep         = 4
     cmap_str="plasma"
     for tidx in range(0, len(tt), tstep):
         fig = plt.figure(figsize=(12, 6), dpi=200)
@@ -979,32 +1002,36 @@ def use_extract_data_on_cell():
         vt_t                                    = np.zeros_like(vr_t) * (np.pi/2)
         vt_t[: , 0:vt_mid_idx     ]             = np.arccos(uz_cell_left[tidx, :, 0: vt_mid_idx  ]/vr_t[:, 0:vt_mid_idx   ])
         vt_t[: , (vt_mid_idx+1):  ]             = np.arccos(uz_cell_left[tidx, :, (vt_mid_idx+1):]/vr_t[:, (vt_mid_idx+1):])
-        vrt_error                               = 0.5 * (np.abs(1 - vr_t/vr_cell[:, np.newaxis]/vth) + np.abs(1- vt_t/vt_cell[np.newaxis, :]))
         
-        plt.imshow(vrt_error.T, aspect='auto', extent=extent, cmap=cmap_str, norm=LogNorm(vmin=1e-8, vmax=1))
+        assert (vr_t[vr_cell==0] == 0).all() == True
+        vrt_error                               = 0.5 * (np.abs(1-vr_t/vr_cell) + np.abs(1-vt_t/vt_cell))
+
+        
+        plt.imshow(vrt_error.T, aspect='auto', extent=extent, cmap=cmap_str, norm=LogNorm(vmin=1e-10, vmax=1))
         #plt.imshow((vtotal.T), aspect='auto', extent=extent, cmap=cmap_str)
         #plt.imshow(uz_cell_left[tidx].T, aspect='auto', extent=extent)
         #plt.imshow(np.abs(uz_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e1, vmax=1e6))
         plt.colorbar()
         plt.xlabel(r"energy [eV]")
         plt.ylabel(r"$v_\theta$")
-        #plt.title(r"$v_z(x_L)$")
-
+        
         plt.subplot(2, 3, 6)
         vr_t                                    = np.sqrt(uz_cell_right[tidx]**2 + uzp_cell_right[tidx]**2)
         vt_t                                    = np.zeros_like(vr_t) * (np.pi/2)
         vt_t[: , 0:vt_mid_idx     ]             = np.arccos(uz_cell_right[tidx, :, 0: vt_mid_idx  ]/vr_t[:, 0:vt_mid_idx   ])
         vt_t[: , (vt_mid_idx+1):  ]             = np.arccos(uz_cell_right[tidx, :, (vt_mid_idx+1):]/vr_t[:, (vt_mid_idx+1):])
-        vrt_error                               = 0.5 * (np.abs(1 - vr_t/vr_cell[:, np.newaxis]/vth) + np.abs(1- vt_t/vt_cell[np.newaxis, :]))
         
-        plt.imshow(vrt_error.T, aspect='auto', extent=extent, cmap=cmap_str, norm=LogNorm(vmin=1e-8, vmax=1))
+        assert (vr_t[vr_cell==0] == 0).all() == True
+        vrt_error                               = 0.5 * (np.abs(1-vr_t/vr_cell) + np.abs(1-vt_t/vt_cell))
+        #print(np.abs(1-vr_t/vr_cell)[0])
+        #print(np.abs(1-vt_t/vt_cell)[:, 0])
+        plt.imshow(vrt_error.T, aspect='auto', extent=extent, cmap=cmap_str, norm=LogNorm(vmin=1e-10, vmax=1))
         #plt.imshow((vtotal.T), aspect='auto', extent=extent, cmap=cmap_str)
         #plt.imshow(uz_cell_right[tidx].T, aspect='auto', extent=extent)
         #plt.imshow(np.abs(uz_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e1, vmax=1e6))
         plt.colorbar()
         plt.xlabel(r"energy [eV]")
         plt.ylabel(r"$v_\theta$")
-        #plt.title(r"$v_z(x_R)$")
         plt.suptitle("time = %.4E"%(tt[tidx]))
 
         plt.tight_layout()

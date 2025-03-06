@@ -439,7 +439,8 @@ print("Nx= ", Np, " n0 = %.8E"%(N0), "t=(%.4E, %.4E)"%(tb, te))
 
 if (run_type == "bte"):
     spec_sp, coll_list = gen_spec_sp(args)
-    ev_grid            = np.linspace(0, float(args["ev_max"]), 512)
+    ev_grid           = np.linspace(0, float(args["ev_max"]), 512)
+    #ev_grid            = np.linspace(0, 2 * float(args["ev_max"]), 1023)
 
     d                  = load_data_bte(folder_name, idx_range, read_cycle_avg=False)
     ki                 = compute_rate_coefficients(d[0], d[3], d[2], collisions=glist)

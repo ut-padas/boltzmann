@@ -20,6 +20,15 @@ import scipy
 import scipy.constants
 import scipy.sparse.linalg
 import scipy.optimize
+import os
+
+def make_dir(dir_name):
+    # Check whether the specified path exists or not
+    isExist = os.path.exists(dir_name)
+    if not isExist:
+       # Create a new directory because it does not exist
+       os.makedirs(dir_name)
+       print("directory %s is created!"%(dir_name))
 
 class ROM_TYPE(Enum):
     POD = 0
@@ -45,7 +54,7 @@ def assemble_mat(op_dim:tuple, Lop:scipy.sparse.linalg.LinearOperator, xp=np):
     assert Aop.shape == op_dim
     return Aop
 
-def plot_solution(bte : glow1d_boltzmann, bte_rom, F0, F1, fprefix, time, p_F0=True, p_F1=True):
+def plot_solution(bte : glow1d_boltzmann, bte_rom, F0, F1, fname, time, p_F0=True, p_F1=True):
     """
     F0 : FOM
     F1 : ROM
@@ -65,15 +74,17 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom, F0, F1, fprefix, time, p_F0=T
 
     F0_lm   = xp.dot(Ps, F0)
     F1_lm   = xp.dot(Ps, F1)
-
+    
     rom_lm  = bte_rom.rom_modes
-    PUv     = [xp.dot(bte_rom.Uv[l], bte_rom.Uv[l].T) for l in range(rom_lm)]
-    PVx     = [xp.dot(bte_rom.Vx[l], bte_rom.Vx[l].T) for l in range(rom_lm)]
+    G0_lm   = xp.zeros((num_p* num_sh, num_x))
+    if rom_lm is not None:
+        PUv     = [xp.dot(bte_rom.Uv[l], bte_rom.Uv[l].T) for l in range(rom_lm)]
+        PVx     = [xp.dot(bte_rom.Vx[l], bte_rom.Vx[l].T) for l in range(rom_lm)]
 
-    G0_lm            = xp.zeros((num_p* num_sh, num_x))
-    for l in range(rom_lm):
-        G0_lm[l::num_sh] = xp.dot(PUv[l], xp.dot(F0_lm[0::num_sh], PVx[l]))
-
+        for l in range(rom_lm):
+            G0_lm[l::num_sh] = xp.dot(PUv[l], xp.dot(F0_lm[0::num_sh], PVx[l]))
+    
+    
     F0_lm_n = bte.bte_eedf_normalization(F0_lm)
     F1_lm_n = bte.bte_eedf_normalization(F1_lm)
     G0_lm_n = bte.bte_eedf_normalization(G0_lm)
@@ -197,7 +208,7 @@ def plot_solution(bte : glow1d_boltzmann, bte_rom, F0, F1, fprefix, time, p_F0=T
     plt.suptitle(r"time = %.4E [T]"%(time))
     plt.tight_layout()
 
-    plt.savefig("%s_rom_%s.png"%(args.fname, fprefix))
+    plt.savefig("%s"%(fname))
     plt.close()
     return
 
@@ -207,6 +218,7 @@ class boltzmann_1d_rom():
         self.bte_solver = bte_solver
         self.args       = self.bte_solver.args
         self.rom_type   = ROM_TYPE.POD
+        self.rom_modes  = None
         self.profile    = True
         self.timer      = [profile_t("") for i in range(TIMER.LAST)]
 
@@ -229,12 +241,16 @@ class boltzmann_1d_rom():
         v       = xp.copy(v0)
         v_all   = xp.zeros(tuple([n_samples]) + v0.shape)
         ts      = xp.zeros(n_samples)
-
+        
+        folder_name = "%s/tb_%.2E_to_te_%.2E"%(self.args.dir, tb, te)
+        make_dir(folder_name)
+        print(folder_name)
         for iter in range(steps+1):
             if (iter % io_freq == 0):
                 print(iter//io_freq, v_all.shape, type(v))
                 v_all[int(iter//io_freq), :, :] = v[:, :]
                 ts   [int(iter//io_freq)]       = tt
+                plot_solution(bte, self, v, v, "%s/tidx_%d.png"%(folder_name,int(iter//io_freq)), tt, p_F0=True, p_F1=False)
 
             bte.bs_E            = Et(tt)
             v                   = bte.step_bte_x(v, tt, dt * 0.5)
@@ -416,15 +432,59 @@ class boltzmann_1d_rom():
         Ps       = bte.op_po2sh
         Po       = bte.op_psh2o
 
-        self.vec_shape = [(self.Uv[l].shape[1], self.Vx[l].shape[1]) for l in range(self.rom_modes)]
-        self.vec_len   = [self.Uv[l].shape[1] * self.Vx[l].shape[1] for l in range(self.rom_modes)]
-        self.vec_offset= [0 for l in range(self.rom_modes)]
+        self.vec_kr_len    = np.array([self.Uv[l].shape[1] for l in range(self.rom_modes)], dtype=np.int32)
+        self.vec_kx_len    = np.array([self.Vx[l].shape[1] for l in range(self.rom_modes)], dtype=np.int32)
+        
+        self.vec_shape     = [(self.Uv[l].shape[1], self.Vx[l].shape[1]) for l in range(self.rom_modes)]
+        self.vec_len       = np.array([self.Uv[l].shape[1] * self.Vx[l].shape[1] for l in range(self.rom_modes)], dtype=np.int32)
+        self.vec_offset    = np.array([0 for l in range(self.rom_modes)], dtype=np.int32)
+        self.vec_kr_offset = np.array([0 for l in range(self.rom_modes)], dtype=np.int32)
+        self.vec_kx_offset = np.array([0 for l in range(self.rom_modes)], dtype=np.int32)
 
+        assert num_sh == rom_lm
         for l in range(1, self.rom_modes):
-            self.vec_offset[l] = self.vec_offset[l-1] + self.vec_len[l-1]
+            self.vec_offset[l]    = self.vec_offset[l-1]     + self.vec_len[l-1]
+            self.vec_kr_offset[l] = self.vec_kr_offset[l-1] + self.vec_kr_len[l-1]
+            self.vec_kx_offset[l] = self.vec_kx_offset[l-1] + self.vec_kx_len[l-1]
 
         self.vec_idx   = [xp.arange(self.vec_offset[l], self.vec_offset[l] + self.vec_len[l]) for l in range(self.rom_modes)]
         self.dof_rom   = np.sum(np.array(self.vec_len))
+
+        # self.Uv_op     = xp.zeros((num_p * num_sh, np.sum(self.vec_kr_len)))
+        # self.Vx_op     = xp.zeros((num_x * num_sh, np.sum(self.vec_kx_len)))
+
+        # for l in range(self.rom_modes):
+        #     self.Uv_op[l * num_p: (l+1) * num_p  , self.vec_kr_offset[l] : self.vec_kr_offset[l] + self.vec_kr_len[l]] = self.Uv[l]
+        #     self.Vx_op[l * num_x: (l+1) * num_x  , self.vec_kx_offset[l] : self.vec_kx_offset[l] + self.vec_kx_len[l]] = self.Vx[l]
+
+        # UU = xp.dot(self.Uv_op.T, self.Uv_op)
+        # VV = xp.dot(self.Vx_op.T, self.Vx_op)
+
+        # for lx in range(rom_lm):
+        #     for ly in range(rom_lm):
+                
+        #         Bu = UU[self.vec_kr_offset[lx] : self.vec_kr_offset[lx] + self.vec_kr_len[lx], 
+        #                    self.vec_kr_offset[ly] : self.vec_kr_offset[ly] + self.vec_kr_len[ly]]
+
+        #         Bv = VV[self.vec_kx_offset[lx] : self.vec_kx_offset[lx] + self.vec_kx_len[lx], 
+        #                    self.vec_kx_offset[ly] : self.vec_kx_offset[ly] + self.vec_kx_len[ly]]
+
+        #         if (lx==ly):
+        #             Iu = xp.eye(self.vec_kr_len[lx])
+        #             Iv = xp.eye(self.vec_kx_len[lx])
+        #             a1 = xp.linalg.norm(Iu-Bu)/xp.linalg.norm(Iu)
+        #             a2 = xp.linalg.norm(Iv-Bv)/xp.linalg.norm(Iv)
+        #             print("(%d, %d) = %.8E %.8E"%(lx, ly, a1, a2))
+        #         else:
+        #             a1 = xp.linalg.norm(Bu)
+        #             a2 = xp.linalg.norm(Bv)
+        #             print("(%d, %d) = %.8E %.8E"%(lx, ly, a1, a2))
+
+
+        #sys.exit(0)
+        # print(self.Uv_op.shape, self.Vx_op.shape)
+        #for l in range(self.rom_modes):
+        #     print(xp.dot(self.Uv_op.T, self.Uv_op)[self.vec_kr_offset[l] : self.vec_kr_offset[l] + self.vec_kr_len[l], self.vec_kr_offset[l] : self.vec_kr_offset[l] + self.vec_kr_len[l]])
 
         # print("basis updated")
         # print("basis shape", self.vec_shape)
@@ -519,7 +579,13 @@ class boltzmann_1d_rom():
         print("||I -   Lv Lv_inv||   = %.8E "%(xp.linalg.norm(Im - xp.dot(L1, self.Lv_inv))/xp.linalg.norm(Im)))
         print("||I -   Lv_inv Lv||   = %.8E "%(xp.linalg.norm(Im - xp.dot(self.Lv_inv, L1))/xp.linalg.norm(Im)))
 
-
+        #self.flow_map_v    = self.assemble_rom_v_flow_map(Ef, bte.args.cfl)
+        #self.flow_map_vx  = xp.dot(self.flow_map_x, xp.dot(self.flow_map_v, self.flow_map_x))
+        
+        # Lv_inv          = xp.linalg.pinv(xp.eye(self.Cop.shape[0]) - dt * param.tau * (self.Cop + Ef[0] * self.Av), rcond=1e-3) #xp.linalg.inv(xp.eye(self.Cop.shape[0]) - dt * param.tau * (self.Cop + Ef[0] * self.Av))
+        # #print(Lv_inv.shape, self.Uv_op.shape)
+        # self.Lv_inv     = Lv_inv
+        # #self.flow_map_v = xp.dot(self.Uv_op.T, xp.dot(Lv_inv, self.Uv_op))
         
         return
 
@@ -530,6 +596,23 @@ class boltzmann_1d_rom():
         bte              = self.bte_solver
         xp               = bte.xp_module
         return xp.zeros(self.dof_rom)
+
+    def matricized_rom_vec(self, Xr):
+        Xrp = xp.zeros((np.sum(self.vec_kr_len), np.sum(self.vec_kx_len)))
+        assert Xr.shape[0] == self.dof_rom
+        for l in range(self.rom_modes):
+            Xrp[self.vec_kr_offset[l] : self.vec_kr_offset[l] + self.vec_kr_len[l], 
+                self.vec_kx_offset[l] : self.vec_kx_offset[l] + self.vec_kx_len[l]] = self.get_rom_lm(Xr,l)
+        return Xrp
+    
+    def vectorized_rom_mat(self, Xr):
+        assert Xr.shape == (np.sum(self.vec_kr_len), np.sum(self.vec_kx_len))
+        Xrp = xp.zeros(self.dof_rom)
+        for l in range(self.rom_modes):
+            Xrp[self.vec_idx[l]] = Xr[self.vec_kr_offset[l] : self.vec_kr_offset[l] + self.vec_kr_len[l], 
+                self.vec_kx_offset[l] : self.vec_kx_offset[l] + self.vec_kx_len[l]].reshape((-1))
+        
+        return Xrp
 
     def append_vec(self, Fr_lm):
         bte   = self.bte_solver
@@ -617,6 +700,102 @@ class boltzmann_1d_rom():
         Ndof = self.dof_rom
         Lop  = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: rom_vx(x, Ef, xp=xp), dtype=xp.float64)
 
+        Lop_mat = assemble_mat((self.dof_rom, self.dof_rom),Lop, xp=xp)
+        return Lop_mat
+
+    """
+    def assemble_rom_vx_flow_map(self, Ef, dt):
+        bte     = self.bte_solver
+        xp      = bte.xp_module
+        param   = bte.param
+
+        spec_sp = bte.op_spec_sp
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+        num_x   = len(bte.xp)
+        num_vt  = len(bte.xp_vt)
+
+        DxT     = self.Dx.T
+        po2sh   = bte.op_po2sh
+        psh2o   = bte.op_psh2o
+        xp_vt_l = bte.xp_vt_l
+        xp_vt_r = bte.xp_vt_r
+
+        def flmap_vx(Xr, Ef, dt, xp=xp):
+            Fo                  = self.decode(Xr)
+            tt                  = 0.0
+            bte.bs_E            = Ef
+
+            v                   = bte.step_bte_x(Fo, tt, dt * 0.5)
+            v                   = bte.step_bte_v(v, None, tt, dt, ts_type="BE", verbose=0)
+            v                   = bte.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
+            
+            return self.encode(v)
+
+        Ndof = self.dof_rom
+        Lop  = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: flmap_vx(x, Ef, dt, xp=xp), dtype=xp.float64)
+        Lop_mat = assemble_mat((self.dof_rom, self.dof_rom),Lop, xp=xp)
+        return Lop_mat
+
+    def assemble_rom_x_flow_map(self, dt):
+        bte     = self.bte_solver
+        xp      = bte.xp_module
+        param   = bte.param
+
+        spec_sp = bte.op_spec_sp
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+        num_x   = len(bte.xp)
+        num_vt  = len(bte.xp_vt)
+
+        DxT     = self.Dx.T
+        po2sh   = bte.op_po2sh
+        psh2o   = bte.op_psh2o
+        xp_vt_l = bte.xp_vt_l
+        xp_vt_r = bte.xp_vt_r
+
+        def flmap_x(Xr, dt, xp=xp):
+            Fo                  = self.decode(Xr)
+            tt                  = 0.0
+            v                   = bte.step_bte_x(Fo, tt, dt * 0.5)
+            return self.encode(v)
+
+        Ndof = self.dof_rom
+        Lop  = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: flmap_x(x, dt, xp=xp), dtype=xp.float64)
+        Lop_mat = assemble_mat((self.dof_rom, self.dof_rom),Lop, xp=xp)
+        return Lop_mat
+    """
+
+    def assemble_rom_v_flow_map(self, Ef, dt):
+        """
+        Assembles the flow map for the vx space. 
+        """
+
+        bte     = self.bte_solver
+        xp      = bte.xp_module
+        param   = bte.param
+
+        spec_sp = bte.op_spec_sp
+        num_p   = spec_sp._p + 1
+        num_sh  = len(spec_sp._sph_harm_lm)
+        num_x   = len(bte.xp)
+        num_vt  = len(bte.xp_vt)
+
+        DxT     = self.Dx.T
+        po2sh   = bte.op_po2sh
+        psh2o   = bte.op_psh2o
+        xp_vt_l = bte.xp_vt_l
+        xp_vt_r = bte.xp_vt_r
+
+        def flmap_v(Xr, Ef, dt, xp=xp):
+            Fo                  = self.decode(Xr)
+            tt                  = 0.0
+            bte.bs_E            = Ef
+            v                   = bte.step_bte_v(Fo, None, tt, dt, ts_type="BE", verbose=0)
+            return self.encode(v)
+
+        Ndof = self.dof_rom
+        Lop  = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: flmap_v(x, Ef, dt, xp=xp), dtype=xp.float64)
         Lop_mat = assemble_mat((self.dof_rom, self.dof_rom),Lop, xp=xp)
         return Lop_mat
 
@@ -1055,8 +1234,30 @@ class boltzmann_1d_rom():
             self.timer[TIMER.ROM_V].start()
 
         #Frh            = self.step_rom_v(Ef, Frh, time,            dt, "BE", atol, rtol, gmres_rst, gmres_iter, verbose)
-        Frh             = xp.dot(self.Lv_inv, Frh)
+        #Frh            = xp.dot(self.Lv_inv, Frh)
+        # a1              = xp.zeros((np.sum(self.vec_kr_len), np.sum(self.vec_kx_len)))
+        # for l in range(self.rom_modes):
+        #     a1[self.vec_kr_offset[l] : self.vec_kr_offset[l] + self.vec_kr_len[l],
+        #        self.vec_kx_offset[l] : self.vec_kx_offset[l] + self.vec_kx_len[l]] = self.get_rom_lm(Frh, l)
+        # a1              = xp.dot(self.flow_map_v, a1)
+        # for l in range(self.rom_modes):
+        #     Frh[self.vec_idx[l]] = a1[self.vec_kr_offset[l] : self.vec_kr_offset[l] + self.vec_kr_len[l],
+        #        self.vec_kx_offset[l] : self.vec_kx_offset[l] + self.vec_kx_len[l]].reshape((-1))
 
+        # Frh = xp.dot(self.Uv_op.T,xp.dot(xp.dot(self.Lv_inv, xp.dot(self.Uv_op, xp.dot(self.matricized_rom_vec(Frh), self.Vx_op.T))), self.Vx_op))
+        # #Frh  = xp.dot(xp.dot(self.flow_map_v, xp.dot(self.matricized_rom_vec(Frh), self.Vx_op.T)), self.Vx_op)
+        # Frh  = self.vectorized_rom_mat(Frh)
+
+        #bte.bs_E        = Ef
+        #Frh             = self.encode(bte.step_bte_v(self.decode(Frh), None, tt, dt, ts_type="BE", verbose=verbose))
+        #Frh             = self.encode(bte.step_bte_v(xp.dot(bte.op_po2sh, self.decode(Frh)), None, tt, dt, ts_type="BE", verbose=verbose))
+        # Frh              = xp.dot(bte.op_po2sh, self.decode(Frh))
+        # Frh              = xp.dot(bte.op_psh2o, xp.dot(self.Lv_inv, Frh))
+        # Frh              = self.encode(Frh)
+
+        Frh            = xp.dot(self.Lv_inv, Frh)
+
+        
         if (self.profile):
             cp.cuda.runtime.deviceSynchronize()
             self.timer[TIMER.ROM_V].stop()
@@ -1311,8 +1512,7 @@ class boltzmann_1d_rom():
 
             ff.close()
 
-        self.update_basis(self.Uv, self.Vx, basis_id="t=%.4E"%(time))
-
+        self.init(basis_id="cp: t=%.4E"%(time))
         return F, Fr, time
 
     def vspace_pc_setup(self, Ef, time, dt):
@@ -1360,10 +1560,10 @@ if __name__ == "__main__":
     tio_freq     = 20
     uv_freq      = int(np.round(10/dt))
 
-    rom_eps_x    = 1e-6
-    rom_eps_v    = 1e-10
-    restore      = 0
-    rs_idx       = 10
+    rom_eps_x    = 1e-5
+    rom_eps_v    = 1e-6
+    restore      = 1
+    rs_idx       = 6
     train_cycles = 1
     num_samples  = 31
     psteps       = 1
@@ -1372,7 +1572,6 @@ if __name__ == "__main__":
     if args.use_gpu==1:
         gpu_device = cp.cuda.Device(args.gpu_device_id)
         gpu_device.use()
-
 
     u, v    = bte_fom.step_init(u, v, dt)
     xp      = bte_fom.xp_module
@@ -1386,40 +1585,34 @@ if __name__ == "__main__":
     Et      = lambda t: xp.ones_like(bte_fom.xp) * 1e3 #* xp.sin(2 * xp.pi * t)
     #Et      = lambda t: (xxg**3) * 1e4 * xp.sin(2 * xp.pi * t)
 
-    bte_rom.construct_rom_basis(Et, v, 0, train_cycles, dt, num_samples, eps_x = rom_eps_x, eps_v = rom_eps_v)
-    bte_rom.init("t=%4E"%(0))
-
-    F       = xp.copy(v)
-    Fo      = xp.copy(v)
-    Fs      = xp.dot(bte_fom.op_po2sh, Fo)
-    Fr      = bte_rom.encode(Fo).reshape((-1))
-    F1      = bte_rom.decode(Fr)
-
-    print("BTE fom advection step size = %.4E"%(bte_fom.adv_setup_dt))
-    print("io freq = %d cycle_freq = %d cp_freq = %d uv_freq = %d" %(io_freq, cycle_freq, cp_freq, uv_freq))
-    tT        = args.cycles
-    idx       = 0
-    flm_error = [list(), list()]
-    ts        = list()
-
     tt        = 0
     if (restore==1):
         F, Fr, tt = bte_rom.restore_checkpoint("%s_rom_%02d.h5"%(bte_fom.args.fname, rs_idx))
         idx       = (rs_idx) * cp_freq
         print("checkpoint restored time = %.4E (s) idx = %d"%(tt, idx))
+    else:
+        bte_rom.construct_rom_basis(Et, v, 0, train_cycles, dt, num_samples, eps_x = rom_eps_x, eps_v = rom_eps_v)
+        bte_rom.init("t=%.4E"%(0))
 
+        F       = xp.copy(v)
+        Fo      = xp.copy(v)
+        Fs      = xp.dot(bte_fom.op_po2sh, Fo)
+        Fr      = bte_rom.encode(Fo).reshape((-1))
+        F1      = bte_rom.decode(Fr)
+        idx     = 0
+        tt      = 0
+    
+
+    print("BTE fom advection step size = %.4E"%(bte_fom.adv_setup_dt))
+    print("io freq = %d cycle_freq = %d cp_freq = %d uv_freq = %d" %(io_freq, cycle_freq, cp_freq, uv_freq))
+    tT        = args.cycles
+    # flm_error = [list(), list()]
+    # ts        = list()
 
     F0  = xp.copy(F)
     Fr0 = xp.copy(Fr)
     Fr2 = xp.copy(Fr)
 
-
-    # Fr_s = bte_rom.step_rom_eigen_solve_vx(Et(0), Fr, 0.0, dt)
-    # Fr_s = bte_rom.step_rom_eigen_solve_vx(Et(0), Fr, 1e6, dt)
-    # plot_solution(bte_fom, bte_rom, F, bte_rom.decode(Fr_s), fprefix="rom_steady_0", time = 1e6, p_F0=False, p_F1=True)
-    # Fr_s = bte_rom.step_rom_eigen_solve_vx(Et(0), Fr, 2e6, dt)
-    # plot_solution(bte_fom, bte_rom, F, bte_rom.decode(Fr_s), fprefix="rom_steady_1", time = 2e6, p_F0=False, p_F1=True)
-    
 
     while tt < tT:
         Ef     = Et(tt)
@@ -1446,18 +1639,17 @@ if __name__ == "__main__":
         if (idx % io_freq == 0):
             print("io output time = %.4E (s)"%(tt))
             F1 = bte_rom.decode(Fr)
-            plot_solution(bte_fom, bte_rom, F, F1, fprefix="%04d"%(idx//io_freq), time = tt)
+            plot_solution(bte_fom, bte_rom, F, F1, fname="%s_rom_%04d.png"%(args.fname, idx//io_freq), time = tt)
 
         if(idx > 0 and (idx % uv_freq) == 0):
             print("-----------------sampling adjust the rom basis------------------------")
+            Fr_old = xp.copy(Fr)
             v_fom  = bte_rom.decode(Fr)
             bte_rom.construct_rom_basis(Et, v_fom, tt, tt + train_cycles, dt, num_samples, eps_x = rom_eps_x, eps_v = rom_eps_v)
             bte_rom.init(basis_id="t=%.4E"%(tt))
             Fr     = bte_rom.encode(v_fom)
-            # Fr1    = bte_rom.encode(v_fom)
-            # v_fom1 = bte_rom.decode(Fr1)
-            # plot_solution(bte_fom, bte_rom, v_fom, v_fom1, fprefix="%04d_basis_change"%(idx//io_freq), time = tt)
-            # Fr     = Fr1
+            v_fom1 = bte_rom.decode(Fr)
+            plot_solution(bte_fom, bte_rom, v_fom, v_fom1, fname="%s_rom_%04d_bc.png"%(args.fname, idx//io_freq), time = tt)
             print("---------------------------------------------------------------------")
 
 
@@ -1465,11 +1657,19 @@ if __name__ == "__main__":
         #Fr2     = bte_rom.step_rom_vx(Ef, Fr2, tt, dt, atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, gmres_rst=20, gmres_iter= 20, verbose = (idx % tio_freq))
         # F      = bte_rom.decode(Fr2)
         #Fr      = Fr2
-        
-        Fr     = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, verbose=(idx % tio_freq))
-        #Fo    = bte_rom.step_fom_ord(Et, Fo, tt, dt, type="BE", atol=1e-20, rtol=1e-3)
-        #Fs    = bte_rom.step_fom_sph(Et, Fs, tt, dt, type="BE", atol=1e-20, rtol=1e-2)
-        F      = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
+
+
+        if (idx % tio_freq == 1):
+            Yr1     = bte_rom.encode(F)   #xp.dot(xp.dot(bte_rom.Uv_op.T, Fs), bte_rom.Vx_op)
+            Yr2     = bte_rom.decode(Yr1) #xp.dot(xp.dot(bte_rom.Uv_op, Yr1), bte_rom.Vx_op.T)
+
+            print("||Y-PY|| = %.8E"%(xp.linalg.norm(F-Yr2)/xp.linalg.norm(F)))
+
+        Fr      = bte_rom.step_rom_op_split(Ef, Fr, tt, dt, type="BE", atol=bte_fom.args.atol, rtol=bte_fom.args.rtol, verbose=(idx % tio_freq))
+        #Fr     = xp.dot(bte_rom.flow_map_vx, Fr)
+        #Fo     = bte_rom.step_fom_ord(Et, Fo, tt, dt, type="BE", atol=1e-20, rtol=1e-3)
+        #Fs     = bte_rom.step_fom_sph(Et, Fs, tt, dt, type="BE", atol=1e-20, rtol=1e-2)
+        F       = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
         #F1     = bte_rom.step_fom_vx(Ef, F, tt, psteps * dt, atol=bte_fom.args.atol,  rtol=1e-3, gmres_rst=1000, gmres_iter=1, pc_type=1, verbose = (idx % tio_freq))
         #F2     = bte_rom.step_fom_vx(Ef, F, tt, psteps * dt, atol=bte_fom.args.atol,  rtol=1e-3, gmres_rst=1000, gmres_iter=1, pc_type=0, verbose = (idx % tio_freq))
         #F      = F1

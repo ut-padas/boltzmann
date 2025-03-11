@@ -67,46 +67,10 @@ def read_cross_section_data(file: str):
     
     return cs_dict
 
-def compute_mw_reaction_rates(Te:np.array, cs_data:list):
-    
-    ## Note: as an additional check
-    # def synthetic_tcs(ev, mode):
-    #     """
-    #     synthetic cross-sections for testing. 
-    #     """
-    #     if mode==0:
-    #         return 2e-20 * np.ones_like(ev)
-        
-    #     elif mode == "g0":
-    #         """
-    #         G0 cross section data fit with analytical function
-    #         """
-    #         ev =     ev+1e-13
-    #         a0 =    0.008787
-    #         b0 =     0.07243
-    #         c  =    0.007048
-    #         d  =      0.9737
-    #         a1 =        3.27
-    #         b1 =       3.679
-    #         x0 =      0.2347
-    #         x1 =       11.71
-    #         y=9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
-    #         assert len(y[y<0]) == 0 , "g0 cross section is negative" 
-    #         return  y
-        
-    #     elif mode == "g2":
-    #         """
-    #         G2 cross section data fit with analytical function (ionization)
-    #         """
-    #         y               = np.zeros_like(ev)
-    #         threshold_value = 15.76
-    #         y[ev>threshold_value] = (2.860000e-20/np.log(90-threshold_value)) * np.log((ev[ev>threshold_value]-threshold_value + 1)) * np.exp(-1e-2*((ev[ev>threshold_value]-90)/90)**2)
-    #         y[ev>=10000]=0
-    #         return  y
-    #     else:
-    #         raise NotImplementedError
-    # cs_data[0]= lambda ev : synthetic_tcs(ev, "g2")
-    
+def compute_mw_reaction_rates(Te:np.array, cs_data:list, normalized_v_domain=(0, 30), num_vr_pts = 1000):
+    """
+    computes Maxwellian rates
+    """
     def composite_trapz(qx):
         N   = len(qx)
         T   = (qx[-1]-qx[0])
@@ -118,16 +82,16 @@ def compute_mw_reaction_rates(Te:np.array, cs_data:list):
         assert (T-np.sum(qw)) < 1e-12
         return qx, qw
     
-    kB       = scipy.constants.Boltzmann
-    me       = scipy.constants.electron_mass
-    qe       = scipy.constants.electron_volt
-    ev_to_K  = (qe/kB)
-    c_gamma  = np.sqrt(2 * qe / me)
-    VTH      = lambda Te : np.sqrt(Te) * c_gamma
+    kB         = scipy.constants.Boltzmann
+    me         = scipy.constants.electron_mass
+    qe         = scipy.constants.electron_volt
+    ev_to_K    = (qe/kB)
+    c_gamma    = np.sqrt(2 * qe / me)
+    VTH        = lambda Te : np.sqrt(Te) * c_gamma
     
-    vr, vr_w = composite_trapz(np.linspace(0, 30, 1000))
-    vth      = VTH(Te)
-    f0       = 4* np.pi * np.array([(1 / ((VTH(Te[i]) * np.sqrt(np.pi))**3)) * np.exp(-vr ** 2) for i in range(Te.shape[0])]).reshape((Te.shape[0], vr.shape[0]))
+    vr, vr_w   = composite_trapz(np.linspace(normalized_v_domain[0], normalized_v_domain[1], num_vr_pts))
+    vth        = VTH(Te)
+    f0         = 4* np.pi * np.array([(1 / ((VTH(Te[i]) * np.sqrt(np.pi))**3)) * np.exp(-vr ** 2) for i in range(Te.shape[0])]).reshape((Te.shape[0], vr.shape[0]))
     
     mass       = (vth**3  * np.dot(vr**2 * f0 , vr_w)).reshape((-1, 1))
     f0_n       = f0/mass

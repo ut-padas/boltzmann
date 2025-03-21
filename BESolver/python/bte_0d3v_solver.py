@@ -17,7 +17,7 @@ import scipy.constants
 import cross_section
 
 
-def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol = 1e-5, atol=1e-5, max_iter=1000):
+def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol = 1e-5, atol=1e-5, max_iter=1000, xp=np):
 
     k_vec     = spec_sp._basis_p._t
     dg_idx    = spec_sp._basis_p._dg_idx
@@ -30,22 +30,22 @@ def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol 
     rel_error       = 1.0 
     iteration_steps = 0        
 
-    fb_prev  = np.dot(Rmat, h0)
+    fb_prev  = xp.dot(Rmat, h0)
     f1p      = f1
-    h_prev   = f1p + np.dot(Qmat,fb_prev)
+    h_prev   = f1p + xp.dot(Qmat,fb_prev)
 
     while ((rel_error> rtol and abs_error > atol) and iteration_steps < max_iter):
         Lmat      =  jac_func(h_prev)
         rhs_vec   = -res_func(h_prev)
-        abs_error = np.linalg.norm(rhs_vec)
+        abs_error = xp.linalg.norm(rhs_vec)
 
-        p      = np.linalg.solve(Lmat, rhs_vec) #np.linalg.lstsq(Lmat, rhs_vec, rcond=1e-16 /np.linalg.cond(Lmat))[0]
-        p      = np.dot(Qmat,p)
+        p      = xp.linalg.solve(Lmat, rhs_vec) #xp.linalg.lstsq(Lmat, rhs_vec, rcond=1e-16 /xp.linalg.cond(Lmat))[0]
+        p      = xp.dot(Qmat,p)
 
         alpha  = 1e0
         is_diverged = False
 
-        while (np.linalg.norm(res_func(h_prev + alpha * p))  >  abs_error):
+        while (xp.linalg.norm(res_func(h_prev + alpha * p))  >  abs_error):
             alpha*=0.5
             if alpha < 1e-30:
                 is_diverged = True
@@ -58,11 +58,11 @@ def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol 
         h_curr      = h_prev + alpha * p
         
         if iteration_steps % 10 == 0:
-            rel_error = np.linalg.norm(h_prev-h_curr)/np.linalg.norm(h_curr)
-            print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(abs_error, rel_error, np.dot(mass_op, h_prev)))
+            rel_error = xp.linalg.norm(h_prev-h_curr)/xp.linalg.norm(h_curr)
+            print("Iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(abs_error, rel_error, xp.dot(mass_op, h_prev)))
         
-        #fb_prev      = np.dot(Rmat,h_curr)
-        h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
+        #fb_prev      = xp.dot(Rmat,h_curr)
+        h_prev       = h_curr #f1p + xp.dot(Qmat,fb_prev)
         iteration_steps+=1
 
     print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))

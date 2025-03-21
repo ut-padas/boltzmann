@@ -22,6 +22,7 @@ import scipy.sparse.linalg
 import scipy.optimize
 import os
 import rom_utils
+import bte_0d3v_solver
 
 def make_dir(dir_name):
     # Check whether the specified path exists or not
@@ -222,7 +223,7 @@ class boltzmann_1d_rom():
         self.num_x      = len(self.bte_solver.xp)
         
 
-        pass
+        return 
 
     def init(self):
         bte     = self.bte_solver
@@ -296,13 +297,16 @@ class boltzmann_1d_rom():
                 print(iter//io_freq, v_all.shape, type(v))
                 v_all[int(iter//io_freq), :, :] = v[:, :]
                 ts   [int(iter//io_freq)]       = tt
-                plot_solution(bte, self, v, v, "%s/tidx_%d.png"%(folder_name,int(iter//io_freq)), tt, p_F0=True, p_F1=False)
 
-            bte.bs_E            = Et(tt)
-            v                   = bte.step_bte_x(v, tt, dt * 0.5)
-            v                   = bte.step_bte_v(v, None, tt, dt, ts_type="BE", verbose=1)
-            v                   = bte.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
-            tt                 += dt
+                if (iter % (10 * io_freq) == 0):
+                    plot_solution(bte, self, v, v, "%s/tidx_%d.png"%(folder_name,int(iter//io_freq)), tt, p_F0=True, p_F1=False)
+
+            # bte.bs_E            = Et(tt)
+            # v                   = bte.step_bte_x(v, tt, dt * 0.5)
+            # v                   = bte.step_bte_v(v, None, tt, dt, ts_type="BE", verbose=1)
+            # v                   = bte.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
+            v                     = self.step_fom_op_split(Et(0), v, tt, dt, verbose = 0)
+            tt                   += dt
         
         xp.save(vfname,v_all)
         print("v_all.shape = ", v_all.shape)
@@ -438,10 +442,11 @@ class boltzmann_1d_rom():
 
         assert (Ef[0] == Ef).all() == True
 
-        Lmat    = xp.eye(self.num_p * self.num_vt) - dt * param.tau * xp.dot(Po, xp.dot(self.Cop, Ps) + xp.dot(Ef[0] * self.Av, Ps))
-        Lmat    = xp.linalg.inv(Lmat)
+        #Lmat    = xp.eye(self.num_p * self.num_vt) - dt * param.tau * xp.dot(Po, xp.dot(self.Cop, Ps) + xp.dot(Ef[0] * self.Av, Ps))
+        Lmat     = xp.eye(self.num_p * self.num_sh) - dt * param.tau * (self.Cop + Ef[0] * self.Av)
+        Lmat     = xp.linalg.inv(Lmat)
         
-        self.Lv_inv = Lmat
+        self.Lv_inv = Po @ Lmat @ Ps
         return self.Lv_inv
 
     def construct_rom_basis(self, Ef, rom_rank, Omega = None):
@@ -480,16 +485,110 @@ class boltzmann_1d_rom():
         
         return
 
+    def init_rom_basis_from_snapshots(self, xt, rank_vx):
+        """
+        xt - (num_p * num_vt * num_x, num_snapshots)
+        """
+        bte     = self.bte_solver
+        xp      = bte.xp_module
+        Ps      = bte.op_po2sh
+        Po      = bte.op_psh2o
+
+        ns      = xt.shape[1]
+
+        assert xt.shape[0] == self.num_p * self.num_vt * self.num_x
+        assert xp == cp
+
+        
+        # yt      = xt.reshape((self.num_p, self.num_vt, self.num_x, ns))
+        # yt      = (Ps @ yt.reshape((self.num_p * self.num_vt, self.num_x * ns))).reshape((self.num_p, self.num_sh, self.num_x, ns))
+
+        # U       = xp.zeros((self.num_sh, self.num_p, rank_vx[0]))
+        # V       = xp.zeros((self.num_sh, self.num_x, rank_vx[1]))
+
+        # for idx in range(self.num_sh):
+        #     zt  = (yt[:, idx, :, :])
+        #     assert zt.shape == (self.num_p, self.num_x, ns)
+            
+        #     Lv  = zt.reshape((self.num_p, self.num_x * ns))
+        #     Lx  = xp.swapaxes(zt, 1, 2).reshape((self.num_p * ns, self.num_x))
+
+        #     Lop       = cupyx.scipy.sparse.linalg.LinearOperator(Lv.shape, matvec  = lambda x : Lv @ x, rmatvec = lambda x : Lv.T @ x)
+        #     uv, sv, _ = rom_utils.rsvd(Lop, rank_vx[0], power_iter=0, Omega = None, xp=xp)
+
+        #     Lop       = cupyx.scipy.sparse.linalg.LinearOperator(Lx.shape, matvec  = lambda x : Lx @ x, rmatvec = lambda x : Lx.T @ x)
+        #     _, sx,vxT = rom_utils.rsvd(Lop, rank_vx[1], power_iter=0, Omega = None, xp=xp)
+
+        #     print("vt_idx = %d "%(idx))
+        #     print(sv/sv[0])
+        #     print(sx/sx[0])
+
+        #     U[idx] = uv     [:, 0:rank_vx[0]]
+        #     V[idx] = (vxT.T)[:, 0:rank_vx[1]]
+        
+
+
+        # sys.exit(0)
+
+        # compressing all v-dofs together
+        Lv        = xt.reshape((self.num_p * self.num_vt, self.num_x,  ns)).reshape((self.num_p * self.num_vt, self.num_x * ns))
+        yt        = xt.reshape((self.num_p * self.num_vt, self.num_x,  ns))
+        yt        = xp.swapaxes(yt, 1, 2)
+        assert yt.shape == (self.num_p * self.num_vt, ns, self.num_x)
+        Lx        = yt.reshape((self.num_p * self.num_vt * ns, self.num_x))
+
+        Lop       = cupyx.scipy.sparse.linalg.LinearOperator(Lv.shape, matvec  = lambda x : Lv @ x, rmatvec = lambda x : Lv.T @ x)
+        uv, sv, _ = rom_utils.rsvd(Lop, rank_vx[0], power_iter=0, Omega = None, xp=xp)
+
+        Lop       = cupyx.scipy.sparse.linalg.LinearOperator(Lx.shape, matvec  = lambda x : Lx @ x, rmatvec = lambda x : Lx.T @ x)
+        _, sx,vxT = rom_utils.rsvd(Lop, rank_vx[1], power_iter=0, Omega = None, xp=xp)
+        # uv, sv, _   = rom_utils.rsvd()#xp.linalg.svd()
+        # _ , sx, vxT = xp.linalg.svd() 
+
+        print(sv/sv[0])
+        print(sx/sx[0])
+
+        self.U = uv     [:, 0:rank_vx[0]]
+        self.V = (vxT.T)[:, 0:rank_vx[1]]
+
+        Iv     = xp.eye(rank_vx[0])
+        Ix     = xp.eye(rank_vx[1])
+
+        print("||Iv-UT @ U||/||Iv|| = %.8E"%(xp.linalg.norm(Iv - self.U.T @ self.U) / xp.linalg.norm(Iv)))
+        print("||Ix-VT @ V||/||Ix|| = %.8E"%(xp.linalg.norm(Ix - self.V.T @ self.V) / xp.linalg.norm(Iv)))
+
+        self.dof_rom  = self.U.shape[1] * self.V.shape[1]
+        
+        return 
+    
+    def assemble_rom_op(self, Ef):
+        bte  = self.bte_solver
+        xp   = bte.xp_module
+
+        kv   = self.U.shape[1]
+        kx   = self.V.shape[1]
+        Vt   = self.V.T
+        Ut   = self.U.T
+
+        Ndof = self.dof_rom
+        Lop  = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec = lambda x: Ut @ self.fom_mv(Ef, self.U @ x.reshape((kv, kx)) @ Vt).reshape((self.num_p * self.num_vt, self.num_x)) @ self.V, dtype=xp.float64)
+
+        Lop_mat = rom_utils.assemble_mat((Ndof, Ndof),Lop, xp=xp)
+        return Lop_mat
+
+
     def encode(self,  x):
         xp = self.bte_solver.xp_module
         #return xp.dot(self.V.T, x.reshape((-1)))
-        return x.reshape((-1))
+        #return x.reshape((-1))
+        return (self.U.T @ x.reshape((self.num_p * self.num_vt, self.num_x)) @ self.V).reshape((-1))
     
     def decode(self, x):
         xp = self.bte_solver.xp_module
         #assert x.shape[0] == self.dof_rom
         #return xp.dot(self.V, x).reshape((self.num_p * self.num_vt, self.num_x))
-        return x.reshape((self.num_p * self.num_vt, self.num_x))
+        #return x.reshape((self.num_p * self.num_vt, self.num_x))
+        return (self.U @ x.reshape((self.U.shape[1], self.V.shape[1])) @ self.V.T).reshape((self.num_p * self.num_vt, self.num_x))
 
     # def assemble_rom_op(self):
     #     xp = self.bte_solver.xp_module
@@ -608,7 +707,16 @@ class boltzmann_1d_rom():
         # y1[self.bte_solver.xp_vt_r, -1 ]       = 0.0
         # y1                                     = y1.reshape((-1))
         # assert xp.linalg.norm(y0-y1)/xp.linalg.norm(y1) < 1e-14
-        Ibv                                    = xp.linalg.solve(xp.eye(Lop.shape[0]) - dt * Lop, Ibv)
+        Lop_bc                                   = xp.copy(Lop)
+        Lop_bc[bte.xp_vt_l * num_x + 0, :]       = 0.0
+        Lop_bc[bte.xp_vt_r * num_x + num_x-1, : ]= 0.0
+        M                                        = xp.eye(Lop.shape[0]) - dt * Lop_bc
+        Minv                                     = xp.linalg.inv(M)
+
+        a1 = xp.linalg.norm(xp.eye(M.shape[0])  - M @ Minv)/xp.linalg.norm(xp.eye(M.shape[0]))
+        a2 = xp.linalg.norm(xp.eye(M.shape[0])  - Minv @ M)/xp.linalg.norm(xp.eye(M.shape[0]))
+        print(a1, a2)
+        Ibv                                      = Minv @ Ibv #xp.linalg.solve(xp.eye(Lop.shape[0]) - dt * Lop_bc , )
 
         xr  = xp.dot(vr.T, x0)
         xu  = xp.dot(vd.T, x0)
@@ -658,12 +766,38 @@ class boltzmann_1d_rom():
         #print(xp.asnumpy(xp.linalg.norm(Xr.T, axis=1)))
         plt.figure(figsize=(8, 4), dpi=300)
 
+        Ndof   = self.num_p * self.num_vt * self.num_x
+        Lopi   = xp.linalg.inv(Lop)
+
+        Im     = xp.eye(Lop.shape[0])
+        a1     = xp.linalg.norm(Im-(Lopi @ Lop )) / xp.linalg.norm(Im)
+        a2     = xp.linalg.norm(Im-(Lop  @ Lopi)) / xp.linalg.norm(Im)
+        print("a1 = %.8E a2=%.8E"%(a1, a2))
+        print("cond(Lop): %.8E"%(np.linalg.cond(xp.asnumpy(Lop))))
+
+
+        Lop_mf = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec  = lambda x : Lop @ x  , rmatvec = lambda x : Lop.T @ x)
+        Lopi_mf= cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec  = lambda x : Lopi @ x , rmatvec = lambda x : Lopi.T @ x)
+
+        p1, q1, r1 = rom_utils.rsvd(Lop_mf  , k=rank_k, power_iter=2, xp=xp)
+        p2, q2, r2 = rom_utils.rsvd(Lopi_mf , k=rank_k, power_iter=2, xp=xp)
+
+        s1 = xp.zeros_like(s)
+        s2 = xp.zeros_like(s)
+
+        s1[0:rank_k] = q1
+        s2[-rank_k:] = q2
+
         plt.subplot(1, 2, 1)
         plt.title(r"$L = L_x + L_v$")
         plt.xlabel(r"k")
         plt.ylabel(r"$\sigma_k$")
         plt.grid(visible=True)
-        plt.semilogy(xp.asnumpy(s/s[0]))
+        #plt.semilogy(xp.asnumpy(s/s[0]))
+        plt.semilogy(xp.asnumpy(s) , label=r"svd(L)")
+        plt.semilogy(xp.asnumpy(s1), label=r"rsvd(L)")
+        plt.semilogy(xp.asnumpy(s2), label=r"rsvd(Linv)")
+        plt.legend()
         plt.grid(visible=True)
 
         plt.subplot(1, 2, 2)
@@ -676,7 +810,7 @@ class boltzmann_1d_rom():
         #print(y0_l2, y0_l2.shape)
 
         plt.semilogy(xp.asnumpy(tt), xp.asnumpy(xp.linalg.norm(Xr.T, axis=1))/xp.asnumpy(y0_l2), label=r"$||f - f_r||/||f||$")
-        plt.semilogy(xp.asnumpy(tt), xp.asnumpy(xp.linalg.norm(Xu.T, axis=1))/xp.asnumpy(y0_l2), label=r"$||f - f_u||/||f||$")
+        #plt.semilogy(xp.asnumpy(tt), xp.asnumpy(xp.linalg.norm(Xu.T, axis=1))/xp.asnumpy(y0_l2), label=r"$||f - f_u||/||f||$")
         #plt.semilogy(xp.asnumpy(tt), xp.asnumpy(xp.linalg.norm(Xu.T, axis=1)), label=r"$||f_u||$")
         #plt.semilogy(xp.asnumpy(tt), xp.asnumpy(y0_l2)                       , label=r"$||f||$")
         plt.legend()
@@ -800,6 +934,77 @@ class boltzmann_1d_rom():
     ############################## FOM routines below ###########################################
     #############################################################################################
 
+    def fom_0dbte_steady_state(self, Ef, x):
+        bte         = self.bte_solver
+        xp          = bte.xp_module
+        qA          = xp.eye(self.Cop.shape[0])
+        mm_op       = bte.op_mass #mass_op * mw(0) * vth**3
+        u           = mm_op
+        u           = xp.dot(xp.transpose(mm_op),qA)
+        f1          = u / xp.dot(u, u)
+        p_vec       = u.reshape((u.shape[0], 1)) / xp.sqrt(xp.dot(u, u))
+        Ps          = bte.op_po2sh
+        Po          = bte.op_psh2o
+
+        assert (Ef[0] == Ef).all() == True
+
+        ne          = xp.dot(u, xp.dot(Ps,x))
+        #Te          = xp.dot(bte.op_temp, xp.dot(Ps,x))/ne
+
+        x0          = xp.dot(Ps, x[:, 0])
+        x0          = x0/xp.dot(u, x0)
+        Lv          = self.Cop + Ef[0] * self.Av
+        Wmat        = xp.dot(u,Lv)
+        
+        Imat        = xp.eye(Lv.shape[0])
+        Imat_r      = xp.eye(Lv.shape[0]-1)
+        Impp        = (Imat - xp.outer(p_vec, p_vec))
+        Qm,Rm       = xp.linalg.qr(Impp)
+        
+        Q           = xp.delete(Qm,(num_p-1) * num_sh + 0, axis=1)
+        R           = xp.delete(Rm,(num_p-1) * num_sh + 0, axis=0)
+        QT          = xp.transpose(Q)
+
+        def res_func(x):
+            y           = xp.dot(QT, xp.dot(Lv, x)) - xp.dot(Wmat,x) * xp.dot(QT, x)
+            return y
+            
+        def jac_func(x):
+            Lmat        = xp.dot(QT, Lv) - xp.dot(Wmat, x) * QT 
+            Lmat        = xp.dot(Lmat, Q)
+            return Lmat
+        
+        y0, at, rt = bte_0d3v_solver.newton_solve(bte.op_spec_sp, h0=x0, res_func = res_func, jac_func = jac_func,
+                     f1      = f1,
+                     Qmat    = Q, Rmat = R, mass_op= u, 
+                     atol=bte.args.atol, rtol=bte.args.rtol, max_iter=1000, xp=xp)
+        
+        ev_range  = (bte.ev_lim[0], bte.ev_lim[1])
+        ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
+
+        x0_lm_n   = bte.bte_eedf_normalization(x0[:, xp.newaxis])
+        y0_lm_n   = bte.bte_eedf_normalization(y0[:, xp.newaxis])
+        
+
+        x0_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(x0_lm_n))
+        y0_rc     = bte.compute_radial_components(ev_grid, xp.asnumpy(y0_lm_n))
+
+
+        plt.figure(figsize=(10, 4), dpi=300)
+        for lidx in range(self.num_sh):
+            plt.subplot(1, self.num_sh, lidx+1)
+            plt.semilogy(ev_grid, np.abs(x0_rc[0, lidx]), label=r"$f_%d(0)$"%(lidx))
+            plt.semilogy(ev_grid, np.abs(y0_rc[0, lidx]), label=r"$f_%d(T)$"%(lidx))
+            plt.legend()
+            plt.grid(visible=True)
+
+        plt.savefig("%s_ss.png"%(bte.args.fname))
+        plt.close()
+
+        y0 = xp.dot(Po, y0)
+        y  = xp.array([ne[i] * y0 for i in range(self.num_x)]).reshape((self.num_x, self.num_p * self.num_vt)).T
+        return y
+        
     def step_fom_op_split(self, Ef, F, time, dt, verbose=1):
         """
         full order model timestep
@@ -929,7 +1134,7 @@ class boltzmann_1d_rom():
         else:
             raise NotImplementedError
 
-    def fom_static_solve(self, Et, F):
+    def fom_static_lanczos(self, Et, F):
         bte     = self.bte_solver
         xp      = bte.xp_module
         param   = bte.param
@@ -938,7 +1143,7 @@ class boltzmann_1d_rom():
         assert (Ef == Et(0.1)).all() and (Ef[0] == Ef).all()
 
         Ndof    = self.num_p * self.num_vt * self.num_x
-        km      = int(1e-3 * Ndof) // 2
+        km      = int(1e-1 * Ndof) // 2
         tol     = 1e-10
 
         if (xp == cp):
@@ -964,8 +1169,8 @@ class boltzmann_1d_rom():
         s_sa     = xp.zeros_like(s)
         s_la     = xp.zeros_like(s)
 
-        s_sa[len(s)-km:] = xp.sqrt(0.5 * (d1 + d2))
-        s_la[0:km]       = xp.sqrt(0.5 * (d3 + d4))
+        s_sa[len(s)-km:] = xp.flip(xp.sqrt(0.5 * (d1 + d2)))
+        s_la[0:km]       = xp.flip(xp.sqrt(0.5 * (d3 + d4)))
 
         plt.figure(figsize=(6, 6), dpi=300)
         plt.semilogy(xp.asnumpy(s)        , label=r"svd")
@@ -998,8 +1203,6 @@ class boltzmann_1d_rom():
         #     print(xp.linalg.norm(x1-x0))
         #     x0 = x1
         #     it+=1
-        
-
 
     ########################### FOM OP END #####################################################
 
@@ -1063,7 +1266,7 @@ if __name__ == "__main__":
     restore      = 0
     rs_idx       = 6
     train_cycles = 1
-    num_samples  = 31
+    num_samples  = 401
     psteps       = 1
 
 
@@ -1085,13 +1288,23 @@ if __name__ == "__main__":
     tt      = 0
     
     bte_rom.flow_map_fom_op_v(Et(0), dt)
+    #v   = bte_rom.fom_0dbte_steady_state(Et(0), v)
+    v_sp = bte_rom.sample_fom(Et, xp.copy(v), 0, 100, dt, num_samples, load_from_file=True)
+    bte_rom.init_rom_basis_from_snapshots(v_sp, (40, 40))
+    Lop_r = bte_rom.assemble_rom_op(Et(0))
+    Lop_r = xp.linalg.inv(xp.eye(Lop_r.shape[0]) - dt * Lop_r)
+    
+    #Lop_r = bte_rom.assemble
 
+    #sys.exit(0)
+    
+    
     if (restore==1):
         F, Fr, tt = bte_rom.restore_checkpoint("%s_rom_%02d.h5"%(bte_fom.args.fname, rs_idx))
         idx       = (rs_idx) * cp_freq
         print("checkpoint restored time = %.4E (s) idx = %d"%(tt, idx))
     else:
-        # bte_rom.fom_static_solve(Et, v)
+        # bte_rom.fom_static_lanczos(Et, v)
         # sys.exit(0)
         #bte_rom.flow_map_fom_op_v(Et(0), dt)
         #Omega    = bte_rom.sample_fom(Et, xp.copy(v).reshape((-1)), 0, 1, dt, rom_rank, load_from_file=False)
@@ -1112,14 +1325,14 @@ if __name__ == "__main__":
         # bte_rom.plot_memory_term_eig(Et(0), xp.copy(z0).reshape((-1)), dt, rank_k=Lop.shape[0]-100, Lop=Lop, Lop_eig = Lop_eig)
         # bte_rom.plot_memory_term_eig(Et(0), xp.copy(z0).reshape((-1)), dt, rank_k=Lop.shape[0]-1, Lop=Lop, Lop_eig = Lop_eig)
 
-        Lop      = bte_rom.assemble_fom_op(Et(0))
-        Lop_svd  = xp.linalg.svd(Lop)
+        # Lop      = bte_rom.assemble_fom_op(Et(0))
+        # Lop_svd  = xp.linalg.svd(Lop)
         
-        z0       = v
-        for rr in range(100, Lop.shape[0], 500):
-            bte_rom.plot_memory_term(Et(0), xp.copy(z0).reshape((-1)), dt, rank_k=rr, Lop=Lop, Lop_svd = Lop_svd)
+        # z0       = v
+        # for rr in [100, 500, 1000]:#range(100, 4000, 500):
+        #     bte_rom.plot_memory_term(Et(0), xp.copy(z0).reshape((-1)), dt, rank_k=rr, Lop=Lop, Lop_svd = Lop_svd)
         
-        sys.exit(0)
+        # sys.exit(0)
         
         #bte_rom.construct_rom_basis(Et(0), rom_rank, Omega=None)
         F       = xp.copy(v)
@@ -1163,6 +1376,7 @@ if __name__ == "__main__":
             print("io output time = %.4E (s)"%(tt))
             F1 = bte_rom.decode(Fr)
             plot_solution(bte_fom, bte_rom, F, F1, fname="%s_rom_%04d.png"%(args.fname, idx//io_freq), time = tt, p_F1=True)
+            
 
         # if(idx > 0 and (idx % uv_freq) == 0):
         #     print("-----------------sampling adjust the rom basis------------------------")
@@ -1195,8 +1409,11 @@ if __name__ == "__main__":
         #Fo     = bte_rom.step_fom_ord(Et, Fo, tt, dt, type="BE", atol=1e-20, rtol=1e-3)
         #Fs     = bte_rom.step_fom_sph(Et, Fs, tt, dt, type="BE", atol=1e-20, rtol=1e-2)
         #F      = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = (idx % tio_freq))
+        
+        F      = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = 0)
+        
         #F      = xp.dot(Lop, F.reshape((-1))).reshape(F.shape)
-        F       = (Ibv @ (F.reshape((-1)))).reshape(F.shape)
+        #F       = (Ibv @ (F.reshape((-1)))).reshape(F.shape)
         
 
         # y       = xp.copy(F)

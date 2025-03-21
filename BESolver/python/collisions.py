@@ -1,12 +1,11 @@
-"""
-@package : Abstract class to represents physics of the binary collisions. 
-for a given binary collision  
-    - pre collision (w1,w2) -> (v1,v2) post collision
-    - omega - scattering angle (\theta,\phi), \theta being the polar angle. 
-    - pre collision velocities  -> post collission velocities
-    - post collision velocities -> pre collision velocities
-    - cross section calculation
-"""
+# @package : Abstract class to represents physics of the binary collisions. 
+# for a given binary collision  
+#     - pre collision (w1,w2) -> (v1,v2) post collision
+#     - omega - scattering angle (\theta,\phi), \theta being the polar angle. 
+#     - pre collision velocities  -> post collission velocities
+#     - post collision velocities -> pre collision velocities
+#     - cross section calculation
+
 import abc
 import numpy as np
 import cross_section
@@ -80,7 +79,7 @@ class Collisions(abc.ABC):
 
         if self._cs_interp_type == CollisionInterpolationType.USE_BSPLINE_PROJECTION:
             sp_order        = 3
-            num_p           = 128
+            num_p           = 255
             kd_threshold    = 1e-8
             k_domain        = (self._energy[0]- kd_threshold, self._energy[-1] + kd_threshold) 
             k_vec           = basis.BSpline.logspace_knots(k_domain, num_p, sp_order, 0.5 *(self._energy[1] + self._energy[0]) , base=2)

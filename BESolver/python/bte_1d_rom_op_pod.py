@@ -930,6 +930,188 @@ class boltzmann_1d_rom():
         make_dir(folder_name)
         plt.savefig("%s/rom_k%06d.png"%(folder_name, rank_k))
 
+    def plot_ic_test(self, Ef, dt, Te, cycles, io_cycle):
+        bte = self.bte_solver
+        xp  = bte.xp_module
+
+        spec_sp     = bte.op_spec_sp
+        mmat        = spec_sp.compute_mass_matrix()
+        mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
+        vth         = bte.bs_vth
+        #mw          = bte_utils.get_maxwellian_3d(vth, 1)
+        Ps          = bte.op_po2sh
+        Po          = bte.op_psh2o
+        PoPs        = Po @ Ps
+
+        mass_op     = bte.op_mass
+        temp_op     = bte.op_temp
+          
+        gmx,gmw     = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+        Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
+          
+        num_p       = spec_sp._p +1
+        num_sh      = len(spec_sp._sph_harm_lm)
+        h_init      = xp.zeros((len(Te), num_p * num_sh))
+
+        gmx, gmw    = xp.asarray(gmx), xp.asarray(gmw)
+        Vqr_gmx     = xp.asarray(Vqr_gmx)
+        mmat_inv    = xp.asarray(mmat_inv)
+          
+        ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * vth/bte.c_gamma)**2
+        print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(bte.ev_lim[1], ev_max_ext))
+        for i in range(len(Te)):
+            v_ratio              = (bte.c_gamma * xp.sqrt(Te[i])/vth)
+            hv                   = lambda v : (1/xp.sqrt(np.pi)**3) * xp.exp(-((v/v_ratio)**2)) / v_ratio**3
+            h_init[i, 0::num_sh] = xp.sqrt(4 * xp.pi) * xp.dot(mmat_inv[0::num_sh,0::num_sh], xp.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
+            m0                   = xp.dot(mass_op, h_init[i])
+            h_init[i]            = h_init[i]/m0
+            print("IC = %d Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, Te[i], m0, (xp.dot(temp_op, h_init[i]))))
+        
+        xx = bte.param.L * (bte.xp + 1)
+        ne = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/bte.param.L)**2 * (0.5 * xx/bte.param.L)**2) / bte.param.np0
+
+        h_init = h_init.T
+        h0     = xp.einsum("ij,k->ijk", xp.dot(bte.op_psh2o, h_init).T, ne)
+        print(h0.shape, Te.shape, ne.shape, h_init.shape)
+        h1     = xp.zeros_like(h0)
+
+        
+        
+        Lop     = self.assemble_fom_op(Ef)
+
+        # Lop     = Lop.reshape((self.num_p * self.num_vt * self.num_x, self.num_p  * self.num_vt , self.num_x))
+        # Lop     = xp.einsum("ilx,lm->imx", Lop, Po)
+        # Lop     = Lop.reshape((self.num_p * self.num_vt, self.num_x, self.num_p * self.num_sh, self.num_x))
+        # Lop     = xp.einsum("ik,kxab->ixab", Ps, Lop)
+        # Lop     = Lop.reshape((self.num_p * self.num_sh * self.num_x, self.num_p * self.num_sh * self.num_x))
+
+        xp.save("%s_Lop_%dx%dx%d.npy"%(bte.args.fname, self.num_p, self.num_vt, self.num_x), Lop)
+        
+        Im      = xp.eye(Lop.shape[0])
+        W1      = Im - dt * Lop
+        Fmop    = xp.linalg.solve(W1, xp.eye(Lop.shape[0]))
+
+        a1_norm = xp.linalg.norm(Im - W1 @ Fmop) / xp.linalg.norm(Im) 
+        a2_norm = xp.linalg.norm(Im - Fmop @ W1) / xp.linalg.norm(Im) 
+
+        print("a1_norm = %.4E a2_norm = %.4E"%(a1_norm, a2_norm))
+
+        
+    
+        
+        Ib                                             = xp.eye(self.num_p * self.num_vt * self.num_x)
+        Ib[bte.xp_vt_l * self.num_x + 0, :]            = 0.0
+        Ib[bte.xp_vt_r * self.num_x + self.num_x-1, :] = 0.0
+        Fmop    = (Fmop) @ Ib
+        
+        steps   = int(cycles/dt) 
+        io_step = int(io_cycle/dt)
+        assert  (steps) % io_step == 0
+        g1      = xp.zeros(tuple(list([(steps // io_step) + 1]) + list(h1.shape)))
+        ts      = xp.zeros((steps // io_step)+1)
+        for ic_idx in range(len(Te)):
+            print("idx = ", ic_idx)
+            tt                  = 0
+            it                  = 0
+            h1[ic_idx,:, :]     = h0[ic_idx, :, :]
+
+            while (it < steps + 1):
+                if (it % io_step == 0):
+                    print("saving ic_idx = %02d time = %.4E"%(ic_idx, tt), "  : ", (it//io_step))
+                    print(xp.linalg.norm(h1[ic_idx,:, :]))
+                    g1[it//io_step, ic_idx, :, :] = h1[ic_idx,:, :]
+                    ts[it//io_step]               = tt
+
+                #h1[ic_idx]                  = self.step_fom_op_split(Ef, h1[ic_idx], tt, dt, verbose=0)
+                #h1[ic_idx]                  = PoPs @ h1[ic_idx]
+                h1[ic_idx]                   = (Fmop @ h1[ic_idx].reshape((-1))).reshape(h1[ic_idx].shape)
+                h1[ic_idx, h1[ic_idx]<0]     = 1e-16
+                
+                # h1[ic_idx, bte.xp_vt_l, 0]  = 0.0
+                # h1[ic_idx, bte.xp_vt_r, -1] = 0.0
+                # h1[ic_idx]                  = Po @ (Fmop @ (Ps @ h1[ic_idx]).reshape(-1)).reshape((self.num_p * self.num_sh , self.num_x))
+                # h1[ic_idx, bte.xp_vt_l, 0]  = 0.0
+                # h1[ic_idx, bte.xp_vt_r, -1] = 0.0
+
+                # h1[ic_idx, h1[ic_idx]<0]    = 1e-16
+
+                # h1[ic_idx]   = PoPs @ h1[ic_idx]
+                # h1[ic_idx, bte.xp_vt_l, 0]  = 0.0
+                # h1[ic_idx, bte.xp_vt_r, -1] = 0.0
+
+                tt          +=dt
+                it          +=1
+            print(ts)
+        param     = bte.param
+        args      = bte.args
+        
+
+        h0_lm     = xp.einsum("ilx,vl->ivx", h0, Ps)
+        h1_lm     = xp.einsum("ilx,vl->ivx", h1, Ps)
+        ne0       = xp.asnumpy(xp.einsum("ilx,l->ix", h0_lm, mass_op))
+        ne1       = xp.asnumpy(xp.einsum("ilx,l->ix", h1_lm, mass_op))
+
+        Te0       = xp.asnumpy(xp.einsum("ilx,l->ix", xp.einsum("ivx,ix->ivx",h0_lm, (1/ne0)), temp_op))
+        Te1       = xp.asnumpy(xp.einsum("ilx,l->ix", xp.einsum("ivx,ix->ivx",h1_lm, (1/ne1)), temp_op))
+        
+        # h0_lm_n   = xp.asnumpy(xp.asarray([bte.bte_eedf_normalization(h0_lm[i]) for i in range(len(Te))]))
+        # h1_lm_n   = xp.asnumpy(xp.asarray([bte.bte_eedf_normalization(h1_lm[i]) for i in range(len(Te))]))
+        
+        # ev_range  = (bte.ev_lim[0], bte.ev_lim[1])
+        # ev_grid   = np.linspace(ev_range[0], ev_range[1], 1024)
+
+        # F0_rc     = xp.asnumpy(xp.array([bte.compute_radial_components(ev_grid, xp.asnumpy(h0_lm_n[i])) for i in range(len(Te))]))
+        # F1_rc     = xp.asnumpy(xp.array([bte.compute_radial_components(ev_grid, xp.asnumpy(h1_lm_n[i])) for i in range(len(Te))]))
+        xx        = xp.asnumpy(xx)
+
+        plt.figure(figsize=(10, 10), dpi=200)
+
+        plt.subplot(2, 2, 1)
+        plt.plot(xx, (ne0.T) * param.np0)
+        plt.grid(visible=True)
+        plt.xlabel(r"$\hat{x}$")
+        plt.ylabel(r"$n_e [m^{-3}]$")
+
+        plt.subplot(2, 2, 2)
+        plt.plot(xx, (ne1.T) * param.np0)
+        plt.grid(visible=True)
+        plt.xlabel(r"$\hat{x}$")
+        plt.ylabel(r"$n_e [m^{-3}]$")
+
+
+        plt.subplot(2, 2, 3)
+        plt.plot(xx, Te0.T)
+        plt.grid(visible=True)
+        plt.xlabel(r"$\hat{x}$")
+        plt.ylabel(r"$T_e [eV]$")
+
+        plt.subplot(2, 2, 4)
+        plt.plot(xx, Te1.T)
+        plt.grid(visible=True)
+        plt.xlabel(r"$\hat{x}$")
+        plt.ylabel(r"$T_e [eV]$")
+
+        plt.suptitle("T=%.2E"%(cycles))
+        plt.tight_layout()
+        plt.savefig("%s_ic_T%d_%dx%dx%d_dt_%.1E.png"%(bte.args.fname, cycles, self.num_p, self.num_vt, self.num_x, dt))
+        plt.close()
+
+        
+        
+        F   = h5py.File("%s_ic_T%d_%dx%dx%d_dt_%.1E.h5"%(bte.args.fname, cycles, self.num_p, self.num_vt, self.num_x, dt), 'w')
+        F.create_dataset("time[T]"      , data = xp.asnumpy(ts))
+        F.create_dataset("x[-1,1]"      , data = xx)
+        F.create_dataset("F"            , data = xp.asnumpy(g1))
+        F.close()
+
+
+
+
+
+
+            
+            
+
     #############################################################################################
     ############################## FOM routines below ###########################################
     #############################################################################################
@@ -1284,19 +1466,19 @@ if __name__ == "__main__":
     bte_rom = boltzmann_1d_rom(bte_fom)
     bte_rom.init()
     xxg     = xp.asarray(bte_fom.xp)
-    Et      = lambda t: xp.ones_like(bte_fom.xp) * 1e3 #* xp.sin(2 * xp.pi * t)
+    Et      = lambda t: xp.ones_like(bte_fom.xp) * 1e1 #* xp.sin(2 * xp.pi * t)
     tt      = 0
     
     bte_rom.flow_map_fom_op_v(Et(0), dt)
-    #v   = bte_rom.fom_0dbte_steady_state(Et(0), v)
-    v_sp = bte_rom.sample_fom(Et, xp.copy(v), 0, 100, dt, num_samples, load_from_file=True)
-    bte_rom.init_rom_basis_from_snapshots(v_sp, (40, 40))
-    Lop_r = bte_rom.assemble_rom_op(Et(0))
-    Lop_r = xp.linalg.inv(xp.eye(Lop_r.shape[0]) - dt * Lop_r)
+    # #v   = bte_rom.fom_0dbte_steady_state(Et(0), v)
+    # v_sp = bte_rom.sample_fom(Et, xp.copy(v), 0, 100, dt, num_samples, load_from_file=True)
+    # bte_rom.init_rom_basis_from_snapshots(v_sp, (40, 40))
+    # Lop_r = bte_rom.assemble_rom_op(Et(0))
+    # Lop_r = xp.linalg.inv(xp.eye(Lop_r.shape[0]) - dt * Lop_r)
     
     #Lop_r = bte_rom.assemble
-
-    #sys.exit(0)
+    bte_rom.plot_ic_test(Et(0), dt, np.linspace(2, 6, 5), 2000, 10)
+    sys.exit(0)
     
     
     if (restore==1):
@@ -1310,7 +1492,10 @@ if __name__ == "__main__":
         #Omega    = bte_rom.sample_fom(Et, xp.copy(v).reshape((-1)), 0, 1, dt, rom_rank, load_from_file=False)
         # bte_rom.construct_rom_basis(Et(0), rom_rank, Omega)
 
-        #Lop      = bte_rom.assemble_fom_op(Et(0))
+        # Lop      = bte_rom.assemble_fom_op(Et(0))
+        # print(Lop.shape)
+        # xp.save("%s_Lop.npy"%bte_rom.bte_solver.args.fname, Lop)
+        # sys.exit(0)
         
         # Lop_h    = xp.asnumpy(Lop)
         # s, u     = np.linalg.eig(Lop_h)

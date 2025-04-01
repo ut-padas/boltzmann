@@ -22,6 +22,7 @@ import scipy.sparse.linalg
 import scipy.optimize
 import os
 import rom_utils
+import argparse
 
 def make_dir(dir_name):
     # Check whether the specified path exists or not
@@ -1603,6 +1604,36 @@ class boltzmann_1d_rom():
 
         return pc_emat_idx
 
+def parse_rom_args(args):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-eps_v"        , "--eps_v"         , help="rom v-space svd truncation"    , type=float, default=1e-8)
+    parser.add_argument("-eps_x"        , "--eps_x"         , help="rom x-space svd truncation"    , type=float, default=1e-4)
+    parser.add_argument("-train_cycles" , "--train_cycles"  , help="number of train cycles"        , type=float, default=1.0 )
+    parser.add_argument("-num_samples"  , "--num_samples"   , help="number of solution snapshots"  , type=int  , default=31  )
+    parser.add_argument("-rom_step_freq", "--rom_step_freq" , help="rom step frequency"            , type=int  , default=5   )
+    parser.add_argument("-par_file"     , "--par_file"      , help="redundant"                     , type=str  , default=""  )
+
+    args_rom  = parser.parse_args()
+
+    assert args.par_file == args_rom.par_file 
+
+    import toml
+    tp  = toml.load(args.par_file)
+    
+    tp0                     = tp["bte-rom"] 
+    args_rom.eps_v          = tp0["eps_v"]
+    args_rom.eps_x          = tp0["eps_x"]
+    args_rom.train_cycles   = tp0["train_cycles"]
+    args_rom.num_samples    = tp0["num_samples"]
+    args_rom.rom_step_freq  = tp0["rom_step_freq"]
+
+    with open("%s_args.txt"%(args.fname), "a") as ff:
+        ff.write("\nrom-args: %s"%(args_rom))
+        ff.close()
+
+    return args_rom
+
+
 if __name__ == "__main__":
     from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
     args         = args_parse()
@@ -1610,6 +1641,8 @@ if __name__ == "__main__":
     bte_fom      = glow1d_boltzmann(args)
     u, v         = bte_fom.initialize()
     args         = bte_fom.args
+
+    args_rom     = parse_rom_args(args)
 
 
     dt           = args.cfl
@@ -1622,14 +1655,15 @@ if __name__ == "__main__":
     tio_freq     = 20
     uv_freq      = int(np.round(10/dt))
 
-    rom_eps_x    = 1e-6
-    rom_eps_v    = 1e-10
-    restore      = 1
-    rs_idx       = 3
-    train_cycles = 1
-    num_samples  = 401
-    num_history  = 40
-    psteps       = 1
+    rom_eps_x    = args_rom.eps_x
+    rom_eps_v    = args_rom.eps_v
+    restore      = 0
+    rs_idx       = 0
+    train_cycles = args_rom.train_cycles
+    num_samples  = args_rom.num_samples
+    #num_history  = 40
+    is_rom       = 1
+    rom_steps    = args_rom.rom_step_freq
 
 
     if args.use_gpu==1:
@@ -1655,7 +1689,7 @@ if __name__ == "__main__":
     #v_sp = bte_rom.sample_fom(Et, xp.copy(v), 0, 100, dt, num_samples, load_from_file=True)
     #bte_rom.init_rom_basis_from_snapshots(v_sp[:, 0::3], (rom_eps_v, rom_eps_x))
 
-    v_sp = bte_rom.sample_fom(Et, xp.copy(v), 0, 1, dt, 31, load_from_file=True)
+    v_sp = bte_rom.sample_fom(Et, xp.copy(v), 0, 1, dt, num_samples, load_from_file=False)
     bte_rom.init_rom_basis_from_snapshots(v_sp[:, 0::1], (rom_eps_v, rom_eps_x))
     Lop_r = bte_rom.assemble_rom_op(Et(0))
 
@@ -1704,8 +1738,6 @@ if __name__ == "__main__":
     Fr2 = xp.copy(Fr)
 
     #Hr  = 0
-    is_rom    = 1
-    rom_steps = 5
     while tt < tT:
         Ef     = Et(tt)
 

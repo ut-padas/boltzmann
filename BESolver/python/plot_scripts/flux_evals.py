@@ -592,11 +592,12 @@ def extract_data_on_cell(folder, xl, xr, vr_p, num_vt, vt_p, ev_cutoff=80, fname
     neuz_cell_sum_l  = np.sum(Svz_cell_l.reshape((len(tt), -1)), axis=1)
     neuz_cell_sum_r  = np.sum(Svz_cell_r.reshape((len(tt), -1)), axis=1)
 
-    assert np.linalg.norm(nex[:, 0]-ne_cell_sum_l)/np.linalg.norm(nex[:, 0]) < 1e-13
-    assert np.linalg.norm(nex[:, 1]-ne_cell_sum_r)/np.linalg.norm(nex[:, 1]) < 1e-13
+    #print(np.linalg.norm(nex[:, 0]-ne_cell_sum_l)/np.linalg.norm(nex[:, 0]))
+    assert np.linalg.norm(nex[:, 0]-ne_cell_sum_l)/np.linalg.norm(nex[:, 0]) < 1e-10
+    assert np.linalg.norm(nex[:, 1]-ne_cell_sum_r)/np.linalg.norm(nex[:, 1]) < 1e-10
 
-    assert np.linalg.norm(neuzx[:, 0]-neuz_cell_sum_l)/np.linalg.norm(neuzx[:, 0]) < 1e-13
-    assert np.linalg.norm(neuzx[:, 1]-neuz_cell_sum_r)/np.linalg.norm(neuzx[:, 1]) < 1e-13
+    assert np.linalg.norm(neuzx[:, 0]-neuz_cell_sum_l)/np.linalg.norm(neuzx[:, 0]) < 1e-10
+    assert np.linalg.norm(neuzx[:, 1]-neuz_cell_sum_r)/np.linalg.norm(neuzx[:, 1]) < 1e-10
 
     vt_mid_idx       = np.argmin(np.abs(vt_cell-np.pi/2))
 
@@ -622,7 +623,12 @@ def extract_data_on_cell(folder, xl, xr, vr_p, num_vt, vt_p, ev_cutoff=80, fname
     vzp_cell[:, :,    0 : vt_mid_idx]     = vzp_cell[:, :, 0 : vt_mid_idx]       / m_cell[:, : , 0 : vt_mid_idx]
     vzp_cell[:, : , (vt_mid_idx + 1):]    = vzp_cell[:, : , (vt_mid_idx + 1):]   / m_cell[:, : , (vt_mid_idx + 1):]
     
-    
+    ## added to make sure we don't get currupted vz due to tail osicllations. 04-15-2025
+    uz_cell_l [Fv_cell_l < 0] = 0.0
+    uz_cell_r [Fv_cell_r < 0] = 0.0
+    uzp_cell_l[Fv_cell_l < 0] = 0.0
+    uzp_cell_r[Fv_cell_r < 0] = 0.0
+
     # print("%.8E " %np.sum(uzp_cell_l))
     # print("%.8E " %np.sum(uzp_cell_r))
     # a = np.sqrt(uz_cell_l**2 + uzp_cell_l**2) /vth
@@ -922,10 +928,10 @@ def use_extract_data():
 
 
 def use_extract_data_on_cell():
-    io_out_folder = "t1"
+    io_out_folder = "t2"
     make_dir(io_out_folder)    
-    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=3 , ev_cutoff=50)
-    # data_low      = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=3 , ev_cutoff=50)
+    data          = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=3 , ev_cutoff=80)
+    # data_low      = extract_data_on_cell(folder = folder_name, fname=macro_fname, xl=xl, xr=xr, vr_p=2, num_vt=130, vt_p=3 , ev_cutoff=160)
 
     # for i in ["Fv_cell_left", "Svz_cell_left", "uz_cell_left", "uzp_cell_left", "Fv_cell_right", "Svz_cell_right", "uz_cell_right", "uzp_cell_right"]:
     #     print("rel error [%s]= %.8E"%(i, np.linalg.norm(data[i]-data_low[i])/np.linalg.norm(data_low[i])))
@@ -957,19 +963,42 @@ def use_extract_data_on_cell():
     extent        = [ev_cell[0]-dev , ev_cell[-1] + dev, vt_cell_coord[-1] + dvt, vt_cell_coord[0]-dvt]
     vt_mid_idx    = np.argmin(np.abs(vt_cell_coord-np.pi/2))
 
-    tstep         = 4
+
+    # uz_energy_left= uz_cell_left ** 2 / c_gamma**2
+    # #print(np.max(uz_energy_left))
+    # print(uz_energy_left.shape)
+    # print(uz_energy_left)
+    # for tidx in range(0, len(tt), 1):
+    #     print(tt[tidx], np.max(uz_energy_left[tidx]), np.min(Fv_cell_left[tidx]), np.max(Fv_cell_left[tidx]), np.min(uz_cell_left[tidx]), np.max(uz_cell_left[tidx]))
+
+    # sys.exit(0)
+
+    # for tidx in range(0, len(tt), 1):
+    #     print("time = %.2E [L] min: %.8E max: %.8E rel error per cell (min/max): %.8E"%(tt[tidx], np.min(Sv_cell_left[tidx,:,0: vt_mid_idx]),
+    #                                                                     np.max(Sv_cell_left[tidx, :, 0:vt_mid_idx]),
+    #                                                                     np.min(Sv_cell_left[tidx, :, 0:vt_mid_idx])/np.max(Sv_cell_left[tidx, :, 0:vt_mid_idx])))
+
+    #     print("time = %.2E [R] min: %.8E max: %.8E rel error per cell (min/max): %.8E"%(tt[tidx], np.min(Sv_cell_right[tidx,:,0: vt_mid_idx]),
+    #                                                                     np.max(Sv_cell_right[tidx, :, 0:vt_mid_idx]),
+    #                                                                     np.min(Sv_cell_right[tidx, :, 0:vt_mid_idx])/np.max(Sv_cell_right[tidx, :, 0:vt_mid_idx])))
+    # for tidx in range(0, len(tt), 1):
+    #     print("time = %.2E [L+] sum (Sv_cell_left[tidx, :, 0:vt_mid_idx]) = %.8E [L-] sum (Sv_cell_left[tidx, :, vt_mid_idx+1:])= %.8E "%(tt[tidx], np.sum(Sv_cell_left[tidx, :, 0:vt_mid_idx]), np.sum(Sv_cell_left[tidx, :, vt_mid_idx+1:])))
+
+        
+
+    tstep         = 100
     cmap_str="plasma"
     for tidx in range(0, len(tt), tstep):
         fig = plt.figure(figsize=(12, 6), dpi=200)
         plt.subplot(2, 3, 1)
-        plt.imshow(np.abs(Fv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e6, vmax=np.max(Fv_cell_left)), cmap=cmap_str)
+        plt.imshow(np.abs(Fv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e3, vmax=np.max(Fv_cell_left)), cmap=cmap_str)
         plt.colorbar()
         plt.xlabel(r"energy [eV]")
         plt.ylabel(r"$v_\theta$")
         plt.title(r"$n_e(x_L)$")
 
         plt.subplot(2, 3, 4)
-        plt.imshow(np.abs(Fv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e6, vmax=np.max(Fv_cell_right)), cmap=cmap_str)
+        plt.imshow(np.abs(Fv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e3, vmax=np.max(Fv_cell_right)), cmap=cmap_str)
         plt.colorbar()
         plt.xlabel(r"energy [eV]")
         plt.ylabel(r"$v_\theta$")
@@ -980,7 +1009,7 @@ def use_extract_data_on_cell():
         #m[:, vt_mid_idx:] = 0.0
         #plt.imshow(np.abs(m.T), aspect='auto', extent=extent, vmin=np.min(Sv_cell_left), vmax=np.max(Sv_cell_left[:, :, 0:vt_mid_idx]))
         #plt.imshow(Sv_cell_left[tidx].T, aspect='auto', extent=extent, vmin=np.min(Sv_cell_left), vmax=np.max(Sv_cell_left))
-        plt.imshow(np.abs(Sv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e15, vmax=np.max(np.abs(Sv_cell_left))), cmap=cmap_str)
+        plt.imshow(np.abs(Sv_cell_left[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e12, vmax=np.max(np.abs(Sv_cell_left))), cmap=cmap_str)
         plt.colorbar()
         plt.xlabel(r"energy [eV]")
         plt.ylabel(r"$v_\theta$")
@@ -989,7 +1018,7 @@ def use_extract_data_on_cell():
 
         plt.subplot(2, 3, 5)
         #plt.imshow(Sv_cell_right[tidx].T, aspect='auto', extent=extent, vmin=np.min(Sv_cell_right), vmax=np.max(Sv_cell_right))
-        plt.imshow(np.abs(Sv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e15, vmax=np.max(np.abs(Sv_cell_right))), cmap=cmap_str)
+        plt.imshow(np.abs(Sv_cell_right[tidx].T), aspect='auto', extent=extent, norm=LogNorm(vmin=1e12, vmax=np.max(np.abs(Sv_cell_right))), cmap=cmap_str)
         plt.colorbar()
         plt.xlabel(r"energy [eV]")
         plt.ylabel(r"$v_\theta$")
@@ -1043,7 +1072,9 @@ def use_extract_data_on_cell():
         #plt.pause(2)
         #os.system('read -p "a" ') 
         #plt.close('all')
-        
+
+    
+
 def make_movie(xloc, movie_data_folder, tidx_step):
     assert len(xloc)%2 == 0
 

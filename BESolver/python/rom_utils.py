@@ -4,6 +4,7 @@ Module for ROM helper functions
 import numpy as np
 import scipy
 import scipy.linalg
+import matplotlib.pyplot as plt
 
 
 def assemble_mat(op_dim:tuple, Lop:scipy.sparse.linalg.LinearOperator, xp=np):
@@ -104,3 +105,27 @@ def sherman_morrison_woodberry(Ainv, U, V, xp=np):
 
     Ik = xp.eye(U.shape[1])
     return Ainv - Ainv @ U @ xp.linalg.inv(Ik + V @ Ainv @ U) @ V @ Ainv
+
+def eigen_plot(A, labels, fname, xp=np):
+    #eig_decomp = [xp.linalg.eig(a) for a in A]
+    schur_decomp = [scipy.linalg.schur(a, output="complex") for a in A]
+
+    cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    plt.figure(figsize=(8, 8), dpi=300)
+    for i in range(len(schur_decomp)):
+        T = schur_decomp[i][0]
+        D = np.diag(T)
+        print(i, " %.15E, %.15E "%(np.min(np.real(D)), np.max(np.real(D))))
+        plt.scatter(np.real(D), np.imag(D), s=4, label=labels[i], facecolors='none', edgecolors=cycle[i], alpha=0.3)
+    
+    plt.legend()
+    plt.grid(visible=True)
+    plt.ylabel(r"Im")
+    plt.xlabel(r"Re")
+    plt.savefig(fname)
+    plt.close()
+
+
+
+    
+

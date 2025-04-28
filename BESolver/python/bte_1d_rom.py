@@ -1927,12 +1927,13 @@ def efield_driver_time_harmonic(E0=1e3):
     Ps      = bte_rom.bte_solver.op_po2sh
     
 
-    recompute   = False
     # # 1. Sample from a fixed initial conditon
+    # recompute   = False
     # v_sp = bte_rom.sample_fom(lambda t : Ex , xp.copy(v), 0, 1, dt, num_samples, load_from_file=(not recompute))
     # bte_rom.init_rom_basis_from_snapshots(v_sp[:, 0::1], (rom_eps_v, rom_eps_x))
 
-    #2. Sample from a series of initial conditions
+    # #2. Sample from a series of initial conditions
+    recompute   = False
     nsTe        = 2
     nsne        = 10
     v0_ic       = bte_rom.generate_initial_data(np.logspace(-5, 0, nsne, base=10), np.linspace(2, 4, nsTe))
@@ -1947,8 +1948,8 @@ def efield_driver_time_harmonic(E0=1e3):
     # v_sp  = v_sp[0::1, :, -1]
     # v_sp  = xp.swapaxes(v_sp, 0, 1).reshape((-1,  v_sp.shape[0]))
 
-    v_sp  = v_sp[0::1, :, :]
-    v_sp  = xp.swapaxes(v_sp, 0, 1).reshape((-1,  num_samples * v_sp.shape[0]))
+    v_sp  = v_sp[0::1, :, 0::1]
+    v_sp  = xp.swapaxes(v_sp, 0, 1).reshape((-1,  (v_sp.shape[2]) * v_sp.shape[0]))
 
     bte_rom.init_rom_basis_from_snapshots(v_sp[:, :], (rom_eps_v, rom_eps_x))
     
@@ -2004,7 +2005,7 @@ def efield_driver_time_harmonic(E0=1e3):
 
 
     Ir   = xp.eye(dof_rom)
-    ttc  = np.linspace(0, 1, 6)
+    ttc  = np.linspace(0, 1, 11)
     Fm_r = xp.array([xp.linalg.inv(Ir - dt * (Ls_r + xp.sin(2 * xp.pi * ttc[i]) * Lt_r)) for i in range(len(ttc))]).reshape((len(ttc), Ir.shape[0], Ir.shape[1]))
     Em_r = xp.array([xp.sin(2 * xp.pi * ttc[i]) for i in range(len(ttc))])
 
@@ -2046,7 +2047,7 @@ def efield_driver_time_harmonic(E0=1e3):
             Fr[bte_rom.bte_solver.xp_vt_l,   0] = 0.0
             Fr[bte_rom.bte_solver.xp_vt_r,  -1] = 0.0
             Fr                                  = bte_rom.encode(Fr)
-            
+
             Lop_r                               = Ls_r + xp.sin(2 * xp.pi * tt) * Lt_r
 
             if rom_use_gmres == True:

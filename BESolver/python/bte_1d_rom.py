@@ -355,9 +355,13 @@ class boltzmann_1d_rom():
         v_all   = xp.zeros(tuple([n_samples]) + (self.num_p * self.num_sh, self.num_x))
         ts      = xp.zeros(n_samples)
 
-        assert (Et(0) == Et(0.1)).all() == True
-        self.flow_map_fom_op_v(Et(0), dt)
-        print("!!!using prefactored v-solve")
+        prefac_solve = False
+
+        if (prefac_solve == True):
+            assert (Et(0) == Et(0.1)).all() == True
+            self.flow_map_fom_op_v(Et(0), dt)
+            print("!!!using prefactored v-solve")
+
         
         for iter in range(steps+1):
             if (iter % io_freq == 0):
@@ -373,7 +377,7 @@ class boltzmann_1d_rom():
             # v                   = bte.step_bte_x(v, tt, dt * 0.5)
             # v                   = bte.step_bte_v(v, None, tt, dt, ts_type="BE", verbose=1)
             # v                   = bte.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
-            v                     = self.step_fom_op_split(Et(tt), v, tt, dt, verbose = 0, prefactored_vsolve=True)
+            v                     = self.step_fom_op_split(Et(tt), v, tt, dt, verbose = 0, prefactored_vsolve=prefac_solve)
             tt                   += dt
         
         xp.save(vfname,v_all)
@@ -414,8 +418,8 @@ class boltzmann_1d_rom():
             Ux, Sx, Vhx         = xp.linalg.svd(fl.reshape(num_t * num_p, -1)) # Nt Nr x Nx
             Uv, Sv, Vhv         = xp.linalg.svd(xp.swapaxes(fl, 0, 1).reshape((num_p, num_t * num_x))) # Nr x Nt Nx
 
-            kr  = len(Sv[Sv > Sv[0] * eps_v])
-            kx  = len(Sx[Sx > Sx[0] * eps_x])
+            kr  = 80  # len(Sv[Sv > Sv[0] * eps_v])
+            kx  = 80   # len(Sx[Sx > Sx[0] * eps_x])
 
             # Vx  = Vhx[0:rank_vx[1],         :   ].T
             # Uv  = Uv [:           , 0:rank_vx[0]]
@@ -452,6 +456,8 @@ class boltzmann_1d_rom():
             fl = zt[:, l :: self.num_sh, :]
             if (self.rom_type == ROM_TYPE.POD):
                 uv, vx , s       = svd(fl, rank_vx[1], rank_vx[0], xp=xp)
+                #uv, vx , s       = svd(fl, rank_vx[1] * (10**(l)), rank_vx[0], xp=xp)
+                #uv, vx , s       = svd(fl, min(1e-1, rank_vx[1] * (10**(2 * l))), min(1e-1, rank_vx[0] * (10**(2 * l))), xp=xp)
                 svalues.append(s)
             elif(self.rom_type == ROM_TYPE.POD_ID):
                 uv, vx           = id_decomp(fl, eps_x, eps_v, xp=xp)
@@ -1874,7 +1880,12 @@ def static_efield_driver(E0=1e3):
         tt  += dt
         idx +=1
 
-def efield_driver_time_harmonic(E0=1e3):
+def efield_driver_time_harmonic(ef_amp, ef_freq, recompute_basis=False):
+    """
+    ef_amp (a, b) amplitudes for cosines and sine waves
+    ef_freq (frequencies) normalized by the osicllation frequency
+    """
+
     from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
     args         = args_parse()
 
@@ -1901,7 +1912,7 @@ def efield_driver_time_harmonic(E0=1e3):
     rs_idx       = 0
     train_cycles = args_rom.train_cycles
     num_samples  = args_rom.num_samples
-    num_history  = 40
+    #num_history  = 40
     is_rom       = 1
     rom_steps    = args_rom.rom_step_freq
     rom_use_gmres= True
@@ -1920,38 +1931,50 @@ def efield_driver_time_harmonic(E0=1e3):
     bte_rom = boltzmann_1d_rom(bte_fom)
     bte_rom.init()
     xxg     = xp.asarray(bte_fom.xp)
-    Ex      = xp.ones_like(bte_fom.xp) * E0 
-    Et      = lambda t: Ex * xp.sin(2 * np.pi * t)
+
+    Et      = lambda t:  xp.sum(xp.array([ef_amp[i, 0] * xp.cos(2 * xp.pi * ef_freq[i] * t) for i in range(len(ef_freq))]).reshape((len(ef_freq), -1)), axis=0) \
+                       + xp.sum(xp.array([ef_amp[i, 1] * xp.sin(2 * xp.pi * ef_freq[i] * t) for i in range(len(ef_freq))]).reshape((len(ef_freq), -1)), axis=0)
+
 
     Po      = bte_rom.bte_solver.op_psh2o
     Ps      = bte_rom.bte_solver.op_po2sh
+
+    ttc     = np.linspace(0, 1, 11)
+    Em_r    = xp.array([Et(ttc[i]) for i in range(len(ttc))]).T
+    plt.figure(figsize=(8, 8), dpi=200)
+    plt.plot(bte_fom.xp, xp.asnumpy(Em_r))
+    plt.xlabel(r"$\hat{x}$")
+    plt.ylabel(r"E [V/m]")
+    plt.grid(visible=True)
+    plt.savefig("%s_efield.png"%(args.fname))
+    plt.close()
     
 
-    # # 1. Sample from a fixed initial conditon
-    # recompute   = False
-    # v_sp = bte_rom.sample_fom(lambda t : Ex , xp.copy(v), 0, 1, dt, num_samples, load_from_file=(not recompute))
-    # bte_rom.init_rom_basis_from_snapshots(v_sp[:, 0::1], (rom_eps_v, rom_eps_x))
+    # 1. Sample from a fixed initial conditon
+    recompute   = recompute_basis
+    v_sp = bte_rom.sample_fom(Et, xp.copy(v), 0, 1, dt, num_samples, load_from_file=(not recompute))
+    bte_rom.init_rom_basis_from_snapshots(v_sp[:, 0::1], (rom_eps_v, rom_eps_x))
 
-    # #2. Sample from a series of initial conditions
-    recompute   = False
-    nsTe        = 2
-    nsne        = 10
-    v0_ic       = bte_rom.generate_initial_data(np.logspace(-5, 0, nsne, base=10), np.linspace(2, 4, nsTe))
+    # # #2. Sample from a series of initial conditions
+    # recompute   = recompute_basis
+    # nsTe        = 1
+    # nsne        = 10
+    # v0_ic       = bte_rom.generate_initial_data(np.logspace(-2, 2, nsne, base=10), np.linspace(4, 6, nsTe))
     
-    Tend        = 1
-    num_samples = 11
-    v_sp        = xp.zeros((v0_ic.shape[0], bte_rom.num_p * bte_rom.num_sh * bte_rom.num_x, num_samples))
-    for k in range(v0_ic.shape[0]):
-        v_sp[k] = bte_rom.sample_fom(lambda t: Ex, v0_ic[k], 0, Tend, dt, num_samples, fprefix="%03d"%(k), load_from_file=(not recompute))
+    # Tend        = 1
+    # num_samples = 11
+    # v_sp        = xp.zeros((v0_ic.shape[0], bte_rom.num_p * bte_rom.num_sh * bte_rom.num_x, num_samples))
+    # for k in range(v0_ic.shape[0]):
+    #     v_sp[k] = bte_rom.sample_fom(Et, v0_ic[k], 0, Tend, dt, num_samples, fprefix="%03d"%(k), load_from_file=(not recompute))
         
     
-    # v_sp  = v_sp[0::1, :, -1]
-    # v_sp  = xp.swapaxes(v_sp, 0, 1).reshape((-1,  v_sp.shape[0]))
+    # # v_sp  = v_sp[0::1, :, -1]
+    # # v_sp  = xp.swapaxes(v_sp, 0, 1).reshape((-1,  v_sp.shape[0]))
 
-    v_sp  = v_sp[0::1, :, 0::1]
-    v_sp  = xp.swapaxes(v_sp, 0, 1).reshape((-1,  (v_sp.shape[2]) * v_sp.shape[0]))
+    # v_sp  = v_sp[0::1, :, 0::1]
+    # v_sp  = xp.swapaxes(v_sp, 0, 1).reshape((-1,  (v_sp.shape[2]) * v_sp.shape[0]))
 
-    bte_rom.init_rom_basis_from_snapshots(v_sp[:, :], (rom_eps_v, rom_eps_x))
+    # bte_rom.init_rom_basis_from_snapshots(v_sp[:, :], (rom_eps_v, rom_eps_x))
     
     Ls_r = bte_rom.assemble_rom_op(Et(0) * 0.0)
     # Eop  = bte_rom.assemble_encode_op()
@@ -1971,9 +1994,27 @@ def efield_driver_time_harmonic(E0=1e3):
 
     dof_fom = bte_rom.num_p * bte_rom.num_vt * bte_rom.num_x
     dof_rom = bte_rom.dof_rom
-    Lop     = cupyx.scipy.sparse.linalg.LinearOperator((dof_rom, dof_rom), matvec = lambda x: rom_vx(x, Ex, xp=xp), dtype=xp.float64)
-    Lt_r    = rom_utils.assemble_mat((dof_rom, dof_rom), Lop, xp=xp)
 
+    Lt_r   = xp.zeros((len(ef_freq) * 2, Ls_r.shape[0], Ls_r.shape[1])) 
+    def eval_wt_r(t):
+        out       = xp.zeros(len(ef_freq) * 2)
+        out[0::2] = xp.array([xp.cos(2 * xp.pi * ef_freq[i] * t) for i in range(len(ef_freq))])
+        out[1::2] = xp.array([xp.sin(2 * xp.pi * ef_freq[i] * t) for i in range(len(ef_freq))])
+        return out
+
+    for i in range(len(ef_freq)):
+        Lop                = cupyx.scipy.sparse.linalg.LinearOperator((dof_rom, dof_rom), matvec = lambda x: rom_vx(x, ef_amp[i, 0], xp=xp), dtype=xp.float64)
+        Lt_r[2 * i  + 0]   = rom_utils.assemble_mat((dof_rom, dof_rom), Lop, xp=xp)
+
+        Lop                = cupyx.scipy.sparse.linalg.LinearOperator((dof_rom, dof_rom), matvec = lambda x: rom_vx(x, ef_amp[i, 1], xp=xp), dtype=xp.float64)
+        Lt_r[2 * i  + 1]   = rom_utils.assemble_mat((dof_rom, dof_rom), Lop, xp=xp)
+
+
+    # Lop     = cupyx.scipy.sparse.linalg.LinearOperator((dof_rom, dof_rom), matvec = lambda x: rom_vx(x, 1e3 * xp.ones(200), xp=xp), dtype=xp.float64)
+    # Wop     = rom_utils.assemble_mat((dof_rom, dof_rom), Lop, xp=xp)
+    # Wop1    = xp.sum(Lt_r, axis=0)
+    # print("error : %.2E"%(xp.linalg.norm(Wop-Wop1)/xp.linalg.norm(Wop)))
+    
     v       = v_sp[:, 0].reshape((bte_rom.num_p * bte_rom.num_sh , bte_rom.num_x))
     v       = Po @ v
     # v[bte_fom.xp_vt_l,  0] = 0.0
@@ -2005,14 +2046,12 @@ def efield_driver_time_harmonic(E0=1e3):
 
 
     Ir   = xp.eye(dof_rom)
-    ttc  = np.linspace(0, 1, 11)
-    Fm_r = xp.array([xp.linalg.inv(Ir - dt * (Ls_r + xp.sin(2 * xp.pi * ttc[i]) * Lt_r)) for i in range(len(ttc))]).reshape((len(ttc), Ir.shape[0], Ir.shape[1]))
-    Em_r = xp.array([xp.sin(2 * xp.pi * ttc[i]) for i in range(len(ttc))])
-
+    Fm_r = xp.array([xp.linalg.inv(Ir - dt * (Ls_r + xp.einsum("k,kij->ij", eval_wt_r(ttc[i]), Lt_r))) for i in range(len(ttc))]).reshape((len(ttc), Ir.shape[0], Ir.shape[1]))
+    
+    pfactored_solve = False
     verbose = 0
     while tt < tT:
-        Ef     = Et(tt)
-
+        Ef      = Et(tt)
         verbose = (idx % 100 == 0)
         
         if (idx > 0 and idx % cycle_freq== 0):
@@ -2048,14 +2087,14 @@ def efield_driver_time_harmonic(E0=1e3):
             Fr[bte_rom.bte_solver.xp_vt_r,  -1] = 0.0
             Fr                                  = bte_rom.encode(Fr)
 
-            Lop_r                               = Ls_r + xp.sin(2 * xp.pi * tt) * Lt_r
+            Lop_r                               = Ls_r + xp.einsum("k,kij->ij", eval_wt_r(tt), Lt_r)
 
             if rom_use_gmres == True:
                 args            = bte_rom.bte_solver.args
                 rtol            = args.rtol
                 atol            = args.atol
                 iter_max        = args.max_iter
-                pidx            = xp.argmin(xp.abs(Em_r - xp.sin(2 * xp.pi * tt)))
+                pidx            = xp.argmin(xp.linalg.norm(Em_r - Ef[:, xp.newaxis], axis=0))
 
 
                 def Lmvec(x):
@@ -2096,13 +2135,13 @@ def efield_driver_time_harmonic(E0=1e3):
                 Fr                                  = xp.linalg.solve(Ir - dt * Lop_r, bte_rom.encode(Fr))
         else:
             Fr                                  = bte_rom.decode(Fr)
-            bte_rom.flow_map_fom_op_v(Ef, dt)
-            Fr                                  = bte_rom.encode(bte_rom.step_fom_op_split(Ef, Fr, tt, dt, verbose = 0, prefactored_vsolve=True))
+            #bte_rom.flow_map_fom_op_v(Ef, dt)
+            Fr                                  = bte_rom.encode(bte_rom.step_fom_op_split(Ef, Fr, tt, dt, verbose = 0, prefactored_vsolve=pfactored_solve))
             is_rom                              = 1
             
         
-        bte_rom.flow_map_fom_op_v(Ef, dt)
-        F       = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = verbose, prefactored_vsolve=True)
+        #bte_rom.flow_map_fom_op_v(Ef, dt)
+        F       = bte_rom.step_fom_op_split(Ef, F, tt, dt, verbose = verbose, prefactored_vsolve=pfactored_solve)
 
         tt  += dt
         idx +=1
@@ -2110,7 +2149,40 @@ def efield_driver_time_harmonic(E0=1e3):
 
 if __name__ == "__main__":
     #static_efield_driver()
-    efield_driver_time_harmonic()
+    
+    from glowdischarge_boltzmann_1d import glow1d_boltzmann, args_parse
+    args         = args_parse()
+
+    # xp      = cp
+    # ef_amp  = xp.array([[0 * xp.ones(args.Np), 1e3 * xp.ones(args.Np)]])
+    # ef_freq = xp.array([1.0])
+
+
+    # 1D glow case
+    xp      = cp
+    folder_name = "1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_cycle"
+    ff          = h5py.File("%s/macro.h5"%(folder_name), 'r')
+    Et          = np.array(ff["E[Vm^-1]"][()])
+    tt          = np.array(ff["time[T]"][()])
+
+
+    if Et.shape[1] != args.Np:
+        print("Using Chebyshev interpolation for e-field interpolation")
+        npts            = Et.shape[1]
+        xx1             = -np.cos(np.pi*np.linspace(0,npts-1, npts)/(npts-1))
+        v0pinv          = np.linalg.solve(np.polynomial.chebyshev.chebvander(xx1, npts-1), np.eye(npts))
+        xx              = -np.cos(np.pi*np.linspace(0,args.Np-1, args.Np)/(args.Np-1))
+        P1              = np.dot(np.polynomial.chebyshev.chebvander(xx, npts-1), v0pinv)
+        Et              = np.dot(P1, Et.T).T
+        Et              = Et/10
+        
+
+    Et = xp.array(Et)
+    tt = xp.array(tt)
+    ef_amp, ef_freq = rom_utils.fourier_modes(Et[:-1], tt[:-1], 1/len(tt[:-1]), 2, xp=cp)
+    #print(ef_amp, ef_freq)
+    #print(ef_amp.shape, ef_freq.shape)
+    efield_driver_time_harmonic(ef_amp, ef_freq, recompute_basis=False)
     
     
     

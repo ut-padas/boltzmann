@@ -5,6 +5,7 @@ import numpy as np
 import scipy
 import scipy.linalg
 import matplotlib.pyplot as plt
+import sys
 
 
 def assemble_mat(op_dim:tuple, Lop:scipy.sparse.linalg.LinearOperator, xp=np):
@@ -125,7 +126,33 @@ def eigen_plot(A, labels, fname, xp=np):
     plt.savefig(fname)
     plt.close()
 
+def fourier_modes(qoi, tt, dt, k, xp):
+    axis           = 0
+    fqoi           = xp.fft.rfft(qoi, axis=axis)
+    freq           = xp.fft.rfftfreq(len(tt), d=dt)
 
+    assert qoi.shape[axis] == len(tt)
+
+    nf             = xp.ones(len(freq)) * (2/len(tt))
+    nf[0]          = 1/len(tt)
+    fmodes         = nf[:, xp.newaxis] * fqoi 
+    a              = xp.concatenate((xp.real(fmodes[0:k])[xp.newaxis,:, :], xp.imag(fmodes[0:k])[xp.newaxis,:,:]), axis=0)
+
+    # print(xp.real(fmodes[0:k]).shape)
+    # print(xp.real(fmodes[0:k])[xp.newaxis,:,:].shape)
+    # print(a.shape)
+    # sys.exit(0)
+
+
+    return a, freq[0:k]
+
+
+
+
+
+
+
+    
 
     
 

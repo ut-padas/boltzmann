@@ -13,6 +13,8 @@ import utils as bte_utils
 import spec_spherical as sp
 import collisions
 import scipy.constants
+import os
+os.environ["OMP_NUM_THREADS"] = "8"
 
 def make_dir(dir_name):
     # Check whether the specified path exists or not
@@ -39,10 +41,9 @@ def load_run_args(fname):
         args[kv[0].strip()]=kv[1].strip().replace("'", "")
     return args
 
-def compute_radial_components(args, bte_op, spec_sp, ev: np.array, ff):
+def compute_radial_components(args, bte_op, spec_sp, ev: np.array, ff, normalize=False):
     t_pts    = ff.shape[0]
-    
-    ff_lm    = ff#np.array([np.dot(bte_op["po2sh"], ff[idx]) for idx in range(t_pts)])
+    ff_lm    = ff #np.array([np.dot(bte_op["po2sh"], ff[idx]) for idx in range(t_pts)])
     Te       = (float)(args["Te"])
     vth      = collisions.electron_thermal_velocity(Te * (scipy.constants.elementary_charge / scipy.constants.Boltzmann))
     c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
@@ -62,8 +63,11 @@ def compute_radial_components(args, bte_op, spec_sp, ev: np.array, ff):
     mm_op    = bte_op["mass"]
     mm_fac   = np.sqrt(4 * np.pi) 
     
-    #scale    = np.array([np.dot(mm_op / mm_fac, ff_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(t_pts)])
-    ff_lm_n  = ff_lm #np.array([ff_lm[idx]/scale[idx] for idx in range(t_pts)])
+    if normalize:
+        scale    = np.array([np.dot(mm_op / mm_fac, ff_lm[idx]) * (2 * (vth/c_gamma)**3) for idx in range(t_pts)])
+        ff_lm_n  = np.array([ff_lm[idx]/scale[idx] for idx in range(t_pts)])
+    else:
+        ff_lm_n  = ff_lm   
     
     #print(scale)
 
@@ -81,7 +85,7 @@ def fft_reconstruct(qoi, axis, tt, dt, k, fprefix, is_real=True):
     
 
     plt.figure(figsize=(8, 2), dpi=300)
-    plt.xlabel(r"frequency")
+    plt.xlabel(r"frequency (Hz)")
     plt.ylabel(r"magnitude")
     plt.semilogy(freq, np.linalg.norm(np.real(fqoi), axis=1), 'o-'  , markersize=1.8, label=r"$cos(\omega_k t)$")
     plt.semilogy(freq, np.linalg.norm(np.imag(fqoi), axis=1), 'o--' , markersize=1.8, label=r"$sin(\omega_k t)$")
@@ -105,7 +109,7 @@ def fft_reconstruct(qoi, axis, tt, dt, k, fprefix, is_real=True):
         plt.plot(xx, sf * np.imag(fqoi[i-1,:]), label=r"sin($\omega_{%d}$ t)"%(i-1))
         plt.legend()
         plt.grid(visible=True)
-        plt.title(r"freq = %.4E"%(freq[i-1]))
+        plt.title(r"freq = %.4E (Hz)"%(freq[i-1]))
         plt.ylabel(r"E [V/m]")
         plt.xlabel(r"$\hat{x}$")
     
@@ -150,7 +154,7 @@ def fft_reconstruct(qoi, axis, tt, dt, k, fprefix, is_real=True):
     plt.savefig("%s_fft_recons.png"%(fprefix))
     plt.close()
 
-def fft_edf(qoi, axis, tt, dt, k, ev, fprefix):
+def fft_edf(qoi, axis, tt, dt, k, ev, spec_sp, bte_op, fprefix, normalize=False):
     fqoi           = np.fft.rfft(qoi, axis=axis)
     freq           = np.fft.rfftfreq(len(tt), d=dt)
     
@@ -166,14 +170,142 @@ def fft_edf(qoi, axis, tt, dt, k, ev, fprefix):
     plt.savefig("%s_fft.png"%(fprefix))
     plt.close()
 
-    a = compute_radial_components(args, bte_op, spec_sp, ev, np.real(fqoi))
-    b = compute_radial_components(args, bte_op, spec_sp, ev, np.imag(fqoi))
+    a = compute_radial_components(args, bte_op, spec_sp, ev, np.real(fqoi), normalize=normalize)
+    b = compute_radial_components(args, bte_op, spec_sp, ev, np.imag(fqoi), normalize=normalize)
 
     print(a.shape)
 
-    plt.figure(figsize=(12, 8), dpi=300)
+    xloc = list(range(0, len(xx), len(xx)//5))
+    xloc.append(len(xx)-1)
+    #print(a)
+    for xidx in xloc:
+        print(xidx)
+        plt.figure(figsize=(12, 8), dpi=300)
+        for i in range(1, k):
+            plt.subplot(3, 4, i)
+            sf = 1
+            if i == 1:
+                sf = 1/len(tt)
+            else:
+                sf = 2/len(tt)
+
+
+            plt.semilogy(ev, np.abs(a[i-1, xidx, 0, :].T), label=r"$f_0$ -- cos($\omega_{%d}$ t)"%(i-1))
+            plt.semilogy(ev, np.abs(b[i-1, xidx, 0, :].T), label=r"$f_0$ -- sin($\omega_{%d}$ t)"%(i-1))
+
+            plt.semilogy(ev, np.abs(a[i-1, xidx, 1, :].T), label=r"$f_1$ -- cos($\omega_{%d}$ t)"%(i-1))
+            plt.semilogy(ev, np.abs(b[i-1, xidx, 1, :].T), label=r"$f_1$ -- sin($\omega_{%d}$ t)"%(i-1))
+
+            plt.semilogy(ev, np.abs(a[i-1, xidx, 2, :].T), label=r"$f_2$ -- cos($\omega_{%d}$ t)"%(i-1))
+            plt.semilogy(ev, np.abs(b[i-1, xidx, 2, :].T), label=r"$f_2$ -- sin($\omega_{%d}$ t)"%(i-1))
+
+            # plt.plot(xx, sf * np.real(fqoi[i-1,:]), label=r"cos($\omega_{%d}$ t)"%(i-1))
+            # plt.plot(xx, sf * np.imag(fqoi[i-1,:]), label=r"sin($\omega_{%d}$ t)"%(i-1))
+            plt.legend(fontsize=6)
+            plt.grid(visible=True)
+            plt.title(r"freq = %.4E"%(freq[i-1]))
+            plt.ylabel(r"radial component [$ev^{-3/2}$]")
+            plt.xlabel(r"energy [eV]")
+        
+        plt.tight_layout()
+        plt.savefig("%s_modes_xloc_%04d.png"%(fprefix, xidx))
+        plt.close()
+
+def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
+    mop               = bte_op["mass"]
+    ne_f              = np.einsum("tlx,l->tx", fs, mop)
+    ne_g              = np.einsum("tlx,l->tx", gs, mop)
+
+    n_fs              = np.einsum("tvx,tx->tvx", fs, (1/ne_f))
+    n_gs              = np.einsum("tvx,tx->tvx", gs, (1/ne_g))
+
+    freq              = np.fft.rfftfreq(len(tt), d=dt)
+    n_fs_fft          = np.fft.rfft(n_fs, axis=0)
+    n_gs_fft          = np.fft.rfft(n_gs, axis=0)
+
+    fs_fft            = np.fft.rfft(fs, axis=0)
+    gs_fft            = np.fft.rfft(gs, axis=0)
+
+
+    plt.figure(figsize=(10, 4), dpi=200)
+    plt.semilogy(freq, np.linalg.norm(n_fs_fft, axis=(1, 2)) / np.linalg.norm(n_fs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(\hat{f}=\frac{f_s}{n_e})$")
+    plt.semilogy(freq, np.linalg.norm(n_gs_fft, axis=(1, 2)) / np.linalg.norm(n_gs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(\hat{g}=\frac{g}{n_e})$")
+
+    plt.semilogy(freq, np.linalg.norm(fs_fft, axis=(1, 2))   / np.linalg.norm(fs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(f_s)$")
+    plt.semilogy(freq, np.linalg.norm(gs_fft, axis=(1, 2))   / np.linalg.norm(gs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(g)$")
+
+    plt.legend()
+    plt.xlabel("frequency (Hz)")
+    plt.ylabel("magnitude")
+    plt.grid(visible=True)
+    plt.legend()
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig("%s_fft.png"%(fprefix))
+
+    #rtol  = 1e-6
+    
+    nfreq      = 3
+    kr         = list(range(10, 251, 10))
+    nkr        = len(kr)
+
+    rel_errors = np.zeros((nfreq, 2, nkr))
+    for fidx in range(nfreq):
+        print("processing freq: ", fidx)
+        u_re, s_re, vt_re = np.linalg.svd(np.real(gs_fft[fidx]))
+        u_im, s_im, vt_im = np.linalg.svd(np.imag(gs_fft[fidx]))
+
+        v_re = vt_re.T
+        v_im = vt_im.T
+
+        for ik, k in enumerate(kr):
+            p_re = u_re[:, 0:k]
+            q_re = v_re[:, 0:k]
+
+            p_im = u_im[:, 0:k]
+            q_im = v_im[:, 0:k]
+
+            Pp_re = p_re @ p_re.T
+            Pq_re = q_re @ q_re.T
+
+            Pp_im = p_im @ p_im.T
+            Pq_im = q_im @ q_im.T
+        
+
+            rel_errors[fidx, 0, ik] = np.linalg.norm(np.real(fs_fft[fidx]) - Pp_re @ np.real(fs_fft[fidx]) @ Pq_re)/np.linalg.norm(np.real(fs_fft[fidx]))
+            rel_errors[fidx, 1, ik] = np.linalg.norm(np.imag(fs_fft[fidx]) - Pp_im @ np.imag(fs_fft[fidx]) @ Pq_im)/np.linalg.norm(np.imag(fs_fft[fidx]))
+            
+    plt.figure(figsize=(12, 4), dpi=200)
+    for fidx in range(nfreq):
+        plt.semilogy(np.array(kr), rel_errors[fidx, 0], 'o-', label=r"$\omega_%d, Re$"%(fidx))
+        plt.semilogy(np.array(kr), rel_errors[fidx, 1], 'o--', label=r"$\omega_%d, Im$"%(fidx))
+
+    plt.xlabel(r"number of svd modes used")
+    plt.ylabel(r"$||I- P fft(f_s)||/||fft(f_s)||$")
+    plt.legend()
+    plt.grid(visible=True)
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig("%s_fft_rom_projection_error.png"%(fprefix))
+    plt.close()
+
+def plot_Et_fft_comp(Et_bte, Et_fluid, tt, dt, k, fprefix):
+    freq              = np.fft.rfftfreq(len(tt), 1/len(tt)/13.56e6)
+    Et_fluid_fft      = np.fft.rfft(Et_fluid, axis=0)
+    Et_fft            = np.fft.rfft(Et_bte, axis=0)
+
+    plt.figure(figsize=(12, 4), dpi=300)
+    plt.semilogy(freq, np.linalg.norm(Et_fft, axis=1)       , 'o-', label=r"$E_{bte}$")
+    plt.semilogy(freq, np.linalg.norm(Et_fluid_fft, axis=1) , 'o--', label=r"$E_{fluid}$")
+    plt.xlabel(r"frequency [Hz]")
+    plt.ylabel(r"magnitude")
+    plt.legend()
+    plt.grid(visible=True)
+    plt.savefig("%s_fft.png"%(fprefix))
+
+    plt.figure(figsize=(20, 6), dpi=300)
     for i in range(1, k):
-        plt.subplot(3, 4, i)
+        plt.subplot(2, 4, i)
         sf = 1
         if i == 1:
             sf = 1/len(tt)
@@ -181,16 +313,15 @@ def fft_edf(qoi, axis, tt, dt, k, ev, fprefix):
             sf = 2/len(tt)
 
 
-        
+        plt.plot(xx, sf * np.real(Et_fluid_fft[i-1,:]), '--', label=r"$E_{fluid}$ cos($\omega_{%d}$ t)"%(i-1))
+        plt.plot(xx, sf * np.imag(Et_fluid_fft[i-1,:]), '--', label=r"$E_{fluid}$ sin($\omega_{%d}$ t)"%(i-1))
 
-        plt.semilogy(ev, np.abs(a[i-1, 50, 0, :].T), label=r"cos($\omega_{%d}$ t)"%(i-1))
-        plt.semilogy(ev, np.abs(b[i-1, 50, 0, :].T), label=r"sin($\omega_{%d}$ t)"%(i-1))
+        plt.plot(xx, sf * np.real(Et_fft[i-1,:]), label=r"$E_{bte}$ cos($\omega_{%d}$ t)"%(i-1))
+        plt.plot(xx, sf * np.imag(Et_fft[i-1,:]), label=r"$E_{bte}$ sin($\omega_{%d}$ t)"%(i-1))
 
-        # plt.plot(xx, sf * np.real(fqoi[i-1,:]), label=r"cos($\omega_{%d}$ t)"%(i-1))
-        # plt.plot(xx, sf * np.imag(fqoi[i-1,:]), label=r"sin($\omega_{%d}$ t)"%(i-1))
-        plt.legend()
+        plt.legend(fontsize=6)
         plt.grid(visible=True)
-        plt.title(r"freq = %.4E"%(freq[i-1]))
+        plt.title(r"freq = %.4E (Hz)"%(freq[i-1]))
         plt.ylabel(r"E [V/m]")
         plt.xlabel(r"$\hat{x}$")
     
@@ -198,51 +329,116 @@ def fft_edf(qoi, axis, tt, dt, k, ev, fprefix):
     plt.savefig("%s_modes.png"%(fprefix))
     plt.close()
 
+def multi_domain_svd(spec_sp:sp.SpectralExpansionSpherical, fl_tvx, xx : np.array, tt : np.array, domain_bdy:np.array, fprefix):
+    num_sh = len(spec_sp._sph_harm_lm)
+    num_p  = spec_sp._p+1
 
-
-
+    num_domains = len(domain_bdy)-1
+    assert num_domains > 0
     
+    plt.figure(figsize=(4 * num_domains, 4), dpi=200)
+    plt_cnt = 1
+    #xidx   = list()
+    xx_idx = np.arange(len(xx))
+    for i in range(num_domains):
+        xidx     = xx_idx[np.logical_and(xx>=domain_bdy[i], xx< domain_bdy[i+1])]
+        fl_tvx_d = fl_tvx[:, :, xidx]
+        
+        num_t    = fl_tvx_d.shape[0]
+        num_x    = fl_tvx_d.shape[2]
+        
+        sx_l     = list()
+        sv_l     = list()
+        for l in range(num_sh):
+            fl_d = fl_tvx_d[:, l::num_sh, :]
+            Ux, Sx, Vhx = np.linalg.svd(fl_d.reshape(num_t * num_p, -1)) # Nt Nr x Nx
+            Uv, Sv, Vhv = np.linalg.svd(np.swapaxes(fl_d, 0, 1).reshape((num_p, num_t * num_x))) # Nr x Nt Nx
 
+            sx_l.append(Sx)
+            sv_l.append(Sv)
     
     
+        plt.subplot(1, num_domains, plt_cnt)
+        for l in range(num_sh):
+            plt.semilogy(sx_l[l]/sx_l[l][0], label=r"l=%d $\sigma_x$"%(l))
+            plt.semilogy(sv_l[l]/sv_l[l][0], label=r"l=%d $\sigma_{v_r}$"%(l))
 
-folder_name_ops = "../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r"
-folder_name = "../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_cycle"
-args        = load_run_args("%s/1d_glow_args.txt"%(folder_name))
-ff          = h5py.File("%s/macro.h5"%(folder_name), 'r')
+        plt.title(r"domain = (%.4E, %.4E)"%(domain_bdy[i], domain_bdy[i+1]))    
+        plt.legend()
+        plt.grid(visible=True)
+        plt_cnt+=1
 
-mop         = np.load("%s/1d_glow_bte_mass_op.npy"%(folder_name_ops))
-Po          = np.load("%s/1d_glow_bte_psh2o.npy"%(folder_name_ops))
-Ps          = np.load("%s/1d_glow_bte_po2sh.npy"%(folder_name_ops))
-g0          = np.load("%s/1d_glow_bte_op_g0.npy"%(folder_name_ops))
-g2          = np.load("%s/1d_glow_bte_op_g2.npy"%(folder_name_ops))
-temp_op     = np.load("%s/1d_glow_bte_temp_op.npy"%(folder_name_ops))
-bte_op      = {"mass": mop , "po2sh": Ps, "psh2o": Po}
+    #plt.suptitle(io_out)
+    plt.tight_layout()
+    plt.savefig("%s/svd_domains.png"%(fprefix))
 
+
+
+folder_name_ops   = "../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r"
+folder_name       = "../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_cycle"
+folder_name_fluid = "../1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle"
+oprefix           = "1Torr300K100V"
+fvtx              = np.array([np.load("%s/1d_glow_%04d_v.npy"%(folder_name, i)) for i in range(101)])
+
+gvtx_s            = np.load("../1dbte_rom/1Torr300K_100V_Ar_3sp2r/tb_0.00E+00_te_1.00E+00/x__tb_0.00E+00_te_1.00E+00_dt_5.00E-04_255x16x2x400.npy")
+
+mop               = np.load("%s/1d_glow_bte_mass_op.npy"%(folder_name_ops))
+Po                = np.load("%s/1d_glow_bte_psh2o.npy"%(folder_name_ops))
+Ps                = np.load("%s/1d_glow_bte_po2sh.npy"%(folder_name_ops))
+g0                = np.load("%s/1d_glow_bte_op_g0.npy"%(folder_name_ops))
+g2                = np.load("%s/1d_glow_bte_op_g2.npy"%(folder_name_ops))
+temp_op           = np.load("%s/1d_glow_bte_temp_op.npy"%(folder_name_ops))
+bte_op            = {"mass": mop , "po2sh": Ps, "psh2o": Po}
+
+args              = load_run_args("%s/1d_glow_args.txt"%(folder_name))
+ff                = h5py.File("%s/macro.h5"%(folder_name), 'r')
+Et                = np.array(ff["E[Vm^-1]"][()])
+ne                = np.array(ff["ne[m^-3]"][()])
+Te                = np.array(ff["Te[eV]"][()])
+xx                = np.array(ff["x[-1,1]"][()])
+tt                = np.array(ff["time[T]"][()])
+ev                = np.linspace(0, 80, 1024)
 spec_sp, col_list = plot_utils.gen_spec_sp(args)
 
-#print(ff.keys())
-Et          = np.array(ff["E[Vm^-1]"][()])
-xx          = np.array(ff["x[-1,1]"][()])
-tt          = np.array(ff["time[T]"][()])
-ne          = np.array(ff["ne[m^-3]"][()])
-Te          = np.array(ff["Te[eV]"][()])
-fvtx        = np.array(ff["Ftvx"][()])
+ff_fluid          = h5py.File("%s/macro.h5"%(folder_name_fluid))
+Et_fluid          = np.array(ff_fluid["E[Vm^-1]"][()])
 
-make_dir("%s/fft"%(folder_name))
-fft_reconstruct(Et[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/Et"%(folder_name))
-fft_reconstruct(ne[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/ne"%(folder_name))
-fft_reconstruct(Te[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/Te"%(folder_name))
+freq              = np.fft.rfftfreq(len(tt[:-1]), 1/len(tt[:-1])/13.56e6)
+Et_fluid_fft      = np.fft.rfft(Et_fluid, axis=0)
+Et_fft            = np.fft.rfft(Et, axis=0)
+
+fvtx_s            = np.einsum("tlx,vl->tvx", fvtx,Ps)
+ne_f              = np.einsum("tlx,l->tx", fvtx_s, mop)
+ne_g              = np.einsum("tlx,l->tx", gvtx_s, mop)
+glm               = compute_radial_components(args,  bte_op, spec_sp, ev, gvtx_s, normalize=True)
+flm               = compute_radial_components(args,  bte_op, spec_sp, ev, fvtx_s, normalize=True)
+
+ofolder_name      = "glow_rom_analysis_plots"
+
+make_dir("%s"%(ofolder_name))
+plot_Et_fft_comp(Et[:-1, :], Et_fluid[:-1, :], tt[:-1], 1/len(tt[:-1])/13.56e6, 9, "%s/E%s"%(ofolder_name, oprefix))
+
+multi_domain_svd(spec_sp, fvtx_s, xx, tt, np.array([-1, -0.75, -0.5, 0.5, 0.75, 1]), "%s/%s"%(ofolder_name, oprefix))
 
 
-fft_edf(fvtx[:-1], 0, tt[:-1], (1e-3)/13.56e6, 13, np.linspace(0, 80, 1024), "%s/fft/edf"%(folder_name))
+
+#fvtx             = np.array(ff["Ftvx"][()])
+
+# make_dir("%s/fft"%(folder_name))
+# fft_reconstruct(Et[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/Et"%(folder_name))
+# fft_reconstruct(ne[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/ne"%(folder_name))
+# fft_reconstruct(Te[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/Te"%(folder_name))
+
+
+# fft_edf(fvtx_s[:-1], 0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_f"%(folder_name))
+# fft_edf(gvtx_s[:-1], 0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_g"%(folder_name))
+# fft_edf(np.einsum("tvx,tx->tvx", gvtx_s, (1/ne_g))[:-1],  0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_hat_g"%(folder_name))
+# fft_edf(np.einsum("tvx,tx->tvx", fvtx_s, (1/ne_f))[:-1],  0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_hat_f"%(folder_name))
 
 
 
 
-
-
-
+#fft_rom_analysis(fvtx_s, gvtx_s, tt, (1e-3)/13.56e6, xx, bte_op)
 
     
 

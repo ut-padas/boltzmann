@@ -137,7 +137,8 @@ def fourier_modes(qoi, tt, dt, k, xp):
     nf[0]          = 1/len(tt)
     fmodes         = nf[:, xp.newaxis] * fqoi 
     a              = xp.concatenate((xp.real(fmodes[0:k])[xp.newaxis,:, :], xp.imag(fmodes[0:k])[xp.newaxis,:,:]), axis=0)
-
+    a              = np.swapaxes(a, 0, 1)
+    
     # print(xp.real(fmodes[0:k]).shape)
     # print(xp.real(fmodes[0:k])[xp.newaxis,:,:].shape)
     # print(a.shape)
@@ -145,6 +146,45 @@ def fourier_modes(qoi, tt, dt, k, xp):
 
 
     return a, freq[0:k]
+
+def stabilize_flowmap(A:np.array, dt):
+    # T, Q = scipy.linalg.schur(A, output="complex")
+    # eig  = np.diag(T)
+
+    # idx  = np.arange(A.shape[0])[np.real(eig)>0]
+    # print("number of unstable modes = %d "%(len(idx)))
+    # print(eig[idx])
+
+    # # for i in range(len(idx)):
+    # #     k       = idx[i] 
+    # #     T[k, k] = 0 + np.imag(T[k,k]) * 1j
+
+    # As = Q @ T @ Q.conjugate().T
+    # print(np.linalg.norm(np.imag(As)))
+    # As = np.real(As)
+    # return As
+
+    Ir   = np.eye(A.shape[0])
+    L    = np.linalg.inv(Ir - dt * A)
+    D, Q = np.linalg.eig(L)
+    Qinv = np.linalg.inv(Q)
+
+    print("||Ir - QQ^{-1}|| / ||Ir|| = %.8E"%(np.linalg.norm(Ir - Q @ Qinv)/np.linalg.norm(Ir)))
+    print("||Ir - QQ^{-1}|| / ||Ir|| = %.8E"%(np.linalg.norm(Ir - Qinv @ Q)/np.linalg.norm(Ir)))
+    print("||L - Q D Q^{-1}||/||L||  = %.8E"%(np.linalg.norm(L - np.real((Q * D) @ Qinv))/np.linalg.norm(L)))
+
+    idx  = np.arange(A.shape[0])[np.real(D)>1]
+    print("number of unstable modes = %d "%(len(idx)))
+    print(D[idx])
+
+    for i in range(len(idx)):
+        k       = idx[i] 
+        D[k]    = 0.9 + np.imag(D[k]) * 1j
+    
+    Ls = (Q * D) @ Qinv
+    print(np.linalg.norm(np.imag(Ls)))
+    return np.real(Ls)
+
 
 
 

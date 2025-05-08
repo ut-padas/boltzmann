@@ -13,8 +13,18 @@ import utils as bte_utils
 import spec_spherical as sp
 import collisions
 import scipy.constants
-import os
-os.environ["OMP_NUM_THREADS"] = "8"
+import cupy as cp
+import matplotlib as mpl
+from matplotlib.pyplot import cm
+import itertools
+#import os
+#os.environ["OMP_NUM_THREADS"] = "8"
+
+def asnumpy(x):
+    if (xp == cp):
+        return xp.asnumpy(x)
+    else:
+        return x
 
 def make_dir(dir_name):
     # Check whether the specified path exists or not
@@ -228,8 +238,8 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
 
 
     plt.figure(figsize=(10, 4), dpi=200)
-    plt.semilogy(freq, np.linalg.norm(n_fs_fft, axis=(1, 2)) / np.linalg.norm(n_fs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(\hat{f}=\frac{f_s}{n_e})$")
-    plt.semilogy(freq, np.linalg.norm(n_gs_fft, axis=(1, 2)) / np.linalg.norm(n_gs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(\hat{g}=\frac{g}{n_e})$")
+    # plt.semilogy(freq, np.linalg.norm(n_fs_fft, axis=(1, 2)) / np.linalg.norm(n_fs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(\hat{f}=\frac{f_s}{n_e})$")
+    # plt.semilogy(freq, np.linalg.norm(n_gs_fft, axis=(1, 2)) / np.linalg.norm(n_gs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(\hat{g}=\frac{g}{n_e})$")
 
     plt.semilogy(freq, np.linalg.norm(fs_fft, axis=(1, 2))   / np.linalg.norm(fs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(f_s)$")
     plt.semilogy(freq, np.linalg.norm(gs_fft, axis=(1, 2))   / np.linalg.norm(gs_fft, axis=(1, 2))[0] , 'o-',     label=r"$fft(g)$")
@@ -244,44 +254,129 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
     plt.savefig("%s_fft.png"%(fprefix))
 
     #rtol  = 1e-6
+    nfreq      = 6
+    num_sh     = int(args["l_max"]) + 1
+
+    if 1:
+        fs_fft_recons = np.zeros(fs_fft.shape, dtype=fs_fft.dtype)
+        for fidx in range(nfreq):
+            for lidx in range(num_sh):
+                u_re, s_re, vt_re = np.linalg.svd(np.real(gs_fft[fidx, lidx::num_sh]))
+                u_im, s_im, vt_im = np.linalg.svd(np.imag(gs_fft[fidx, lidx::num_sh]))
+                v_re              = vt_re.T
+                v_im              = vt_im.T
+                rank_k            = 150
+
+                p_re              = u_re[:, 0:rank_k]
+                q_re              = v_re[:, 0:rank_k]
+                p_im              = u_im[:, 0:rank_k]
+                q_im              = v_im[:, 0:rank_k]
+
+                Pp_re             = p_re @ p_re.T
+                Pq_re             = q_re @ q_re.T
+                Pp_im             = p_im @ p_im.T
+                Pq_im             = q_im @ q_im.T
+                
+                fs_fft_recons[fidx, lidx::num_sh]  = Pp_re @ np.real(fs_fft[fidx, lidx::num_sh]) @ Pq_re + (1j) * Pp_im @ np.imag(fs_fft[fidx, lidx::num_sh]) @ Pq_im
+                
+
+            ev         = np.linspace(1e-3, 80, 1024)
+            fs_fft_re  = compute_radial_components(args, bte_op, spec_sp, ev, np.real(fs_fft[fidx])       [np.newaxis, :, :]           , normalize=False)
+            fs_fft_im  = compute_radial_components(args, bte_op, spec_sp, ev, np.imag(fs_fft[fidx])       [np.newaxis, :, :]           , normalize=False)
+            fs_fft_re0 = compute_radial_components(args, bte_op, spec_sp, ev, np.real(fs_fft_recons[fidx])[np.newaxis, :, :]           , normalize=False)
+            fs_fft_im0 = compute_radial_components(args, bte_op, spec_sp, ev, np.imag(fs_fft_recons[fidx])[np.newaxis, :, :]           , normalize=False)
+
+            # Set the default color cycle
+            #mpl.rcParams['axes.prop_cycle'] =  
+            #print(fs_fft_re.shape)
+            #cycle   = itertools.cycle(cm.viridis(np.linspace(0, 1, 12)))
+            cycle   = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
+            # xloc    = list(range(0, 400, 50))
+            # xloc.append(len(xx)-1)
+            xloc    = [0, 20, 50, 100, 200]
+
+            for idx, (fs, fs_r) in enumerate(list([(fs_fft_re, fs_fft_re0), (fs_fft_im, fs_fft_im0)])):
+                plt.figure(figsize=(12, 4), dpi=300)
+                for xidx in xloc:
+                    clr = next(cycle)
+                    plt.subplot(1, 3, 1)
+                    plt.title(r"$f_0$")
+                    
+                    plt.semilogy(ev, np.abs(fs  [0, xidx, 0]), '-'  , color=clr, label = r"FOM F($\epsilon$,$x=%.2f$)"%(xx[xidx]))
+                    plt.semilogy(ev, np.abs(fs_r[0, xidx, 0]), 'o--', color=clr, label = r"ROM F($\epsilon$,$x=%.2f$)"%(xx[xidx]), markersize=2.4)
+                    
+                    plt.legend(fontsize=8)
+                    
+                    plt.xlabel(r"energy [eV]")
+                    plt.grid(visible=True)
+
+                    plt.subplot(1, 3, 2)
+                    plt.title(r"$f_1$")
+
+                    plt.semilogy(ev, np.abs(fs  [0, xidx, 1]), '-'  , color=clr, label = r"FOM F($\epsilon$,$x=%.2f$)"%(xx[xidx]))
+                    plt.semilogy(ev, np.abs(fs_r[0, xidx, 1]), 'o--', color=clr, label = r"ROM F($\epsilon$,$x=%.2f$)"%(xx[xidx]), markersize=2.4)
+
+                    plt.legend(fontsize=8)
+
+                    plt.xlabel(r"energy [eV]")
+                    plt.grid(visible=True)
+
+                    plt.subplot(1, 3, 3)
+                    plt.title(r"$f_2$")
+                    
+                    plt.semilogy(ev, np.abs(fs  [0, xidx, 2]), '-'  , color=clr, label = r"FOM F($\epsilon$,$x=%.2f$)"%(xx[xidx]))
+                    plt.semilogy(ev, np.abs(fs_r[0, xidx, 2]), 'o--', color=clr, label = r"ROM F($\epsilon$,$x=%.2f$)"%(xx[xidx]), markersize=2.4)
+                    plt.legend(fontsize=8)
+
+                    plt.xlabel(r"energy [eV]")
+                    plt.grid(visible=True)
+
+                if idx == 0 : plt.savefig("%s_fft_modes_re_fidx_%04d.png"%(fprefix, fidx))
+                if idx == 1 : plt.savefig("%s_fft_modes_im_fidx_%04d.png"%(fprefix, fidx))
+
     
-    nfreq      = 3
-    kr         = list(range(10, 251, 10))
+    kr         = list(range(10, 251, 50))
     nkr        = len(kr)
 
-    rel_errors = np.zeros((nfreq, 2, nkr))
-    for fidx in range(nfreq):
-        print("processing freq: ", fidx)
-        u_re, s_re, vt_re = np.linalg.svd(np.real(gs_fft[fidx]))
-        u_im, s_im, vt_im = np.linalg.svd(np.imag(gs_fft[fidx]))
-
-        v_re = vt_re.T
-        v_im = vt_im.T
-
-        for ik, k in enumerate(kr):
-            p_re = u_re[:, 0:k]
-            q_re = v_re[:, 0:k]
-
-            p_im = u_im[:, 0:k]
-            q_im = v_im[:, 0:k]
-
-            Pp_re = p_re @ p_re.T
-            Pq_re = q_re @ q_re.T
-
-            Pp_im = p_im @ p_im.T
-            Pq_im = q_im @ q_im.T
+    rel_errors    = np.zeros((nfreq, 2, nkr))
+    fs_fft_recons = np.zeros(fs_fft.shape, dtype=fs_fft.dtype)
+    for ik, k in enumerate(kr):
         
+        for fidx in range(nfreq):
+            for lidx in range(num_sh):
+                print("rank = ", k, " processing freq: ", fidx, " l = ", lidx)
 
-            rel_errors[fidx, 0, ik] = np.linalg.norm(np.real(fs_fft[fidx]) - Pp_re @ np.real(fs_fft[fidx]) @ Pq_re)/np.linalg.norm(np.real(fs_fft[fidx]))
-            rel_errors[fidx, 1, ik] = np.linalg.norm(np.imag(fs_fft[fidx]) - Pp_im @ np.imag(fs_fft[fidx]) @ Pq_im)/np.linalg.norm(np.imag(fs_fft[fidx]))
+                u_re, s_re, vt_re = np.linalg.svd(np.real(gs_fft[fidx, lidx::num_sh]))
+                u_im, s_im, vt_im = np.linalg.svd(np.imag(gs_fft[fidx, lidx::num_sh]))
+
+                v_re = vt_re.T
+                v_im = vt_im.T
+
+                p_re = u_re[:, 0:k]
+                q_re = v_re[:, 0:k]
+
+                p_im = u_im[:, 0:k]
+                q_im = v_im[:, 0:k]
+
+                Pp_re = p_re @ p_re.T
+                Pq_re = q_re @ q_re.T
+
+                Pp_im = p_im @ p_im.T
+                Pq_im = q_im @ q_im.T
+        
+                fs_fft_recons[fidx, lidx::num_sh]  = Pp_re @ np.real(fs_fft[fidx, lidx::num_sh]) @ Pq_re + (1j) * Pp_im @ np.imag(fs_fft[fidx, lidx::num_sh]) @ Pq_im
+
+            rel_errors[fidx, 0, ik] = np.linalg.norm(np.real(fs_fft[fidx]) - np.real(fs_fft_recons[fidx])) / np.linalg.norm(np.real(fs_fft[fidx]))
+            rel_errors[fidx, 1, ik] = np.linalg.norm(np.imag(fs_fft[fidx]) - np.imag(fs_fft_recons[fidx])) / np.linalg.norm(np.imag(fs_fft[fidx]))
             
-    plt.figure(figsize=(12, 4), dpi=200)
+    plt.figure(figsize=(12, 6), dpi=200)
     for fidx in range(nfreq):
-        plt.semilogy(np.array(kr), rel_errors[fidx, 0], 'o-', label=r"$\omega_%d, Re$"%(fidx))
-        plt.semilogy(np.array(kr), rel_errors[fidx, 1], 'o--', label=r"$\omega_%d, Im$"%(fidx))
+        plt.semilogy(np.array(kr), rel_errors[fidx, 0], 'o-'     , label=r"$\cos(\omega_%d t)$"%(fidx))
+        if(fidx>0):
+            plt.semilogy(np.array(kr), rel_errors[fidx, 1], 'o--', label=r"$\sin(\omega_%d t)$"%(fidx))
 
     plt.xlabel(r"number of svd modes used")
-    plt.ylabel(r"$||I- P fft(f_s)||/||fft(f_s)||$")
+    plt.ylabel(r"$||I- P \text{fft}(f_s)||/||\text{fft}(f_s)||$")
     plt.legend()
     plt.grid(visible=True)
     plt.tight_layout()
@@ -289,14 +384,16 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
     plt.savefig("%s_fft_rom_projection_error.png"%(fprefix))
     plt.close()
 
+    
+
 def plot_Et_fft_comp(Et_bte, Et_fluid, tt, dt, k, fprefix):
     freq              = np.fft.rfftfreq(len(tt), 1/len(tt)/13.56e6)
     Et_fluid_fft      = np.fft.rfft(Et_fluid, axis=0)
     Et_fft            = np.fft.rfft(Et_bte, axis=0)
 
     plt.figure(figsize=(12, 4), dpi=300)
-    plt.semilogy(freq, np.linalg.norm(Et_fft, axis=1)       , 'o-', label=r"$E_{bte}$")
-    plt.semilogy(freq, np.linalg.norm(Et_fluid_fft, axis=1) , 'o--', label=r"$E_{fluid}$")
+    plt.semilogy(freq, np.linalg.norm(Et_fft, axis=1)       / np.linalg.norm(Et_fft, axis=1)[0]       , 'o-', label=r"$E_{bte}$")
+    plt.semilogy(freq, np.linalg.norm(Et_fluid_fft, axis=1) / np.linalg.norm(Et_fluid_fft, axis=1)[0] , 'o--', label=r"$E_{fluid}$")
     plt.xlabel(r"frequency [Hz]")
     plt.ylabel(r"magnitude")
     plt.legend()
@@ -319,7 +416,7 @@ def plot_Et_fft_comp(Et_bte, Et_fluid, tt, dt, k, fprefix):
         plt.plot(xx, sf * np.real(Et_fft[i-1,:]), label=r"$E_{bte}$ cos($\omega_{%d}$ t)"%(i-1))
         plt.plot(xx, sf * np.imag(Et_fft[i-1,:]), label=r"$E_{bte}$ sin($\omega_{%d}$ t)"%(i-1))
 
-        plt.legend(fontsize=6)
+        plt.legend(fontsize=10)
         plt.grid(visible=True)
         plt.title(r"freq = %.4E (Hz)"%(freq[i-1]))
         plt.ylabel(r"E [V/m]")
@@ -329,14 +426,15 @@ def plot_Et_fft_comp(Et_bte, Et_fluid, tt, dt, k, fprefix):
     plt.savefig("%s_modes.png"%(fprefix))
     plt.close()
 
-def multi_domain_svd(spec_sp:sp.SpectralExpansionSpherical, fl_tvx, xx : np.array, tt : np.array, domain_bdy:np.array, fprefix):
+def multi_domain_svd(spec_sp:sp.SpectralExpansionSpherical, fl_tvx, xx : np.array, tt : np.array, domain_bdy:np.array, nr, nc, fprefix, xp):
     num_sh = len(spec_sp._sph_harm_lm)
     num_p  = spec_sp._p+1
 
+    num_pts     = len(domain_bdy)
     num_domains = len(domain_bdy)-1
     assert num_domains > 0
     
-    plt.figure(figsize=(4 * num_domains, 4), dpi=200)
+    plt.figure(figsize=(4 * nc, 4 * nr), dpi=300)
     plt_cnt = 1
     #xidx   = list()
     xx_idx = np.arange(len(xx))
@@ -351,14 +449,18 @@ def multi_domain_svd(spec_sp:sp.SpectralExpansionSpherical, fl_tvx, xx : np.arra
         sv_l     = list()
         for l in range(num_sh):
             fl_d = fl_tvx_d[:, l::num_sh, :]
-            Ux, Sx, Vhx = np.linalg.svd(fl_d.reshape(num_t * num_p, -1)) # Nt Nr x Nx
-            Uv, Sv, Vhv = np.linalg.svd(np.swapaxes(fl_d, 0, 1).reshape((num_p, num_t * num_x))) # Nr x Nt Nx
+            Ux, Sx, Vhx = xp.linalg.svd(fl_d.reshape(num_t * num_p, -1)) # Nt Nr x Nx
+            Uv, Sv, Vhv = xp.linalg.svd(np.swapaxes(fl_d, 0, 1).reshape((num_p, num_t * num_x))) # Nr x Nt Nx
+
+            if (xp == cp):
+                Sx = asnumpy(Sx)
+                Sv = asnumpy(Sv)
 
             sx_l.append(Sx)
             sv_l.append(Sv)
     
     
-        plt.subplot(1, num_domains, plt_cnt)
+        plt.subplot(nr, nc, plt_cnt)
         for l in range(num_sh):
             plt.semilogy(sx_l[l]/sx_l[l][0], label=r"l=%d $\sigma_x$"%(l))
             plt.semilogy(sv_l[l]/sv_l[l][0], label=r"l=%d $\sigma_{v_r}$"%(l))
@@ -370,17 +472,24 @@ def multi_domain_svd(spec_sp:sp.SpectralExpansionSpherical, fl_tvx, xx : np.arra
 
     #plt.suptitle(io_out)
     plt.tight_layout()
-    plt.savefig("%s/svd_domains.png"%(fprefix))
+    plt.savefig("%s_svd_domains.png"%(fprefix))
 
 
-
+xp                = cp
 folder_name_ops   = "../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r"
 folder_name       = "../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_cycle"
 folder_name_fluid = "../1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle"
 oprefix           = "1Torr300K100V"
+
+# folder_name_ops   = "../1dglow_hybrid_Nx400/0.5Torr300K_100V_Ar_3sp2r"
+# folder_name       = "../1dglow_hybrid_Nx400/0.5Torr300K_100V_Ar_3sp2r_cycle"
+# folder_name_fluid = "../1dglow_fluid_Nx400/0.5Torr300K_100V_Ar_3sp2r_tab_cycle"
+# oprefix           = "0.5Torr300K100V"
+
 fvtx              = np.array([np.load("%s/1d_glow_%04d_v.npy"%(folder_name, i)) for i in range(101)])
 
-gvtx_s            = np.load("../1dbte_rom/1Torr300K_100V_Ar_3sp2r/tb_0.00E+00_te_1.00E+00/x__tb_0.00E+00_te_1.00E+00_dt_5.00E-04_255x16x2x400.npy")
+gvtx_s            = np.load("../1dbte_rom/1Torr300K_100V_Ar_3sp2r/tb_0.00E+00_te_1.00E+00/x__tb_0.00E+00_te_1.00E+00_dt_5.00E-05_255x16x2x400.npy")
+#gvtx_s            = np.load("../1dbte_rom/1Torr300K_100V_Ar_3sp2r/tb_0.00E+00_te_1.00E+00_ic100T/x__tb_0.00E+00_te_1.00E+00_dt_5.00E-04_255x16x2x400.npy")
 
 mop               = np.load("%s/1d_glow_bte_mass_op.npy"%(folder_name_ops))
 Po                = np.load("%s/1d_glow_bte_psh2o.npy"%(folder_name_ops))
@@ -407,18 +516,21 @@ freq              = np.fft.rfftfreq(len(tt[:-1]), 1/len(tt[:-1])/13.56e6)
 Et_fluid_fft      = np.fft.rfft(Et_fluid, axis=0)
 Et_fft            = np.fft.rfft(Et, axis=0)
 
-fvtx_s            = np.einsum("tlx,vl->tvx", fvtx,Ps)
+fvtx_s            = asnumpy(xp.einsum("tlx,vl->tvx", xp.array(fvtx), xp.array(Ps)))
 ne_f              = np.einsum("tlx,l->tx", fvtx_s, mop)
 ne_g              = np.einsum("tlx,l->tx", gvtx_s, mop)
 glm               = compute_radial_components(args,  bte_op, spec_sp, ev, gvtx_s, normalize=True)
 flm               = compute_radial_components(args,  bte_op, spec_sp, ev, fvtx_s, normalize=True)
 
 ofolder_name      = "glow_rom_analysis_plots"
-
 make_dir("%s"%(ofolder_name))
+
+# multi_domain_svd(spec_sp, xp.array(fvtx_s), np.array(xx), tt, np.array([-1, -0.75, -0.5, 0.5, 0.75, 1]), 2, 3, "%s/%s_md"%(ofolder_name, oprefix), cp)
+# multi_domain_svd(spec_sp, xp.array(fvtx_s), np.array(xx), tt, np.array([-1, 1]), 1, 1, "%s/%s_sd"%(ofolder_name, oprefix), cp)
 plot_Et_fft_comp(Et[:-1, :], Et_fluid[:-1, :], tt[:-1], 1/len(tt[:-1])/13.56e6, 9, "%s/E%s"%(ofolder_name, oprefix))
 
-multi_domain_svd(spec_sp, fvtx_s, xx, tt, np.array([-1, -0.75, -0.5, 0.5, 0.75, 1]), "%s/%s"%(ofolder_name, oprefix))
+fft_rom_analysis(fvtx_s, gvtx_s, tt, (1e-3)/13.56e6, xx, bte_op, "%s/%s_fd_rom"%(ofolder_name, oprefix))
+
 
 
 

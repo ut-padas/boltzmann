@@ -196,7 +196,7 @@ class bte_0d3v_batched():
 
         else:
             for i in range(self._par_nvgrids):
-                print(i, self._par_col_model[i])
+                #print(i, self._par_col_model[i])
                 avail_species = cross_section.read_available_species(self._par_col_model[i])
                 cs_data_all   = cross_section.read_cross_section_data(self._par_col_model[i])
                 cross_section.CROSS_SECTION_DATA = cs_data_all
@@ -217,6 +217,33 @@ class bte_0d3v_batched():
                 self.num_collisions = len(coll_list)
                 self._coll_list.append(coll_list)
                 self._collision_names.append(coll_names)
+        
+        egrid     = np.logspace(-3, 3, 100, base=10)
+        sigma_crs = np.zeros((self._par_nvgrids, len(self._coll_list[0]), len(egrid)))
+        for i in range(self._par_nvgrids):
+            for col_idx, g in enumerate(self._coll_list[i]):
+                sigma_crs[i, col_idx] = g.total_cross_section(egrid)
+        
+        import matplotlib.pyplot as plt
+        col_process_str = list()
+        for col_str, col_data in self._cross_section_data[0].items():
+            col_process_str.append(col_str)
+
+        for col_idx in range(sigma_crs.shape[1]):
+            plt.figure(figsize=(8,8), dpi=200)
+            
+            for i in range(self._par_nvgrids):
+                plt.loglog(egrid, sigma_crs[i, col_idx], label=r"$T_e = %.4E [K]$"%(self._par_ap_Te[i] * collisions.TEMP_K_1EV))
+        
+            plt.xlabel(r"energy [eV]")
+            plt.ylabel(r"cross section [$m^2$]")
+            plt.legend()
+            plt.title("%s"%(col_process_str[col_idx]))
+            plt.tight_layout()
+            plt.savefig("%s_crs_%04d.png"%(self._args.out_fname, col_idx))
+            #print("file saved in ", "%s_crs.png"%(self._args.out_fname))
+            plt.close()
+            
             
         
         # self._collision_names              = list()

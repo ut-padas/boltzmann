@@ -153,8 +153,8 @@ class CollisionOpSP():
                         gw_e             = gw_e[check_1]
                         v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
                     
-                    elif (g._type == collisions.CollisionType.EAR_G3):
-                        v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  + g._attachment_energy)) / V_TH
+                    # elif (g._type == collisions.CollisionType.EAR_G3):
+                    #     v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  + g._attachment_energy)) / V_TH
                     else:
                         raise ValueError
 

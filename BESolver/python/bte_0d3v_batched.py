@@ -161,23 +161,107 @@ class bte_0d3v_batched():
         
         profile_tt = self.profile_tt_all[0]
         profile_tt[pp.C_CS_SETUP].start()
-        
+
         self._collision_names              = list()
         self._coll_list                    = list()
-        self._avail_species                = cross_section.read_available_species(self._args.collisions)
-        cross_section.CROSS_SECTION_DATA   = cross_section.read_cross_section_data(self._args.collisions)
-        self._cross_section_data           = cross_section.CROSS_SECTION_DATA
-        print("==========read collissions===========")
-        collision_count = 0
-        for col_str, col_data in self._cross_section_data.items():
-            print(col_str, col_data["type"])
-            g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
-            self._coll_list.append(g)
-            self._collision_names.append("C%d"%(collision_count)) 
-            collision_count+=1
-        print("=====================================")
-        print("number of total collisions = %d " %(len(self._coll_list)))
-        self.num_collisions = len(self._coll_list)
+        self._avail_species                = list()
+        self._cross_section_data           = list()
+
+        if (len(self._par_col_model)==1):
+            avail_species = cross_section.read_available_species(self._par_col_model[0])
+            cs_data_all   = cross_section.read_cross_section_data(self._par_col_model[0])
+            
+            cross_section.CROSS_SECTION_DATA = cs_data_all
+            coll_names     = list()
+            coll_list      = list()
+
+            print("==========read collissions===========")
+            collision_count = 0
+            for col_str, col_data in cs_data_all.items():
+                print(col_str, col_data["type"])
+                g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
+                coll_list.append(g)
+                coll_names.append("C%d"%(collision_count)) 
+                collision_count+=1
+            print("=====================================")
+            print("number of total collisions = %d " %(len(coll_list)))
+            self.num_collisions = len(coll_list)
+            
+            for i in range(self._par_nvgrids):
+                self._avail_species.append(avail_species)
+                self._cross_section_data.append(cs_data_all)
+                self._coll_list.append(coll_list)
+                self._collision_names.append(coll_names)
+
+
+        else:
+            for i in range(self._par_nvgrids):
+                #print(i, self._par_col_model[i])
+                avail_species = cross_section.read_available_species(self._par_col_model[i])
+                cs_data_all   = cross_section.read_cross_section_data(self._par_col_model[i])
+                cross_section.CROSS_SECTION_DATA = cs_data_all
+                self._avail_species.append(avail_species)
+                self._cross_section_data.append(cs_data_all)
+
+                collision_count = 0
+                coll_names      = list()
+                coll_list       = list()
+                for col_str, col_data in cs_data_all.items():
+                    print(col_str, col_data["type"])
+                    g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
+                    coll_list.append(g)
+                    coll_names.append("C%d"%(collision_count)) 
+                    collision_count+=1
+
+                print("number of total collisions = %d " %(len(coll_list)))
+                self.num_collisions = len(coll_list)
+                self._coll_list.append(coll_list)
+                self._collision_names.append(coll_names)
+        
+        egrid     = np.logspace(-3, 3, 100, base=10)
+        sigma_crs = np.zeros((self._par_nvgrids, len(self._coll_list[0]), len(egrid)))
+        for i in range(self._par_nvgrids):
+            for col_idx, g in enumerate(self._coll_list[i]):
+                sigma_crs[i, col_idx] = g.total_cross_section(egrid)
+        
+        import matplotlib.pyplot as plt
+        col_process_str = list()
+        for col_str, col_data in self._cross_section_data[0].items():
+            col_process_str.append(col_str)
+
+        for col_idx in range(sigma_crs.shape[1]):
+            plt.figure(figsize=(8,8), dpi=200)
+            
+            for i in range(self._par_nvgrids):
+                plt.loglog(egrid, sigma_crs[i, col_idx], label=r"$T_e = %.4E [K]$"%(self._par_ap_Te[i] * collisions.TEMP_K_1EV))
+        
+            plt.xlabel(r"energy [eV]")
+            plt.ylabel(r"cross section [$m^2$]")
+            plt.legend()
+            plt.title("%s"%(col_process_str[col_idx]))
+            plt.tight_layout()
+            plt.savefig("%s_crs_%04d.png"%(self._args.out_fname, col_idx))
+            #print("file saved in ", "%s_crs.png"%(self._args.out_fname))
+            plt.close()
+            
+            
+        
+        # self._collision_names              = list()
+        # self._coll_list                    = list()
+        # self._avail_species                = cross_section.read_available_species(self._args.collisions)
+        # cross_section.CROSS_SECTION_DATA   = cross_section.read_cross_section_data(self._args.collisions)
+        # self._cross_section_data           = cross_section.CROSS_SECTION_DATA
+        # print("==========read collissions===========")
+        # collision_count = 0
+        # for col_str, col_data in self._cross_section_data.items():
+        #     print(col_str, col_data["type"])
+        #     g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
+        #     self._coll_list.append(g)
+        #     self._collision_names.append("C%d"%(collision_count)) 
+        #     collision_count+=1
+        # print("=====================================")
+        # print("number of total collisions = %d " %(len(self._coll_list)))
+        # self.num_collisions = len(self._coll_list)
         
         # species       = cross_section.read_available_species(self._args.collisions)
         # mole_fraction = np.array(self._args.ns_by_n0)[0:len(species)]
@@ -210,9 +294,10 @@ class bte_0d3v_batched():
         vth                    = self._par_vth[idx]
         maxwellian             = bte_utils.get_maxwellian_3d(vth, 1.0)
         
-        sig_pts   =  list()
-        for col_idx, g in enumerate(self._coll_list):
-            g  = self._coll_list[col_idx]
+        coll_list              = self._coll_list[idx]
+        sig_pts                =  list()
+        for col_idx, g in enumerate(coll_list):
+            g  = coll_list[col_idx]
             if g._reaction_threshold != None and g._reaction_threshold >0:
                 sig_pts.append(g._reaction_threshold)
         
@@ -246,16 +331,16 @@ class bte_0d3v_batched():
         gx_ev                   = (gx * vth / c_gamma)**2
 
         sigma_m                 = 0
-        FOp                     = [0 for i in range(len(self._avail_species))]
+        FOp                     = [0 for i in range(len(self._avail_species[idx]))]
         FOp_g                   = 0
 
         profile_tt[pp.C_EN_SETUP].start()
         
-        for col_idx, (col_str, col_data) in enumerate(self._cross_section_data.items()):
-            g   =  self._coll_list[col_idx]
+        for col_idx, (col_str, col_data) in enumerate(self._cross_section_data[idx].items()):
+            g   =  self._coll_list[idx][col_idx]
             g.reset_scattering_direction_sp_mat()
 
-            mol_idx       = self._avail_species.index(col_data["species"])
+            mol_idx       = self._avail_species[idx].index(col_data["species"])
             FOp[mol_idx] += collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=args.threads)
             
             if col_data["type"] == "ELASTIC":
@@ -270,10 +355,10 @@ class bte_0d3v_batched():
         self._op_temp[idx]      = bte_utils.temp_op(spec_sp, 1) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
         
         self._op_mobility[idx]  = bte_utils.mobility_op(spec_sp, maxwellian, vth)
-        self._op_diffusion[idx] = bte_utils.diffusion_op(spec_sp, self._coll_list, maxwellian, vth)
+        self._op_diffusion[idx] = bte_utils.diffusion_op(spec_sp, self._coll_list[idx], maxwellian, vth)
         
-        rr_op  = [None] * len(self._coll_list)
-        for col_idx, g in enumerate(self._coll_list):
+        rr_op  = [None] * len(self._coll_list[idx])
+        for col_idx, g in enumerate(self._coll_list[idx]):
             rr_op[col_idx] = bte_utils.reaction_rates_op(spec_sp, [g], maxwellian, vth)
             
         self._op_rate[idx] = rr_op
@@ -294,11 +379,11 @@ class bte_0d3v_batched():
         profile_tt[pp.ADV_SETUP].stop()    
         
         self._op_diag_dg[idx]   = qA
-        FOp                     = [ np.matmul(np.transpose(qA), np.matmul(FOp[m_idx], qA)) for m_idx in range(len(self._avail_species))   ]
+        FOp                     = [ np.matmul(np.transpose(qA), np.matmul(FOp[m_idx], qA)) for m_idx in range(len(self._avail_species[idx]))   ]
         FOp_g                   = np.matmul(np.transpose(qA), np.matmul(FOp_g, qA))
         
         self._op_advection[idx] = np.dot(mmat_inv, adv_mat) * (1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
-        self._op_col_en[idx]    = np.array([np.dot(mmat_inv, FOp[m_idx])   for m_idx in range(len(self._avail_species))])
+        self._op_col_en[idx]    = np.array([np.dot(mmat_inv, FOp[m_idx])   for m_idx in range(len(self._avail_species[idx]))])
         self._op_col_gT[idx]    = np.dot(mmat_inv, FOp_g)
         
         mm_op   = self._op_mass[idx] * maxwellian(0) * vth**3
@@ -427,7 +512,7 @@ class bte_0d3v_batched():
             for k, v in self._par_bte_params[idx].items():
                 self._par_bte_params[idx][k] = cp.asarray(v)
             
-            for col_idx, col in enumerate(self._coll_list):
+            for col_idx, col in enumerate(self._coll_list[idx]):
                 self._op_rate[idx][col_idx] = cp.asarray(self._op_rate[idx][col_idx])
                     
         if self._args.ee_collisions==1:
@@ -461,7 +546,7 @@ class bte_0d3v_batched():
             for k, v in self._par_bte_params[idx].items():
                 self._par_bte_params[idx][k] = cp.asnumpy(v)
                 
-            for col_idx, col in enumerate(self._coll_list):
+            for col_idx, col in enumerate(self._coll_list[idx]):
                 self._op_rate[idx][col_idx] = cp.asnumpy(self._op_rate[idx][col_idx])
                     
         if self._args.ee_collisions==1:
@@ -662,7 +747,7 @@ class bte_0d3v_batched():
     
     def rhs_and_jac_flops(self):
         args   = self._args
-        s      = len(self._avail_species)
+        s      = len(self._avail_species[0])
         
         def res_flops(n, p):
             m0 = p * (2 * n -1) * 2 + (1 + 1 + 1) * p                       # ne * gamma_a(x)
@@ -901,7 +986,7 @@ class bte_0d3v_batched():
             cycle_avg_u     = xp.zeros_like(u)
             cycle_avg_v     = xp.zeros_like(u)
             
-            v_qoi           = xp.zeros((3 + len(self._coll_list), n_pts))
+            v_qoi           = xp.zeros((3 + len(self._coll_list[grid_idx]), n_pts))
             u0              = xp.copy(u)
             
             if xp==cp:
@@ -947,7 +1032,7 @@ class bte_0d3v_batched():
                     v_qoi[2]    = qoi["diffusion"]
                     rates       = qoi["rates"]
                     
-                    for col_idx, g in enumerate(self._coll_list):
+                    for col_idx, g in enumerate(self._coll_list[grid_idx]):
                         v_qoi[3 + col_idx] = rates[col_idx]
                     
                     a1 = xp.linalg.norm(u-u0)
@@ -1024,7 +1109,7 @@ class bte_0d3v_batched():
         D   = xp.dot(self._op_diffusion[grid_idx],  ff[0::num_sh,:]) * (c_gamma / 3.)
         
         rr  = list()
-        for col_idx, g in enumerate(self._coll_list):
+        for col_idx, g in enumerate(self._coll_list[grid_idx]):
             reaction_rate = xp.dot(self._op_rate[grid_idx][col_idx], ff[0::num_sh, :])
             rr.append(reaction_rate)
             

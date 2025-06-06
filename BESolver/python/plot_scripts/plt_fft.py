@@ -120,7 +120,7 @@ def fft_reconstruct(qoi, axis, tt, dt, k, fprefix, is_real=True):
         plt.legend()
         plt.grid(visible=True)
         plt.title(r"freq = %.4E (Hz)"%(freq[i-1]))
-        plt.ylabel(r"E [V/m]")
+        #plt.ylabel(r"E [V/m]")
         plt.xlabel(r"$\hat{x}$")
     
     plt.tight_layout()
@@ -143,7 +143,7 @@ def fft_reconstruct(qoi, axis, tt, dt, k, fprefix, is_real=True):
     plt.colorbar()
     plt.xlabel(r"$\hat{x}$")
     plt.ylabel(r"$time [T]$")
-    plt.title(r"E(x,t)")
+    #plt.title(r"E(x,t)")
 
     plt.subplot(1, 3, 2)
     plt.imshow(qoi_r, aspect='auto', extent=extent)
@@ -153,7 +153,8 @@ def fft_reconstruct(qoi, axis, tt, dt, k, fprefix, is_real=True):
     plt.title(r"$\sum_{k=0}^{10} a_k(x) cos(k \omega t) + b_k(x) sin(k \omega t)$")
 
     plt.subplot(1, 3, 3)
-    plt.imshow(np.abs(1 - qoi_r/qoi), aspect='auto', extent=extent, norm=LogNorm(vmin=1e-10, vmax=1))
+    #plt.imshow(np.abs(1 - qoi_r/qoi), aspect='auto', extent=extent, norm=LogNorm(vmin=1e-10, vmax=1))
+    plt.imshow(np.abs((qoi - qoi_r)/np.max(np.abs(qoi))), aspect='auto', extent=extent, norm=LogNorm(vmin=1e-10, vmax=1))
     plt.colorbar()
     plt.xlabel(r"$\hat{x}$")
     plt.ylabel(r"$time [T]$")
@@ -384,8 +385,6 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
     plt.savefig("%s_fft_rom_projection_error.png"%(fprefix))
     plt.close()
 
-    
-
 def plot_Et_fft_comp(Et_bte, Et_fluid, tt, dt, k, fprefix):
     freq              = np.fft.rfftfreq(len(tt), 1/len(tt)/13.56e6)
     Et_fluid_fft      = np.fft.rfft(Et_fluid, axis=0)
@@ -489,7 +488,7 @@ oprefix           = "1Torr300K100V"
 fvtx              = np.array([np.load("%s/1d_glow_%04d_v.npy"%(folder_name, i)) for i in range(101)])
 
 gvtx_s            = np.load("../1dbte_rom/1Torr300K_100V_Ar_3sp2r/tb_0.00E+00_te_1.00E+00/x__tb_0.00E+00_te_1.00E+00_dt_5.00E-05_255x16x2x400.npy")
-#gvtx_s            = np.load("../1dbte_rom/1Torr300K_100V_Ar_3sp2r/tb_0.00E+00_te_1.00E+00_ic100T/x__tb_0.00E+00_te_1.00E+00_dt_5.00E-04_255x16x2x400.npy")
+#gvtx_s           = np.load("../1dbte_rom/1Torr300K_100V_Ar_3sp2r/tb_0.00E+00_te_1.00E+00_ic100T/x__tb_0.00E+00_te_1.00E+00_dt_5.00E-04_255x16x2x400.npy")
 
 mop               = np.load("%s/1d_glow_bte_mass_op.npy"%(folder_name_ops))
 Po                = np.load("%s/1d_glow_bte_psh2o.npy"%(folder_name_ops))
@@ -497,7 +496,9 @@ Ps                = np.load("%s/1d_glow_bte_po2sh.npy"%(folder_name_ops))
 g0                = np.load("%s/1d_glow_bte_op_g0.npy"%(folder_name_ops))
 g2                = np.load("%s/1d_glow_bte_op_g2.npy"%(folder_name_ops))
 temp_op           = np.load("%s/1d_glow_bte_temp_op.npy"%(folder_name_ops))
-bte_op            = {"mass": mop , "po2sh": Ps, "psh2o": Po}
+mu_op             = np.load("%s/1d_glow_bte_mobility.npy"%(folder_name_ops))
+De_op             = np.load("%s/1d_glow_bte_diffusion.npy"%(folder_name_ops))
+bte_op            = {"mass": mop , "po2sh": Ps, "psh2o": Po, "g0": g0, "g2": g2, "mobility": mu_op, "De": De_op}
 
 args              = load_run_args("%s/1d_glow_args.txt"%(folder_name))
 ff                = h5py.File("%s/macro.h5"%(folder_name), 'r')
@@ -506,6 +507,10 @@ ne                = np.array(ff["ne[m^-3]"][()])
 Te                = np.array(ff["Te[eV]"][()])
 xx                = np.array(ff["x[-1,1]"][()])
 tt                = np.array(ff["time[T]"][()])
+uz                = np.array(ff["uz[ms^{-1}]"][()])
+ki                = np.array(ff["ki[m^3s^{-1}]"][()])
+mue               = plot_utils.compute_mobility(args, bte_op, fvtx, EbyN=1.0)
+
 ev                = np.linspace(0, 80, 1024)
 spec_sp, col_list = plot_utils.gen_spec_sp(args)
 
@@ -527,25 +532,36 @@ make_dir("%s"%(ofolder_name))
 
 # multi_domain_svd(spec_sp, xp.array(fvtx_s), np.array(xx), tt, np.array([-1, -0.75, -0.5, 0.5, 0.75, 1]), 2, 3, "%s/%s_md"%(ofolder_name, oprefix), cp)
 # multi_domain_svd(spec_sp, xp.array(fvtx_s), np.array(xx), tt, np.array([-1, 1]), 1, 1, "%s/%s_sd"%(ofolder_name, oprefix), cp)
-plot_Et_fft_comp(Et[:-1, :], Et_fluid[:-1, :], tt[:-1], 1/len(tt[:-1])/13.56e6, 9, "%s/E%s"%(ofolder_name, oprefix))
+#plot_Et_fft_comp(Et[:-1, :], Et_fluid[:-1, :], tt[:-1], 1/len(tt[:-1])/13.56e6, 9, "%s/E%s"%(ofolder_name, oprefix))
 
-fft_rom_analysis(fvtx_s, gvtx_s, tt, (1e-3)/13.56e6, xx, bte_op, "%s/%s_fd_rom"%(ofolder_name, oprefix))
+#fft_rom_analysis(fvtx_s, gvtx_s, tt, (1e-3)/13.56e6, xx, bte_op, "%s/%s_fd_rom"%(ofolder_name, oprefix))
 
+
+gvtx    = asnumpy(xp.einsum("tlx,vl->tvx", xp.array(gvtx_s), xp.array(Po)))
+rr_g    = plot_utils.compute_rate_coefficients(args, bte_op, gvtx, ["g0", "g2"])
+mue_g   = plot_utils.compute_mobility(args, bte_op, gvtx, EbyN=1.0)
 
 
 
 #fvtx             = np.array(ff["Ftvx"][()])
 
 # make_dir("%s/fft"%(folder_name))
-# fft_reconstruct(Et[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/Et"%(folder_name))
+fft_reconstruct(Et[:-1, :], 0, tt[:-1], 1/len(tt[:-1])/13.56e6, 13, "%s/%s_Et"%(ofolder_name, oprefix))
+fft_reconstruct(ne[:-1, :], 0, tt[:-1], 1/len(tt[:-1])/13.56e6, 13, "%s/%s_ne"%(ofolder_name, oprefix))
+fft_reconstruct(ki[:-1, :], 0, tt[:-1], 1/len(tt[:-1])/13.56e6, 13, "%s/%s_ki"%(ofolder_name, oprefix))
+fft_reconstruct(mue[:-1, :], 0, tt[:-1], 1/len(tt[:-1])/13.56e6, 13, "%s/%s_mue"%(ofolder_name, oprefix))
+
+fft_reconstruct(rr_g[1][:-1, :], 0, tt[:-1], 1/len(tt[:-1])/13.56e6, 13, "%s/%s_ki_g"%(ofolder_name, oprefix))
+fft_reconstruct(mue_g  [:-1, :], 0, tt[:-1], 1/len(tt[:-1])/13.56e6, 13, "%s/%s_mue_g"%(ofolder_name, oprefix))
+
 # fft_reconstruct(ne[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/ne"%(folder_name))
 # fft_reconstruct(Te[:-1, :], 0, tt[:-1], (1e-3)/13.56e6, 13, "%s/fft/Te"%(folder_name))
 
 
-# fft_edf(fvtx_s[:-1], 0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_f"%(folder_name))
+fft_edf(fvtx_s[:-1], 0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/%s_edf_f"%(ofolder_name, oprefix))
 # fft_edf(gvtx_s[:-1], 0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_g"%(folder_name))
 # fft_edf(np.einsum("tvx,tx->tvx", gvtx_s, (1/ne_g))[:-1],  0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_hat_g"%(folder_name))
-# fft_edf(np.einsum("tvx,tx->tvx", fvtx_s, (1/ne_f))[:-1],  0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/fft/edf_hat_f"%(folder_name))
+fft_edf(np.einsum("tvx,tx->tvx", fvtx_s, (1/ne_f))[:-1],  0, tt[:-1], (1e-3)/13.56e6, 13, ev, spec_sp, bte_op, "%s/%s_edf_f_hat"%(ofolder_name, oprefix))
 
 
 

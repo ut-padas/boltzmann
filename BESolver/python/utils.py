@@ -1068,4 +1068,48 @@ def sample_distribution_with_uniform_prior(spec_sp, ss_sol, x_domain, vth, fname
 
     np.save("%s"%(fname), x_cart)
     return 0
+
+def assemble_moment_ops(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, mf, scale=1.0):
+
+    num_p        = spec_sp._p +1
+    sph_harm_lm  = spec_sp._sph_harm_lm
+    num_sh       = len(sph_harm_lm)
+    
+    Vop          = np.zeros((3, num_p * num_sh))
+    
+    [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VT)
+    vt_q, vt_w   = np.arccos(glx), glw
+    
+    [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VP)
+    vp_q, vp_w   = np.pi * glx + np.pi , np.pi * glw
+
+    vr_q, vr_w   = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+
+    vg           = np.meshgrid(vr_q, vt_q, vp_q, indexing="ij")
+    Vq           = np.zeros(tuple([num_p * num_sh]) + vg[0].shape, dtype=np.float64)
+
+    if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+        wx = vg[0]**2 
+    else:
+        wx = np.ones_like(vg[0])    
+    
+
+    for k in range(num_p):
+        for lm_idx, lm in enumerate(sph_harm_lm):
+            Vq[k * num_sh + lm_idx] = wx * spec_sp.basis_eval_full(vg[0], vg[1], vg[2], k, lm[0], lm[1])
+
+    num_m         = len(mf)
+    mf_op         = np.zeros((num_m, num_p * num_sh))
+    mf_eval       = np.zeros(tuple([num_m]) + vg[0].shape)
+
+    for i in range(num_m):
+       mf_eval[i] = mf[i](vg[0], vg[1], vg[2])
+    
+    mf_op         = np.einsum("iklm,jklm->ijklm", mf_eval, Vq)
+    mf_op         = np.einsum("ijklm,m->ijkl", mf_op, vp_w)
+    mf_op         = np.einsum("ijkl,l->ijk"  , mf_op, vt_w)
+    mf_op         = scale * np.einsum("ijk ,k->ij"   , mf_op, vr_w)
+
+    return mf_op
+
     

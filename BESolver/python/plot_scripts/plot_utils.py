@@ -254,8 +254,8 @@ def gen_spec_sp(args):
     bs_coll_list        = list()
     collision_names     = list()
     coll_list           = list()
-    
-    collision_str       = "../lxcat_data/eAr_crs.Biagi.3sp2r"
+
+    collision_str       = os.path.dirname(os.path.abspath(__file__)) + "/../lxcat_data/eAr_crs.Biagi.3sp2r"
 
     avail_species                     = cross_section.read_available_species(collision_str)
     cross_section.CROSS_SECTION_DATA  = cross_section.read_cross_section_data(collision_str)

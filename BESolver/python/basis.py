@@ -255,6 +255,35 @@ class Laguerre(Basis):
         """
         return lagpoly.lagpolyweight
 
+# generalized Laguerre polynomials    
+class gLaguerre(Basis):
+    def __init__(self, domain=None, window=None, alpha=0.5):
+        self._basis_type = BasisType.LAGUERRE
+        self._domain     = domain
+        self._window     = window
+        self._alpha      = alpha
+
+    def Pn(self,deg,domain=None,window=None):
+        """
+        returns 1d associated (k=1/2) Laguerre polynomial the specified degree 
+        """
+        
+        return lambda x, l : scipy.special.genlaguerre(deg, self._alpha)(x**2) / np.sqrt(scipy.special.gamma(deg + self._alpha + 1)/scipy.special.factorial(deg))
+    
+    def Gauss_Pn(self,deg):
+        """
+        Quadrature points and the corresponding weights for 1d Gauss quadrature. 
+        The specified quadrature is exact to poly degree <= 2*degree-1, over [0,inf] domain
+        """
+        qx, wx = scipy.special.roots_genlaguerre(deg, self._alpha)
+        return np.sqrt(qx), wx  
+
+    def Wx(self):
+        """
+        Weight function w.r.t. the polynomials are orthogonal
+        """
+        return lambda x: x**(2 * self._alpha + 1) * np.exp(-x**2)
+
 class BSpline(Basis):
     
     def __init__(self, k_domain, spline_order, num_p, q_per_knot=None , sig_pts=list(), knots_vec=None, dg_splines=False, verbose=True, extend_domain=False, extend_domain_with_log=False):
@@ -263,6 +292,7 @@ class BSpline(Basis):
         self._window     = k_domain
         self._kdomain    = (k_domain[0], k_domain[1])
         self._sp_order   = spline_order
+        self._sig_pts    = sig_pts
         
         if knots_vec is None:
             if dg_splines:

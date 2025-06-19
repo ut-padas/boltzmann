@@ -72,6 +72,8 @@ def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol
         cond2     = norm_rr < atol
         converged = (cond1.all() or cond2.all())
         
+        #print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, xp.max(norm_rr), xp.max(norm_rr/norm_r0)))
+        
         x         = x + alpha * xp.einsum("ijk,ki->ji", jac_inv, -rr)
         count    += 1
     
@@ -314,6 +316,7 @@ class bte_0d3v_batched():
         use_dg                 = 0
         self._args.use_dg      = use_dg
         bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain=True)
+        #bb                    = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain_with_log=True)
         print("grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1])
         
         spec_sp                = sp.SpectralExpansionSpherical(self._par_nr[idx], bb, self._par_lm[idx])

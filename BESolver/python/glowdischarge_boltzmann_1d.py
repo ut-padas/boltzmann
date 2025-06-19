@@ -1457,10 +1457,18 @@ class glow1d_boltzmann():
           
           norm_b    = xp.linalg.norm(u.reshape((-1)))
           Ndof      = self.dof_v * self.Np
-          Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
-          Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
-          gmres_c   = glow1d_utils.gmres_counter(disp=False)
-          v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=rtol, atol=atol, M=Mmat_op, restart=self.args.gmres_rsrt, maxiter=self.args.gmres_rsrt * 50, callback=gmres_c)
+          if (self.args.use_gpu == 1):
+            Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
+            Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
+            gmres_c   = glow1d_utils.gmres_counter(disp=False)
+            v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=rtol, atol=atol, M=Mmat_op, restart=self.args.gmres_rsrt, maxiter=self.args.gmres_rsrt * 50, callback=gmres_c)
+          else:
+            Lmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
+            Mmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
+            gmres_c   = glow1d_utils.gmres_counter(disp=False)
+            v, status = scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.args.gmres_rsrt, maxiter=self.args.gmres_rsrt * 50, callback=gmres_c)
+
+          
           
           norm_res_abs  = xp.linalg.norm(Lmat_mvec(v) -  u.reshape((-1)))
           norm_res_rel  = xp.linalg.norm(Lmat_mvec(v) -  u.reshape((-1))) / norm_b

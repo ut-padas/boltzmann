@@ -58,7 +58,7 @@ class generalized_moments():
         self.mfuncs     = [ lambda vr, vt, vp : np.ones_like(vr),
                             lambda vr, vt, vp : vth * vr * np.cos(vt),
                             lambda vr, vt, vp : scale_Te * vr **2,
-                            lambda vr, vt, vp : q.n0 * q.np0 * vth * vr * np.einsum("k,l,m->klm", col_list[1].total_cross_section(np.unique(vr) **2 * Te0), np.unique(vt), xp.unique(vp))
+                            #lambda vr, vt, vp : q.n0 * q.np0 * vth * vr * np.einsum("k,l,m->klm", col_list[1].total_cross_section(np.unique(vr) **2 * Te0), np.unique(vt), xp.unique(vp))
                             ]
         
         self.mfuncs_Jx  = [lambda vr, vt, vp: vr * np.cos(vt) * m(vr, vt, vp) for m in self.mfuncs]
@@ -70,14 +70,12 @@ class generalized_moments():
         self.mesh          = mesh.mesh(tuple([self.params.Np]), 1, mesh.grid_type.CHEBYSHEV_COLLOC)
         assert (self.mesh.xcoord[0] == self.bte_1d3v.xp).all() == True
 
-        self.efield        = lambda t : xp.ones_like(self.mesh.xcoord[0]) * 1e0 * xp.sin(2 * xp.pi * t)
+        self.efield        = lambda t : xp.ones_like(self.mesh.xcoord[0]) * 1e3 * xp.cos(2 * xp.pi * t)
         self.cmodel_type   = closure_type.MAX_ENTROPY
         
     def init(self):
         xp   = self.xp_module 
         u, v = self.bte_1d3v.initialize()
-        print(v[:, 0])
-        print(v[:, 3])
         #Po   = self.bte_1d3v.op_psh2o
         Ps          = self.bte_1d3v.op_po2sh
         self.mae_m0 = xp.zeros((len(self.mfuncs), self.bte_1d3v.Np))
@@ -98,7 +96,7 @@ class generalized_moments():
             Av  = (self.bte_1d3v.op_adv_v) * q.tau
 
             mJx = (self.bte_1d3v.bs_vth * q.tau/q.L) * self.mfuncs_Jx_ops @ fklm
-            mJv = self.mfuncs_ops @ (Cop @ fklm + E * (Av @ fklm))
+            mJv = (self.mfuncs_ops @ (Cop @ fklm + E * (Av @ fklm))) #* 0.0
 
             return mJx, mJv
         else:
@@ -121,8 +119,8 @@ class generalized_moments():
 
 
 if __name__ == "__main__":
-    gm = generalized_moments()
-    m0 = gm.init()
+    gm     = generalized_moments()
+    m_gme  = gm.init()
 
     #print(m0)
     T      = 1.0
@@ -131,21 +129,48 @@ if __name__ == "__main__":
     params = gm.params
     dt     = params.cfl
     xx     = gm.mesh.xcoord[0]
-    while tt < T:
-        print(tt, m0)
-        print(m0.shape)
-        plt.figure(figsize=(8, 4), dpi=200)
-        plt.subplot(1, 2, 1)
-        plt.semilogy(xx, m0[0])
 
-        plt.subplot(1, 2, 2)
-        plt.plot(xx, m0[2]/m0[0])
-        plt.show()
-        plt.close()
+    bte_solver = gm.bte_1d3v
+    bte_solver.initialize_bte_adv_x(0.5 * dt)
+    
+    u, v       = bte_solver.initialize()
+    bte_solver.step_init(u, v, dt)
+    mass_op    = bte_solver.op_mass
+    temp_op    = bte_solver.op_temp
+
+    xp         = gm.xp_module
+    io_freq    = int(bte_solver.args.io_cycle_freq / dt)
+    
+    
+
+    while tt < T:
+        m_bte = gm.mfuncs_ops @ (bte_solver.op_po2sh @ v)
         
+        print(tt, m_gme, m_bte)
+
+        if (idx % io_freq == 0):
+            plt.figure(figsize=(8, 4), dpi=200)
+            plt.subplot(1, 2, 1)
+            plt.semilogy(xx, m_gme[0], label=r"GME")
+            plt.semilogy(xx, m_bte[0], label=r"BTE")
+            plt.legend()
+            plt.grid(visible=True)
+            
+
+            plt.subplot(1, 2, 2)
+            plt.plot(xx, m_gme[2]/m_gme[0], label=r"GME")
+            plt.plot(xx, m_bte[2]/m_bte[0], label=r"BTE")
+            plt.legend()
+            plt.grid(visible=True)
+            plt.savefig("%s_%04d.png"%(bte_solver.args.fname, idx//io_freq))
+            plt.close()
         
-        m0   = gm.step(m0, tt, dt)
-        
+        m_gme   = gm.step(m_gme, tt, dt)
+
+        bte_solver.bs_E = gm.efield(tt)
+        v               = bte_solver.step_bte_x(v, tt, 0.5 * dt)
+        v               = bte_solver.step_bte_v(v, None, tt, dt, ts_type="BE", verbose=1)
+        v               = bte_solver.step_bte_x(v, tt + 0.5 * dt, 0.5 * dt)
         tt  += dt
         idx +=1
         

@@ -70,8 +70,8 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         xmf = xp.einsum("ix,iklm->xklm", x, mf)
         y   = 2 * xp.exp(xmf) * (xp.exp(beta * vg[0]**2) * wx)[xp.newaxis, :, :, :]
         y   = xp.einsum("iklm,xklm->ixklm", mf, y)
-        y   = xp.einsum("ixklm,k,l,m->ix", y, vr_w, vt_w, vp_w) - m_vec
-        return y
+        y   = xp.einsum("ixklm,k,l,m->ix", y, vr_w, vt_w, vp_w) 
+        return y - m_vec
 
     def jacobian(x):
         xmf = xp.einsum("ix,iklm->xklm", x, mf)
@@ -87,19 +87,27 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
     norm_rr   = norm_r0 = xp.linalg.norm(r0, axis=1)
     converged = ((norm_rr/m_vec_l2 < rtol).all() or (norm_rr < atol).all())
 
-    alpha     = 1e0
+    alpha     = 5e-1
+    print("iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))
     while( not converged and (count < iter_max) ):
         jinv = xp.linalg.inv(jacobian(x))
-        # line search
-        while ( alpha > 1e-8 ):
-            xk       = x  - alpha * xp.einsum("xil,lx->ix", jinv, rr)
-            rk       = residual(xk)
-            norm_rk  = xp.linalg.norm(rk, axis=1)
+        xk       = x  - alpha * xp.einsum("xil,lx->ix", jinv, rr)
+        rk       = residual(xk)
+        norm_rk  = xp.linalg.norm(rk, axis=1)
+        ## line search
+        # while ( alpha > 1e-8 ):
+        #     xk       = x  - alpha * xp.einsum("xil,lx->ix", jinv, rr)
+        #     rk       = residual(xk)
+        #     norm_rk  = xp.linalg.norm(rk, axis=1)
+
+        #     # print(norm_rk)
+        #     # print(norm_rr)
+        #     # print(alpha)
       
-            if ( (norm_rk < norm_rr).any() ):
-                break
-            else:
-                alpha = 0.25 * alpha
+        #     if ( (norm_rk < norm_rr).any() ):
+        #         break
+        #     else:
+        #         alpha = 0.25 * alpha
     
         x         = xk
         rr        = rk

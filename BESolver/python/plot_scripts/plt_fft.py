@@ -266,7 +266,7 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
                 u_im, s_im, vt_im = np.linalg.svd(np.imag(gs_fft[fidx, lidx::num_sh]))
                 v_re              = vt_re.T
                 v_im              = vt_im.T
-                rank_k            = 150
+                rank_k            = 100
 
                 p_re              = u_re[:, 0:rank_k]
                 q_re              = v_re[:, 0:rank_k]
@@ -306,7 +306,7 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
                     plt.semilogy(ev, np.abs(fs  [0, xidx, 0]), '-'  , color=clr, label = r"FOM F($\epsilon$,$x=%.2f$)"%(xx[xidx]))
                     plt.semilogy(ev, np.abs(fs_r[0, xidx, 0]), 'o--', color=clr, label = r"ROM F($\epsilon$,$x=%.2f$)"%(xx[xidx]), markersize=2.4)
                     
-                    plt.legend(fontsize=8)
+                    plt.legend(fontsize=5)
                     
                     plt.xlabel(r"energy [eV]")
                     plt.grid(visible=True)
@@ -317,7 +317,7 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
                     plt.semilogy(ev, np.abs(fs  [0, xidx, 1]), '-'  , color=clr, label = r"FOM F($\epsilon$,$x=%.2f$)"%(xx[xidx]))
                     plt.semilogy(ev, np.abs(fs_r[0, xidx, 1]), 'o--', color=clr, label = r"ROM F($\epsilon$,$x=%.2f$)"%(xx[xidx]), markersize=2.4)
 
-                    plt.legend(fontsize=8)
+                    plt.legend(fontsize=5)
 
                     plt.xlabel(r"energy [eV]")
                     plt.grid(visible=True)
@@ -327,13 +327,13 @@ def fft_rom_analysis(fs, gs, tt, dt, xx, bte_op, fprefix):
                     
                     plt.semilogy(ev, np.abs(fs  [0, xidx, 2]), '-'  , color=clr, label = r"FOM F($\epsilon$,$x=%.2f$)"%(xx[xidx]))
                     plt.semilogy(ev, np.abs(fs_r[0, xidx, 2]), 'o--', color=clr, label = r"ROM F($\epsilon$,$x=%.2f$)"%(xx[xidx]), markersize=2.4)
-                    plt.legend(fontsize=8)
+                    plt.legend(fontsize=5)
 
                     plt.xlabel(r"energy [eV]")
                     plt.grid(visible=True)
 
-                if idx == 0 : plt.savefig("%s_fft_modes_re_fidx_%04d.png"%(fprefix, fidx))
-                if idx == 1 : plt.savefig("%s_fft_modes_im_fidx_%04d.png"%(fprefix, fidx))
+                if idx == 0 : plt.savefig("%s_fft_modes_re_fidx_%04d_rank_%04d.png"%(fprefix, fidx, rank_k))
+                if idx == 1 : plt.savefig("%s_fft_modes_im_fidx_%04d_rank_%04d.png"%(fprefix, fidx, rank_k))
 
     
     kr         = list(range(10, 251, 50))
@@ -533,8 +533,8 @@ make_dir("%s"%(ofolder_name))
 # multi_domain_svd(spec_sp, xp.array(fvtx_s), np.array(xx), tt, np.array([-1, -0.75, -0.5, 0.5, 0.75, 1]), 2, 3, "%s/%s_md"%(ofolder_name, oprefix), cp)
 # multi_domain_svd(spec_sp, xp.array(fvtx_s), np.array(xx), tt, np.array([-1, 1]), 1, 1, "%s/%s_sd"%(ofolder_name, oprefix), cp)
 #plot_Et_fft_comp(Et[:-1, :], Et_fluid[:-1, :], tt[:-1], 1/len(tt[:-1])/13.56e6, 9, "%s/E%s"%(ofolder_name, oprefix))
-
-#fft_rom_analysis(fvtx_s, gvtx_s, tt, (1e-3)/13.56e6, xx, bte_op, "%s/%s_fd_rom"%(ofolder_name, oprefix))
+print(tt)
+fft_rom_analysis(fvtx_s, gvtx_s, tt, (1e-2)/13.56e6, xx, bte_op, "%s/%s_fd_rom"%(ofolder_name, oprefix))
 
 
 gvtx    = asnumpy(xp.einsum("tlx,vl->tvx", xp.array(gvtx_s), xp.array(Po)))

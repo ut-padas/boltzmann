@@ -19,7 +19,6 @@ import spec_spherical as sp
 import collision_operator_spherical as collOpSp
 import scipy.constants
 import os
-import cupyx.scipy.sparse.linalg
 import scipy.sparse.linalg
 import cross_section
 from time import perf_counter, sleep
@@ -29,13 +28,14 @@ CUDA_NUM_DEVICES      = 0
 PROFILE_SOLVERS       = 0
 try:
   import cupy as cp
+  import cupyx.scipy.sparse.linalg
   #CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
 except ImportError:
   print("Please install CuPy for GPU use")
   #sys.exit(0)
 except:
   print("CUDA not configured properly !!!")
-  sys.exit(0)
+  #sys.exit(0)
 
 
 class gmres_counter(object):

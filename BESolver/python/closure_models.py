@@ -1,5 +1,8 @@
 """
-Module to handle different closure models. 
+Module to handle different closure models for the electron BTE
+    1. Maximum entropy closure
+    2. 0D-BTE closure
+    
 """
 import numpy as np
 import cross_section
@@ -9,38 +12,8 @@ import utils as bte_utils
 import plot_scripts.plot_utils as plot_utils
 import scipy.constants
 import matplotlib.pyplot as plt
-
-def compute_radial_components(spec_sp, ff, ev: np.array, Te0):
-    
-    t_pts    = ff.shape[0]
-    
-    ff_lm    = ff
-    c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
-    vth      = np.sqrt(Te0) * c_gamma
-    
-    vr       = np.sqrt(ev) * c_gamma / vth
-    num_p    = spec_sp._p +1 
-    num_sh   = len(spec_sp._sph_harm_lm)
-    n_pts    = ff.shape[2]
-    
-    output   = np.zeros((t_pts, n_pts, num_sh, len(vr)))
-    Vqr      = spec_sp.Vq_r(vr,0,1)
-    
-    mm_fac   = np.sqrt(4 * np.pi) 
-    
-    scale    = np.array([1 / mm_fac  for idx in range(t_pts)])
-    ff_lm_n  = np.array([ff_lm[idx]/scale[idx] for idx in range(t_pts)])
-    
-    for idx in range(t_pts):
-        ff_lm_T  = ff_lm_n[idx].T
-        for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
-            output[idx, :, l_idx, :] = np.dot(ff_lm_T[:,l_idx::num_sh], Vqr)
-
-
-    if spec_sp.get_radial_basis_type() == basis.BasisType.LAGUERRE:
-        output *= (1/np.pi**1.5) * np.exp(-vr**2)
-        
-    return output
+import h5py
+import os
 
 def quadrature_grid(spec_sp : sp.SpectralExpansionSpherical, num_vr, num_vt, num_vp, coord="spherical"):
     [glx,glw]    = basis.Legendre().Gauss_Pn(num_vt)
@@ -90,6 +63,9 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
     else:
         raise NotImplementedError
 
+    m_vec_l2 = xp.linalg.norm(m_vec, axis=1)[:, xp.newaxis]
+    #print(m_vec_l2)
+    m_vec_l2[m_vec_l2 < 1e-10] = 1.0
     def residual(x):
         xmf = xp.einsum("ix,iklm->xklm", x, mf)
         y   = 2 * xp.exp(xmf) * (xp.exp(beta * vg[0]**2) * wx)[xp.newaxis, :, :, :]
@@ -108,8 +84,8 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
     count     = 0
     r0        = residual(x)
     rr        = xp.copy(r0)
-    norm_rr   = norm_r0 = xp.linalg.norm(r0)
-    converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
+    norm_rr   = norm_r0 = xp.linalg.norm(r0, axis=1)
+    converged = ((norm_rr/m_vec_l2 < rtol).all() or (norm_rr < atol).all())
 
     alpha     = 1e0
     while( not converged and (count < iter_max) ):
@@ -118,9 +94,9 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         while ( alpha > 1e-8 ):
             xk       = x  - alpha * xp.einsum("xil,lx->ix", jinv, rr)
             rk       = residual(xk)
-            norm_rk  = xp.linalg.norm(rk)
+            norm_rk  = xp.linalg.norm(rk, axis=1)
       
-            if ( norm_rk < norm_rr ):
+            if ( (norm_rk < norm_rr).any() ):
                 break
             else:
                 alpha = 0.25 * alpha
@@ -129,8 +105,8 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         rr        = rk
         norm_rr   = norm_rk
         count    += 1
-        converged = ((norm_rr/norm_r0 < rtol) or (norm_rr < atol))
-        print("iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, norm_rr, norm_rr/norm_r0))
+        converged = ((norm_rr/m_vec_l2 < rtol).all() or (norm_rr < atol).all())
+        print("iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))
         #print(rr)
     
     #print(x)
@@ -202,25 +178,31 @@ def relative_entropy(spec_sp_psh: sp.SpectralExpansionSpherical, psh,
 
     return xp.einsum("xklm,k,l,m", wx * psh_vg * xp.log(xp.abs(psh_vg/qsh_vg)), vr_w, vt_w, vp_w)
 
-def max_entropy_closure(args, data):
-    pass
-
-def bte_0d_closure(args, E, fprefix):
+def bte_0d_closure(args, Ef, fprefix):
     """
     computes the time normalized EEDFs with 0D bte
     """
     
-    import cupy as cp
+    try:
+        import cupy as cp
+        #CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
+    except:
+        print("cupy is required for 0D-BTE closure model")
+        raise ModuleNotFoundError
+    
     from   bte_0d3v_batched import bte_0d3v_batched
     import glow1d_utils
 
+    class A:
+        par_file = args["par_file"].replace("'", "")
+
     class bte_0d_params():
-        param           = glow1d_utils.parameters(args)
+        param           = glow1d_utils.parameters(A)
         threads         = 4
         out_fname       = fprefix
         solver_type     = "transient"
         l_max           = int(args["l_max"])
-        collisions      = args.collisions
+        collisions      = "lxcat_data/eAr_crs.Biagi.3sp2r" #args["collisions"]
         sp_order        = int(args["sp_order"])
         spline_qpts     = int(args["spline_qpts"])
         atol            = float(args["atol"])
@@ -242,16 +224,20 @@ def bte_0d_closure(args, E, fprefix):
         dt              = 1e-2
         Efreq           = 13.56e6
         n_grids         = 1
-        n_pts           = int(args.Np)
+        n_pts           = int(args["Np"])
 
     args_0d_bte = bte_0d_params()
-
+    print(args_0d_bte.collisions, args_0d_bte.out_fname)
+    n_grids     = bte_0d_params.n_grids
     lm_modes    = [[l,0] for l in range(args_0d_bte.l_max+1)]    
-    bte_solver  = bte_0d3v_batched(args, args_0d_bte.ev_max, args_0d_bte.Te,
-                                   args_0d_bte.Nr, lm_modes, args_0d_bte.n_grids, args_0d_bte.collisions)
+    bte_solver  = bte_0d3v_batched(args_0d_bte, np.array([args_0d_bte.ev_max]),
+                                         np.array([args_0d_bte.Te]),
+                                         np.array([args_0d_bte.Nr], dtype=np.int32), [lm_modes], args_0d_bte.n_grids, [args_0d_bte.collisions])
     
     grid_idx    = 0
     n_pts       = args_0d_bte.n_pts
+
+    bte_solver.assemble_operators(grid_idx)
     f0          = bte_solver.initialize(grid_idx, n_pts,"maxwellian")
 
     bte_solver.set_boltzmann_parameter(grid_idx, "n0"       , np.ones(n_pts) * args_0d_bte.n0)
@@ -263,74 +249,81 @@ def bte_0d_closure(args, E, fprefix):
     bte_solver.set_boltzmann_parameter(grid_idx, "f0"       , f0)
     bte_solver.set_boltzmann_parameter(grid_idx,  "E"       , np.ones(n_pts) * 0.0)
 
-    if args.use_gpu==1:
+    bte_solver.set_boltzmann_parameter(grid_idx, "u0"       , f0)
+    bte_solver.set_boltzmann_parameter(grid_idx, "u1"       , 0 * f0)
+
+
+    if args_0d_bte.use_gpu==1:
         dev_id   = 0
         bte_solver.host_to_device_setup(dev_id, grid_idx)
+    
+    xp     = bte_solver.xp_module
+    Ex, Ek = Ef[0], Ef[1]
+    
+    Ex     = xp.asarray(Ex)
+    Ek     = xp.asarray(Ek)
 
+    def Et(t):
+        at = xp.array([[xp.cos(2 * xp.pi * Ek[i] * t ), xp.sin(2 * xp.pi * Ek[i] * t)] for i in range(len(Ek))])
+        return xp.sum(Ex * at[:, :, xp.newaxis], axis=(0, 1))
 
+    def solve_step(time, delta_t, Et):
+        """
+        perform a single timestep in 0d-BTE
+        """
+        with cp.cuda.Device(dev_id):
+            print(Et(time), Et(time).shape)
+            bte_solver.set_boltzmann_parameter(grid_idx, "E", Et(time))
+            u0    = bte_solver.get_boltzmann_parameter(grid_idx, "u0")
+            v     = bte_solver.step(grid_idx, u0, args_0d_bte.atol, args_0d_bte.rtol, args_0d_bte.max_iter, time, delta_t)
+            bte_solver.set_boltzmann_parameter(grid_idx, "u1", v)
+
+        return 
+
+    tt               = 0
+    dt               = args_0d_bte.dt
+    steps_per_cycle  = int(1/dt)
+    max_steps        = args_0d_bte.cycles * steps_per_cycle + 1
+    print("0d bte : steps_per_cycles = %d max cycles = %d"%(steps_per_cycle, args_0d_bte.cycles))
+
+    
+    bte_u            = [0 for i in range(n_grids)]
+    bte_v            = [0 for i in range(n_grids)]
+    u_avg            = [0 for i in range(n_grids)]
+    abs_error        = [0 for i in range(n_grids)]
+    rel_error        = [0 for i in range(n_grids)]
+    cycle_f1         = (0.5 * dt/ (steps_per_cycle * dt))
+    xp               = bte_solver.xp_module
+    tt               = 0
+    with cp.cuda.Device(dev_id):
+        for tidx in range(0, max_steps):   
+            if (tidx % steps_per_cycle == 0):
+                u0      = bte_solver.get_boltzmann_parameter(grid_idx, "u0")
+                abs_error[grid_idx] = xp.max(xp.abs(bte_v[grid_idx]-u0))
+                rel_error[grid_idx] = abs_error[grid_idx] / xp.max(xp.abs(u0))
+                bte_v[grid_idx] = xp.copy(u0)
+
+                print("cycle = %04d ||u0-u1|| = %.4E  ||u0-u1||/||u0|| = %.4E"%(tidx//steps_per_cycle, abs_error[grid_idx], rel_error[grid_idx]))
+
+                if max(abs_error) < args_0d_bte.atol or max(rel_error)< args_0d_bte.rtol:
+                    break
+
+                if tidx < (max_steps-1):
+                    u_avg  = [0 for i in range(n_grids)]
+            
+            if tidx == (max_steps-1):
+                break    
+
+            u_avg[grid_idx] += cycle_f1 * bte_solver.get_boltzmann_parameter(grid_idx, "u0")
+            solve_step(tt, dt, Et)
+            u_avg[grid_idx] += cycle_f1 * bte_solver.get_boltzmann_parameter(grid_idx, "u1")
+            bte_solver.set_boltzmann_parameter(grid_idx, "u0", bte_solver.get_boltzmann_parameter(grid_idx, "u1"))
+            tt+=dt
+
+    return u_avg[grid_idx]
     # do the time-steping till convergence
 
 
-
-
-
-data_folder               = "1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_cycle"
-l_max                     = 2
-Nr                        = 128
-num_qvr, num_qvt, num_qvp = 120, 16, 8
-data                      = plot_utils.load_data_bte(data_folder, range(0, 101), eedf_idx=None, read_cycle_avg=False, use_ionization=1)
-args                      = data[0]
-spec_bspline, col_list    = plot_utils.gen_spec_sp(args)
-
-bb                        = basis.BSpline(spec_bspline._basis_p._kdomain,
-                                          spec_bspline._basis_p._sp_order,
-                                          Nr+1,
-                                          sig_pts=spec_bspline._basis_p._sig_pts, knots_vec=None, 
-                                          dg_splines=False, verbose = 0, extend_domain_with_log=True)
-
-Lp                        = basis.gLaguerre(alpha=0.5)
-sph_lm                    = [[l,0] for l in range(l_max+1)]
-spec_sp                   = sp.SpectralExpansionSpherical(Nr, bb, sph_lm)
-num_qvr                   = spec_sp._basis_p._num_knot_intervals * 5
-nscale                    = 1
-
-# spec_sp                   = sp.SpectralExpansionSpherical(Nr-1, Lp, sph_lm)
-# nscale                    = (1/np.pi**1.5)/2
-
-
-
-v                         = data[2]
-bte_op                    = data[3]
-#vsh                      = np.einsum("lo,tox->tlx", bte_op["po2sh"], v)
-Te0                       = float(args["Te"])
-c_gamma                   = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
-
-mfuncs                    = [lambda vr, vt, vp: np.ones_like(vr),
-                            lambda vr, vt, vp : vr * np.cos(vt),
-                            lambda vr, vt, vp : vr **2,
-                            lambda vr, vt, vp : vr * np.einsum("k,l,m->klm", col_list[1].total_cross_section(np.unique(vr) **2 * Te0), np.unique(vt), np.unique(vp)) * 3.22e22
-                            ]
-
-mnt_ops                   = bte_utils.assemble_moment_ops(spec_sp, num_qvr, num_qvt, num_qvp, mfuncs, scale = nscale)
-mnt_ops_bspline           = bte_utils.assemble_moment_ops(spec_bspline, spec_bspline._basis_p._num_knot_intervals * 5,
-                                                        num_qvt, num_qvp, mfuncs, scale = 1.0)
-
-
-tidx        = 0
-vsh         = bte_op["po2sh"] @ v[tidx]
-mnt_rhs     = mnt_ops_bspline @ vsh
-mnt_rhs     = mnt_rhs[:, 0::10]
-x, fsh      = max_entropy_reconstruction(spec_sp, np.zeros_like(mnt_rhs), num_qvr, num_qvt, num_qvp, mnt_rhs, mfuncs, np, atol=1e-20, rtol=1e-16, iter_max=1000)
-rel_entropy = relative_entropy(spec_bspline, vsh[:, 0::10], spec_sp, fsh, (num_qvr, num_qvt, num_qvp), np, "KL")
-
-ev         = np.linspace(0, 40, 512)
-vsh_n_rc   = compute_radial_components(spec_bspline, vsh[np.newaxis, :, 0::10], ev, Te0)
-fsh_n_rc   = compute_radial_components(spec_sp     , fsh[np.newaxis, :, :]    , ev, Te0)
-
-plt.semilogy(ev, np.abs(vsh_n_rc[0, 10, 0])   ,'-', label=r"1D-BTE")
-plt.semilogy(ev, np.abs(fsh_n_rc[0, 10, 0])        ,'--', label=r"max entropy recons")
-plt.show()
-plt.close()
 
 
 

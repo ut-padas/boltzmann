@@ -1069,7 +1069,8 @@ def sample_distribution_with_uniform_prior(spec_sp, ss_sol, x_domain, vth, fname
     np.save("%s"%(fname), x_cart)
     return 0
 
-def assemble_moment_ops(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, mf, scale=1.0):
+def assemble_moment_ops(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, mf, scale=1.0, 
+                        dvr=None, dvt=(0, np.pi), dvp=(0, 2 *np.pi) ):
 
     num_p        = spec_sp._p +1
     sph_harm_lm  = spec_sp._sph_harm_lm
@@ -1077,11 +1078,16 @@ def assemble_moment_ops(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_
     
     Vop          = np.zeros((3, num_p * num_sh))
     
+    dvt          = (np.cos(dvt[1]), np.cos(dvt[0]))
     [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VT)
-    vt_q, vt_w   = np.arccos(glx), glw
+    vt_q, vt_w   = 0.5 * (dvt[1] -dvt[0]) * glx + 0.5 * (dvt[1] + dvt[0]) , 0.5 * (dvt[1] -dvt[0]) * glw
+    vt_q, vt_w   = np.arccos(glx), vt_w
+
+    #print(dvt, vt_q, vt_w, np.sum(vt_w))
+
     
     [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VP)
-    vp_q, vp_w   = np.pi * glx + np.pi , np.pi * glw
+    vp_q, vp_w   = 0.5 * (dvp[1] -dvp[0]) * glx + 0.5 * (dvp[1] + dvp[0]) , 0.5 * (dvp[1] -dvp[0]) * glw
 
     vr_q, vr_w   = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
 

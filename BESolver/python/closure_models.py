@@ -14,6 +14,7 @@ import scipy.constants
 import matplotlib.pyplot as plt
 import h5py
 import os
+import sys
 
 def quadrature_grid(spec_sp : sp.SpectralExpansionSpherical, num_vr, num_vt, num_vp, coord="spherical"):
     [glx,glw]    = basis.Legendre().Gauss_Pn(num_vt)
@@ -63,15 +64,22 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
     else:
         raise NotImplementedError
 
-    m_vec_l2 = xp.linalg.norm(m_vec, axis=1)[:, xp.newaxis]
+    m_vec_l2 = xp.linalg.norm(m_vec, axis=1)
     #print(m_vec_l2)
-    m_vec_l2[m_vec_l2 < 1e-10] = 1.0
+    # print("gme : ")
+    # print(m_vec)
+    #m_vec_l2[m_vec_l2 < 1e-10] = 1.0
+    rtheta = 1e-8
+    
     def residual(x):
         xmf = xp.einsum("ix,iklm->xklm", x, mf)
         y   = 2 * xp.exp(xmf) * (xp.exp(beta * vg[0]**2) * wx)[xp.newaxis, :, :, :]
         y   = xp.einsum("iklm,xklm->ixklm", mf, y)
         y   = xp.einsum("ixklm,k,l,m->ix", y, vr_w, vt_w, vp_w) 
-        return y - m_vec
+
+        # rx  = xp.zeros_like(x)
+        # rx[2, x[2]>0] = x[2][x[2]>0]
+        return y - m_vec + rtheta * x**3
 
     def jacobian(x):
         xmf = xp.einsum("ix,iklm->xklm", x, mf)
@@ -79,45 +87,92 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         y   = xp.einsum("iklm,jklm,xklm->ijxklm", mf, mf, y)
         y   = xp.einsum("ijxklm,k,l,m->ijx", y, vr_w, vt_w, vp_w)
         y   = (y.reshape((num_m * num_m, num_x)).T).reshape((num_x, num_m, num_m))
+        # rx  = xp.zeros((num_x, num_m, num_m))
+        # mx   = 0.0 * xp.eye(num_m)
+        # mx[2, 2] = 1.0
+        # rx[x[2]>0]  = xp.einsum("x,ij->xij", xp.ones_like(x[2, x[2]>0]), mx) 
+        I   = xp.eye(num_m)
+        y   += xp.einsum("ix,ij->xij", 3 * rtheta * x**2, I)
         return y
     
-    count     = 0
-    r0        = residual(x)
-    rr        = xp.copy(r0)
-    norm_rr   = norm_r0 = xp.linalg.norm(r0, axis=1)
-    converged = ((norm_rr/m_vec_l2 < rtol).all() or (norm_rr < atol).all())
-
-    alpha     = 5e-1
-    print("iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))
-    while( not converged and (count < iter_max) ):
-        jinv = xp.linalg.inv(jacobian(x))
-        xk       = x  - alpha * xp.einsum("xil,lx->ix", jinv, rr)
-        rk       = residual(xk)
-        norm_rk  = xp.linalg.norm(rk, axis=1)
-        ## line search
-        # while ( alpha > 1e-8 ):
-        #     xk       = x  - alpha * xp.einsum("xil,lx->ix", jinv, rr)
-        #     rk       = residual(xk)
-        #     norm_rk  = xp.linalg.norm(rk, axis=1)
-
-        #     # print(norm_rk)
-        #     # print(norm_rr)
-        #     # print(alpha)
-      
-        #     if ( (norm_rk < norm_rr).any() ):
-        #         break
-        #     else:
-        #         alpha = 0.25 * alpha
-    
-        x         = xk
-        rr        = rk
-        norm_rr   = norm_rk
-        count    += 1
+        
+    alpha = 1e0
+    eta   = 1e-8
+    rcond = 1e-14
+    while (alpha > 1e-1):
+        x         = xp.copy(x0)
+        count     = 0
+        r0        = residual(x)
+        rr        = xp.copy(r0)
+        norm_rr   = norm_r0 = xp.linalg.norm(r0, axis=1)
         converged = ((norm_rr/m_vec_l2 < rtol).all() or (norm_rr < atol).all())
+
+        
         print("iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))
+        while( not converged and (count < iter_max) ):
+            jmat     = jacobian(x)
+            #jinv     = xp.linalg.pinv(jmat, rcond=rcond)
+            jinv     = xp.linalg.inv(jmat)
+            pk       = xp.einsum("xil,lx->ix", jinv, rr)
+            xk       = x  - alpha * pk
+            rk       = residual(xk)
+            norm_rk  = xp.linalg.norm(rk, axis=1)
+            norm_pk  = xp.linalg.norm(pk, axis=1)
+
+            if ((xp.linalg.norm(pk)< eta).all()):
+                print("terminted due to singular jacobian (%.4E)"%(xp.max(norm_pk)))
+            ## line search
+            # while ( alpha > 1e-8 ):
+            #     xk       = x  - alpha * xp.einsum("xil,lx->ix", jinv, rr)
+            #     rk       = residual(xk)
+            #     norm_rk  = xp.linalg.norm(rk, axis=1)
+
+            #     # print(norm_rk)
+            #     # print(norm_rr)
+            #     # print(alpha)
+        
+            #     if ( (norm_rk < norm_rr).any() ):
+            #         break
+            #     else:
+            #         alpha = 0.25 * alpha
+
+            if (xp.isnan(norm_rr).any()==True):
+                break
+            # if((norm_rr > norm_r0).all()):
+            #     break
+        
+        
+            x         = xk
+            rr        = rk
+            norm_rr   = norm_rk
+            count    += 1
+            converged = ((norm_rr/m_vec_l2 < rtol).all() or (norm_rr < atol).all()) or (xp.linalg.norm(pk) < eta).all()
+            # print(norm_rr.shape, m_vec_l2.shape, (norm_rr/m_vec_l2).shape)
+            #print(norm_rr, norm_rr/m_vec_l2, x)
+            #print(xp.linalg.norm(pk))
+            #print("iter: ", iter, x, rr)
+            if(count % 10 ==0):
+                print("iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))
+            
+            
+        if (not converged):
+            alpha = alpha * 0.1 
+        else:
+            break
         #print(rr)
     
-    #print(x)
+
+    print("x: \n", x, x.shape)
+    #print("norm_rr: \n", norm_rr, norm_rr.shape)
+    print("m_vec: \n", m_vec, m_vec.shape)
+    print("rr: \n", rr, rr.shape)
+    # print("norm_rr: \n", norm_rr, norm_rr.shape)
+    # #print("norm_rr: \n", norm_rr)
+    # if (not converged):
+    #     assert False
+
+    print("converged at iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))
+
     num_p        = spec_sp._p +1
     sph_harm_lm  = spec_sp._sph_harm_lm
     num_sh       = len(sph_harm_lm)

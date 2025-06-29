@@ -106,6 +106,7 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         rr        = xp.copy(r0)
         norm_rr   = norm_r0 = xp.linalg.norm(r0, axis=1)
         converged = ((norm_rr/m_vec_l2 < rtol).all() or (norm_rr < atol).all())
+        
 
         
         print("iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))

@@ -35,11 +35,14 @@ class cheb_collocation_1d():
         # for i in range(0,self.Np):
         #     self.V2p[:,i] = cheb.chebval(self.xp, cheb.chebder(ident[i,:], m=2))
         self.V2p  = np.array([np.polynomial.Chebyshev.basis(i).deriv(m=2)(self.xp) for i in range(self.Np)]).reshape((-1, self.Np)).T  
+        self.V3p  = np.array([np.polynomial.Chebyshev.basis(i).deriv(m=3)(self.xp) for i in range(self.Np)]).reshape((-1, self.Np)).T  
+        self.V4p  = np.array([np.polynomial.Chebyshev.basis(i).deriv(m=4)(self.xp) for i in range(self.Np)]).reshape((-1, self.Np)).T  
         
 
         # Lp: values at xp to 2nd derivatives at xp
-        self.Lp = self.V2p @ self.V0pinv
-        
+        self.Lp  = self.V2p @ self.V0pinv
+        self.Lp3 = self.V3p @ self.V0pinv
+        self.Lp4 = self.V4p @ self.V0pinv
         
         # LpD: values at xp to 2nd derivatives at xc, with identity
         # for top and bottom row (for Dirichlet BCs)

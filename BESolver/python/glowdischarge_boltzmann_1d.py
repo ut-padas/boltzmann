@@ -1192,6 +1192,7 @@ class glow1d_boltzmann():
       Vin       = v.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
       Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
       
+      #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr*self.Nvt, self.Np)) 
       # enforce rhs BCs
       Vin[self.xp_vt_l, 0]  = 0.0
       Vin[self.xp_vt_r, -1] = 0.0

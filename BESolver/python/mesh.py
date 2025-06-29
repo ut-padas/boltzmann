@@ -32,7 +32,10 @@ class mesh():
             self.cheb    = [collocation_op.cheb_collocation_1d(N[i]) for i in range(dim)]
             self.D1      = [self.cheb[i].Dp for i in range(dim)]
             self.D2      = [self.cheb[i].Lp for i in range(dim)]
+            self.D3      = [self.cheb[i].Lp3 for i in range(dim)]
+            self.D4      = [self.cheb[i].Lp4 for i in range(dim)]
             self.xcoord  = [self.cheb[i].xp for i in range(dim)]
+            self.dx      = [np.min(self.xcoord[i][1:] - self.xcoord[i][0:-1]) for i in range(dim)]
 
         elif(self.gtype == grid_type.REGULAR_GRID):
             sw            = self.sw
@@ -77,6 +80,7 @@ class mesh():
                 self.D1.append(scipy.sparse.csr_matrix(D1))
                 self.D2.append(scipy.sparse.csr_matrix(D2))
                 self.xcoord  = [np.linspace(-1, 1, N[i]) for i in range(dim)]
+                self.dx      = [np.min(self.xcoord[i][1:] - self.xcoord[i][0:-1]) for i in range(dim)]
                 
         else:
             raise NotImplementedError

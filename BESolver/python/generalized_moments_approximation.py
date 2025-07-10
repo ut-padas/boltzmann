@@ -11,6 +11,7 @@ import collisions
 import matplotlib.pyplot as plt
 import sys
 import h5py
+import collocation_op
 
 class params():
     def __init__(self):
@@ -60,14 +61,14 @@ class generalized_moments():
         self.spec_sp     = self.bte_1d3v.op_spec_sp
         
         self.num_vr      = (self.spec_sp._basis_p._num_knot_intervals) * self.params.spline_qpts
-        self.num_vt      = 32
+        self.num_vt      = self.params.Nvt
         self.num_vp      = 4
 
         vth              = self.bte_1d3v.bs_vth
         q                = self.bte_1d3v.param
         c_gamma          = np.sqrt(2 * scipy.constants.elementary_charge / scipy.constants.electron_mass)
-
         scale_Te         = (vth**2) * (2/3/c_gamma**2) #(vth**2) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
+        self.c_gamma     = c_gamma
 
         self.bte_params  = self.bte_1d3v.param
 
@@ -139,38 +140,79 @@ class generalized_moments():
 
 
         self.mesh          = mesh.mesh(tuple([self.params.Np]), 1, mesh.grid_type.CHEBYSHEV_COLLOC)
-        assert (self.mesh.xcoord[0] == self.bte_1d3v.xp).all() == True
+        #assert (self.mesh.xcoord[0] == self.bte_1d3v.xp).all() == True
+        # cheb               = collocation_op.cheb_collocation_1d(self.params.Np)
+        # self.mesh_iterp    = np.dot(np.polynomial.chebyshev.chebvander(self.mesh.xcoord[0], self.params.Np-1), cheb.V0pinv)
+        # print(self.mesh_iterp.shape)
 
-        self.efield        = lambda t : xp.ones_like(self.mesh.xcoord[0]) * 1e4 * xp.cos(2 * xp.pi * t)
-        #self.efield        = lambda t : xp.ones_like(self.mesh.xcoord[0]) * 1e4 * xp.cos(2 * xp.pi * t)
+        self.efield        = lambda t : xp.ones(self.params.Np) * 1e1 * xp.cos(2 * xp.pi * t)
         self.cmodel_type   = closure_type.BTE_1D3V
-
         self.Ix            = xp.eye(self.mesh.N[0])
         
     def init(self):
         xp          = self.xp_module 
-        u, v        = self.bte_1d3v.initialize()
-        
-        # q           = self.bte_1d3v.param
-        # xx          = q.L * (self.bte_1d3v.xp + 1)
-        # print(self.mfuncs_ops_ords[0] @ v)
-        # print(self.mfuncs_ops[0] @ self.bte_1d3v.op_po2sh @ v)
-        # print(1e6 * (1e7 + 1e9 * (1-0.5 * xx/q.L)**2 * (0.5 * xx/q.L)**2)/q.np0)
-        # sys.exit(0)
+        #u, v        = self.bte_1d3v.initialize()
+        xcoord      = self.mesh.xcoord[0]
+        q           = self.bte_1d3v.param
+        xx          = q.L * (xcoord + 1)
+
+        ne          = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/q.L)**2 * (0.5 * xx/q.L)**2)/q.np0
+        Te          = self.params.Te * xp.ones_like(ne)
 
 
-        self.edf    = v
-        
+        spec_sp     = self.bte_1d3v.op_spec_sp
+        mmat        = spec_sp.compute_mass_matrix()
+        mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
+        vth         = self.bte_1d3v.bs_vth
+        mw          = bte_utils.get_maxwellian_3d(vth, 1)
+
+        mass_op     = self.bte_1d3v.op_mass
+        temp_op     = self.bte_1d3v.op_temp
+          
+        [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+        Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
+          
+        num_p       = spec_sp._p +1
+        num_sh      = len(spec_sp._sph_harm_lm)
+        num_x       = self.mesh.N[0]
+        num_vt      = self.params.Nvt
+
+        h_init      = xp.zeros(num_p * num_sh)
+        v           = xp.zeros((num_p * num_vt, num_x))
         Po          = self.bte_1d3v.op_psh2o
         Ps          = self.bte_1d3v.op_po2sh
+        
+          
+        ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * vth/self.c_gamma)**2
+        print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.bte_1d3v.ev_lim[1], ev_max_ext))
+        for i in range(self.mesh.N[0]):
+            v_ratio           = (self.c_gamma * xp.sqrt(Te[i])/vth)
+            hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+            h_init[0::num_sh] = xp.sqrt(4 * xp.pi) * xp.dot(mmat_inv[0::num_sh,0::num_sh], xp.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
+            m0                = xp.dot(mass_op, h_init)
+            
+            h_init            = h_init/m0
+            
+            hh1               = self.bte_1d3v.bte_eedf_normalization(h_init)
+            num_sh            = len(spec_sp._sph_harm_lm)
+            
+            print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.mesh.xcoord[0][i], Te[i], m0, (xp.dot(temp_op, h_init)/m0)), end='')
+            print(" k_elastic [m^3s^{-1}] = %.8E " %(xp.dot(self.bte_1d3v.op_rate[0], hh1[0::num_sh])), end='')
+            if (len(self.bte_1d3v.op_rate) > 1):
+              print("k_ionization [m^3s^{-1}] = %.8E " %(xp.dot(self.bte_1d3v.op_rate[1], hh1[0::num_sh])))
+          
+            v[:, i] = xp.dot(Po, h_init)
+              
+        v = v * ne
 
+        self.edf    = v
         mw          = (Ps @ v[:,1])
         self.mw_edf = mw / (self.bte_1d3v.op_mass @ mw)
         
         # v[self.bte_1d3v.xp_vt_l, 0 ] = 0.0
         # v[self.bte_1d3v.xp_vt_r, -1] = 0.0
         
-        self.mae_m0             = xp.zeros((len(self.mfuncs), self.bte_1d3v.Np))
+        self.mae_m0             = xp.zeros((len(self.mfuncs), self.mesh.N[0]))
         m                       = self.mfuncs_ops @ (Ps @ v)
         return m
 
@@ -211,7 +253,7 @@ class generalized_moments():
 
 
             mJx = (q.tau/q.L) * self.mfuncs_Jx_ops_ords @ m_vec
-            mJv = (q.tau)     * (self.mfuncs_ops @ (Cop @ fklm + E * (Av @ fklm))) 
+            mJv = (q.tau)     * (self.mfuncs_ops @ ((Cop @ fklm) + E * (Av @ fklm))) 
             m   = self.mfuncs_ops_ords @ m_vec
 
             # self.bte_1d3v.bs_E  = E
@@ -219,8 +261,16 @@ class generalized_moments():
             # v_dt                = self.bte_1d3v.step_bte_v(v, None, 0, dt, ts_type="BE")
             # mJv1                = self.mfuncs_ops_ords @ ((v_dt - v)/dt)
             # print(mJv1, mJv, xp.linalg.norm(mJv1-mJv))
+            # P1 = self.mesh_iterp
 
             return m, mJx, mJv, fklm
+
+            # plt.plot(self.bte_1d3v.xp, m[1], label=r"bte")
+            # plt.plot(self.mesh.xcoord[0], (P1 @ m.T).T[1], label=r"reg")
+            # plt.legend()
+            # plt.show()
+            # plt.close()
+            # return (P1 @ m.T).T, (P1 @ mJx.T).T, (P1 @ mJv.T).T, (P1 @ fklm.T).T
         else:
             raise NotImplementedError
         
@@ -238,7 +288,7 @@ class generalized_moments():
         # print(self.mw_edf * m_vec[self.MIDX_MASS, 0])
         # BCs. 
 
-        # fl = Po @fklm[:,  0]
+        # fl = Po @fklm[:,  0]self.mesh_iterp
         # fr = Po @fklm[:, -1]
 
         # fl[self.bte_1d3v.xp_vt_l] = 0.0
@@ -384,9 +434,9 @@ class generalized_moments():
             # print(a2)
             # print(xp.linalg.norm(a1-a2)/xp.linalg.norm(a1), xp.linalg.norm(a1))
             #sys.exit(0)
-
-            A            = (self.Ix * (1 - 0.5 * dt * sv[i])  +  0.5 * dt * ( jx[i] * D1 +  (D1 @ jx[i]) * self.Ix))
-            b            = x[i] * (1 + 0.5 * dt * sv[i]) -0.5 * dt * D1 @ (x[i] * jx[i]) #- 0.5 * dt * (jx[i] * (D1 @ x[i]) + x[i] * (D1 @ jx[i]))
+            r            = 1e-1
+            A            = (self.Ix * (1 - r * dt * sv[i])  +  r * dt * ( jx[i] * D1 +  (D1 @ jx[i]) * self.Ix))
+            b            = x[i] * (1 + (1-r) * dt * sv[i]) -(1-r) * dt * D1 @ (x[i] * jx[i]) #- 0.5 * dt * (jx[i] * (D1 @ x[i]) + x[i] * (D1 @ jx[i]))
             y[i]         = xp.linalg.solve(A, b)
 
             # A            = (self.Ix * (1 - 0.5 * dt * sv[i]) +  0.5 * dt * jx[i] * self.mesh.D1[0])
@@ -402,9 +452,9 @@ class generalized_moments():
             # print("Jx", Jx[1])
             # print("a", (q.tau/q.L) * ue * x[1])
             # print("Dp", xp.linalg.norm(D1 @ P))
-
-            # A    = self.Ix + 0.5 * dt * (q.tau/q.L) * (ue * D1 + (D1 @ ue) * self.Ix)
-            # b    = dt * Jv[1] - dt * D1 @ (P  + 0.5 * (q.tau/q.L) * (ue * x[1]))
+            # r    = 0.0 #1e-1
+            # A    = self.Ix + r * dt * (q.tau/q.L) * (ue * D1 + (D1 @ ue) * self.Ix)
+            # b    = x[1] + dt * Jv[1] - dt * D1 @ (P  + (1-r) * (q.tau/q.L) * (ue * x[1]))
 
             # y[1] = xp.linalg.solve(A, b)
 
@@ -426,11 +476,11 @@ class generalized_moments():
         #sigma = 1e0    
         # ue_abs    = xp.abs(Jx[0]/m[0]) * (q.L/q.tau)
         # sigma     = ue_abs * 1e-4
-        sigma     = 5e1
+        sigma     = 2e1
         # sigma[sigma>1e2] = 1e2
         # sigma[sigma<1]   = 1
         # print(sigma)
-        Lp        = self.Ix - dt * sigma * (q.tau/q.L**2) * self.mesh.cheb[0].Lp
+        Lp        = self.Ix - dt * sigma * (q.tau/q.L**2) * self.mesh.D2[0]
         Lp[0 , :] = self.Ix[0]
         Lp[-1, :] = self.Ix[-1]
         y         = xp.linalg.solve(Lp, y.T).T 
@@ -449,31 +499,6 @@ class generalized_moments():
         #y          = x + dt * self.rhs(x, time, dt)
         #y          = self.rhs(x,time, dt)
 
-        # q             = self.bte_params
-        # v             = self.edf
-        # m             = self.mfuncs_ops_ords    @ v
-        # Jx            = self.mfuncs_Jx_ops_ords @ v
-        
-        # #print("rhs ", time, ue)
-        # #print((xp.eye(self.mesh.D1[0].shape[0]) - dt * ue * self.mesh.D1[0]).shape)
-
-        # # print(ue[:, xp.newaxis] * self.mesh.D1[0])
-        # # print(ue[0] * self.mesh.D1[0][0,:])
-        # # sys.exit(0)
-        # y             = xp.zeros_like(x)
-        # y[0]          = xp.linalg.solve((xp.eye(self.mesh.D1[0].shape[0]) + 0.5 * dt * (q.tau/q.L) * ue * self.mesh.D1[0]), x[0])
-        # y[1]          = ue * ne #* (q.L / q.tau)
-        
-        # y[2,  0] = 4 * y[0,  0] 
-        # y[2, -1] = 4 * y[0, -1] 
-        # y[0, y[0]<0]  = 1e-10
-        # y[2, y[2]<0]  = 1e-10
-        # idx = (y[self.MIDX_ENERGY]/y[self.MIDX_MASS]) < 0
-        # y [self.MIDX_ENERGY,  idx ] = 1e-1 * y[self.MIDX_MASS, idx]
-        # y[self.MIDX_MOM, (y[self.MIDX_MOM]/y[self.MIDX_MASS])> 8e5]  =  8e5 * y[self.MIDX_MASS, (y[self.MIDX_MOM]/y[self.MIDX_MASS]) > 8e5]
-        # y[self.MIDX_MOM, (y[self.MIDX_MOM]/y[self.MIDX_MASS])< -8e5] = -8e5 * y[self.MIDX_MASS, (y[self.MIDX_MOM]/y[self.MIDX_MASS])< -8e5]
-        # y[self.MIDX_ENERGY,  0] = (y[self.MIDX_MASS,  0] * self.bte_params.Teb0) 
-        # y[self.MIDX_ENERGY, -1] = (y[self.MIDX_MASS, -1] * self.bte_params.Teb1)
         
         return y
 
@@ -496,7 +521,7 @@ if __name__ == "__main__":
     bte_solver = gm.bte_1d3v
     bte_solver.initialize_bte_adv_x(0.5 * dt)
     
-    u, v                      = bte_solver.initialize()
+    u, v   = bte_solver.initialize()
     
     # v[bte_solver.xp_vt_l, 0 ] = 0.0
     # v[bte_solver.xp_vt_r, -1] = 0.0
@@ -521,10 +546,12 @@ if __name__ == "__main__":
         # if(tt > 2*dt):
         #     sys.exit(0)
         if (idx % io_freq == 0):
+            xx_gme = gm.mesh.xcoord[0]
+            xx_bte = gm.bte_1d3v.xp
             plt.figure(figsize=(12, 8), dpi=200)
             plt.subplot(2, 3, 1)
-            plt.plot(xx, m_gme[gm.MIDX_MASS] * gm.bte_params.np0, label=r"GME")
-            plt.plot(xx, m_bte[gm.MIDX_MASS] * gm.bte_params.np0, label=r"BTE")
+            plt.plot(xx_gme, m_gme[gm.MIDX_MASS] * gm.bte_params.np0, label=r"GME")
+            plt.plot(xx_bte, m_bte[gm.MIDX_MASS] * gm.bte_params.np0, label=r"BTE")
             plt.xlabel(r"$\hat{x}$")
             plt.ylabel(r"$n_e [m^-3]$")
             plt.legend()
@@ -532,16 +559,16 @@ if __name__ == "__main__":
             
 
             plt.subplot(2, 3, 2)
-            plt.plot(xx, m_gme[gm.MIDX_MOM]/m_gme[gm.MIDX_MASS], label=r"GME")
-            plt.plot(xx, m_bte[gm.MIDX_MOM]/m_bte[gm.MIDX_MASS], label=r"BTE")
+            plt.plot(xx_gme, m_gme[gm.MIDX_MOM]/m_gme[gm.MIDX_MASS], label=r"GME")
+            plt.plot(xx_bte, m_bte[gm.MIDX_MOM]/m_bte[gm.MIDX_MASS], label=r"BTE")
             plt.xlabel(r"$\hat{x}$")
             plt.ylabel(r"$v_x [ms^{-1}]$")
             plt.legend()
             plt.grid(visible=True)
 
             plt.subplot(2, 3, 3)
-            plt.plot(xx, m_gme[gm.MIDX_ENERGY]/m_gme[gm.MIDX_MASS], label=r"GME")
-            plt.plot(xx, m_bte[gm.MIDX_ENERGY]/m_bte[gm.MIDX_MASS], label=r"BTE")
+            plt.plot(xx_gme, m_gme[gm.MIDX_ENERGY]/m_gme[gm.MIDX_MASS], label=r"GME")
+            plt.plot(xx_bte, m_bte[gm.MIDX_ENERGY]/m_bte[gm.MIDX_MASS], label=r"BTE")
             plt.xlabel(r"$\hat{x}$")
             plt.ylabel(r"$T_e [eV]$")
             plt.legend()

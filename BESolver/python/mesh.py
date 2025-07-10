@@ -60,7 +60,7 @@ class mesh():
                     D1[N[i]-1-r , N[i]-1-r - idx] = c1["coefficients"]
                     D2[N[i]-1-r , N[i]-1-r - idx] = c2["coefficients"]
 
-                    print(idx, -idx)
+                    #print(idx, -idx)
 
 
                 r                = sw

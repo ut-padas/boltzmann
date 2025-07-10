@@ -35,7 +35,10 @@ def quadrature_grid(spec_sp : sp.SpectralExpansionSpherical, num_vr, num_vt, num
     else:
         raise NotImplementedError
     
-def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr, num_vt, num_vp, m_vec : np.array, m_funcs : list, xp:np, rtol, atol, iter_max):
+def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0,
+                               num_vr, num_vt, num_vp,
+                               m_vec : np.array, m_funcs : list, xp:np, rtol, atol, iter_max):
+    
     num_m = m_vec.shape[0]
     num_x = m_vec.shape[1]
 
@@ -46,7 +49,21 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
     ###
 
     x                             = xp.copy(x0)
-    vg, (vr_w, vt_w, vp_w)        = quadrature_grid(spec_sp, num_vr, num_vt, num_vp)
+
+    [glx,glw]                     = basis.Legendre().Gauss_Pn(num_vp)
+    vp_q, vp_w                    = np.pi * glx + np.pi , np.pi * glw
+    vr_q, vr_w                    = spec_sp._basis_p.Gauss_Pn(num_vr)
+
+    
+
+    assert num_vt % 2             == 0 
+    gx, gw                        = basis.Legendre().Gauss_Pn(num_vt//2)
+    gx_m1_0 , gw_m1_0             = 0.5 * gx - 0.5, 0.5 * gw
+    gx_0_p1 , gw_0_p1             = 0.5 * gx + 0.5, 0.5 * gw
+    vt_q                          = np.append(np.arccos(gx_m1_0), np.arccos(gx_0_p1)) 
+    vt_w                          = np.append(gw_m1_0, gw_0_p1)
+    vg                            = np.meshgrid(vr_q, vt_q, vp_q, indexing="ij")
+
     mf                            = np.zeros(tuple([num_m]) + vg[0].shape)
 
     for i in range(num_m):
@@ -65,10 +82,6 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         raise NotImplementedError
 
     m_vec_l2 = xp.linalg.norm(m_vec, axis=1)
-    #print(m_vec_l2)
-    # print("gme : ")
-    # print(m_vec)
-    #m_vec_l2[m_vec_l2 < 1e-10] = 1.0
     rtheta = 1e-8
     
     def residual(x):
@@ -76,9 +89,6 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         y   = 2 * xp.exp(xmf) * (xp.exp(beta * vg[0]**2) * wx)[xp.newaxis, :, :, :]
         y   = xp.einsum("iklm,xklm->ixklm", mf, y)
         y   = xp.einsum("ixklm,k,l,m->ix", y, vr_w, vt_w, vp_w) 
-
-        # rx  = xp.zeros_like(x)
-        # rx[2, x[2]>0] = x[2][x[2]>0]
         return y - m_vec + rtheta * x**3
 
     def jacobian(x):
@@ -87,10 +97,6 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         y   = xp.einsum("iklm,jklm,xklm->ijxklm", mf, mf, y)
         y   = xp.einsum("ijxklm,k,l,m->ijx", y, vr_w, vt_w, vp_w)
         y   = (y.reshape((num_m * num_m, num_x)).T).reshape((num_x, num_m, num_m))
-        # rx  = xp.zeros((num_x, num_m, num_m))
-        # mx   = 0.0 * xp.eye(num_m)
-        # mx[2, 2] = 1.0
-        # rx[x[2]>0]  = xp.einsum("x,ij->xij", xp.ones_like(x[2, x[2]>0]), mx) 
         I   = xp.eye(num_m)
         y   += xp.einsum("ix,ij->xij", 3 * rtheta * x**2, I)
         return y
@@ -163,34 +169,42 @@ def max_entropy_reconstruction(spec_sp:sp.SpectralExpansionSpherical, x0, num_vr
         #print(rr)
     
 
-    print("x: \n", x, x.shape)
+    #print("x: \n", x, x.shape)
     #print("norm_rr: \n", norm_rr, norm_rr.shape)
-    print("m_vec: \n", m_vec, m_vec.shape)
-    print("rr: \n", rr, rr.shape)
+    #print("m_vec: \n", m_vec, m_vec.shape)
+    #print("rr: \n", rr, rr.shape)
     # print("norm_rr: \n", norm_rr, norm_rr.shape)
     # #print("norm_rr: \n", norm_rr)
     # if (not converged):
     #     assert False
-
     print("converged at iter = %04d norm_rr = %.4E norm_rr/norm_r0 = %.4E"%(count, xp.max(norm_rr), xp.max(norm_rr/m_vec_l2)))
 
+    x            = np.array(x)
     num_p        = spec_sp._p +1
     sph_harm_lm  = spec_sp._sph_harm_lm
     num_sh       = len(sph_harm_lm)
     mm           = spec_sp.compute_mass_matrix()
-
+    mm_inv       = spec_sp.inverse_mass_mat(Mmat=mm)
+    
+    
     xmf          = xp.einsum("ix,iklm->xklm", x, mf)
     q            = nfac * xp.exp(xmf) * (xp.exp(beta * vg[0]**2) * wx)[xp.newaxis, :, :, :]
-
     Vq           = xp.zeros(tuple([num_p * num_sh]) + vg[0].shape)
+
+    Vqr          = spec_sp.Vq_r(vg[0], 0)
+    Vqvt         = spec_sp.Vq_sph(vg[1], vg[2])
     
-    for p in range(num_p):
-        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-            Vq[p * num_sh + lm_idx] = spec_sp.basis_eval_radial(vg[0], p, l=0) * spec_sp.basis_eval_spherical(vg[1], vg[2], lm[0], lm[1])
     
-    fklm = np.einsum("ixklm,k,l,m->ix", np.einsum("iklm,xklm->ixklm", Vq, q), vr_w, vt_w, vp_w)
-    fklm = xp.linalg.solve(mm, fklm)
-    return x, fklm
+    Vq           = np.einsum("iklm,jklm->ijklm", Vqr, Vqvt).reshape(tuple([num_p * num_sh]) + vg[0].shape)
+    fs           = np.einsum("ixklm,k,l,m->ix", np.einsum("iklm,xklm->ixklm", Vq, q), vr_w, vt_w, vp_w)
+    fs           = mm_inv @ fs #np.linalg.solve(mm, fs)
+
+    fo           = (1/2/np.pi) * np.einsum("ixklm,k,m->ilx",np.einsum("iklm,xklm->ixklm", Vqr, q), vr_w, vp_w)
+    mm_r_inv     = bte_utils.choloskey_inv(mm[0::num_sh, 0::num_sh])
+    
+    fo           = np.einsum("pk,klx->plx", mm_r_inv, fo).reshape((num_p * num_vt, num_x))
+    
+    return x, fs, fo
     
 def relative_entropy(spec_sp_psh: sp.SpectralExpansionSpherical, psh,
                      spec_sp_qsh: sp.SpectralExpansionSpherical, qsh,
@@ -242,19 +256,12 @@ def relative_entropy(spec_sp_psh: sp.SpectralExpansionSpherical, psh,
 
     return xp.einsum("xklm,k,l,m", wx * psh_vg * xp.log(xp.abs(psh_vg/qsh_vg)), vr_w, vt_w, vp_w)
 
-def bte_0d_closure(args, Ef, fprefix):
+def bte_0d_closure(args, Et, fprefix, tau, max_cycles=10, abs_tol=1e-10, rel_tol=1e-8, sfreq=1e-2):
     """
     computes the time normalized EEDFs with 0D bte
     """
     
-    try:
-        import cupy as cp
-        #CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
-    except:
-        print("cupy is required for 0D-BTE closure model")
-        raise ModuleNotFoundError
-    
-    from   bte_0d3v_batched import bte_0d3v_batched
+    from   bte_0d3v_batched import bte_0d3v_batched, vspace_grid_extension
     import glow1d_utils
 
     class A:
@@ -269,8 +276,8 @@ def bte_0d_closure(args, Ef, fprefix):
         collisions      = "lxcat_data/eAr_crs.Biagi.3sp2r" #args["collisions"]
         sp_order        = int(args["sp_order"])
         spline_qpts     = int(args["spline_qpts"])
-        atol            = float(args["atol"])
-        rtol            = float(args["rtol"])
+        atol            = abs_tol
+        rtol            = rel_tol
         max_iter        = 1000
         Te              = float(args["Te"])
         n0              = param.n0 * param.np0
@@ -283,15 +290,15 @@ def bte_0d_closure(args, Ef, fprefix):
         store_csv       = 1
         plot_data       = 1
         verbose         = 1
-        use_gpu         = 1
-        cycles          = 100
-        dt              = 1e-2
-        Efreq           = 13.56e6
+        use_gpu         = int(args["use_gpu"])
+        cycles          = max_cycles
+        dt              = float(args["cfl"])
+        Efreq           = 1/tau #13.56e6
         n_grids         = 1
         n_pts           = int(args["Np"])
 
     args_0d_bte = bte_0d_params()
-    print(args_0d_bte.collisions, args_0d_bte.out_fname)
+    #print(args_0d_bte.collisions, args_0d_bte.out_fname)
     n_grids     = bte_0d_params.n_grids
     lm_modes    = [[l,0] for l in range(args_0d_bte.l_max+1)]    
     bte_solver  = bte_0d3v_batched(args_0d_bte, np.array([args_0d_bte.ev_max]),
@@ -301,12 +308,12 @@ def bte_0d_closure(args, Ef, fprefix):
     grid_idx    = 0
     n_pts       = args_0d_bte.n_pts
 
-    bte_solver.assemble_operators(grid_idx)
+    bte_solver.assemble_operators(grid_idx, vspace_ext=vspace_grid_extension.LOG)
     f0          = bte_solver.initialize(grid_idx, n_pts,"maxwellian")
 
     bte_solver.set_boltzmann_parameter(grid_idx, "n0"       , np.ones(n_pts) * args_0d_bte.n0)
     bte_solver.set_boltzmann_parameter(grid_idx, "ne"       , np.ones(n_pts) * 1.0)
-    bte_solver.set_boltzmann_parameter(grid_idx, "ns_by_n0" , np.ones(n_pts))
+    bte_solver.set_boltzmann_parameter(grid_idx, "ns_by_n0" , np.ones(n_pts)[np.newaxis,:])
     bte_solver.set_boltzmann_parameter(grid_idx, "Tg"       , np.ones(n_pts) * args_0d_bte.param.Tg)
     bte_solver.set_boltzmann_parameter(grid_idx, "eRe"      , np.ones(n_pts) * 0.0)
     bte_solver.set_boltzmann_parameter(grid_idx, "eIm"      , np.ones(n_pts) * 0.0)
@@ -316,31 +323,28 @@ def bte_0d_closure(args, Ef, fprefix):
     bte_solver.set_boltzmann_parameter(grid_idx, "u0"       , f0)
     bte_solver.set_boltzmann_parameter(grid_idx, "u1"       , 0 * f0)
 
-
     if args_0d_bte.use_gpu==1:
+        try:
+            import cupy as cp
+            #CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
+        except:
+            print("cupy is required for 0D-BTE closure model")
+            raise ModuleNotFoundError
+        
         dev_id   = 0
         bte_solver.host_to_device_setup(dev_id, grid_idx)
+        cp.cuda.Device(dev_id).use()
     
     xp     = bte_solver.xp_module
-    Ex, Ek = Ef[0], Ef[1]
     
-    Ex     = xp.asarray(Ex)
-    Ek     = xp.asarray(Ek)
-
-    def Et(t):
-        at = xp.array([[xp.cos(2 * xp.pi * Ek[i] * t ), xp.sin(2 * xp.pi * Ek[i] * t)] for i in range(len(Ek))])
-        return xp.sum(Ex * at[:, :, xp.newaxis], axis=(0, 1))
-
     def solve_step(time, delta_t, Et):
         """
         perform a single timestep in 0d-BTE
         """
-        with cp.cuda.Device(dev_id):
-            print(Et(time), Et(time).shape)
-            bte_solver.set_boltzmann_parameter(grid_idx, "E", Et(time))
-            u0    = bte_solver.get_boltzmann_parameter(grid_idx, "u0")
-            v     = bte_solver.step(grid_idx, u0, args_0d_bte.atol, args_0d_bte.rtol, args_0d_bte.max_iter, time, delta_t)
-            bte_solver.set_boltzmann_parameter(grid_idx, "u1", v)
+        bte_solver.set_boltzmann_parameter(grid_idx, "E", Et(time))
+        u0    = bte_solver.get_boltzmann_parameter(grid_idx, "u0")
+        v     = bte_solver.step(grid_idx, u0, args_0d_bte.atol, args_0d_bte.rtol, args_0d_bte.max_iter, time * tau, delta_t * tau)
+        bte_solver.set_boltzmann_parameter(grid_idx, "u1", v)
 
         return 
 
@@ -359,32 +363,51 @@ def bte_0d_closure(args, Ef, fprefix):
     cycle_f1         = (0.5 * dt/ (steps_per_cycle * dt))
     xp               = bte_solver.xp_module
     tt               = 0
-    with cp.cuda.Device(dev_id):
-        for tidx in range(0, max_steps):   
-            if (tidx % steps_per_cycle == 0):
-                u0      = bte_solver.get_boltzmann_parameter(grid_idx, "u0")
-                abs_error[grid_idx] = xp.max(xp.abs(bte_v[grid_idx]-u0))
-                rel_error[grid_idx] = abs_error[grid_idx] / xp.max(xp.abs(u0))
-                bte_v[grid_idx] = xp.copy(u0)
 
-                print("cycle = %04d ||u0-u1|| = %.4E  ||u0-u1||/||u0|| = %.4E"%(tidx//steps_per_cycle, abs_error[grid_idx], rel_error[grid_idx]))
+    sample_freq      = int(sfreq / dt)
+    nsamples         = int(1/sfreq) + 1
+    u                = [xp.zeros(tuple([nsamples]) + f0.shape) for i in range(n_grids)] 
+    scount           = 0
+    
+    for tidx in range(0, max_steps):   
+        
+        if (tidx % sample_freq == 0):
+            #print(tt, scount, tidx)
+            u[grid_idx][scount] = bte_solver.get_boltzmann_parameter(grid_idx, "u0")
+            scount +=1
 
-                if max(abs_error) < args_0d_bte.atol or max(rel_error)< args_0d_bte.rtol:
-                    break
+        if (tidx % steps_per_cycle == 0):
+            scount              = 0
+            #print(tt, scount, tidx)
+            u0                  = bte_solver.get_boltzmann_parameter(grid_idx, "u0")
+            u[grid_idx][scount] = u0
+            scount              +=1
 
-                if tidx < (max_steps-1):
-                    u_avg  = [0 for i in range(n_grids)]
-            
-            if tidx == (max_steps-1):
-                break    
+            abs_error[grid_idx] = xp.max(xp.abs(bte_v[grid_idx]-u0))
+            rel_error[grid_idx] = abs_error[grid_idx] / xp.max(xp.abs(u0))
+            bte_v[grid_idx] = xp.copy(u0)
 
-            u_avg[grid_idx] += cycle_f1 * bte_solver.get_boltzmann_parameter(grid_idx, "u0")
-            solve_step(tt, dt, Et)
-            u_avg[grid_idx] += cycle_f1 * bte_solver.get_boltzmann_parameter(grid_idx, "u1")
-            bte_solver.set_boltzmann_parameter(grid_idx, "u0", bte_solver.get_boltzmann_parameter(grid_idx, "u1"))
-            tt+=dt
+            print("cycle = %04d ||u0-u1|| = %.4E  ||u0-u1||/||u0|| = %.4E"%(tidx//steps_per_cycle, abs_error[grid_idx], rel_error[grid_idx]))
 
-    return u_avg[grid_idx]
+            if max(abs_error) < args_0d_bte.atol or max(rel_error)< args_0d_bte.rtol:
+                break
+
+            if tidx < (max_steps-1):
+                u_avg  = [0 for i in range(n_grids)]
+        
+        if tidx == (max_steps-1):
+            break    
+
+        u_avg[grid_idx] += cycle_f1 * bte_solver.get_boltzmann_parameter(grid_idx, "u0")
+        solve_step(tt, dt, Et)
+        u_avg[grid_idx] += cycle_f1 * bte_solver.get_boltzmann_parameter(grid_idx, "u1")
+        bte_solver.set_boltzmann_parameter(grid_idx, "u0", bte_solver.get_boltzmann_parameter(grid_idx, "u1"))
+
+        tt+=dt
+        
+    
+
+    return u[grid_idx], u_avg[grid_idx]
     # do the time-steping till convergence
 
 

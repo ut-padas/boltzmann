@@ -22,12 +22,15 @@ import scipy.interpolate
 import scipy.constants
 import cross_section
 from multiprocessing.pool import ThreadPool as WorkerPool
-
-import cupy as cp
-import cupyx.scipy.sparse
 import enum
 from os import environ
 from profile_t import profile_t
+
+try:
+    import cupy as cp
+    import cupyx.scipy.sparse
+except:
+    print("cupy module not found")
 
 NVTX_FLAGS=0
 
@@ -47,6 +50,11 @@ class pp(enum.IntEnum):
     D2H           = 12
     LAST          = 13
 
+class vspace_grid_extension(enum.IntEnum):
+    NONE   = 0, # no v-space extension is applied
+    LINEAR = 1, # ev truncation energy is k * ev_max
+    LOG    = 2, # log space ev extension
+
 
 def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol, iter_max, xp=np):
     jac      = jacobian(x)
@@ -54,7 +62,7 @@ def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol
     jac_inv  = jacobian_inv(jac) #xp.linalg.inv(jac)
     
     ns_info  = dict()
-    alpha    = 1.0 #xp.ones(n_pts)
+    alpha    = xp.ones(n_pts)
     x0       = x
     r0       = residual(x0)
     norm_rr  = norm_r0  = xp.linalg.norm(r0, axis=0)
@@ -63,6 +71,7 @@ def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol
     cond1        = (norm_rr/norm_r0) < rtol
     cond2        = norm_rr < atol
     converged    = (cond1.all() or cond2.all())
+    #print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, xp.max(norm_rr), xp.max(norm_rr/norm_r0)))
     
     while( not converged and (count < iter_max) ):
         rr        = residual(x)
@@ -74,7 +83,23 @@ def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol
         
         #print("  {0:d}: ||res|| = {1:.6e}, ||res||/||res0|| = {2:.6e}".format(count, xp.max(norm_rr), xp.max(norm_rr/norm_r0)))
         
-        x         = x + alpha * xp.einsum("ijk,ki->ji", jac_inv, -rr)
+        p         = xp.einsum("ijk,ki->ji", jac_inv, -rr)
+        x         = x + alpha * p
+        #print("p", xp.linalg.norm(p, axis=0))
+        # xk        = x + alpha * p
+        # rk        = residual(xk)
+        # norm_rk   = xp.linalg.norm(rk, axis=0)
+        # idx       = norm_rk > norm_rr
+        # print("idx", (idx.any() == True))
+
+        # while((idx.any() == True) and (alpha[idx]>rtol).all()):
+        #     alpha[idx] *= 0.5
+        #     xk          = x + alpha * p
+        #     rk          = residual(xk)
+        #     norm_rk     = xp.linalg.norm(rk, axis=0)
+        #     idx         = norm_rk > norm_rr
+        # x        = x + alpha * p
+        
         count    += 1
     
     if (not converged):
@@ -231,20 +256,20 @@ class bte_0d3v_batched():
         for col_str, col_data in self._cross_section_data[0].items():
             col_process_str.append(col_str)
 
-        for col_idx in range(sigma_crs.shape[1]):
-            plt.figure(figsize=(8,8), dpi=200)
+        # for col_idx in range(sigma_crs.shape[1]):
+        #     plt.figure(figsize=(8,8), dpi=200)
             
-            for i in range(self._par_nvgrids):
-                plt.loglog(egrid, sigma_crs[i, col_idx], label=r"$T_e = %.4E [K]$"%(self._par_ap_Te[i] * collisions.TEMP_K_1EV))
+        #     for i in range(self._par_nvgrids):
+        #         plt.loglog(egrid, sigma_crs[i, col_idx], label=r"$T_e = %.4E [K]$"%(self._par_ap_Te[i] * collisions.TEMP_K_1EV))
         
-            plt.xlabel(r"energy [eV]")
-            plt.ylabel(r"cross section [$m^2$]")
-            plt.legend()
-            plt.title("%s"%(col_process_str[col_idx]))
-            plt.tight_layout()
-            plt.savefig("%s_crs_%04d.png"%(self._args.out_fname, col_idx))
-            #print("file saved in ", "%s_crs.png"%(self._args.out_fname))
-            plt.close()
+        #     plt.xlabel(r"energy [eV]")
+        #     plt.ylabel(r"cross section [$m^2$]")
+        #     plt.legend()
+        #     plt.title("%s"%(col_process_str[col_idx]))
+        #     plt.tight_layout()
+        #     plt.savefig("%s_crs_%04d.png"%(self._args.out_fname, col_idx))
+        #     #print("file saved in ", "%s_crs.png"%(self._args.out_fname))
+        #     plt.close()
             
             
         
@@ -282,7 +307,7 @@ class bte_0d3v_batched():
     def get_cross_section_data(self):
         return self._cross_section_data
                 
-    def assemble_operators(self, grid_idx:int):
+    def assemble_operators(self, grid_idx:int, vspace_ext=vspace_grid_extension.LINEAR):
         """
         perform the operator setup for grid_idx
         """
@@ -315,7 +340,15 @@ class bte_0d3v_batched():
         # the DG code should at the limit of advection dominated Tg is low, and E is large. 
         use_dg                 = 0
         self._args.use_dg      = use_dg
-        bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain=True)
+        if (vspace_ext == vspace_grid_extension.NONE):
+            bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain=False, extend_domain_with_log=False)
+        elif(vspace_ext == vspace_grid_extension.LINEAR):
+            bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain=True, extend_domain_with_log=False)
+        elif(vspace_ext == vspace_grid_extension.LOG):
+            bb                     = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain=False, extend_domain_with_log=True)
+        else:
+            raise NotImplementedError
+
         #bb                    = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain_with_log=True)
         print("grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1])
         
@@ -478,7 +511,11 @@ class bte_0d3v_batched():
         
         for i in range(n_pts):
             f0[:,i] = h_init
-        
+
+        Qmat                                    = self._op_qmat[grid_idx]
+        INr                                     = np.eye(Qmat.shape[1])
+        self._op_imat_vx[grid_idx]              = np.einsum("i,jk->ijk",np.ones(n_pts), INr)
+
         profile_tt[pp.INIT_COND].stop()
         return f0
     
@@ -511,6 +548,7 @@ class bte_0d3v_batched():
             self._op_mobility[idx]  = cp.asarray(self._op_mobility[idx])
             self._op_diffusion[idx] = cp.asarray(self._op_diffusion[idx])
             self._op_diag_dg[idx]   = cp.asarray(self._op_diag_dg[idx])
+            self._op_imat_vx[idx]   = cp.asarray(self._op_imat_vx[idx])
             
             for k, v in self._par_bte_params[idx].items():
                 self._par_bte_params[idx][k] = cp.asarray(v)
@@ -545,6 +583,7 @@ class bte_0d3v_batched():
             self._op_mobility[idx]  = cp.asnumpy(self._op_mobility[idx])
             self._op_diffusion[idx] = cp.asnumpy(self._op_diffusion[idx])
             self._op_diag_dg[idx]   = cp.asnumpy(self._op_diag_dg[idx])
+            self._op_imat_vx[idx]   = cp.asnumpy(self._op_imat_vx[idx])
             
             for k, v in self._par_bte_params[idx].items():
                 self._par_bte_params[idx][k] = cp.asnumpy(v)

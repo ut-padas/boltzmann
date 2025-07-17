@@ -117,8 +117,8 @@ class gmres_counter(object):
         self.niter = 0
     def __call__(self, rk=None):
         self.niter += 1
-        #if self._disp:
-        print('iter %3i\trk = %s' % (self.niter, str(rk)))
+        if self._disp:
+            print('iter %3i\trk = %s' % (self.niter, str(rk)))
 
 class bte_1d3v():
 
@@ -688,7 +688,7 @@ class bte_1d3v():
         assert (idx_set.shape[0]==self.params.Np), "!!! Error: preconditioner partitioning does not match the domain size"
         return pc_emat_idx
     
-    def step_bte_x(self, v, time, dt):
+    def step_bte_x(self, v, time, dt, verbose=0):
       "perform the bte x-advection analytically"
       xp        = self.xp_module
       assert self.adv_setup_dt == dt
@@ -718,7 +718,8 @@ class bte_1d3v():
         if xp == cp:
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
-        print("BTE x-advection cost = %.4E (s)" %(t2-t1), flush=True)
+        if (verbose):
+            print("time: [%.4E T] -- BTE x-advection cost = %.4E (s)" %(time, t2-t1), flush=True)
       Vin_adv_x[Vin_adv_x<0] = 1e-16
       return Vin_adv_x
     
@@ -988,9 +989,9 @@ class bte_1d3v():
       t1     = perf_counter()
       num_sh = len(self.op_spec_sp._sph_harm_lm)
       # Strang-Splitting
-      v           = self.step_bte_x(v, time, dt * 0.5)
+      v           = self.step_bte_x(v, time, dt * 0.5, verbose)
       v           = self.step_bte_v(E, v, None, time, dt, verbose)
-      v           = self.step_bte_x(v, time + 0.5 * dt, dt * 0.5)
+      v           = self.step_bte_x(v, time + 0.5 * dt, dt * 0.5, verbose)
       
       #if PROFILE_SOLVERS==1:
       if xp == cp:

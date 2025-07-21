@@ -97,9 +97,9 @@ class gm_bte_hybrid_solver():
         print("Warmup cycles begin")
 
         
-        # for tidx in range(warmup_cycles * (int) (1/dt) + 1):
-        #     tt  = tidx * dt
-        #     v   = bte.step(Ext(tt), v, None, tt, dt, verbose=int(tidx%100==0))
+        for tidx in range(warmup_cycles * (int) (1/dt) + 1):
+            tt  = tidx * dt
+            v   = bte.step(Ext(tt), v, None, tt, dt, verbose=int(tidx%100==0))
 
         print("Warmup cycles end")
 
@@ -231,45 +231,112 @@ if __name__ == "__main__":
     #print(ne)
     #print(Te)
     #mxt1, jxt1, sxt1 = gm_bte.eval_bte(ne, Te, Ext, 2 * params.dt, 2)
-    mxt, jxt, sxt, vT = gm_bte.eval_bte(ne, Te, Ext, params.dt, 1)
     
+    
+    while True:
 
-    gm_dt             = params.dt
-    gm_freq           = int(1e-2 / gm_dt)
-    ncycles           = 5
-    #m                 = xp.copy(mxt[0,-1])
-    v                 = gm_bte.bte_solver.maxwellian_eedf(ne, Te)#xp.copy(vT)
-    m                 = gm_bte.mfuncs_ops_ords @ v
+        mxt, jxt, sxt, vT = gm_bte.eval_bte(ne, Te, Ext, params.dt, 1)
+        gm_dt             = params.dt
+        gm_freq           = int(1/ gm_dt)
+        ncycles           = 500
+        v                 = xp.copy(vT)
+        m                 = gm_bte.mfuncs_ops_ords @ v
 
-    for tidx in range((int)(ncycles/gm_dt) + 1):
-        m_bte = gm_bte.mfuncs_ops_ords @ v
-        if (tidx % gm_freq ==0):
-            xx = bte.xp
-            plt.figure(figsize=(12, 4), dpi=200)
-            plt.subplot(1, 2, 1)
-            plt.plot(xx, params.np0 * m_bte[0]       , label="BTE");
-            plt.plot(xx, params.np0 * m[0]           , label="GM");
-            plt.legend() 
-            plt.xlabel(r"$\hat{x}$")
-            plt.ylabel(r"$n_e[m^{-3}]$")
-            plt.grid(visible=True)
+        sigma             = 2e1
+        Lp                = gm_bte.bte_solver.I_Nx - gm_dt * sigma * (params.tau/params.L**2) * gm_bte.bte_solver.mesh.D2[0]
+        Lp[0 , :]         = gm_bte.bte_solver.I_Nx[0]
+        Lp[-1, :]         = gm_bte.bte_solver.I_Nx[-1]
+        LpD               = xp.linalg.inv(Lp)
 
-            plt.subplot(1, 2, 2)
-            plt.plot(xx, m_bte[1]/m_bte[0], label="BTE");
-            plt.plot(xx, m[1]/m[0]        , label="GM");
-            plt.legend()
-            plt.xlabel(r"$\hat{x}$")
-            plt.ylabel(r"$T_e [eV]$")
-            plt.grid(visible=True)
+        cycle_freq        = int(1/gm_dt)
 
-            plt.suptitle("t = %.2E"%(tidx * gm_dt))
-            plt.tight_layout()
-            #plt.show()
-            plt.savefig("%s_%04d.png"%(params.fname,tidx//gm_freq))
-            plt.close()
+        m0                = xp.copy(m)
+
+        for tidx in range((int)(ncycles/gm_dt) + 1):
+            
+            if (tidx > 0 and (tidx % cycle_freq) == 0):
+                ne_rtol = xp.linalg.norm(m0[0]       - m[0])/xp.max(m0[0])
+                Te_rtol = xp.linalg.norm(m0[1]/m0[0] - m[1]/m[0])/xp.max(m0[1]/m0[0])
+                print("cycle = %04d -- |ne - ne0| / ne_max = %.4E |Te - Te0| / Te_max = %.4E"%(tidx//cycle_freq, ne_rtol, Te_rtol))
+                m0 = xp.copy(m)
+            
+            if (tidx % gm_freq ==0):
+                xx = bte.xp
+                plt.figure(figsize=(12, 4), dpi=200)
+                plt.subplot(1, 2, 1)
+                plt.plot(xx, params.np0 * m[0]           , label="GM");
+                plt.legend() 
+                plt.xlabel(r"$\hat{x}$")
+                plt.ylabel(r"$n_e[m^{-3}]$")
+                plt.grid(visible=True)
+
+                plt.subplot(1, 2, 2)
+                plt.plot(xx, m[1]/m[0]        , label="GM");
+                plt.legend()
+                plt.xlabel(r"$\hat{x}$")
+                plt.ylabel(r"$T_e [eV]$")
+                plt.grid(visible=True)
+
+                plt.suptitle("t = %.2E"%(tidx * gm_dt))
+                plt.tight_layout()
+                #plt.show()
+                plt.savefig("%s_%04d.png"%(params.fname,tidx//gm_freq))
+                plt.close()
+                
+                m = gm_bte.step(m, jxt, sxt, tidx * gm_dt, gm_dt)
+                m = (LpD @ m.T).T
+
         
-        m = gm_bte.step(m, jxt, sxt, tidx * gm_dt, gm_dt)
-        v = gm_bte.bte_solver.step(Ext(tidx * gm_dt), v, None, tidx * gm_dt, gm_dt, verbose=0)
+        ne, Te = m[0], m[1]/m[0]
+
+
+
+
+
+
+
+    
+    
+    if False:
+        mxt, jxt, sxt, vT = gm_bte.eval_bte(ne, Te, Ext, params.dt, 1)
+        
+
+        gm_dt             = params.dt
+        gm_freq           = int(1e-2 / gm_dt)
+        ncycles           = 5
+        #m                 = xp.copy(mxt[0,-1])
+        v                 = gm_bte.bte_solver.maxwellian_eedf(ne, Te)#xp.copy(vT)
+        m                 = gm_bte.mfuncs_ops_ords @ v
+
+        for tidx in range((int)(ncycles/gm_dt) + 1):
+            m_bte = gm_bte.mfuncs_ops_ords @ v
+            if (tidx % gm_freq ==0):
+                xx = bte.xp
+                plt.figure(figsize=(12, 4), dpi=200)
+                plt.subplot(1, 2, 1)
+                plt.plot(xx, params.np0 * m_bte[0]       , label="BTE");
+                plt.plot(xx, params.np0 * m[0]           , label="GM");
+                plt.legend() 
+                plt.xlabel(r"$\hat{x}$")
+                plt.ylabel(r"$n_e[m^{-3}]$")
+                plt.grid(visible=True)
+
+                plt.subplot(1, 2, 2)
+                plt.plot(xx, m_bte[1]/m_bte[0], label="BTE");
+                plt.plot(xx, m[1]/m[0]        , label="GM");
+                plt.legend()
+                plt.xlabel(r"$\hat{x}$")
+                plt.ylabel(r"$T_e [eV]$")
+                plt.grid(visible=True)
+
+                plt.suptitle("t = %.2E"%(tidx * gm_dt))
+                plt.tight_layout()
+                #plt.show()
+                plt.savefig("%s_%04d.png"%(params.fname,tidx//gm_freq))
+                plt.close()
+            
+            m = gm_bte.step(m, jxt, sxt, tidx * gm_dt, gm_dt)
+            v = gm_bte.bte_solver.step(Ext(tidx * gm_dt), v, None, tidx * gm_dt, gm_dt, verbose=0)
 
 
 

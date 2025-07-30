@@ -23,6 +23,7 @@ import mesh
 import toml
 import argparse
 import h5py
+import scipy.optimize
 
 PROFILE_SOLVERS=1
 
@@ -753,7 +754,7 @@ class bte_1d3v():
             rtol            = self.params.rtol
             atol            = self.params.atol
             iter_max        = self.params.max_iter
-            use_gmres       = True
+            use_gmres       = not((E[0] == E).all() == True)
             dof_v           = self.op_col_en.shape[0] 
             
             steps_cycle     = int(1/dt)
@@ -808,7 +809,15 @@ class bte_1d3v():
                     v               = v.reshape((dof_v, self.params.Np))
         
             else:
-                raise NotImplementedError
+                vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
+                Lop           = self.I_Nv - dt * self.params.tau * E[0] * self.op_adv_v - dt * self.params.tau * vmat
+                gmres_c       = gmres_counter(disp=False)
+                v             = xp.linalg.solve(Lop, u)
+                norm_b        = xp.linalg.norm(u)
+                norm_res_abs  = xp.linalg.norm(Lop @ v -  u)
+                norm_res_rel  = norm_res_abs / norm_b
+
+                #raise NotImplementedError
         else:
             raise NotImplementedError    
         
@@ -924,10 +933,10 @@ class bte_1d3v():
         
       # scale functions to have ne, at initial timestep
       Vin = Vin * ne
-      return Vin
+      return xp.array(Vin)
     
     def initial_condition(self, type=0):
-       xp = self.xp_module
+       xp   = np #self.xp_module
        assert xp == np
 
        xx = self.params.L * (self.xp + 1)
@@ -935,7 +944,7 @@ class bte_1d3v():
           ne = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
           Te = xp.ones_like(ne) * self.params.Te
           v  = self.maxwellian_eedf(ne, Te)
-          return v
+          return self.xp_module.array(v)
        else:
           raise NotImplementedError
 
@@ -1035,25 +1044,17 @@ class bte_1d3v():
         ne  = self.op_mass @ vsh
         Te  = (self.op_temp @ vsh) / ne
 
-        def asnumpy(a, xp):
-           if (xp == np):
-              return a
-           elif (xp == cp):
-              return cp.asnumpy(a)
-           else:
-              raise NotImplementedError
-        
         try:
             with h5py.File("%s.h5"%(fprefix), 'w') as F:
                 F.create_dataset("time[T]"      , data = np.array([time]))
                 F.create_dataset("dt[T]"        , data = np.array([dt]))
-                F.create_dataset("edf"          , data = asnumpy(v))
-                F.create_dataset("ne[]"         , data = asnumpy(ne))
-                F.create_dataset("Te[eV]"       , data = asnumpy(Te))
+                F.create_dataset("edf"          , data = self.asnumpy(v))
+                F.create_dataset("ne[m^-3]"     , data = self.params.np0 * self.asnumpy(ne))
+                F.create_dataset("Te[eV]"       , data = self.asnumpy(Te))
 
                 F.close()
         except:
-           print("checkpoint file write failed at time = %.4E"%(time))
+           print("checkpoint file write failed at time = %.4E"%(time), " : ", "%s.h5"%(fprefix) )
         
         return
 
@@ -1061,13 +1062,13 @@ class bte_1d3v():
         xp = self.xp_module
         try:
             with h5py.File("%s.h5"%(fprefix), 'r') as F:
-                time = xp.array(F["time[T]"]["()"])[0]
-                dt   = xp.array(F["dt[T]"]["()"])[0]
-                v    = xp.array(F["edf"]["()"])
+                time = xp.array(F["time[T]"][()])[0]
+                dt   = xp.array(F["dt[T]"][()])[0]
+                v    = xp.array(F["edf"][()])
+                F.close()
         except:
-           print("Error while reading the checkpoint file")
+           print("Error while reading the checkpoint file", " : ", "%s.h5"%(fprefix) )
 
-        F.close()
         return time, dt, v
              
     def plot(self, E, v, fname, time):
@@ -1207,7 +1208,20 @@ class bte_1d3v():
         fig.savefig(fname)
         plt.close()
     
+    def asnumpy(self, x):
+       if type(x) == cp.ndarray:
+          return cp.asnumpy(x)
+       else:
+          assert type(x) == np.ndarray
+          return x
+    
+    
 
+        
+
+            
+        
+       
 
 
 

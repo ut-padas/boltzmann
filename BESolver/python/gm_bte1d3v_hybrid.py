@@ -63,14 +63,15 @@ class gm_bte_hybrid_solver():
         self.num_vp         = 2
         vth                 = self.bte_solver.bs_vth
         c_gamma             = self.bte_solver.c_gamma
+        ev0                 = self.bte_params.ev_max
 
-        self.mfuncs         = [ lambda vr, vt, vp : np.ones_like(vr),
-                                lambda vr, vt, vp : vth**2 * vr **2 * (2/3/c_gamma**2),
+        self.mfuncs         = [ lambda vr, vt, vp : np.ones_like(vr) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1),
+                                lambda vr, vt, vp : vth**2 * vr **2 * (2/3/c_gamma**2) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1)#np.exp(-(vr)**2),
                                 #lambda vr, vt, vp : vth    * vr * np.cos(vt),
                                 ]
         
-        self.mfuncs_Jx      = [ lambda vr, vt, vp:  vth * vr * np.cos(vt)  * np.ones_like(vr), 
-                                lambda vr, vt, vp:  vth * vr * np.cos(vt)  * vth**2 * vr **2 * (2/3/c_gamma**2),
+        self.mfuncs_Jx      = [ lambda vr, vt, vp:  vth * vr * np.cos(vt)  * np.ones_like(vr) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1), 
+                                lambda vr, vt, vp:  vth * vr * np.cos(vt)  * vth**2 * vr **2 * (2/3/c_gamma**2) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1),
                                 #lambda vr, vt, vp:  vth * vr * np.cos(vt)  * vth    * vr * np.cos(vt),
                                 ]
         
@@ -237,8 +238,8 @@ class gm_bte_hybrid_solver():
 
 
             for i in range(num_m):
-                jxt               = fft_filtering(tt, jx[:, i, :], num_t//num_t, xp)
-                sxt               = fft_filtering(tt, sx[:, i, :], num_t//num_t, xp)
+                jxt               = fft_filtering(tt, jx[:, i, :], num_t//4, xp)
+                sxt               = fft_filtering(tt, sx[:, i, :], num_t//4, xp)
 
                 jx[:, i, :]       = xp.array([jxt(t) for t in tt]).reshape((num_t, params.Np))
                 sx[:, i, :]       = xp.array([sxt(t) for t in tt]).reshape((num_t, params.Np))
@@ -301,7 +302,7 @@ class gm_bte_hybrid_solver():
         else:
             return v 
 
-    def step(self, m, jxt, sxt, time, dt):
+    def step(self, m, jxt, sxt, time, dt, tidx):
         bte  = self.bte_solver
         xp   = self.xp_module
 
@@ -312,12 +313,16 @@ class gm_bte_hybrid_solver():
 
         mp    = xp.zeros_like(m)
         r     = 0.5
+
+        assert time == tidx * dt, "time = %.4E tidx * dt = %.4E"%(time, tidx * dt)
+        cycle_freq = int(1/dt)
+
         for i in range(num_m):
-            jxp  = jxt[i](time + dt)
-            sxp  = sxt[i](time + dt)
+            jxp  = jxt[i][(tidx + 1) % cycle_freq]
+            sxp  = sxt[i][(tidx + 1) % cycle_freq]
             
-            jxm  = jxt[i](time)
-            sxm  = sxt[i](time)
+            jxm  = jxt[i][(tidx) % cycle_freq]
+            sxm  = sxt[i][(tidx) % cycle_freq]
             
             
             # a2   = (Dp @ jxm) * m[i] + (Dp @ m[i]) * jxm
@@ -386,6 +391,31 @@ class gm_bte_hybrid_solver():
                 M[i]   = xp.linalg.inv(Lmat) @ M[i]
             
         return M
+
+    def store_checkpoint(self, m, time, dt, fprefix):
+        try:
+            with h5py.File("%s.h5"%(fprefix), 'w') as F:
+                F.create_dataset("time[T]"      , data = np.array([time]))
+                F.create_dataset("dt[T]"        , data = np.array([dt]))
+                F.create_dataset("m"            , data = self.asnumpy(m))
+                F.close()
+        except:
+           print("checkpoint file write failed at time = %.4E"%(time), " : ", "%s.h5"%(fprefix) )
+        
+        return
+    
+    def restore_checkpoint(self, fprefix):
+        xp = self.xp_module
+        try:
+            with h5py.File("%s.h5"%(fprefix), 'r') as F:
+                time = xp.array(F["time[T]"][()])[0]
+                dt   = xp.array(F["dt[T]"][()])[0]
+                m    = xp.array(F["m"][()])
+                F.close()
+        except:
+           print("Error while reading the checkpoint file", " : ", "%s.h5"%(fprefix) )
+
+        return time, dt, m
 
     def time_periodic_solve(self, m0, jxt, sxt, dt, ncycles):
         xp = self.xp_module
@@ -518,6 +548,16 @@ class gm_bte_hybrid_solver():
                 plt.savefig("%s_moments_%04d.png"%(self.bte_params.fname, tidx // freq))
                 plt.close()
 
+                with h5py.File("%s_moments_%04d.h5"%(self.bte_params.fname, tidx // freq), 'w') as f:
+                    f.create_dataset("m"  ,data =m[0])
+                    f.create_dataset("jx" ,data =jx)
+                    f.create_dataset("sx" ,data =sx)
+                    f.create_dataset("tt" ,data =tt)
+                    f.create_dataset("xx" ,data =xx)
+                    f.close()
+
+
+
             u                  = v #bte.op_psh2o @ (bte.op_po2sh @ v)
             vnp                = bte.asnumpy(u)
             m[0, tidx % num_t] = self.mfuncs_ops_ords    @ vnp
@@ -623,7 +663,7 @@ class gm_bte_hybrid_solver():
         
         return v 
         
-
+    
 
 
 
@@ -690,7 +730,7 @@ if __name__ == "__main__":
     ne      = ne * 1e-4
     ne0     = gm_bte.xp_module.copy(ne)
 
-    for it in range(0, 1000):
+    for it in range(0, args.maxiter):
         ne_tol = gm_bte.xp_module.linalg.norm(ne0 - ne) / gm_bte.xp_module.linalg.norm(ne0)
         
         if (it > 0):
@@ -702,9 +742,10 @@ if __name__ == "__main__":
                 break
         
         mxt, jxt, sxt, vT , delta_ne, delta_Te = gm_bte.eval_bte(gm_bte.asnumpy(ne), gm_bte.asnumpy(Te), Ext, params.dt, args.wc, it)
-        bte.store_checkpoint(xp.asarray(vT), 0.0, params.dt, "%s_gmbte_hybrid_cp_%04d"%(params.fname, it))
+        #bte.store_checkpoint(xp.asarray(vT), 0.0, params.dt, "%s_gmbte_hybrid_cp_%04d"%(params.fname, it))
+        
 
-        Mop               = gm_bte.assemble_cycle_step_op(jxt, sxt, params.dt)
+        #Mop               = gm_bte.assemble_cycle_step_op(jxt, sxt, params.dt)
         gm_dt             = params.dt
         gm_freq           = int(1/ gm_dt)
         ncycles           = args.hybrid_solver_freq
@@ -771,25 +812,25 @@ if __name__ == "__main__":
                 plt.savefig("%s_gm_bte_iter_%04d_%04d.png"%(params.fname, it, tidx//gm_freq))
                 plt.close()
 
-                m = gm_bte.xp_module.einsum("ijk,ik->ij", Mop, m)
+                #m = gm_bte.xp_module.einsum("ijk,ik->ij", Mop, m)
             
             if (tidx == (int)(ncycles/gm_dt)):
                 break
 
-
-            #m   = gm_bte.step(m, jxt, sxt, tidx * gm_dt, gm_dt)
+            m   = gm_bte.step(m, jxt, sxt, tidx * gm_dt, gm_dt, tidx)
             # #m   = (LpD @ m.T).T
             if run_bte==True:
                 v   = gm_bte.bte_solver.step(Ext(tidx * gm_dt), v, None, tidx * gm_dt, gm_dt, verbose=0)
                 
 
         ne, Te = m[0], m[1]/m[0]
-        Te     = Te0 #gm_bte.xp_module.ones_like(Te) * params.Te
+        gm_bte.store_checkpoint(m, 0.0, params.dt, "%s_gm_cp_%04d"%(params.fname, it))
+        #Te     = Te0 #gm_bte.xp_module.ones_like(Te) * params.Te
 
 
     v       = bte.maxwellian_eedf(ne, Te)
 
-    gm_bte.bte1d3v(Ext, v, 100, params.dt, fprefix="_gm")
+    gm_bte.bte1d3v(Ext, v, 100, params.dt, fprefix="__gm")
 
     
         

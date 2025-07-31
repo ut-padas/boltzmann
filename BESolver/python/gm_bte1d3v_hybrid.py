@@ -677,12 +677,67 @@ if __name__ == "__main__":
     parser.add_argument("-run_1d3v", "--run_1d3v"                       , help="run 1d3V", type=int, default=0)
     parser.add_argument("-maxiter",  "--maxiter"                        , help="hybrid solver maxiter", type=int, default=1000)
     parser.add_argument("-hybrid_solver_freq",  "--hybrid_solver_freq"  , help="hybrid solver freq"   , type=int, default=5)
+    parser.add_argument("-plot_mode","--plot_mode"                      , help="plot_mode"            , type=int, default=0)
     
     
     args    = parser.parse_args()
     gm_bte  = gm_bte_hybrid_solver(args)
     bte     = gm_bte.bte_solver
     params  = bte.params
+
+    if(args.plot_mode==1):
+        cp_idx = 0
+        ff     = h5py.File("%s__gm_%04d_cp.h5"%(params.fname, cp_idx))
+        # ne_bte = np.array(ff["ne[m^-3]"][()])
+        # Te_bte = np.array(ff["Te[eV]"][()])
+        v        = np.array(ff["edf"][()])
+        m_bte    = gm_bte.mfuncs_ops_ords @ v 
+        ne_bte   = m_bte[0]
+        Te_bte   = m_bte[1]/m_bte[0]
+        ff.close()
+
+        cp_idx = 13
+        ff     = h5py.File("%s_gm_cp_%04d.h5"%(params.fname, cp_idx))
+        m_gm   = np.array(ff["m"][()])
+        ne_gm  = m_gm[0] #np.array(ff["ne[m^-3]"][()])
+        Te_gm  = m_gm[1] / m_gm[0] #np.array(ff["Te[eV]"][()])
+        ff.close()
+
+        xx = bte.xp
+
+        plt.figure(figsize=(8, 4), dpi=300)
+        plt.subplot(1, 2, 1)
+        plt.plot(xx, ne_bte * params.np0 , label=r"$n_e$ (BTE)")
+        plt.plot(xx, ne_gm  * params.np0 , label=r"$n_e$ (GM)")
+        
+        plt.xlabel(r"$\hat{x}$")
+        plt.ylabel(r"$n_e$ [$m^{-3}$]")
+        plt.legend()
+        plt.grid(visible=True)
+
+        plt.subplot(1, 2, 2)
+        plt.plot(xx, Te_bte             , label=r"$T_e$ (BTE)")
+        plt.plot(xx, Te_gm              , label=r"$T_e$ (GM)")
+        
+        plt.xlabel(r"$\hat{x}$")
+        plt.ylabel(r"$T_e$ [eV]")
+        plt.legend()
+        plt.grid(visible=True)
+
+        #plt.show()
+        plt.tight_layout()
+        plt.savefig("%s_converged_plot.png"%(params.fname))
+        plt.close()
+
+        sys.exit(0)
+
+
+
+
+
+
+
+
     
     if (params.use_gpu == 1):
         import cupy as cp

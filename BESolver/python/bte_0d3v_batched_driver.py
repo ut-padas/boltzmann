@@ -127,7 +127,7 @@ lm_modes    = [[[l,0] for l in range(args.l_max+1)] for i in range(n_grids)]
 n_pts       = args.n_pts
 nr          = np.ones(n_grids, dtype=np.int32) * args.Nr
 
-bte_solver  = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, args.collisions)
+bte_solver  = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, [args.collisions])
 
 bte_solver.assemble_operators(grid_idx)
 f0         = bte_solver.initialize(grid_idx, n_pts,"maxwellian")

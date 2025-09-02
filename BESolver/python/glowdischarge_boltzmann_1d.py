@@ -23,6 +23,7 @@ import scipy.sparse.linalg
 import cross_section
 from time import perf_counter, sleep
 import glowdischarge_1d
+import mesh
 
 CUDA_NUM_DEVICES      = 0
 PROFILE_SOLVERS       = 0
@@ -67,7 +68,11 @@ class glow1d_fluid_args():
     self.bc_dirichlet_e = 0
     self.use_gpu        = 0#args.use_gpu
     self.gpu_device_id  = args.gpu_device_id
-    
+
+class bte_xspace_adv_type():
+    USE_BE_CHEB   = 0 
+    USE_BE_UPW_FD = 1
+
 class glow1d_boltzmann():
     """
     perform glow discharge simulation with electron Boltzmann solver
@@ -78,6 +83,7 @@ class glow1d_boltzmann():
       self.ts_type_bte_v       = "BE"
       self.ts_op_split_factor  = 1/1
       self.heavies_freeze_E    = True
+      self.xspace_adv_type     = args.xadv_type #bte_xspace_adv_type.USE_BE_UPW_FD
        
       dir            = args.dir
       if os.path.exists(dir):
@@ -132,48 +138,18 @@ class glow1d_boltzmann():
       # diffusivity
       self.D  = np.zeros((self.Np , self.Ns))
       
-      self.xp    = -np.cos(np.pi*np.linspace(0,self.deg,self.Np)/self.deg)
-      
-      #self.xp = np.linspace(-1,1, self.Np)
-      from numpy.polynomial import chebyshev as cheb
-      # Operators
-      ident = np.identity(self.Np)
+      self.op            = mesh.mesh([self.Np], 1, mesh.grid_type.CHEBYSHEV_COLLOC)
+      self.xp            = self.op.xcoord[0]
 
-      # V0p: Coefficients to values at xp
-      self.V0p = np.polynomial.chebyshev.chebvander(self.xp, self.deg)
+      self.Dp            = self.op.D1[0]
+      self.DpT           = self.Dp.T
+      self.Lp            = self.op.D2[0]
 
-      # V0pinv: xp values to coefficients
-      self.V0pinv = np.linalg.solve(self.V0p, ident)
+      self.LpD           = np.identity(self.Np)
+      self.LpD[1:-1,:]   = self.Lp[1:-1,:]
+      
+      self.LpD_inv       = np.linalg.solve(self.LpD, np.eye(self.Np))
 
-      # V1p: coefficients to derivatives at xp
-      self.V1p = np.zeros((self.Np,self.Np))
-      for i in range(0,self.Np):
-          self.V1p[:,i] = cheb.chebval(self.xp, cheb.chebder(ident[i,:], m=1))
-
-      # Dp: values at xp to derivatives at xp
-      self.Dp  = self.V1p @ self.V0pinv
-      self.DpT = np.transpose(self.Dp)
-      
-      # V2p: coefficients to 2nd derivatives at xp
-      self.V2p = np.zeros((self.Np,self.Np))
-      for i in range(0,self.Np):
-          self.V2p[:,i] = cheb.chebval(self.xp, cheb.chebder(ident[i,:], m=2))
-
-      # Lp: values at xp to 2nd derivatives at xp
-      self.Lp = self.V2p @ self.V0pinv
-      
-      # self.xp = np.linspace(-1,1,self.Np)
-      # self.Dp = np.eye(self.Np)
-      # self.Lp = np.eye(self.Np)
-      
-      # LpD: values at xp to 2nd derivatives at xc, with identity
-      # for top and bottom row (for Dirichlet BCs)
-      self.LpD = np.identity(self.Np)
-      self.LpD[1:-1,:] = self.Lp[1:-1,:]
-      
-      self.LpD_inv     = np.linalg.solve(self.LpD, np.eye(self.Np)) 
-      
-      
       Imat      = np.eye(self.Np)
       Imat[0,0] = Imat[-1,-1] = 0
 
@@ -206,6 +182,19 @@ class glow1d_boltzmann():
       
       # self.xp_vt, self.xp_vt_qw = basis.Legendre().Gauss_Pn(self.Nvt)
       # self.xp_vt                = np.arccos(self.xp_vt) 
+
+      LpDvt              = mesh.central_dxx(self.xp_vt)
+      I_Nvt              = np.eye(len(self.xp_vt))
+      LpDvt              = I_Nvt - self.args.vtDe * LpDvt
+      
+      #dirichlet BCs
+      LpDvt[0]           = I_Nvt[0]
+      LpDvt[-1]          = I_Nvt[-1]
+      
+      # # neumann BCs
+      # LpDvt[0]         = mesh.upwinded_dx(self.xp_vt, "LtoR")[0]  
+      # LpDvt[-1]        = mesh.upwinded_dx(self.xp_vt, "LtoR")[-1] 
+      self.LpDvt         = np.linalg.inv(LpDvt)
       
       self.xp_cos_vt     = np.cos(self.xp_vt)
       self.xp_vt_l       = np.array([i * self.Nvt + j for i in range(self.Nr) for j in list(np.where(self.xp_vt <= 0.5 * np.pi)[0])])
@@ -334,28 +323,14 @@ class glow1d_boltzmann():
       # glx, glw               = basis.Legendre().Gauss_Pn(len(vt_pts))
       # vq_theta               = np.arccos(glx)
       # assert (vq_theta == vt_pts).all(), "collocation points does not match with the theta quadrature points"
-      tmp1                    = np.matmul(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt)), np.diag(self.xp_vt_qw) ) * 2 * np.pi
+      self.op_po2sh             = np.matmul(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt)), np.diag(self.xp_vt_qw) ) * 2 * np.pi
       #tmp1                     = np.linalg.inv(np.transpose(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt))))
       
-      #print(tmp)
-      self.op_po2sh = np.zeros((num_p * num_sh, num_p* num_vt))
-      for ii in range(num_p):
-        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-          for vt_idx in range(num_vt):
-            self.op_po2sh[ii * num_sh + lm_idx, ii * num_vt + vt_idx] = tmp1[lm_idx, vt_idx]
-      
-      #print(self.op_po2sh)
-      
       # spherical lm to ordinates computation (self.Nvt, num_sh)
-      tmp2                    = np.transpose(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt))) 
-      self.op_psh2o           = np.zeros((num_p * num_vt, num_p * num_sh)) 
-      for ii in range(num_p):
-        for vt_idx in range(num_vt):
-          for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-            self.op_psh2o[ii * num_vt + vt_idx, ii * num_sh + lm_idx] = tmp2[vt_idx, lm_idx]
+      self.op_psh2o             = np.transpose(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt))) 
       
       # to check if the oridinates to spherical and spherical to ordinates projection is true (weak test not sufficient but necessary condition)
-      assert np.allclose(np.dot(tmp2, np.dot(tmp1, 1 + np.cos(self.xp_vt))), 1 + np.cos(self.xp_vt))
+      assert np.allclose(np.dot(self.op_psh2o, np.dot(self.op_po2sh, 1 + np.cos(self.xp_vt))), 1 + np.cos(self.xp_vt))
       
       self.par_ev_range       = ev_range  
       mm_mat                  = spec_sp.compute_mass_matrix()
@@ -477,8 +452,7 @@ class glow1d_boltzmann():
       FOp_g                   = np.matmul(np.transpose(qA), np.matmul(FOp_g, qA))
       
       def psh2o_C_po2sh(opM):
-          return opM
-          #return np.dot(self.op_psh2o, np.dot(opM,self.op_po2sh))
+          return opM          
       
       adv_mat_v                *= (1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
       adv_mat_v                 = psh2o_C_po2sh(adv_mat_v)
@@ -653,7 +627,7 @@ class glow1d_boltzmann():
               self.r_rates[i, self.ion_idx] = xp.dot(self.op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
               print("k_ionization [m^3s^{-1}] = %.8E " %(xp.dot(self.op_rate[1], hh1[0::num_sh])))
           
-            Vin[:, i] = xp.dot(self.op_psh2o, h_init)
+            Vin[:, i] = xp.einsum("il,rl->ri", self.op_psh2o, h_init.reshape((num_p, num_sh))).reshape((num_p * len(self.xp_vt)))
               
           Vin = Vin * Uin[:,ele_idx]
         else:
@@ -707,6 +681,8 @@ class glow1d_boltzmann():
       
       num_p       = spec_sp._p +1
       num_sh      = len(spec_sp._sph_harm_lm)
+      num_x       = len(self.xp)
+      num_vt      = len(self.xp_vt)
       h_init      = np.zeros(num_p * num_sh)
       
       ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
@@ -727,9 +703,9 @@ class glow1d_boltzmann():
         print(" k_elastic [m^3s^{-1}] = %.8E " %(np.dot(op_rate[0], hh1[0::num_sh])), end='')
         if (len(op_rate) > 1):
           rates[i, self.ion_idx] = np.dot(op_rate[1], hh1[0::num_sh]) * self.param.np0 * self.param.tau
-          print("k_ionization [m^3s^{-1}] = %.8E " %( rates[i, self.ion_idx] / self.param.np0 / self.param.tau))
+          print("k_ionization [m^3s^{-1}] = %.8E " %(rates[i, self.ion_idx] / self.param.np0 / self.param.tau))
         
-        Vin[:, i] = np.dot(psh2o, h_init)
+        Vin[:, i] = np.einsum("il,rlx->rix", psh2o, h_init.reshape((num_p , num_sh, num_x))).reshape((num_p * num_vt, num_x))
         
       # scale functions to have ne, at initial timestep
       Vin = Vin * ne
@@ -743,12 +719,25 @@ class glow1d_boltzmann():
       
       self.bte_x_shift      = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
       #self.bte_x_shift_rmat = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
-      DpL = xp.zeros((self.Np, self.Np))
-      DpR = xp.zeros((self.Np, self.Np))
-
-      DpL[1:,:]  = self.Dp[1:,:]
-      DpR[:-1,:] = self.Dp[:-1,:]
       
+      if (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+        DpL        = xp.zeros((self.Np, self.Np))
+        DpR        = xp.zeros((self.Np, self.Np))
+        
+        DpL[1:,:]  = self.Dp[1:,:]
+        DpR[:-1,:] = self.Dp[:-1,:]
+
+      elif (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+
+        DpL        = xp.zeros((self.Np, self.Np))
+        DpR        = xp.zeros((self.Np, self.Np))
+
+        DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, "LtoR"))[1:,:]
+        DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, "RtoL"))[:-1,:]
+        
+      else:
+        raise NotImplementedError
+
       f1 = 1.0
       f2 = 1-f1
 
@@ -985,20 +974,20 @@ class glow1d_boltzmann():
       return  
     
     def solve_poisson(self, ne, ni,time):
-        """Solve Gauss' law for the electric potential.
+      """Solve Gauss' law for the electric potential.
 
-        Inputs:
-          ne   : Values of electron density at xp
-          ni   : Values of ion density at xp
-          time : Current time
+      Inputs:
+        ne   : Values of electron density at xp
+        ni   : Values of ion density at xp
+        time : Current time
 
-        Outputs: None (sets self.phi to computed potential)
-        """
-        xp    = self.xp_module
-        r     = - self.param.alpha * (ni-ne)
-        r[0]  = xp.sin(2 * xp.pi * time) #+ self.params.verticalShift
-        r[-1] = 0.0
-        return xp.dot(self.LpD_inv, r)
+      Outputs: None (sets self.phi to computed potential)
+      """
+      xp    = self.xp_module
+      r     = - self.param.alpha * (ni-ne)
+      r[0]  = xp.sin(2 * xp.pi * time) #+ self.params.verticalShift
+      r[-1] = 0.0
+      return xp.dot(self.LpD_inv, r)
     
     def bte_eedf_normalization(self, v_lm):
       xp = self.xp_module
@@ -1011,6 +1000,24 @@ class glow1d_boltzmann():
       scale                    = xp.dot(mm_op / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
       return v_lm / scale
     
+    def ords_to_sph(self, x):
+      num_p   = self.op_spec_sp._p + 1
+      num_sh  = len(self.op_spec_sp._sph_harm_lm)
+      num_vt  = len(self.xp_vt)
+      num_x   = len(self.xp)
+      xp      = self.xp_module
+
+      return xp.einsum("li,rix->rlx", self.op_po2sh, x.reshape((num_p, num_vt, num_x))).reshape((num_p * num_sh, num_x))
+    
+    def sph_to_ords(self, x):
+      num_p   = self.op_spec_sp._p + 1
+      num_sh  = len(self.op_spec_sp._sph_harm_lm)
+      num_vt  = len(self.xp_vt)
+      num_x   = len(self.xp)
+      xp      = self.xp_module
+
+      return xp.einsum("li,rix->rlx", self.op_psh2o, x.reshape((num_p, num_sh, num_x))).reshape((num_p * num_vt, num_x))
+
     def bte_to_fluid(self, u, v, time, dt):
       """
       boltzmann to fluid push
@@ -1023,8 +1030,10 @@ class glow1d_boltzmann():
       
       num_p   = self.op_spec_sp._p + 1
       num_sh  = len(self.op_spec_sp._sph_harm_lm)
+      num_vt  = len(self.xp_vt)
+      num_x   = len(self.xp)
       
-      v_lm                   = xp.dot(self.op_po2sh, v)
+      v_lm                   = self.ords_to_sph(v)
       u[:, ele_idx]          = xp.dot(self.op_mass[0::num_sh], v_lm[0::num_sh,:])
       u[:, Te_idx]           = xp.dot(self.op_temp[0::num_sh], v_lm[0::num_sh,:])/u[:,ele_idx]
       
@@ -1183,6 +1192,10 @@ class glow1d_boltzmann():
       "perform the bte x-advection analytically"
       xp        = self.xp_module
       assert self.adv_setup_dt == dt
+
+      Nr        = self.op_spec_sp._p + 1
+      Nvt       = len(self.xp_vt)
+      Nx        = len(self.xp)
       
       if PROFILE_SOLVERS==1:
         if xp == cp:
@@ -1194,7 +1207,7 @@ class glow1d_boltzmann():
       
       #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr*self.Nvt, self.Np)) 
       # enforce rhs BCs
-      Vin[self.xp_vt_l, 0]  = 0.0
+      Vin[self.xp_vt_l,  0] = 0.0
       Vin[self.xp_vt_r, -1] = 0.0
       
       Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((self.Nr, self.Nvt, self.Np)))
@@ -1209,7 +1222,11 @@ class glow1d_boltzmann():
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
         print("BTE x-advection cost = %.4E (s)" %(t2-t1), flush=True)
-      Vin_adv_x[Vin_adv_x<0] = 1e-16
+      
+      #Vin_adv_x[Vin_adv_x<0] = 1e-16
+      # if (self.args.vtDe > 0):
+      #   Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * Nvt, Nx))
+
       return Vin_adv_x
       
     def rhs_bte_v(self, v_lm: np.array, time, dt):
@@ -1410,7 +1427,7 @@ class glow1d_boltzmann():
       dt      = dt
       
       rhs     = self.rhs_bte_v
-      u       = xp.dot(self.op_po2sh,v)
+      u       = self.ords_to_sph(v)
       
       if ts_type == "RK2":
         k1 = dt * rhs(u, time, dt)[0]
@@ -1485,7 +1502,7 @@ class glow1d_boltzmann():
         else:
           raise NotImplementedError
         
-        v       = xp.dot(self.op_psh2o, v)
+        v       = self.sph_to_ords(v)
         
         if PROFILE_SOLVERS==1:
           if xp == cp:
@@ -1520,7 +1537,7 @@ class glow1d_boltzmann():
       dt      = dt
       rhs     = self.rhs_bte_v
       
-      u       = xp.dot(self.op_po2sh,v)
+      u       = self.ords_to_sph(v)
       
       rtol            = self.args.rtol
       atol            = self.args.atol
@@ -1531,7 +1548,8 @@ class glow1d_boltzmann():
       pmat_freq       = steps_cycle//50
       step            = int(time/dt)
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
       a_t1 = perf_counter()
       
       E               = self.bs_E
@@ -1544,17 +1562,23 @@ class glow1d_boltzmann():
       Jmat            = self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) + self.param.tau * E * self.op_adv_v
       Lmat            = Imat -dt * Jmat
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
       a_t2 = perf_counter()
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+      
       s_t1 = perf_counter()
       v = xp.dot(xp.linalg.inv(Lmat), u)
-      cp.cuda.runtime.deviceSynchronize()
+      
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t2 = perf_counter()
       norm_res = xp.linalg.norm(xp.dot(Lmat, v) - u) / xp.linalg.norm(u.reshape(-1))
       print("%08d Boltzmann step time = %.6E op. assembly =%.6E solve = %.6E res=%.12E"%(step, time, (a_t2-a_t1), (s_t2-s_t1), norm_res))
-      v       = xp.dot(self.op_psh2o, v)
+      v       = self.sph_to_ords(v)
       return v
     
     def step_bte_v2(self, Uin, Vin, time, dt, verbose=0):
@@ -1562,7 +1586,10 @@ class glow1d_boltzmann():
       """
       v-space BTE solve coupled with E field
       """
-      cp.cuda.runtime.deviceSynchronize()
+      xp      = self.xp_module
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t1    = perf_counter()
       
       gmres_rs    = self.args.gmres_rsrt
@@ -1576,13 +1603,13 @@ class glow1d_boltzmann():
       num_p   = self.op_spec_sp._p + 1
       num_sh  = len(self.op_spec_sp._sph_harm_lm)
       
-      xp      = self.xp_module
+      
       u       = Uin
       v       = Vin
       
       ni      = u[:, self.ion_idx]
       v       = v.reshape((self.Nr * self.Nvt, self.Np)) 
-      v_lm    = xp.dot(self.op_po2sh, v)
+      v_lm    = self.ords_to_sph(v)
       
       ne0     = xp.dot(self.op_mass[0::num_sh], v_lm[0::num_sh])
       E0      = -xp.dot(self.Dp, self.solve_poisson(ne0, ni, time + dt)) * (self.param.V0/self.param.L)
@@ -1627,7 +1654,9 @@ class glow1d_boltzmann():
       ns_info = glow1d_utils.newton_solver_matfree(dv_lm.reshape((-1)), residual, jacobian, precond, newton_atol, newton_rtol, gmres_atol, gmres_rtol, gmres_rs, gmres_rs * 50, xp)
       dv_lm   = ns_info["x"].reshape((num_p * num_sh, self.Np))
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t2    = perf_counter()
       
       if(verbose==1):
@@ -1641,27 +1670,31 @@ class glow1d_boltzmann():
         sys.exit(-1)
         return u, v
       
-      dv = xp.dot(self.op_psh2o, dv_lm)
+      dv = self.sph_to_ords(dv_lm)
       return u, v + dv
     
     def step_bte_vx_with_E(self, Uin, Vin, time, dt, verbose=0):
       """
       vx-space BTE solve coupled with E field
       """
-      cp.cuda.runtime.deviceSynchronize()
+      xp      = self.xp_module
+      
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t1    = perf_counter()
       
       num_p   = self.op_spec_sp._p + 1
       num_sh  = len(self.op_spec_sp._sph_harm_lm)
       num_vt  = self.Nvt
       
-      xp      = self.xp_module
+      
       u       = Uin
       v       = Vin
       
       ni      = u[:, self.ion_idx]
       v       = v.reshape((self.Nr * self.Nvt, self.Np)) 
-      v_lm    = xp.dot(self.op_po2sh, v)
+      v_lm    = self.ords_to_sph(v)
       
       ne0     = xp.dot(self.op_mass[0::num_sh], v_lm[0::num_sh])
       E0      = -xp.dot(self.Dp, self.solve_poisson(ne0, ni, time + dt)) * (self.param.V0/self.param.L)
@@ -1711,13 +1744,13 @@ class glow1d_boltzmann():
         
         yp    = vp.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
         yp    = xp.dot(self.op_adv_x_q, yp).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
-        yp    = xp.dot(self.op_po2sh, yp)
+        yp    = self.ords_to_sph(yp)
         
         ne    = xp.dot(self.op_mass[0::num_sh], yp[0::num_sh])
         E     = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time + dt)) * (self.param.V0/self.param.L)
         
         Fv    = self.param.tau * (self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, yp) + self.param.Tg * xp.dot(self.op_col_gT, yp))  + E * xp.dot(self.op_adv_v, yp))
-        Fv    = xp.dot(self.op_psh2o, Fv)
+        Fv    = self.sph_to_ords(Fv)
         
         Fv    = Fv.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
         Fv    = xp.dot(self.op_adv_x_qinv, Fv).reshape((self.Nr, self.Nvt, self.Np)).reshape(self.Nr * self.Nvt, self.Np)
@@ -1728,7 +1761,7 @@ class glow1d_boltzmann():
         res[self.xp_vt_l, 0 ]  = (vp[self.xp_vt_l, 0 ] - 0.0)
         res[self.xp_vt_r, -1 ] = (vp[self.xp_vt_r, -1] - 0.0)
         
-        res = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, res))
+        res = self.sph_to_ords(self.ords_to_sph(res))
         
         return res.reshape((-1))
       
@@ -1741,13 +1774,13 @@ class glow1d_boltzmann():
         
         yp    = dv.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
         yp    = xp.dot(self.op_adv_x_q, yp).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
-        yp    = xp.dot(self.op_po2sh, yp)
+        yp    = self.ords_to_sph(yp)
         
         ne    = xp.dot(self.op_mass[0::num_sh], yp[0::num_sh])
         dE    = -xp.dot(self.Dp, self.solve_poisson(ne, 0* ni, 0.0)) * (self.param.V0/self.param.L)
         
         Jv    = self.param.tau * (self.param.n0 * self.param.np0 * (xp.dot(self.op_col_en, yp) + self.param.Tg * xp.dot(self.op_col_gT, yp))  + E0 * xp.dot(self.op_adv_v, yp) + dE * xp.dot(self.op_adv_v, v_lm))
-        Jv    = xp.dot(self.op_psh2o, Jv)
+        Jv    = self.sph_to_ords(Jv)
         
         Jv    = Jv.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
         Jv    = xp.dot(self.op_adv_x_qinv, Jv).reshape((self.Nr, self.Nvt, self.Np)).reshape(self.Nr * self.Nvt, self.Np)
@@ -1758,7 +1791,7 @@ class glow1d_boltzmann():
         jac[self.xp_vt_l, 0 ]  = dv[self.xp_vt_l, 0 ]
         jac[self.xp_vt_r, -1 ] = dv[self.xp_vt_r, -1]
         
-        jac = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, jac))
+        jac = self.sph_to_ords(self.ords_to_sph(jac))
         
         return jac.reshape((-1))
       
@@ -1773,7 +1806,7 @@ class glow1d_boltzmann():
         y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
         y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
         
-        y           = xp.dot(self.op_po2sh, y)
+        y           = self.ords_to_sph(y)
         ne          = xp.dot(self.op_mass[0::num_sh], y[0::num_sh])
         E           = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time)) * (self.param.V0/self.param.L)
         
@@ -1785,7 +1818,7 @@ class glow1d_boltzmann():
         for idx_id, idx in enumerate(pc_emat_idx):
           y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
         
-        y = xp.dot(self.op_psh2o, y)
+        y = self.sph_to_ords(y)
 
         y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
         y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
@@ -1814,11 +1847,11 @@ class glow1d_boltzmann():
         y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
         y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
         
-        y           = xp.dot(self.op_po2sh, y)
+        y           = self.ords_to_sph(y)
         for idx_id, idx in enumerate(pc_emat_idx):
           y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
         
-        y = xp.dot(self.op_psh2o, y)
+        y = self.sph_to_ords(y)
         y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
         y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
         
@@ -1826,7 +1859,7 @@ class glow1d_boltzmann():
         y[self.xp_vt_r, -1 ] = x[self.xp_vt_r, -1]
         y                    = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, y.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr * self.Nvt, self.Np))
         
-        y = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, y))
+        y = self.sph_to_ords(self.ords_to_sph(y))
         
         return y.reshape((-1))
       
@@ -1844,11 +1877,11 @@ class glow1d_boltzmann():
           y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
           y = xp.dot(self.op_adv_x_q, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
           
-          y = xp.dot(self.op_po2sh, y)
+          y = self.ords_to_sph(y)
           for idx_id, idx in enumerate(pc_emat_idx):
             y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
           
-          y = xp.dot(self.op_psh2o, y)
+          y = self.sph_to_ords(y)
           
           y = y.reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr, self.Nvt * self.Np))
           y = xp.dot(self.op_adv_x_qinv, y).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
@@ -1884,7 +1917,9 @@ class glow1d_boltzmann():
         
         v1         = adv_x_q_vec(v1.reshape((self.Nr * self.Nvt, self.Np)))
         
-        cp.cuda.runtime.deviceSynchronize()
+        if xp == cp:
+          cp.cuda.runtime.deviceSynchronize()
+
         s_t2    = perf_counter()
         print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E solve time = %.4E gmres iterations: %d " %(time, norm_res_abs, norm_res_rel, (s_t2-s_t1), gmres_ctx.niter * gmres_restart))
         return u, v1
@@ -1901,10 +1936,12 @@ class glow1d_boltzmann():
       v1       = v + dv
       
       ## filtering to denoise the ordinates to spherical projections
-      v1       = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, v1))
+      v1       = self.sph_to_ords(self.ords_to_sph(v1))
       v1[v1<0] = 1e-16
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t2    = perf_counter()
       
       if(verbose==1):
@@ -1936,14 +1973,14 @@ class glow1d_boltzmann():
       
       # # First order splitting
       # v       = self.step_bte_x(v, tt_bte, dt_bte)
-      # v_lm    = xp.dot(self.op_po2sh,v)
+      # v_lm    = self.ords_to_sph(v)
       # v_lm    = self.step_bte_v(v_lm, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
-      # v       = xp.dot(self.op_psh2o,v_lm)
+      # v       = self.sph_to_ords(v_lm)
       # v[v<0]  = 0
       
       # Strang-Splitting
       v           = self.step_bte_x(v, tt_bte, dt_bte * 0.5)
-      # ne          = xp.dot(self.op_mass[0::num_sh], xp.dot(self.op_po2sh, v)[0::num_sh])
+      # ne          = xp.dot(self.op_mass[0::num_sh], self.ords_to_sph(v)[0::num_sh])
       # self.bs_E   = -xp.dot(self.Dp, self.solve_poisson(ne, ni, time)) * (self.param.V0/self.param.L)
       
       v           = self.step_bte_v(v, None, tt_bte, dt_bte, self.ts_type_bte_v , verbose)
@@ -2108,7 +2145,9 @@ class glow1d_boltzmann():
       xp      = self.xp_module
       tt      = time
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t1    = perf_counter()
       
       if scheme=="strang-splitting":
@@ -2149,7 +2188,9 @@ class glow1d_boltzmann():
         
         self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t2    = perf_counter()
       
       if(verbose==1):
@@ -2388,6 +2429,101 @@ class glow1d_boltzmann():
         
       return u, v
     
+    def evolve_1dbte_adv_x(self, Uin, Vin, output_cycle_averaged_qois=False):
+      """
+      Emode = 0 : static E
+      Emode = 1 : time-periodic E
+      """
+      
+      tT              = self.args.cycles
+      tt              = 0
+      
+      dt              = self.args.cfl 
+      steps           = int(max(1,np.round(tT/dt)))
+      
+      print("T = %.4E RF cycles = %.1E dt = %.4E steps = %d atol = %.2E rtol = %.2E max_iter=%d"%(tT, self.args.cycles, dt, steps, self.args.atol, self.args.rtol, self.args.max_iter))
+      Uin1, Vin1     = self.step_init(Uin, Vin, dt)
+      xp             = self.xp_module
+      u              = xp.copy(Uin1)
+      v              = xp.copy(Vin1)
+      
+      du             = xp.zeros_like(u)
+      dv             = xp.zeros_like(v)
+      
+      io_cycle       = self.args.io_cycle_freq
+      io_freq        = int(np.round(io_cycle/dt))
+      
+      cp_cycle       = self.args.cp_cycle_freq
+      cp_freq        = int(np.round(cp_cycle/dt))
+      
+      ts_idx_b  = 0 
+      if args.restore==1:
+        ts_idx_b = int(args.rs_idx * io_freq)
+        tt       = ts_idx_b * dt
+        print("restoring solver from ts_idx = ", int(args.rs_idx * io_freq), "at time = ",tt)
+        
+      if (output_cycle_averaged_qois == True):
+        cycle_avg_u       = xp.zeros_like(u)
+        cycle_avg_v       = xp.zeros_like(v)
+      
+      ele_idx           = self.ele_idx
+      ion_idx           = self.ion_idx
+      Te_idx            = self.Te_idx
+      num_p             = self.op_spec_sp._p + 1
+      num_sh            = len(self.op_spec_sp._sph_harm_lm)
+      Et                = lambda t : xp.zeros(len(self.xp))
+      for ts_idx in range(ts_idx_b, steps):
+        du[:,:]=0
+        dv[:,:]=0
+        
+        if (ts_idx % io_freq == 0):
+          print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))
+          self.plot_unit_test1(u, v, "%s_%04d.png"%(args.fname, ts_idx//io_freq), tt, Et(tt))
+          xp.save("%s_%04d_u.npy"%(args.fname, ts_idx//io_freq), u)
+          xp.save("%s_%04d_v.npy"%(args.fname, ts_idx//io_freq), v)
+          
+          if (output_cycle_averaged_qois == True):
+            if ts_idx>ts_idx_b:
+              cycle_avg_u       *= 0.5 * dt / io_cycle
+              cycle_avg_v       *= 0.5 * dt / io_cycle
+              #print(np.abs(1-cycle_avg_u[:, ion_idx]/u[:,ion_idx]))
+              self.plot_unit_test1(cycle_avg_u, cycle_avg_v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, Et(tt))
+              
+              if (ts_idx % cp_freq == 0):
+                xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_u)
+                xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), cycle_avg_v)
+              
+              cycle_avg_u[:,:]       = 0
+              cycle_avg_v[:,:]       = 0
+            else:
+              self.plot_unit_test1(u, v, "%s_avg_%04d.png"%(args.fname, ts_idx//io_freq), tt, Et(tt))
+              
+              
+              if (ts_idx % cp_freq == 0):
+                xp.save("%s_%04d_u_avg.npy"%(args.fname, ts_idx//io_freq), u)
+                xp.save("%s_%04d_v_avg.npy"%(args.fname, ts_idx//io_freq), v)
+          
+          
+        
+        if (output_cycle_averaged_qois == True):
+          cycle_avg_u     += u
+          cycle_avg_v     += (v/u[ : , ele_idx])
+        
+        v           = self.step_bte_x(v, tt, dt * 0.5)
+        v           = self.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
+        
+        #v, a1, a2  = self.step_bte_vx_imp(v,None, tt, dt, None, 1)
+        self.bte_to_fluid(u, v, tt + dt, dt)         # bte to fluid
+        
+        
+        if (output_cycle_averaged_qois == True):
+          cycle_avg_u     += u
+          cycle_avg_v     += (v/u[ : , ele_idx])
+        
+        tt+= dt
+        
+      return u, v
+    
     def compute_radial_components(self, ev: np.array, ff):
         ff_cpu = ff
         
@@ -2420,7 +2556,7 @@ class glow1d_boltzmann():
       
       num_p   = self.op_spec_sp._p + 1
       num_sh  = len(self.op_spec_sp._sph_harm_lm)
-      Vin_lm  = xp.dot(self.op_po2sh, Vin)
+      Vin_lm  = self.ords_to_sph(Vin)
       
       def asnumpy(a):
         if self.xp_module == cp:
@@ -2596,7 +2732,7 @@ class glow1d_boltzmann():
       num_p   = self.op_spec_sp._p + 1
       num_sh  = len(self.op_spec_sp._sph_harm_lm)
       
-      Vin_lm  = xp.dot(self.op_po2sh, Vin)
+      Vin_lm  = self.ords_to_sph(Vin)
       
       plt.subplot(2, 4, 6)
       Vin_lm1      = self.bte_eedf_normalization(Vin_lm)
@@ -2672,10 +2808,10 @@ class glow1d_boltzmann():
       Fv1   = xp.einsum('ik,kjq->ijq', self.op_adv_x,  Fv1)
       Fv1   = xp.einsum('ijq,j->ijq' , Fv1, self.xp_cos_vt).reshape((-1))
       
-      v_lm  = xp.dot(self.op_po2sh, v.reshape((self.Nr * self.Nvt, self.Np)))
+      v_lm  = self.ords_to_sph(v.reshape((self.Nr * self.Nvt, self.Np)))
     
       Fv2   = self.param.tau * (n0 * self.param.np0 * (xp.dot(self.op_col_en, v_lm) + Tg * xp.dot(self.op_col_gT, v_lm))  + E * xp.dot(self.op_adv_v, v_lm))
-      Fv2   = xp.dot(self.op_psh2o, Fv2).reshape((-1))
+      Fv2   = self.sph_to_ords(Fv2).reshape((-1))
       
       Fv    = Fv2 - Fv1
     
@@ -2684,10 +2820,13 @@ class glow1d_boltzmann():
     
     def step_bte_vx_imp(self, v0, dv, time, dt, ts_type, verbose):
       
-      cp.cuda.runtime.deviceSynchronize()
+      xp      = self.xp_module
+
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t1    = perf_counter()
       
-      xp        = self.xp_module
       Ndof      = self.Nr * self.Nvt * self.Np
       
       atol      = self.args.atol
@@ -2735,14 +2874,14 @@ class glow1d_boltzmann():
         
         y    = x.reshape((self.Nr * self.Nvt, self.Np))
         
-        # y_lm = xp.dot(self.op_po2sh, y)
+        # y_lm = self.ords_to_sph(y)
         # y_lm = xp.dot(self.PmatC, y_lm)
-        # y    = xp.dot(self.op_psh2o, y_lm)
+        # y    = self.sph_to_ords(y_lm)
         
-        y_lm = xp.dot(self.op_po2sh, y)
+        y_lm = self.ords_to_sph(y)
         for idx_id, idx in enumerate(pc_emat_idx):
           y_lm[:,idx[1]] = xp.dot(pcEmat[idx[0]], y_lm[:, idx[1]])
-        y    = xp.dot(self.op_psh2o, y_lm)
+        y    = self.sph_to_ords(y_lm)
         
         # x-space operators. 
         y    = adv_x(y, time, dt)
@@ -2768,10 +2907,12 @@ class glow1d_boltzmann():
       #     print("GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(status, norm_res_abs, norm_res_rel))
       
       v1         = v1.reshape((self.Nr * self.Nvt, self.Np))
-      v_lm       = xp.dot(self.op_po2sh, v1)
-      v1         = xp.dot(self.op_psh2o, v_lm)
+      v_lm       = self.ords_to_sph(v1)
+      v1         = self.sph_to_ords(v_lm)
       
-      cp.cuda.runtime.deviceSynchronize()
+      if xp == cp:
+        cp.cuda.runtime.deviceSynchronize()
+
       s_t2    = perf_counter()
       
       print("time = %.2E ||Ax-b|| = %.4E ||Ax-b|| / ||b|| = %.4E solve time = %.4E gmres iterations: %d " %(time, norm_res_abs, norm_res_rel, (s_t2-s_t1), gmres_ctx.niter * gmres_restart))
@@ -2835,8 +2976,8 @@ class glow1d_boltzmann():
         v, _, _ = self.step_bte_vx_imp(v, None, tt, dt, None, 0)
         
         v       = v.reshape((self.Nr * self.Nvt, self.Np))
-        v_lm    = xp.dot(self.op_po2sh, v)
-        v       = xp.dot(self.op_psh2o, v_lm)
+        v_lm    = self.ords_to_sph(v)
+        v       = self.sph_to_ords(v_lm)
         tt+= dt
         
         
@@ -2857,7 +2998,7 @@ class glow1d_boltzmann():
       c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
       vth      = self.bs_vth
 
-      v_lm     = xp.dot(self.op_po2sh, v)
+      v_lm     = self.ords_to_sph(v)
       
       m0       = xp.dot(self.op_mass, v_lm)
       Te       = xp.dot(self.op_temp,v_lm) / m0
@@ -2871,7 +3012,7 @@ class glow1d_boltzmann():
       
       # these are computed from SI units qoi/n0
       D_e      = xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma / 3.) / n0 
-      mu_e     = xp.dot(self.op_mobility, v_lm_n[1::num_sh])  * ((c_gamma / (3 * ( 1 / n0)))) /n0
+      mu_e     = xp.dot(self.op_mobility, v_lm_n[1::num_sh])  * ((c_gamma / (3 * (1 / n0)))) /n0
       
       return {"rates": rr_rates, "mu": mu_e, "D": D_e}
       
@@ -3100,7 +3241,7 @@ class glow1d_boltzmann():
       for ts_idx in range(0, steps+1):
         
         if (ts_idx % extract_freq == 0):
-          vlm                    = xp.dot(self.op_po2sh, v)
+          vlm                    = self.ords_to_sph(v)
           uu                     = xp.copy(u)
           uu[:, ele_idx]         = xp.dot(self.op_mass[0::num_sh], vlm[0::num_sh,:])
           uu[:, Te_idx]          = xp.dot(self.op_temp[0::num_sh], vlm[0::num_sh,:])/u[:,ele_idx]
@@ -3119,7 +3260,7 @@ class glow1d_boltzmann():
         
         u , v  = self.step(u, v, du, dv, tt, dt)
         # v      = v.reshape((self.Nr * self.Nvt, self.Np))
-        # v      = xp.dot(self.op_psh2o, xp.dot(self.op_po2sh, v))
+        # v      = self.sph_to_ords(self.ords_to_sph(v))
         tt    += dt
       
       return ut, ut1, vt
@@ -3155,7 +3296,7 @@ class glow1d_boltzmann():
       for ts_idx in range(0, steps+1):
         
         if (ts_idx % extract_freq == 0):
-          vlm = xp.dot(self.op_po2sh, v)
+          vlm = self.ords_to_sph(v)
           
           ut[:,:, ts_idx//extract_freq] = u
           vt[:,:, ts_idx//extract_freq] = vlm[:, x_idx]
@@ -3227,6 +3368,8 @@ def args_parse():
   parser.add_argument("-io_cycle_freq"   , "--io_cycle_freq"              , help="io output every k-th cycle"              , type=float, default=1e0)
   parser.add_argument("-cp_cycle_freq"   , "--cp_cycle_freq"              , help="checkpoint output every k-th cycle"      , type=float, default=1e1)
   parser.add_argument("-bte_with_E"      , "--bte_with_E"                 , help="only do 1D-bte with E"                   , type=int, default=0)
+  parser.add_argument("-vtDe"            , "--vtDe"                       , help="vtheta smoothing parameter"              , type=float, default=0)
+  parser.add_argument("-xadv_type"       , "--xadv_type"                  , help="x-adv type 0-cheb, 1-upwinded FD"        , type=int, default=0)
   args  = parser.parse_args()
 
   if args.par_file != "":
@@ -3247,7 +3390,9 @@ def args_parse():
     args.Np             = tp0["Np"]
     args.cfl            = tp0["dt"]
     args.cycles         = tp0["cycles"]
-    
+    args.vtDe           = tp0["vtDe"]
+    args.xadv_type      = tp0["xadv_type"]
+
     tp0                 = tp["glow_1d"] 
     args.Tg             = tp0["Tg"]
     
@@ -3270,10 +3415,10 @@ def args_parse():
     
     args.glow_op_split_scheme = tp0["split_scheme"]
     
-    tp0                  = tp["chemistry"]
+    tp0                 = tp["chemistry"]
     args.Ns             = tp0["Ns"]
     args.NT             = tp0["NT"]
-    
+
     print("intiailized solver using %s"%args.par_file)
 
 
@@ -3293,6 +3438,18 @@ if __name__ == "__main__":
     a0        = xp.ones(glow_1d.Np) * 1e4  #xp.asarray(glow_1d.xp)**7 * 8e4  #xp.ones(glow_1d.Np) * 5e4
     Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
     uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
+  elif(args.bte_with_E == 2):
+    xp        = cp #glow_1d.xp_module 
+    a0        = xp.ones(glow_1d.Np) * 1e4  * xp.asarray(glow_1d.xp)**7 #* 8e4  #xp.ones(glow_1d.Np) * 5e4
+    Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
+    uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
+  elif(args.bte_with_E == 3):
+    xp        = cp #glow_1d.xp_module 
+    a0        = xp.ones(glow_1d.Np) * 0.0  #* 8e4  #xp.ones(glow_1d.Np) * 5e4
+    Et        = lambda tt : a0 * xp.sin(2 * np.pi * tt)
+    uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
+  elif(args.bte_with_E == 4):
+    uu,vv     = glow_1d.evolve_1dbte_adv_x(u, v, output_cycle_averaged_qois=True)
   else:
     uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
     

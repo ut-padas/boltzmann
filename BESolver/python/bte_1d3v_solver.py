@@ -23,6 +23,7 @@ import mesh
 import toml
 import argparse
 import h5py
+import scipy.optimize
 
 PROFILE_SOLVERS=1
 
@@ -32,6 +33,10 @@ try:
 except:
     print("Cupy module not found !")
     #raise ModuleNotFoundError
+
+class adv_xtype():
+    CHEB   = 0 
+    UPW_FD = 1
 
 class params():
     def __init__(self, par_file):
@@ -111,6 +116,11 @@ class params():
       
         self.fname=str(dir)+"/"+self.fname
 
+        self.vtDe      = tp["vtDe"] #0.25
+        self.xadv_type = tp["xadv_type"]
+        
+        
+
 class gmres_counter(object):
     def __init__(self, disp=True):
         self._disp = disp
@@ -140,7 +150,6 @@ class bte_1d3v():
         self.xp            = self.mesh.xcoord[0]
         self.Dp            = self.mesh.D1[0]
         self.DpT           = self.mesh.D1[0].T
-        
 
         dof_v              = (self.params.Nr + 1) * (self.params.l_max+1)
         Imat               = np.eye(self.params.Np)
@@ -162,6 +171,20 @@ class bte_1d3v():
         self.xp_cos_vt     = np.cos(self.xp_vt)
         self.xp_vt_l       = np.array([i * Nvt + j for i in range(self.params.Nr + 1) for j in list(np.where(self.xp_vt <= 0.5 * np.pi)[0])])
         self.xp_vt_r       = np.array([i * Nvt + j for i in range(self.params.Nr + 1) for j in list(np.where(self.xp_vt > 0.5 * np.pi)[0])])
+
+        LpDvt              = mesh.central_dxx(self.xp_vt)
+        I_Nvt              = np.eye(len(self.xp_vt))
+        LpDvt              = I_Nvt - self.params.vtDe * LpDvt
+        
+        #dirichlet BCs
+        LpDvt[0]           = I_Nvt[0]
+        LpDvt[-1]          = I_Nvt[-1]
+        
+        # # neumann BCs
+        # LpDvt[0]           = mesh.upwinded_dx(self.xp_vt, "LtoR")[0]  
+        # LpDvt[-1]          = mesh.upwinded_dx(self.xp_vt, "LtoR")[-1] 
+        self.LpDvt         = np.linalg.inv(LpDvt)
+
         
         self.bs_Te         = self.params.Te 
         self.bs_nr         = self.params.Nr
@@ -285,28 +308,14 @@ class bte_1d3v():
         # glx, glw               = basis.Legendre().Gauss_Pn(len(vt_pts))
         # vq_theta               = np.arccos(glx)
         # assert (vq_theta == vt_pts).all(), "collocation points does not match with the theta quadrature points"
-        tmp1                    = np.matmul(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt)), np.diag(self.xp_vt_qw) ) * 2 * np.pi
-        #tmp1                     = np.linalg.inv(np.transpose(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt))))
-      
-        #print(tmp)
-        self.op_po2sh = np.zeros((num_p * num_sh, num_p* num_vt))
-        for ii in range(num_p):
-            for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-                for vt_idx in range(num_vt):
-                    self.op_po2sh[ii * num_sh + lm_idx, ii * num_vt + vt_idx] = tmp1[lm_idx, vt_idx]
-        
+        self.op_po2sh             = np.matmul(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt)), np.diag(self.xp_vt_qw) ) * 2 * np.pi
         #print(self.op_po2sh)
         
         # spherical lm to ordinates computation (Nvt, num_sh)
-        tmp2                    = np.transpose(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt))) 
-        self.op_psh2o           = np.zeros((num_p * num_vt, num_p * num_sh)) 
-        for ii in range(num_p):
-            for vt_idx in range(num_vt):
-                for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-                    self.op_psh2o[ii * num_vt + vt_idx, ii * num_sh + lm_idx] = tmp2[vt_idx, lm_idx]
+        self.op_psh2o           = np.transpose(spec_sp.Vq_sph(self.xp_vt, np.zeros_like(self.xp_vt))) 
         
         # to check if the oridinates to spherical and spherical to ordinates projection is true (weak test not sufficient but necessary condition)
-        assert np.allclose(np.dot(tmp2, np.dot(tmp1, 1 + np.cos(self.xp_vt))), 1 + np.cos(self.xp_vt))
+        assert np.allclose(np.dot(self.op_psh2o, np.dot(self.op_po2sh, 1 + np.cos(self.xp_vt))), 1 + np.cos(self.xp_vt))
       
         self.par_ev_range       = ev_range  
         mm_mat                  = spec_sp.compute_mass_matrix()
@@ -429,7 +438,6 @@ class bte_1d3v():
         
         def psh2o_C_po2sh(opM):
             return opM
-            #return np.dot(self.op_psh2o, np.dot(opM,self.op_po2sh))
         
         adv_mat_v                *= (1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO
         adv_mat_v                 = psh2o_C_po2sh(adv_mat_v)
@@ -509,161 +517,197 @@ class bte_1d3v():
             self.op_col_ee       = cc_op
             
             print("e-e collision assembly end")
-        
-    def copy_operators_H2D(self, dev_id):
-      
-      if self.params.use_gpu == 0:
-        return
-      
-      with cp.cuda.Device(dev_id):
-        self.xp_cos_vt      = cp.asarray(self.xp_cos_vt)
-        self.I_Nx           = cp.asarray(self.I_Nx)
-        self.I_Nv           = cp.asarray(self.I_Nv)
-        
-        self.Dp             = cp.asarray(self.Dp)
-        self.DpT            = cp.asarray(self.DpT)
-        # self.LpD            = cp.asarray(self.LpD)
-        # self.Lp             = cp.asarray(self.Lp)
-        # self.LpD_inv        = cp.asarray(self.LpD_inv)
-        
-        self.op_adv_v       = cp.asarray(self.op_adv_v)
-        self.op_adv_x       = cp.asarray(self.op_adv_x)
-        self.op_adv_x_d     = cp.asarray(self.op_adv_x_d)
-        self.op_adv_x_q     = cp.asarray(self.op_adv_x_q)
-        self.op_adv_x_qinv  = cp.asarray(self.op_adv_x_qinv)
-        
-        self.op_psh2o       = cp.asarray(self.op_psh2o)
-        self.op_po2sh       = cp.asarray(self.op_po2sh)
-        self.op_col_en      = cp.asarray(self.op_col_en)
-        self.op_col_gT      = cp.asarray(self.op_col_gT)
-        
-        if self.params.ee_collisions==1:
-          self.op_col_ee    = cp.asarray(self.op_col_ee)
-          
-        self.op_mass        = cp.asarray(self.op_mass)
-        self.op_temp        = cp.asarray(self.op_temp)
-        self.op_rate        = [cp.asarray(self.op_rate[i]) for i in range(len(self.op_rate))]
-        self.op_mobility    = cp.asarray(self.op_mobility)
-        self.op_diffusion   = cp.asarray(self.op_diffusion)
+    
+    def ords_to_sph(self, x):
+        num_p   = self.op_spec_sp._p + 1
+        num_sh  = len(self.op_spec_sp._sph_harm_lm)
+        num_vt  = len(self.xp_vt)
+        num_x   = len(self.xp)
+        xp      = self.xp_module
 
-      return
+        return xp.einsum("li,rix->rlx", self.op_po2sh, x.reshape((num_p, num_vt, num_x))).reshape((num_p * num_sh, num_x))
+    
+    def sph_to_ords(self, x):
+        num_p   = self.op_spec_sp._p + 1
+        num_sh  = len(self.op_spec_sp._sph_harm_lm)
+        num_vt  = len(self.xp_vt)
+        num_x   = len(self.xp)
+        xp      = self.xp_module
+
+        return xp.einsum("li,rix->rlx", self.op_psh2o, x.reshape((num_p, num_sh, num_x))).reshape((num_p * num_vt, num_x))
+
+    def copy_operators_H2D(self, dev_id):
+        
+        if self.params.use_gpu == 0:
+            return
+        
+        with cp.cuda.Device(dev_id):
+            self.xp_cos_vt      = cp.asarray(self.xp_cos_vt)
+            self.I_Nx           = cp.asarray(self.I_Nx)
+            self.I_Nv           = cp.asarray(self.I_Nv)
+            
+            self.Dp             = cp.asarray(self.Dp)
+            self.DpT            = cp.asarray(self.DpT)
+            # self.LpD            = cp.asarray(self.LpD)
+            # self.Lp             = cp.asarray(self.Lp)
+            # self.LpD_inv        = cp.asarray(self.LpD_inv)
+            
+            self.op_adv_v       = cp.asarray(self.op_adv_v)
+            self.op_adv_x       = cp.asarray(self.op_adv_x)
+            self.op_adv_x_d     = cp.asarray(self.op_adv_x_d)
+            self.op_adv_x_q     = cp.asarray(self.op_adv_x_q)
+            self.op_adv_x_qinv  = cp.asarray(self.op_adv_x_qinv)
+            
+            self.op_psh2o       = cp.asarray(self.op_psh2o)
+            self.op_po2sh       = cp.asarray(self.op_po2sh)
+            self.op_col_en      = cp.asarray(self.op_col_en)
+            self.op_col_gT      = cp.asarray(self.op_col_gT)
+            
+            if self.params.ee_collisions==1:
+                self.op_col_ee    = cp.asarray(self.op_col_ee)
+            
+            self.op_mass        = cp.asarray(self.op_mass)
+            self.op_temp        = cp.asarray(self.op_temp)
+            self.op_rate        = [cp.asarray(self.op_rate[i]) for i in range(len(self.op_rate))]
+            self.op_mobility    = cp.asarray(self.op_mobility)
+            self.op_diffusion   = cp.asarray(self.op_diffusion)
+            self.LpDvt          = cp.asarray(self.LpDvt)
+
+        return
     
     def copy_operators_D2H(self, dev_id):
+        if self.params.use_gpu==0:
+            return
       
-      if self.params.use_gpu==0:
-        return
-      
-      with cp.cuda.Device(dev_id):
-        self.xp_cos_vt      = cp.asnumpy(self.xp_cos_vt)
-        self.I_Nx           = cp.asnumpy(self.I_Nx)
-        self.I_Nv           = cp.asnumpy(self.I_Nv)
-        
-        self.Dp             = cp.asnumpy(self.Dp)
-        self.DpT            = cp.asnumpy(self.DpT)
-        #self.LpD_inv        = cp.asnumpy(self.LpD_inv)
-        
-        self.op_adv_v       = cp.asnumpy(self.op_adv_v)
-        self.op_adv_x       = cp.asnumpy(self.op_adv_x)
-        self.op_adv_x_d     = cp.asnumpy(self.op_adv_x_d)
-        self.op_adv_x_q     = cp.asnumpy(self.op_adv_x_q)
-        self.op_adv_x_qinv  = cp.asnumpy(self.op_adv_x_qinv)
-        
-        self.op_psh2o       = cp.asnumpy(self.op_psh2o)
-        self.op_po2sh       = cp.asnumpy(self.op_po2sh)
-        self.op_col_en      = cp.asnumpy(self.op_col_en)
-        self.op_col_gT      = cp.asnumpy(self.op_col_gT)
-        
-        if self.params.ee_collisions==1:
-          self.op_col_ee   = cp.asnumpy(self.op_col_ee)
-        
-        self.op_mass        = cp.asnumpy(self.op_mass)
-        self.op_temp        = cp.asnumpy(self.op_temp)
-        
-        self.op_rate        = [cp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
-        self.op_mobility    = cp.asnumpy(self.op_mobility)
-        self.op_diffusion   = cp.asnumpy(self.op_diffusion)
-        
-      return  
+        with cp.cuda.Device(dev_id):
+            self.xp_cos_vt      = cp.asnumpy(self.xp_cos_vt)
+            self.I_Nx           = cp.asnumpy(self.I_Nx)
+            self.I_Nv           = cp.asnumpy(self.I_Nv)
+            
+            self.Dp             = cp.asnumpy(self.Dp)
+            self.DpT            = cp.asnumpy(self.DpT)
+            #self.LpD_inv        = cp.asnumpy(self.LpD_inv)
+            
+            self.op_adv_v       = cp.asnumpy(self.op_adv_v)
+            self.op_adv_x       = cp.asnumpy(self.op_adv_x)
+            self.op_adv_x_d     = cp.asnumpy(self.op_adv_x_d)
+            self.op_adv_x_q     = cp.asnumpy(self.op_adv_x_q)
+            self.op_adv_x_qinv  = cp.asnumpy(self.op_adv_x_qinv)
+            
+            self.op_psh2o       = cp.asnumpy(self.op_psh2o)
+            self.op_po2sh       = cp.asnumpy(self.op_po2sh)
+            self.op_col_en      = cp.asnumpy(self.op_col_en)
+            self.op_col_gT      = cp.asnumpy(self.op_col_gT)
+            
+            if self.params.ee_collisions==1:
+                self.op_col_ee   = cp.asnumpy(self.op_col_ee)
+            
+            self.op_mass        = cp.asnumpy(self.op_mass)
+            self.op_temp        = cp.asnumpy(self.op_temp)
+            
+            self.op_rate        = [cp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
+            self.op_mobility    = cp.asnumpy(self.op_mobility)
+            self.op_diffusion   = cp.asnumpy(self.op_diffusion)
+            self.LpDvt          = cp.asnumpy(self.LpDvt)
+            
+        return  
     
     def __initialize_bte_adv_x__(self, dt):
-      """initialize spatial advection operator"""
-      xp                = self.xp_module
-      self.adv_setup_dt = dt 
-      #assert xp == np
-      
-      self.bte_x_shift      = xp.zeros((self.params.Nr+1, self.params.Nvt, self.params.Np, self.params.Np))
-      #self.bte_x_shift_rmat = xp.zeros((self.params.Nr+1, self.params.Nvt, self.params.Np, self.params.Np))
-      DpL = xp.zeros((self.params.Np, self.params.Np))
-      DpR = xp.zeros((self.params.Np, self.params.Np))
-
-      DpL[1:,:]  = self.Dp[1:,:]
-      DpR[:-1,:] = self.Dp[:-1,:]
-      
-      f1 = 1.0
-      f2 = 1-f1
-
-      for j in range(self.params.Nvt):
-        if (self.xp_vt[j] <= 0.5 * xp.pi):
-          for i in range(self.params.Nr+1):
-            self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
-            #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
-        else:
-          for i in range(self.params.Nr+1):
-            self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
-            #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
-      
-      #self.tmp1        = self.bte_x_shift   
-      self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
-      #self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
-      
-      # adv_mat = cp.asnumpy(self.bte_x_shift)
-      # v1 = -self.xp**2 + 1.2
-      # plt.figure(figsize=(10,4), dpi=300)
-      # plt.subplot(1, 2 , 1)
-      # plt.semilogy(self.xp, v1,"-b",label="t=0")
-      # y1 = np.copy(v1)
-      # for i in range(50):
-      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
-      #   y1[0]=0
-      #   y1=xp.dot(adv_mat[-1,-1],y1)
-      # plt.semilogy(self.xp, y1,"-r", label="left to right")
-      # y1 = np.copy(v1)
-      # for i in range(50):
-      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
-      #   y1[-1]=0
-      #   y1=xp.dot(adv_mat[-1,0],y1)
-      # plt.semilogy(self.xp, y1,"-y", label="right to left ")
-      # plt.legend()
-      # plt.grid()
-      
-      # plt.subplot(1, 2 , 2)
-      # plt.plot(self.xp, v1,"-b",label="t=0")
-      # y1 = np.copy(v1)
-      # for i in range(50):
-      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
-      #   y1[0]=0
-      #   y1=xp.dot(adv_mat[-1,-1],y1)
-      #   # print(y1<0)
-      #   # print("L to R", y1[0])
-      #   y1[y1<0]=1e-16
         
-      # plt.plot(self.xp, y1,"-r", label="left to right")
-      # y1 = np.copy(v1)
-      # for i in range(50):
-      #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
-      #   y1[-1]=0
-      #   y1=xp.dot(adv_mat[-1,0],y1)
-      #   # print("R to L", y1[-1])
-      #   # y1[y1<0]=1e-16
-      # plt.plot(self.xp, y1,"-y", label="right to left ")
-      # plt.legend()
-      # plt.grid()
-      
-      # #plt.show()
-      # plt.savefig("test.png")
-      # plt.close()
-      # #sys.exit(0)
-      return
+        """initialize spatial advection operator"""
+        xp                = self.xp_module
+        self.adv_setup_dt = dt 
+        #assert xp == np
+        
+        self.bte_x_shift      = xp.zeros((self.params.Nr+1, self.params.Nvt, self.params.Np, self.params.Np))
+        #self.bte_x_shift_rmat = xp.zeros((self.params.Nr+1, self.params.Nvt, self.params.Np, self.params.Np))
+
+        if (self.params.xadv_type == adv_xtype.CHEB):
+            DpL        = xp.zeros((self.params.Np, self.params.Np))
+            DpR        = xp.zeros((self.params.Np, self.params.Np))
+
+            DpL[1:,:]  = self.Dp[1:,:]
+            DpR[:-1,:] = self.Dp[:-1,:]
+
+            print("using chebyshev pseudo-spectral")
+
+        elif (self.params.xadv_type == adv_xtype.UPW_FD):
+            DpL         = xp.zeros((self.params.Np, self.params.Np))
+            DpR         = xp.zeros((self.params.Np, self.params.Np))
+
+            DpL[1:,:]   = xp.array(mesh.upwinded_dx(self.xp, "LtoR"))[1: ,:]
+            DpR[:-1, :] = xp.array(mesh.upwinded_dx(self.xp, "RtoL"))[:-1,:]
+
+            print("using upwinded finite differences")
+
+        else:
+            raise NotImplementedError
+
+        f1 = 1.0
+        f2 = 1-f1
+
+        for j in range(self.params.Nvt):
+            if (self.xp_vt[j] <= 0.5 * xp.pi):
+                for i in range(self.params.Nr+1):
+                    self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+                    #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+            else:
+                for i in range(self.params.Nr+1):
+                    self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+                    #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+        
+        #self.tmp1        = self.bte_x_shift   
+        self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
+        #self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
+        
+        # adv_mat = cp.asnumpy(self.bte_x_shift)
+        # v1 = -self.xp**2 + 1.2
+        # plt.figure(figsize=(10,4), dpi=300)
+        # plt.subplot(1, 2 , 1)
+        # plt.semilogy(self.xp, v1,"-b",label="t=0")
+        # y1 = np.copy(v1)
+        # for i in range(50):
+        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
+        #   y1[0]=0
+        #   y1=xp.dot(adv_mat[-1,-1],y1)
+        # plt.semilogy(self.xp, y1,"-r", label="left to right")
+        # y1 = np.copy(v1)
+        # for i in range(50):
+        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
+        #   y1[-1]=0
+        #   y1=xp.dot(adv_mat[-1,0],y1)
+        # plt.semilogy(self.xp, y1,"-y", label="right to left ")
+        # plt.legend()
+        # plt.grid()
+        
+        # plt.subplot(1, 2 , 2)
+        # plt.plot(self.xp, v1,"-b",label="t=0")
+        # y1 = np.copy(v1)
+        # for i in range(50):
+        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
+        #   y1[0]=0
+        #   y1=xp.dot(adv_mat[-1,-1],y1)
+        #   # print(y1<0)
+        #   # print("L to R", y1[0])
+        #   y1[y1<0]=1e-16
+            
+        # plt.plot(self.xp, y1,"-r", label="left to right")
+        # y1 = np.copy(v1)
+        # for i in range(50):
+        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
+        #   y1[-1]=0
+        #   y1=xp.dot(adv_mat[-1,0],y1)
+        #   # print("R to L", y1[-1])
+        #   # y1[y1<0]=1e-16
+        # plt.plot(self.xp, y1,"-y", label="right to left ")
+        # plt.legend()
+        # plt.grid()
+        
+        # #plt.show()
+        # plt.savefig("test.png")
+        # plt.close()
+        # #sys.exit(0)
+        return
     
     def vspace_pc_setup(self, E):
         xp          = self.xp_module
@@ -689,39 +733,46 @@ class bte_1d3v():
         return pc_emat_idx
     
     def step_bte_x(self, v, time, dt, verbose=0):
-      "perform the bte x-advection analytically"
-      xp        = self.xp_module
-      assert self.adv_setup_dt == dt
-      
-      if PROFILE_SOLVERS==1:
-        if xp == cp:
-          cp.cuda.runtime.deviceSynchronize()
-        t1 = perf_counter()
-      
-      Nr        = self.params.Nr + 1
-      Vin       = v.reshape((Nr, self.params.Nvt , self.params.Np)).reshape(Nr, self.params.Nvt * self.params.Np)
-      Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, self.params.Nvt, self.params.Np)).reshape((Nr * self.params.Nvt , self.params.Np))
-      
-      #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((Nr, self.params.Nvt, self.params.Np))).reshape((Nr*self.params.Nvt, self.params.Np)) 
-      # enforce rhs BCs
-      Vin[self.xp_vt_l, 0]  = 0.0
-      Vin[self.xp_vt_r, -1] = 0.0
-      
-      Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, self.params.Nvt, self.params.Np)))
-      Vin_adv_x  = Vin_adv_x.reshape((Nr, self.params.Nvt *  self.params.Np))
-      Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((Nr , self.params.Nvt, self.params.Np)).reshape((Nr * self.params.Nvt, self.params.Np))
-      
-      # print((Vin_adv_x[self.xp_vt_l , 0] ==0).all())
-      # print((Vin_adv_x[self.xp_vt_r , -1]==0).all())
-      
-      if PROFILE_SOLVERS==1:
-        if xp == cp:
-          cp.cuda.runtime.deviceSynchronize()
-        t2 = perf_counter()
-        if (verbose):
-            print("time: [%.4E T] -- BTE x-advection cost = %.4E (s)" %(time, t2-t1), flush=True)
-      Vin_adv_x[Vin_adv_x<0] = 1e-16
-      return Vin_adv_x
+        "perform the bte x-advection analytically"
+        xp        = self.xp_module
+        assert self.adv_setup_dt == dt
+        
+        if PROFILE_SOLVERS==1:
+            if xp == cp:
+                cp.cuda.runtime.deviceSynchronize()
+            t1 = perf_counter()
+        
+        Nr        = self.params.Nr + 1
+        Nvt       = self.params.Nvt
+        Nx        = self.params.Np
+
+        Vin       = v.reshape((Nr, self.params.Nvt , self.params.Np)).reshape(Nr, self.params.Nvt * self.params.Np)
+        Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, self.params.Nvt, self.params.Np)).reshape((Nr * self.params.Nvt , self.params.Np))
+        
+        #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((Nr, self.params.Nvt, self.params.Np))).reshape((Nr*self.params.Nvt, self.params.Np)) 
+        # enforce rhs BCs
+        Vin[self.xp_vt_l, 0]  = 0.0
+        Vin[self.xp_vt_r, -1] = 0.0
+        
+        Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, self.params.Nvt, self.params.Np)))
+        Vin_adv_x  = Vin_adv_x.reshape((Nr, self.params.Nvt *  self.params.Np))
+        Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((Nr , self.params.Nvt, self.params.Np)).reshape((Nr * self.params.Nvt, self.params.Np))
+        
+        # print((Vin_adv_x[self.xp_vt_l , 0] ==0).all())
+        # print((Vin_adv_x[self.xp_vt_r , -1]==0).all())
+        
+        if PROFILE_SOLVERS==1:
+            if xp == cp:
+                cp.cuda.runtime.deviceSynchronize()
+            t2 = perf_counter()
+            if (verbose):
+                print("time: [%.4E T] -- BTE x-advection cost = %.4E (s)" %(time, t2-t1), flush=True)
+        
+        #Vin_adv_x[Vin_adv_x<0] = 1e-16
+        if (self.params.vtDe > 0):
+            Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * Nvt, Nx))
+        
+        return Vin_adv_x
     
     def step_bte_v(self, E, v, dv, time, dt, verbose=0):
         xp      = self.xp_module
@@ -733,27 +784,12 @@ class bte_1d3v():
         
         time    = time
         dt      = dt
-      
-        #   rhs     = self.rhs_bte_v
-        #   u       = xp.dot(self.op_po2sh,v)
-        
-        #   if ts_type == "RK2":
-        #     k1 = dt * rhs(u, time, dt)[0]
-        #     k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)[0]
-        #     return u + k2
-        #   elif ts_type == "RK4":
-        #     k1 = dt * rhs(u           , time           , dt)[0]
-        #     k2 = dt * rhs(u + 0.5 * k1, time + 0.5 * dt, dt)[0]
-        #     k3 = dt * rhs(u + 0.5 * k2, time + 0.5 * dt, dt)[0]
-        #     k4 = dt * rhs(u +  k3     , time + dt      , dt)[0]
-        #     return u + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
-        
-        u       = xp.dot(self.op_po2sh,v)
+        u       = self.ords_to_sph(v)
         if self.params.vts_type == "BE":
             rtol            = self.params.rtol
             atol            = self.params.atol
             iter_max        = self.params.max_iter
-            use_gmres       = True
+            use_gmres       = not((E[0] == E).all() == True)
             dof_v           = self.op_col_en.shape[0] 
             
             steps_cycle     = int(1/dt)
@@ -808,11 +844,19 @@ class bte_1d3v():
                     v               = v.reshape((dof_v, self.params.Np))
         
             else:
-                raise NotImplementedError
+                vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
+                Lop           = self.I_Nv - dt * self.params.tau * E[0] * self.op_adv_v - dt * self.params.tau * vmat
+                gmres_c       = gmres_counter(disp=False)
+                v             = xp.linalg.solve(Lop, u)
+                norm_b        = xp.linalg.norm(u)
+                norm_res_abs  = xp.linalg.norm(Lop @ v -  u)
+                norm_res_rel  = norm_res_abs / norm_b
+
+                #raise NotImplementedError
         else:
             raise NotImplementedError    
         
-        v       = xp.dot(self.op_psh2o, v)
+        v       = self.sph_to_ords(v)
         if PROFILE_SOLVERS==1:
             if xp == cp:
                 cp.cuda.runtime.deviceSynchronize()
@@ -846,88 +890,88 @@ class bte_1d3v():
         return output
     
     def compute_qoi(self, v, time, dt):
-      xp       = self.xp_module
-      mm_fac   = np.sqrt(4 * np.pi) 
-      c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
-      vth      = self.bs_vth
+        xp       = self.xp_module
+        mm_fac   = np.sqrt(4 * np.pi) 
+        c_gamma  = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
+        vth      = self.bs_vth
 
-      v_lm     = xp.dot(self.op_po2sh, v)
-      
-      m0       = xp.dot(self.op_mass, v_lm)
-      Te       = xp.dot(self.op_temp,v_lm) / m0
-      scale    = xp.dot(self.op_mass / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
-      v_lm_n   = v_lm/scale
-      num_sh   = len(self.op_spec_sp._sph_harm_lm)
-      
-      n0       = self.params.np0 * self.params.n0
-      num_collisions = len(self.bs_coll_list)
-      rr_rates = xp.array([xp.dot(self.op_rate[col_idx], v_lm_n[0::num_sh, :]) for col_idx in range(num_collisions)]).reshape((num_collisions, self.params.Np)).T
-      
-      # these are computed from SI units qoi/n0
-      D_e      = xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma / 3.) / n0 
-      mu_e     = xp.dot(self.op_mobility, v_lm_n[1::num_sh])  * ((c_gamma / (3 * ( 1 / n0)))) /n0
-      
-      return {"rates": rr_rates, "mu": mu_e, "D": D_e}
+        v_lm     = self.ords_to_sph(v)
+        
+        m0       = xp.dot(self.op_mass, v_lm)
+        Te       = xp.dot(self.op_temp,v_lm) / m0
+        scale    = xp.dot(self.op_mass / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
+        v_lm_n   = v_lm/scale
+        num_sh   = len(self.op_spec_sp._sph_harm_lm)
+        
+        n0       = self.params.np0 * self.params.n0
+        num_collisions = len(self.bs_coll_list)
+        rr_rates = xp.array([xp.dot(self.op_rate[col_idx], v_lm_n[0::num_sh, :]) for col_idx in range(num_collisions)]).reshape((num_collisions, self.params.Np)).T
+        
+        # these are computed from SI units qoi/n0
+        D_e      = xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma / 3.) / n0 
+        mu_e     = xp.dot(self.op_mobility, v_lm_n[1::num_sh])  * ((c_gamma / (3 * ( 1 / n0)))) /n0
+        
+        return {"rates": rr_rates, "mu": mu_e, "D": D_e}
     
     def maxwellian_eedf(self, ne, Te):
-      xp          = self.xp_module
-      
-      temp_op     = self.op_temp
-      mass_op     = self.op_mass
-      op_rate     = self.op_rate
-      psh2o       = self.op_psh2o
-      mm_fac      = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
-      
-      if xp==cp:
-        temp_op     = xp.asnumpy(self.op_temp)
-        mass_op     = xp.asnumpy(self.op_mass)
-        op_rate     = [xp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
-        psh2o       = xp.asnumpy(self.op_psh2o)
-      
-      #rates       = np.zeros((len(op_rate), self.params.Np))
-      num_p       = self.op_spec_sp._p + 1
-      Vin         = np.zeros((num_p * self.params.Nvt, self.params.Np))
-      spec_sp     = self.op_spec_sp
-      mmat        = spec_sp.compute_mass_matrix()
-      mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
-      vth         = self.bs_vth
-      mw          = bte_utils.get_maxwellian_3d(vth, 1)
+        xp          = self.xp_module
+        
+        temp_op     = self.op_temp
+        mass_op     = self.op_mass
+        op_rate     = self.op_rate
+        psh2o       = self.op_psh2o
+        mm_fac      = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
+        
+        if xp==cp:
+            temp_op     = xp.asnumpy(self.op_temp)
+            mass_op     = xp.asnumpy(self.op_mass)
+            op_rate     = [xp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
+            psh2o       = xp.asnumpy(self.op_psh2o)
+        
+        #rates       = np.zeros((len(op_rate), self.params.Np))
+        num_p       = self.op_spec_sp._p + 1
+        Vin         = np.zeros((num_p * self.params.Nvt, self.params.Np))
+        spec_sp     = self.op_spec_sp
+        mmat        = spec_sp.compute_mass_matrix()
+        mmat_inv    = spec_sp.inverse_mass_mat(Mmat = mmat)
+        vth         = self.bs_vth
+        mw          = bte_utils.get_maxwellian_3d(vth, 1)
 
-      [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
-      Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
-      
-      num_p       = spec_sp._p +1
-      num_sh      = len(spec_sp._sph_harm_lm)
-      h_init      = np.zeros(num_p * num_sh)
-      
-      ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
-      print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
-      for i in range(self.params.Np):
-        v_ratio           = (self.c_gamma * np.sqrt(Te[i])/vth)
-        hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
-        h_init[0::num_sh] = np.sqrt(4 * np.pi) * np.dot(mmat_inv[0::num_sh,0::num_sh], np.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
-        m0                = np.dot(mass_op, h_init)
+        [gmx,gmw]   = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+        Vqr_gmx     = spec_sp.Vq_r(gmx, 0, 1)
         
-        h_init            = h_init/m0
+        num_p       = spec_sp._p +1
+        num_sh      = len(spec_sp._sph_harm_lm)
+        h_init      = np.zeros(num_p * num_sh)
         
-        scale             = np.dot(mass_op / mm_fac, h_init) * (2 * (vth / self.c_gamma)**3)
-        hh1               = h_init/scale
-        num_sh            = len(spec_sp._sph_harm_lm)
-        
-        print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Te[i], m0, (np.dot(temp_op, h_init)/m0)), end='')
-        print(" k_elastic [m^3s^{-1}] = %.8E " %(np.dot(op_rate[0], hh1[0::num_sh])), end='')
-        if (len(op_rate) > 1):
-          ki = np.dot(op_rate[1], hh1[0::num_sh]) * self.params.np0 * self.params.tau
-          print("k_ionization [m^3s^{-1}] = %.8E " %( ki / self.params.np0 / self.params.tau))
-        
-        Vin[:, i] = np.dot(psh2o, h_init)
-        
-      # scale functions to have ne, at initial timestep
-      Vin = Vin * ne
-      return Vin
+        ev_max_ext        = (spec_sp._basis_p._t_unique[-1] * self.bs_vth/self.c_gamma)**2
+        print("v-grid max = %.4E (eV) extended to = %.4E (eV)" %(self.ev_lim[1], ev_max_ext))
+        for i in range(self.params.Np):
+            v_ratio           = (self.c_gamma * np.sqrt(Te[i])/vth)
+            hv                = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+            h_init[0::num_sh] = np.sqrt(4 * np.pi) * np.dot(mmat_inv[0::num_sh,0::num_sh], np.dot(Vqr_gmx * hv(gmx) * gmx**2, gmw))
+            m0                = np.dot(mass_op, h_init)
+            
+            h_init            = h_init/m0
+            
+            scale             = np.dot(mass_op / mm_fac, h_init) * (2 * (vth / self.c_gamma)**3)
+            hh1               = h_init/scale
+            num_sh            = len(spec_sp._sph_harm_lm)
+            
+            print("BTE idx=%d x_i=%.2E Te=%.8E mass=%.8E temp(eV)=%.8E "%(i, self.xp[i], Te[i], m0, (np.dot(temp_op, h_init)/m0)), end='')
+            print(" k_elastic [m^3s^{-1}] = %.8E " %(np.dot(op_rate[0], hh1[0::num_sh])), end='')
+            if (len(op_rate) > 1):
+                ki = np.dot(op_rate[1], hh1[0::num_sh]) * self.params.np0 * self.params.tau
+            print("k_ionization [m^3s^{-1}] = %.8E " %( ki / self.params.np0 / self.params.tau))
+            
+            Vin[:, i] = np.einsum("il,rl->ri", psh2o, h_init.reshape((num_p , num_sh))).reshape((num_p * len(self.xp_vt)))
+            
+        # scale functions to have ne, at initial timestep
+        Vin = Vin * ne
+        return xp.array(Vin)
     
     def initial_condition(self, type=0):
-       xp = self.xp_module
+       xp   = np #self.xp_module
        assert xp == np
 
        xx = self.params.L * (self.xp + 1)
@@ -935,7 +979,7 @@ class bte_1d3v():
           ne = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
           Te = xp.ones_like(ne) * self.params.Te
           v  = self.maxwellian_eedf(ne, Te)
-          return v
+          return self.xp_module.array(v)
        else:
           raise NotImplementedError
 
@@ -949,71 +993,48 @@ class bte_1d3v():
         #self.PmatC   = xp.linalg.inv(self.I_Nv - 1.0 * dt * self.params.tau * vmat)
         self.PmatE    = list()
         self.PmatE    = xp.array([xp.linalg.inv(self.I_Nv - dt * self.params.tau * self.Evals[i] * self.op_adv_v - dt * self.params.tau * vmat) for i in range(num_pc_evals)])
-           
         
-        # num_sh        = len(self.op_spec_sp._sph_harm_lm)
-        
-        # pmat          = self.PmatC
-        # emat          = xp.linalg.inv(self.I_Nv - dt * self.params.tau * self.Evals[0] * self.op_adv_v - dt * self.params.tau * vmat)
-        # ep_mat        = emat 
-        # self.PmatE.append(ep_mat)
-        
-        
-        # for i in range(1, num_pc_evals):
-        #     emat          = xp.linalg.inv(self.I_Nv - dt * self.params.tau * 0.5 * (self.Evals[i-1] + self.Evals[i]) * self.op_adv_v - dt * self.params.tau * vmat)
-        #     ep_mat        = emat 
-        #     self.PmatE.append(ep_mat)
-            
-        # emat          = xp.linalg.inv(self.I_Nv - dt * self.params.tau * self.Evals[-1] * self.op_adv_v - dt * self.params.tau * vmat)
-        # ep_mat        = emat 
-        # self.PmatE.append(ep_mat)
-        
-
-        # self.PmatE    = xp.array(self.PmatE)
-        
-        # assert len(self.PmatE) == num_pc_evals + 1
-        # assert len(self.Evals) == num_pc_evals
-
-
         print("v-space advection mat preconditioner gird : \n", self.Evals)
         self.__initialize_bte_adv_x__(0.5 * dt)
         
         return 
     
     def step(self, E, v, dv, time, dt, verbose=0):
-      xp     = self.xp_module
-      
-      #if PROFILE_SOLVERS==1:
-      if xp == cp:
-        cp.cuda.runtime.deviceSynchronize()
-      t1     = perf_counter()
-      num_sh = len(self.op_spec_sp._sph_harm_lm)
-      # Strang-Splitting
-      v           = self.step_bte_x(v, time, dt * 0.5, verbose)
-      v           = self.step_bte_v(E, v, None, time, dt, verbose)
-      v           = self.step_bte_x(v, time + 0.5 * dt, dt * 0.5, verbose)
-      
-      #if PROFILE_SOLVERS==1:
-      if xp == cp:
-        cp.cuda.runtime.deviceSynchronize()
-      t2 = perf_counter()
-      if (verbose==1):
-        print("BTE(vx-op-split) solver cost = %.4E (s)" %(t2-t1), flush=True)
+        xp     = self.xp_module
         
-      return v
+        #if PROFILE_SOLVERS==1:
+        if xp == cp:
+            cp.cuda.runtime.deviceSynchronize()
+        t1     = perf_counter()
+        num_sh = len(self.op_spec_sp._sph_harm_lm)
+        # Strang-Splitting
+        v           = self.step_bte_x(v, time, dt * 0.5, verbose)
+        v           = self.step_bte_v(E, v, None, time, dt, verbose)
+        v           = self.step_bte_x(v, time + 0.5 * dt, dt * 0.5, verbose)
+        
+        #if PROFILE_SOLVERS==1:
+        if xp == cp:
+            cp.cuda.runtime.deviceSynchronize()
+        
+        t2 = perf_counter()
+        
+        if (verbose==1):
+            print("BTE(vx-op-split) solver cost = %.4E (s)" %(t2-t1), flush=True)
+            
+        return v
     
     def normalize_edf(self, v):
-      xp    = self.xp_module
-      v_lm  = self.op_po2sh @ v
-      
-      # normalization of the distribution function before computing the reaction rates
-      mm_fac                   = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
-      mm_op                    = self.op_mass
-      c_gamma                  = self.c_gamma
-      vth                      = self.bs_vth
-      
-      scale                    = xp.dot(mm_op / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
-      return v / scale
+        xp    = self.xp_module
+        v_lm  = self.ords_to_sph(v)
+        
+        # normalization of the distribution function before computing the reaction rates
+        mm_fac                   = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
+        mm_op                    = self.op_mass
+        c_gamma                  = self.c_gamma
+        vth                      = self.bs_vth
+        
+        scale                    = xp.dot(mm_op / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
+        return v / scale
     
     def normalize_edf_lm(self, v_lm):
         xp    = self.xp_module
@@ -1030,30 +1051,22 @@ class bte_1d3v():
     def store_checkpoint(self, v, time, dt, fprefix):
 
         xp  = self.xp_module
-        vsh = self.op_po2sh @ v
+        vsh = self.ords_to_sph(v)
 
         ne  = self.op_mass @ vsh
         Te  = (self.op_temp @ vsh) / ne
 
-        def asnumpy(a, xp):
-           if (xp == np):
-              return a
-           elif (xp == cp):
-              return cp.asnumpy(a)
-           else:
-              raise NotImplementedError
-        
         try:
             with h5py.File("%s.h5"%(fprefix), 'w') as F:
                 F.create_dataset("time[T]"      , data = np.array([time]))
                 F.create_dataset("dt[T]"        , data = np.array([dt]))
-                F.create_dataset("edf"          , data = asnumpy(v))
-                F.create_dataset("ne[]"         , data = asnumpy(ne))
-                F.create_dataset("Te[eV]"       , data = asnumpy(Te))
+                F.create_dataset("edf"          , data = self.asnumpy(v))
+                F.create_dataset("ne[m^-3]"     , data = self.params.np0 * self.asnumpy(ne))
+                F.create_dataset("Te[eV]"       , data = self.asnumpy(Te))
 
                 F.close()
         except:
-           print("checkpoint file write failed at time = %.4E"%(time))
+           print("checkpoint file write failed at time = %.4E"%(time), " : ", "%s.h5"%(fprefix) )
         
         return
 
@@ -1061,13 +1074,13 @@ class bte_1d3v():
         xp = self.xp_module
         try:
             with h5py.File("%s.h5"%(fprefix), 'r') as F:
-                time = xp.array(F["time[T]"]["()"])[0]
-                dt   = xp.array(F["dt[T]"]["()"])[0]
-                v    = xp.array(F["edf"]["()"])
+                time = xp.array(F["time[T]"][()])[0]
+                dt   = xp.array(F["dt[T]"][()])[0]
+                v    = xp.array(F["edf"][()])
+                F.close()
         except:
-           print("Error while reading the checkpoint file")
+           print("Error while reading the checkpoint file", " : ", "%s.h5"%(fprefix) )
 
-        F.close()
         return time, dt, v
              
     def plot(self, E, v, fname, time):
@@ -1080,7 +1093,7 @@ class bte_1d3v():
             else:
                 return a
       
-        vsh = self.op_po2sh @ v
+        vsh = self.ords_to_sph(v)
         ne  = asnumpy(self.op_mass @ vsh)
         Te  = asnumpy(self.op_temp @ vsh)/ne
         
@@ -1207,7 +1220,20 @@ class bte_1d3v():
         fig.savefig(fname)
         plt.close()
     
+    def asnumpy(self, x):
+       if type(x) == cp.ndarray:
+          return cp.asnumpy(x)
+       else:
+          assert type(x) == np.ndarray
+          return x
+    
+    
 
+        
+
+            
+        
+       
 
 
 

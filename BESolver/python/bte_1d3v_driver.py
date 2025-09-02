@@ -24,18 +24,20 @@ if __name__ == "__main__":
     bte     = bte_1d3v_solver.bte_1d3v(args)
     params  = bte.params
 
-    bte.init(params.dt)
     v       = bte.initial_condition(type=0)
 
     if params.use_gpu == 1:
+        print("using GPUs")
         cp.cuda.Device(params.dev_id).use()
         bte.copy_operators_H2D(params.dev_id)
         v             = cp.array(v)
         bte.xp_module = cp
+    
+    bte.init(params.dt)
 
     output_cycle_averaged_qois = True
     xp    = bte.xp_module
-    Ext   = lambda t : xp.ones(params.Np) * 1e3 #* xp.sin(2 * xp.pi * t)
+    Ext   = lambda t : xp.ones(params.Np) * 1e4 #* xp.sin(2 * xp.pi * t)
     dt    = params.dt
     steps = int(params.T / params.dt)+1
 
@@ -58,7 +60,7 @@ if __name__ == "__main__":
     num_sh              = len(bte.op_spec_sp._sph_harm_lm)
 
     def qoi(v, xp):
-        vsh                 = bte.op_po2sh @ v
+        vsh                 = bte.ords_to_sph(v)
         qoi                 = xp.zeros((qoi_idx.LAST, params.Np))
         qoi[qoi_idx.NE_IDX] = bte.op_mass @ vsh
         qoi[qoi_idx.TE_IDX] = (bte.op_temp @ vsh) / qoi[qoi_idx.NE_IDX]
@@ -91,7 +93,11 @@ if __name__ == "__main__":
            bte.store_checkpoint(v, tt, params.dt, "%s_cp_%04d"%(params.fname, ts_idx//io_freq))
            
           
-        v  = bte.step(Ext(tt), v, None, tt, dt, params.verbose)
+        #v  = bte.step(Ext(tt), v, None, tt, dt, params.verbose)
+        v = bte.step_bte_x(v, tt           , 0.5 * dt, verbose=1)
+        v = bte.step_bte_x(v, tt + 0.5 * dt, 0.5 * dt, verbose=1)
+        #v = bte.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
+
         tt+= dt
 
     

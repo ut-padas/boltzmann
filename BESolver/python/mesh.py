@@ -8,6 +8,49 @@ class grid_type():
     CHEBYSHEV_COLLOC = 0
     REGULAR_GRID     = 1
 
+def fd_coefficients(x, order):
+    xp = np
+    I  = xp.eye(x.shape[0])
+    L  = [scipy.interpolate.lagrange(x, I[i]) for i in range(len(x))]
+
+    Vdx = xp.array([L[i].deriv(order)(x) for i in range(len(L))]).T
+    return Vdx
+
+def upwinded_dx(x, dir):
+    xp = np
+    Np = len(x)
+    Dx = xp.zeros((Np, Np))
+    
+    if (dir == "LtoR"):
+        Dx[0, 0:2] = fd_coefficients(x[0:2], 1)[0]
+    
+        for i in range(1, Np):
+            Dx[i, (i-1):(i+1)] = fd_coefficients(x[i-1:i+1], 1)[1]
+    
+    else:
+        assert dir == "RtoL"
+
+        for i in range(0, Np-1):
+            Dx[i, i:(i+2)] = fd_coefficients(x[i:i+2], 1)[0]
+
+        Dx[-1, -2:] = fd_coefficients(x[-2:], 1)[1]
+
+    return Dx
+
+def central_dxx(x):
+    xp = np
+    Np = len(x)
+    Lp = xp.zeros((Np, Np))
+
+    for i in range(1, Np-1):
+        Lp[i, (i-1):(i+2)] = fd_coefficients(x[i-1:i+2], 2)[1]
+
+    Lp[0 , 0:3]       = fd_coefficients(x[0:3], 2)[0]
+    Lp[-1, (Np-3):Np] = fd_coefficients(x[(Np-3):Np], 2)[-1]
+
+    return Lp
+
+
 
 class mesh():
     

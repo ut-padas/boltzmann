@@ -969,6 +969,7 @@ class bte_1d3v():
         # scale functions to have ne, at initial timestep
         Vin = Vin * ne
         return xp.array(Vin)
+        
     
     def initial_condition(self, type=0):
        xp   = np #self.xp_module

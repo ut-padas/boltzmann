@@ -144,6 +144,40 @@ class op():
         r[-1] = 0.0
         return xp.dot(self.LpD_inv, r)
 
+    def interp_op_galerkin(self, xx_grid):
+        Np    = len(xx_grid)
+
+        qx,qw = np.polynomial.chebyshev.chebgauss(Np + 1)
+        v0    = np.polynomial.chebyshev.chebvander(qx, Np-1).T
+        M     = np.einsum("ik,jk->ijk", v0, v0)
+        M     = M @ qw
+
+        qx0,qw0 = np.polynomial.chebyshev.chebgauss(self.Np + 1)
+        u0      = np.polynomial.chebyshev.chebvander(qx0, self.Np-1).T
+        M0      = np.einsum("ik,jk->ijk", u0, u0)
+        M0      = M0 @ qw0
+        Q0      = np.einsum("ik,k->ik", u0, qw0)
+
+        p0      = np.dot(np.polynomial.chebyshev.chebvander(qx0, self.Np-1), self.V0pinv)
+        p0      = np.linalg.solve(M0, Q0 @ p0)
+        p0      = np.polynomial.chebyshev.chebvander(qx, self.Np-1) @ p0
+
+
+        
+
+        #p0    = np.dot(np.polynomial.chebyshev.chebvander(qx, self.Np-1), self.V0pinv)
+        Q     = np.einsum("ik,k->ik", v0, qw)
+        print(v0.shape, Q.shape, p0.shape)
+        P     = np.linalg.solve(M, Q @ p0)
+
+        q0    = np.polynomial.chebyshev.chebvander(xx_grid, Np-1)
+        P     = q0 @ P 
+        return P
+
+
+        
+
+
 def make_dir(dir_name):
     # Check whether the specified path exists or not
     isExist = os.path.exists(dir_name)

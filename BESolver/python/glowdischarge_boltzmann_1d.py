@@ -1216,16 +1216,16 @@ class glow1d_boltzmann():
       
       # print((Vin_adv_x[self.xp_vt_l , 0] ==0).all())
       # print((Vin_adv_x[self.xp_vt_r , -1]==0).all())
-      
+
+      # if (self.args.vtDe > 0):
+      #   Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((self.Nr * self.Nvt, self.Np))
+
       if PROFILE_SOLVERS==1:
         if xp == cp:
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
         print("BTE x-advection cost = %.4E (s)" %(t2-t1), flush=True)
       
-      #Vin_adv_x[Vin_adv_x<0] = 1e-16
-      # if (self.args.vtDe > 0):
-      #   Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * Nvt, Nx))
 
       return Vin_adv_x
       
@@ -3450,6 +3450,28 @@ if __name__ == "__main__":
     uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
   elif(args.bte_with_E == 4):
     uu,vv     = glow_1d.evolve_1dbte_adv_x(u, v, output_cycle_averaged_qois=True)
+  elif(args.bte_with_E == 5):
+    xp        = cp #glow_1d.xp_module 
+    import h5py
+    import scipy.interpolate
+    ff        = h5py.File("1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+    tt_sp     = np.array(ff["time[T]"][()])
+    E_sp      = np.array(ff['E[Vm^-1]'][()])
+    Et_inp    = scipy.interpolate.interp1d(tt_sp, E_sp, axis=0, bounds_error=True)
+
+    dt        = args.cfl
+    
+    def Et(t):
+      idx  = int(np.round(t / dt))
+      cfrq = int(1 / dt)
+      if (t > 0):
+        assert (np.abs(idx * dt - t)/np.abs(t) < 1e-10) , "time = %.14E idx * dt = %.14E"%(t, idx * dt)
+      tta  = (idx % cfrq) * dt
+      return xp.array(Et_inp(tta))
+
+    uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
+
+    
   else:
     uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
     

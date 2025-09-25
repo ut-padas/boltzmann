@@ -1421,7 +1421,8 @@ class glow1d_boltzmann():
         if xp == cp:
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
-        print("fluid solver cost = %.4E (s)" %(t2-t1), flush=True)
+        if (verbose==1):
+          print("fluid solver cost = %.4E (s)" %(t2-t1), flush=True)
         
       return u1
     
@@ -3526,6 +3527,11 @@ if __name__ == "__main__":
     ff        = h5py.File("1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
     tt_sp     = np.array(ff["time[T]"][()])
     E_sp      = np.array(ff['E[Vm^-1]'][()])
+    xx_sp     = np.array(ff['x[-1,1]'][()])
+    if(len(xx_sp)!=glow_1d.Np):
+      print("resampling E field to match BTE grid")
+      E_sp      = scipy.interpolate.interp1d(xx_sp, E_sp, axis=1, bounds_error=True)(glow_1d.xp)
+
     Et_inp    = scipy.interpolate.interp1d(tt_sp, E_sp, axis=0, bounds_error=True)
 
     dt        = args.cfl

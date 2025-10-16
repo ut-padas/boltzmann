@@ -24,6 +24,7 @@ import toml
 import argparse
 import h5py
 import scipy.optimize
+import rawkernel as cp_rk
 
 PROFILE_SOLVERS=1
 
@@ -34,9 +35,9 @@ except:
     print("Cupy module not found !")
     #raise ModuleNotFoundError
 
-class adv_xtype():
-    CHEB   = 0 
-    UPW_FD = 1
+class bte_xspace_adv_type():
+    USE_BE_CHEB   = 0 
+    USE_BE_UPW_FD = 1
 
 class params():
     def __init__(self, par_file):
@@ -138,6 +139,8 @@ class bte_1d3v():
         self.me            = scipy.constants.electron_mass
         self.kB            = scipy.constants.Boltzmann
         self.c_gamma       = np.sqrt(2 * (self.qe/ self.me))
+        self.xadv_bw       = 1
+        self.xspace_adv_type = self.params.xadv_type
         
         Nvt                = self.params.Nvt
         if (self.params.xgrid_type == "chebyshev-collocation"):
@@ -619,46 +622,68 @@ class bte_1d3v():
         self.adv_setup_dt = dt 
         #assert xp == np
         
-        self.bte_x_shift      = xp.zeros((self.params.Nr+1, self.params.Nvt, self.params.Np, self.params.Np))
-        #self.bte_x_shift_rmat = xp.zeros((self.params.Nr+1, self.params.Nvt, self.params.Np, self.params.Np))
+        Nr  = self.params.Nr+1
+        Nvt = self.params.Nvt
+        Nx  = self.params.Np 
 
-        if (self.params.xadv_type == adv_xtype.CHEB):
-            DpL        = xp.zeros((self.params.Np, self.params.Np))
-            DpR        = xp.zeros((self.params.Np, self.params.Np))
+        assert Nr == self.op_spec_sp._p + 1
+        assert Nvt == len(self.xp_vt)
+        assert Nx == len(self.xp)
 
+        if (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+            DpL        = xp.zeros((Nx, Nx))
+            DpR        = xp.zeros((Nx, Nx))
+            
             DpL[1:,:]  = self.Dp[1:,:]
             DpR[:-1,:] = self.Dp[:-1,:]
 
-            print("using chebyshev pseudo-spectral")
+        elif (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+            DpL        = xp.zeros((Nx, Nx))
+            DpR        = xp.zeros((Nx, Nx))
 
-        elif (self.params.xadv_type == adv_xtype.UPW_FD):
-            DpL         = xp.zeros((self.params.Np, self.params.Np))
-            DpR         = xp.zeros((self.params.Np, self.params.Np))
-
-            DpL[1:,:]   = xp.array(mesh.upwinded_dx(self.xp, "LtoR"))[1: ,:]
-            DpR[:-1, :] = xp.array(mesh.upwinded_dx(self.xp, "RtoL"))[:-1,:]
-
-            print("using upwinded finite differences")
-
+            DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, "LtoR"))[1:,:]
+            DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, "RtoL"))[:-1,:]
+        
         else:
             raise NotImplementedError
 
         f1 = 1.0
         f2 = 1-f1
 
-        for j in range(self.params.Nvt):
-            if (self.xp_vt[j] <= 0.5 * xp.pi):
-                for i in range(self.params.Nr+1):
-                    self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
-                    #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+        if (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+            self.bte_x_shift      = xp.zeros((Nr, Nvt, Nx, Nx))
+            #self.bte_x_shift_rmat = xp.zeros((Nr, Nvt, Nx, Nx))
+      
+            for j in range(Nvt):
+                if (self.xp_vt[j] <= 0.5 * xp.pi):
+                    for i in range(Nr):
+                        self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+                        #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
             else:
-                for i in range(self.params.Nr+1):
+                for i in range(Nr):
                     self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
                     #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+            
+            self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
+
+        elif (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+            self.bte_x_shift_diag    = xp.zeros((Nr, Nvt, Nx))
+            self.bte_x_shift_sdiag   = xp.zeros((Nr, Nvt, Nx-1))
         
-        #self.tmp1        = self.bte_x_shift   
-        self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
-        #self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
+            for j in range(Nvt):
+                if (self.xp_vt[j] <= 0.5 * xp.pi):
+                    for i in range(Nr):
+                        self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=0)
+                        self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=-1)
+              
+                else:
+                    for i in range(Nr):
+                        self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=0)
+                        self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=1)
+              
+        else:
+            raise NotImplementedError
+
         
         # adv_mat = cp.asnumpy(self.bte_x_shift)
         # v1 = -self.xp**2 + 1.2
@@ -746,20 +771,50 @@ class bte_1d3v():
         Nvt       = self.params.Nvt
         Nx        = self.params.Np
 
-        Vin       = v.reshape((Nr, self.params.Nvt , self.params.Np)).reshape(Nr, self.params.Nvt * self.params.Np)
-        Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, self.params.Nvt, self.params.Np)).reshape((Nr * self.params.Nvt , self.params.Np))
+        Vin       = v.reshape((Nr, Nvt , Nx)).reshape(Nr, Nvt * Nx)
+        Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, Nvt, Nx)).reshape((Nr * Nvt , Nx))
         
         #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((Nr, self.params.Nvt, self.params.Np))).reshape((Nr*self.params.Nvt, self.params.Np)) 
         # enforce rhs BCs
         Vin[self.xp_vt_l, 0]  = 0.0
         Vin[self.xp_vt_r, -1] = 0.0
-        
-        Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, self.params.Nvt, self.params.Np)))
+
+        if(self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+            Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, Nvt, Nx)))
+      
+        elif(self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+            z         = Vin.reshape((Nr, Nvt, Nx))
+            Vin_adv_x = xp.zeros_like(z)
+            idx_lr    = self.xp_vt <= 0.5 * xp.pi
+            idx_rl    = self.xp_vt  > 0.5 * xp.pi
+
+            if xp == cp:
+                Vin_adv_x[:, idx_lr] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_lr],
+                                                                self.bte_x_shift_sdiag[:, idx_lr], z[:, idx_lr], lower=True)
+                
+                Vin_adv_x[:, idx_rl] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_rl],
+                                                                self.bte_x_shift_sdiag[:, idx_rl], z[:, idx_rl], lower=False)
+            else:
+                raise NotImplementedError
+            
+            # for j in range(self.Nvt):
+            #   if (self.xp_vt[j] <= 0.5 * xp.pi):
+            #     for i in range(Nr):
+            #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=True)
+            #   else:
+            #     for i in range(Nr):
+            #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=False)
+        else:
+            raise NotImplementedError
+
         Vin_adv_x  = Vin_adv_x.reshape((Nr, self.params.Nvt *  self.params.Np))
         Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((Nr , self.params.Nvt, self.params.Np)).reshape((Nr * self.params.Nvt, self.params.Np))
         
         # print((Vin_adv_x[self.xp_vt_l , 0] ==0).all())
         # print((Vin_adv_x[self.xp_vt_r , -1]==0).all())
+
+        # if (self.params.vtDe > 0):
+        #     Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * Nvt, Nx))
         
         if PROFILE_SOLVERS==1:
             if xp == cp:
@@ -767,10 +822,6 @@ class bte_1d3v():
             t2 = perf_counter()
             if (verbose):
                 print("time: [%.4E T] -- BTE x-advection cost = %.4E (s)" %(time, t2-t1), flush=True)
-        
-        #Vin_adv_x[Vin_adv_x<0] = 1e-16
-        if (self.params.vtDe > 0):
-            Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * Nvt, Nx))
         
         return Vin_adv_x
     
@@ -970,7 +1021,6 @@ class bte_1d3v():
         Vin = Vin * ne
         return xp.array(Vin)
         
-    
     def initial_condition(self, type=0):
        xp   = np #self.xp_module
        assert xp == np

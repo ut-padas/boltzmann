@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     output_cycle_averaged_qois = True
     xp    = bte.xp_module
-    Ext   = lambda t : xp.ones(params.Np) * 1e4 #* xp.sin(2 * xp.pi * t)
+    Ext   = lambda t : xp.ones(params.Np) * 1e4 * xp.sin(2 * xp.pi * t)
     dt    = params.dt
     steps = int(params.T / params.dt)+1
 
@@ -94,11 +94,12 @@ if __name__ == "__main__":
            
           
         #v  = bte.step(Ext(tt), v, None, tt, dt, params.verbose)
-        v = bte.step_bte_x(v, tt           , 0.5 * dt, verbose=1)
-        v = bte.step_bte_x(v, tt + 0.5 * dt, 0.5 * dt, verbose=1)
-        #v = bte.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
+        #v = bte.step_bte_x(v, tt           , 0.5 * dt, verbose=1)
+        #v = bte.step_bte_x(v, tt + 0.5 * dt, 0.5 * dt, verbose=1)
+        v = bte.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
+        tt += 0.5 * dt
 
-        tt+= dt
+        #tt+= dt
 
     
 

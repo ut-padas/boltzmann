@@ -64,15 +64,22 @@ class gm_bte_hybrid_solver():
         vth                 = self.bte_solver.bs_vth
         c_gamma             = self.bte_solver.c_gamma
         ev0                 = self.bte_params.ev_max
-
+        ev1                 = self.bte_params.ev_max
+        ev2                 = self.bte_params.ev_max
+        
         self.mfuncs         = [ lambda vr, vt, vp : np.ones_like(vr) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1),
                                 lambda vr, vt, vp : vth**2 * vr **2 * (2/3/c_gamma**2) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1)#np.exp(-(vr)**2),
                                 #lambda vr, vt, vp : vth    * vr * np.cos(vt),
                                 ]
         
-        self.mfuncs_Jx      = [ lambda vr, vt, vp:  vth * vr * np.cos(vt)  * np.ones_like(vr) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1), 
-                                lambda vr, vt, vp:  vth * vr * np.cos(vt)  * vth**2 * vr **2 * (2/3/c_gamma**2) * np.heaviside((ev0 - (vr * vth / c_gamma)**2), 1),
+        self.mfuncs_Jx      = [ lambda vr, vt, vp:  vth * vr * np.cos(vt)  * np.ones_like(vr) * np.heaviside((ev1 - (vr * vth / c_gamma)**2), 1), 
+                                lambda vr, vt, vp:  vth * vr * np.cos(vt)  * vth**2 * vr **2 * (2/3/c_gamma**2) * np.heaviside((ev1 - (vr * vth / c_gamma)**2), 1),
                                 #lambda vr, vt, vp:  vth * vr * np.cos(vt)  * vth    * vr * np.cos(vt),
+                                ]
+        
+        self.mfuncs_Sx      = [ lambda vr, vt, vp : np.ones_like(vr) * np.heaviside((ev2 - (vr * vth / c_gamma)**2), 1),
+                                lambda vr, vt, vp : vth**2 * vr **2 * (2/3/c_gamma**2) * np.heaviside((ev2 - (vr * vth / c_gamma)**2), 1)#np.exp(-(vr)**2),
+                                #lambda vr, vt, vp : vth    * vr * np.cos(vt),
                                 ]
         
         self.mfuncs_names   = [r"$n_e$", r"$T_e$"] 
@@ -80,10 +87,12 @@ class gm_bte_hybrid_solver():
         
         self.mfuncs_ops_ords    = bte_utils.assemble_moment_ops_ords(self.spec_sp, self.vt, self.vt_w, self.num_vr, self.num_vp, self.mfuncs, scale=1.0)
         self.mfuncs_Jx_ops_ords = bte_utils.assemble_moment_ops_ords(self.spec_sp, self.vt, self.vt_w, self.num_vr, self.num_vp, self.mfuncs_Jx, scale=1.0)
+        self.mfuncs_Sx_ops_ords = bte_utils.assemble_moment_ops_ords(self.spec_sp, self.vt, self.vt_w, self.num_vr, self.num_vp, self.mfuncs_Sx, scale=1.0)
 
         self.I_Nx           = xp.eye(self.bte_params.Np)
         self.Dp             = self.bte_solver.Dp
         self.Dp2            = self.bte_solver.mesh.D2[0]
+        self.Dp4            = self.bte_solver.mesh.D4[0]
 
     def host_to_device(self, dev_id):
         with cp.cuda.Device(dev_id):
@@ -133,6 +142,7 @@ class gm_bte_hybrid_solver():
         print("Warmup cycles begin")
 
         cycle_freq = (int) (1/dt)
+        io_freq    = (int) (0.1/dt)
         vnp        = bte.asnumpy(v)
         m0         = self.mfuncs_ops_ords @ vnp
         for tidx in range(warmup_cycles * (int) (1/dt) + 1):
@@ -145,6 +155,9 @@ class gm_bte_hybrid_solver():
                 b1  = np.linalg.norm(m[1]/m[0] - m0[1]/m0[0]) / np.linalg.norm(m0[1]/m0[0])
                 print("warmup cycle = %04d ne rtol = %.4E Te rtol = %.4E"%(tidx//cycle_freq, a1, b1))
                 m0  = np.copy(m)
+
+            if (tidx % io_freq == 0):
+                bte.plot(Ext(tt), v, "%s_1d3v_%04d.png"%(params.fname, tidx //io_freq), tt)
 
             if(tidx == warmup_cycles * (int) (1/dt)):
                 break
@@ -175,18 +188,59 @@ class gm_bte_hybrid_solver():
                 m[0, idx] = self.mfuncs_ops_ords @ vnp
                 m[1, idx] = self.mfuncs_Jx_ops_ords @ vnp
 
-                if (self.xp_module == np):
-                    fv        = bte.asnumpy(self.bte_vspace_mvec(v, Ext(tt)))
-                else:
-                    fv        = self.bte_vspace_mvec(v, Ext(tt))
-                
-                # fvp             = self.bte_solver.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
-                # fv              = (fvp - v)/dt
                 # if (self.xp_module == np):
-                #     fv          = self.bte_solver.asnumpy(fv)
+                #     fv        = bte.asnumpy(self.bte_vspace_mvec(v, Ext(tt)))
+                # else:
+                #     fv        = self.bte_vspace_mvec(v, Ext(tt))
                 
-                m[2, idx] = self.mfuncs_ops_ords @ fv
+                # # # fvp             = self.bte_solver.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
+                # # # fv              = (fvp - v)/dt
+                # # # if (self.xp_module == np):
+                # # #     fv          = self.bte_solver.asnumpy(fv)
+                
+                # m[2, idx] = self.mfuncs_ops_ords @ fv
+
+                if (self.xp_module == np):
+                    fv        = bte.asnumpy(self.bte_vspace_mvec(v, 0 * Ext(tt)))
+                else:
+                    fv        = self.bte_vspace_mvec(v, 0 * Ext(tt))
+
+                m[2, idx, 0] = self.mfuncs_ops_ords[0] @ fv
+                m[2, idx, 1] = (self.mfuncs_ops_ords[1] @ fv) - params.tau * ((2/3) * bte.asnumpy(Ext(tt)) * m[1, idx, 0]) 
+
+                # a1      = - params.tau * ((2/3) * bte.asnumpy(Ext(tt)) * m[1, idx, 0])
+                # xp_bte  = bte.xp_module
+                
+                # a2      = params.tau * self.mfuncs_Sx_ops_ords[1] @ (bte.asnumpy( bte.op_psh2o @ (Ext(tt) * xp_bte.dot(bte.op_adv_v,  bte.op_po2sh @ v))) )
+                
+                # # #print(a1, a2, np.linalg.norm(a1-a2)/np.linalg.norm(a2))
+                # # plt.plot(bte.xp, a1, label=r"a1")
+                # # plt.plot(bte.xp, a2, label=r"a2")
+                # # plt.legend()
+                # # plt.grid(visible=True)
+                # # plt.show()
+                # # plt.close()
+
+                # a3      = (self.mfuncs_Sx_ops_ords[1] @ fv)
+                # # xp_bte  = bte.xp_module
+                
+                # a4      = -(1/3) * (15.76) * (self.mfuncs_Sx_ops_ords[0] @ fv)
+                
+                # # #print(a1, a2, np.linalg.norm(a1-a2)/np.linalg.norm(a2))
+                # plt.plot(bte.xp, a1, label=r"a1")
+                # plt.plot(bte.xp, a2, label=r"a2")
+                # plt.plot(bte.xp, a3, label=r"a3")
+                # plt.plot(bte.xp, a4, label=r"a4")
+                # plt.legend()
+                # plt.grid(visible=True)
+                # plt.show()
+                # plt.close()
+
                 vT        = xp.copy(vnp)
+            
+            if (tidx % io_freq == 0 ):
+                idx = warmup_cycles * (cycle_freq//io_freq) +  tidx //io_freq
+                bte.plot(Ext(tt), v, "%s_1d3v_%04d.png"%(params.fname, idx), tt)
             
             v   = bte.step(Ext(tt), v, None, tt, dt, verbose=int(tidx%100==0))
 
@@ -208,8 +262,24 @@ class gm_bte_hybrid_solver():
         # jx[idx] = m[1][idx] / m[0][idx]
         # sx[idx] = m[2][idx] / m[0][idx]
 
+        #jxm_max   = xp.max(xp.abs(m[1]), axis=(1, 2)) 
+        #m[1, :, 0]
+        
+        # for i in range(num_m):
+        #     jxm = m[1,:, i, :]
+        #     a1  = xp.max(xp.abs(jxm), axis=1).reshape((-1, 1))
+        #     jxm[xp.abs(jxm) < a1 * 1e-3 ] = 1e-15
+
+        #     sxm = m[2,:, i, :]
+        #     a1  = xp.max(xp.abs(sxm), axis=1).reshape((-1, 1))
+        #     sxm[xp.abs(sxm) < a1 * 1e-3 ] = 0.0#1e-15
+        
+
+
         jx = m[1] / m[0]
         sx = m[2] / m[0]
+
+        
 
         tt                = xp.linspace(0, 1, num_t + 1)[:-1]
         xx                = self.bte_solver.xp
@@ -222,7 +292,7 @@ class gm_bte_hybrid_solver():
         #jx[:, 0, -1]      = 0.0
         #jx[:, 1, -1]      = 0.0
 
-        use_flux_smooth       = True
+        use_flux_smooth       = False
         if (use_flux_smooth):
             sigma             = 1e-1
             Lp                = gm_bte.I_Nx - sigma * (params.tau/params.L**2) * gm_bte.Dp2
@@ -237,12 +307,82 @@ class gm_bte_hybrid_solver():
             sx                = sx_s
 
 
-            for i in range(num_m):
-                jxt               = fft_filtering(tt, jx[:, i, :], num_t//4, xp)
-                sxt               = fft_filtering(tt, sx[:, i, :], num_t//4, xp)
+            # for i in range(num_m):
+            #     jxt               = fft_filtering(tt, jx[:, i, :], num_t//4, xp)
+            #     sxt               = fft_filtering(tt, sx[:, i, :], num_t//4, xp)
 
-                jx[:, i, :]       = xp.array([jxt(t) for t in tt]).reshape((num_t, params.Np))
-                sx[:, i, :]       = xp.array([sxt(t) for t in tt]).reshape((num_t, params.Np))
+            #     jx[:, i, :]       = xp.array([jxt(t) for t in tt]).reshape((num_t, params.Np))
+            #     sx[:, i, :]       = xp.array([sxt(t) for t in tt]).reshape((num_t, params.Np))
+
+
+        for tidx in range(num_t):
+            if (tidx % (100) == 0):
+                plt.figure(figsize=(12, 4 * num_m), dpi=200)
+                for i in range(num_m):
+                    plt.subplot(3, num_m, 0 * num_m + i + 1)
+                    plt.semilogy(bte.xp, m[0, tidx, i], label="%s"%(self.mfuncs_names[i]))
+                    
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$m$")
+                    plt.grid(visible=True)
+                    plt.legend()
+
+                for i in range(num_m):
+                    plt.subplot(3, num_m, 1 * num_m + i + 1)
+                    plt.semilogy(bte.xp, np.abs(m[1, tidx, i]), label="%s"%(self.mfuncs_names[i]))
+                
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$J(m)$")
+                    plt.grid(visible=True)
+                    plt.legend()
+
+                for i in range(num_m):
+                    plt.subplot(3, num_m, 2 * num_m + i + 1)
+                    plt.semilogy(bte.xp, m[2, tidx, i], label="%s"%(self.mfuncs_names[i]))
+                
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$S(m)$")
+                    plt.grid(visible=True)
+                    plt.legend()
+                
+                plt.tight_layout()
+                plt.savefig("%s_flux_snapshot_%04d.png"%(params.fname, tidx))
+                plt.close()
+
+                plt.figure(figsize=(12, 4 * num_m), dpi=200)
+                for i in range(num_m):
+                    plt.subplot(3, num_m, 0 * num_m + i + 1)
+                    plt.plot(bte.xp, m[0, tidx, i], label="%s"%(self.mfuncs_names[i]))
+                
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$m$")
+                    plt.grid(visible=True)
+                    plt.legend()
+
+                for i in range(num_m):
+                    plt.subplot(3, num_m, 1 * num_m + i + 1)
+                    plt.plot(bte.xp, m[1, tidx, i]/m[0, tidx, i], label="%s"%(self.mfuncs_names[i]))
+                    plt.plot(bte.xp, jx[tidx, i],              '--', label="%s-smoothed"%(self.mfuncs_names[i]))
+                
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$J(m)$")
+                    plt.grid(visible=True)
+                    plt.legend()
+
+                for i in range(num_m):
+                    plt.subplot(3, num_m, 2 * num_m + i + 1)
+                    plt.plot(bte.xp, m[2, tidx, i]/m[0, tidx, i], label="%s"%(self.mfuncs_names[i]))
+                    plt.plot(bte.xp, sx[tidx, i],              '--', label="%s-smoothed"%(self.mfuncs_names[i]))
+                
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$S(m)$")
+                    plt.grid(visible=True)
+                    plt.legend()
+                
+                plt.tight_layout()
+                plt.savefig("%s_flux_snapshot_normalized_%04d.png"%(params.fname, tidx))
+                plt.close()
+
 
 
         plt.figure(figsize=(12, 4 * num_m), dpi=200)
@@ -310,9 +450,14 @@ class gm_bte_hybrid_solver():
         num_m = len(self.mfuncs)
         Imat  = self.I_Nx
         Dp    = self.Dp
+        Dp2d  = xp.copy(self.Dp2)
+
+        Dp2d[0  , :] = 0 
+        Dp2d[-1 , :] = 0 
+        
 
         mp    = xp.zeros_like(m)
-        r     = 0.5
+        r     = 0.0
 
         assert time == tidx * dt, "time = %.4E tidx * dt = %.4E"%(time, tidx * dt)
         cycle_freq = int(1/dt)
@@ -324,6 +469,9 @@ class gm_bte_hybrid_solver():
             jxm  = jxt[i][(tidx) % cycle_freq]
             sxm  = sxt[i][(tidx) % cycle_freq]
             
+
+            jxp  = 0.5 * (jxp + jxm)
+            sxp  = 0.5 * (sxp + sxm)
             
             # a2   = (Dp @ jxm) * m[i] + (Dp @ m[i]) * jxm
             # a1   = ((Dp @ jxm) * Imat +(xp.diag(jxm) @ Dp)) @ m[i] 
@@ -332,11 +480,17 @@ class gm_bte_hybrid_solver():
             # Lmat = Imat + (1-r) * dt * (-sxp * Imat + (params.tau/params.L) * (Dp @ xp.diag(jxp)))
             # bvec = m[i] + r * dt * (sxm * m[i] - (params.tau/params.L) * (Dp @ (jxm * m[i])))
             
-            Lmat = Imat + (1-r) * dt * (-sxp * Imat + (params.tau/params.L) * ((Dp @ jxp) * Imat + xp.diag(jxp) @ Dp))
+            Lmat = Imat + (1-r) * dt * (-sxp * Imat + (params.tau/params.L) * ((Dp @ jxp) * Imat + xp.diag(jxp) @ Dp)) - (1-r) * dt * (params.tau / params.L**2) *  5e1 * Dp2d
             bvec = m[i] + r * dt * (sxm * m[i] - (params.tau/params.L) * ((Dp @ jxm) * m[i] + (Dp @ m[i]) * jxm))
             #bvec = m[i] + r * dt * (sxm * m[i] - (params.tau/params.L) * (Dp @ (jxm * m[i])))
 
             mp[i]= xp.linalg.solve(Lmat, bvec)
+
+            # if (np.any(mp[i] < 0)==True):
+            #     print(mp[i][mp[i] < 0])
+            #     print(i, time, dt, tidx)
+                #sys.exit(0)
+
 
         return mp
 
@@ -678,6 +832,9 @@ if __name__ == "__main__":
     parser.add_argument("-maxiter",  "--maxiter"                        , help="hybrid solver maxiter", type=int, default=1000)
     parser.add_argument("-hybrid_solver_freq",  "--hybrid_solver_freq"  , help="hybrid solver freq"   , type=int, default=5)
     parser.add_argument("-plot_mode","--plot_mode"                      , help="plot_mode"            , type=int, default=0)
+    parser.add_argument("-rbte_with_gm","--rbte_with_gm"                , help="run bte solver with GM", type=int, default=0)
+    parser.add_argument("-staticE","--staticE"                          , help="static E field", type=int, default=0)
+    parser.add_argument("-gm_restore", "--gm_restore"                   , help="restore from gm_bte solver", type=str, default="")
     
     
     args    = parser.parse_args()
@@ -696,7 +853,7 @@ if __name__ == "__main__":
         Te_bte   = m_bte[1]/m_bte[0]
         ff.close()
 
-        cp_idx = 13
+        cp_idx = 29
         ff     = h5py.File("%s_gm_cp_%04d.h5"%(params.fname, cp_idx))
         m_gm   = np.array(ff["m"][()])
         ne_gm  = m_gm[0] #np.array(ff["ne[m^-3]"][()])
@@ -731,13 +888,6 @@ if __name__ == "__main__":
 
         sys.exit(0)
 
-
-
-
-
-
-
-
     
     if (params.use_gpu == 1):
         import cupy as cp
@@ -757,7 +907,11 @@ if __name__ == "__main__":
     
     ne      = gm_bte.mfuncs_ops_ords[0] @ v
     Te      = (gm_bte.mfuncs_ops_ords[1] @ v)/ne
-    Ext     = lambda t : bte.xp_module.ones(params.Np) * args.E #* bte.xp_module.sin(2 * bte.xp_module.pi * t)
+    if (args.staticE == 1):
+        Ext     = lambda t : bte.xp_module.ones(params.Np) * args.E #* bte.xp_module.sin(2 * bte.xp_module.pi * t)
+    else:
+        Ext     = lambda t : bte.xp_module.array(bte.xp)**3 * args.E * bte.xp_module.sin(2 * bte.xp_module.pi * t) 
+        #Ext     = lambda t :bte.xp_module.ones(params.Np) * args.E * bte.xp_module.sin(2 * bte.xp_module.pi * t)
 
 
     # gm_bte.sample_fluxes_bte1d3v(Ext, xp.asarray(v), params.T, params.dt)
@@ -774,114 +928,118 @@ if __name__ == "__main__":
         
         
     
-
-    run_bte = True
-    
-    # _, _, v           = bte.restore_checkpoint("bte1d3v/E1e3_static_40eV/bte1d3v_0000_cp") 
-    # ne                =  gm_bte.mfuncs_ops_ords[0] @ bte.asnumpy(v)
-    # Te                = (gm_bte.mfuncs_ops_ords[1] @ bte.asnumpy(v))/ne
-
-    rtol    = 1e-3
-    ne      = ne * 1e-4
-    ne0     = gm_bte.xp_module.copy(ne)
-
-    for it in range(0, args.maxiter):
-        ne_tol = gm_bte.xp_module.linalg.norm(ne0 - ne) / gm_bte.xp_module.linalg.norm(ne0)
+    if (args.gm_restore == ""):
+        run_bte = (args.rbte_with_gm == 1)
         
-        if (it > 0):
-            print("it = %04d ne_tol = %.4E"%(it, ne_tol))
-            ne0    = gm_bte.xp_module.copy(ne)
+        # _, _, v           = bte.restore_checkpoint("bte1d3v/E1e3_static_40eV/bte1d3v_0000_cp") 
+        # ne                =  gm_bte.mfuncs_ops_ords[0] @ bte.asnumpy(v)
+        # Te                = (gm_bte.mfuncs_ops_ords[1] @ bte.asnumpy(v))/ne
 
-            if (it > 0 and ne_tol < rtol):
-                print("ne relative change : %.4E"%(ne_tol))
-                break
-        
-        mxt, jxt, sxt, vT , delta_ne, delta_Te = gm_bte.eval_bte(gm_bte.asnumpy(ne), gm_bte.asnumpy(Te), Ext, params.dt, args.wc, it)
-        #bte.store_checkpoint(xp.asarray(vT), 0.0, params.dt, "%s_gmbte_hybrid_cp_%04d"%(params.fname, it))
-        
+        rtol    = 1e-3
+        ne      = ne * 1e-4
+        ne0     = gm_bte.xp_module.copy(ne)
 
-        #Mop               = gm_bte.assemble_cycle_step_op(jxt, sxt, params.dt)
-        gm_dt             = params.dt
-        gm_freq           = int(1/ gm_dt)
-        ncycles           = args.hybrid_solver_freq
-        v                 = xp.asarray(vT) 
-        vnp               = gm_bte.bte_solver.asnumpy(v)
-        m                 = gm_bte.mfuncs_ops_ords @ vnp
-
-        Te0               = m[1]/m[0]
-
-        m0_bte_np         = np.copy(m)
-        m0_np             = np.copy(m)
-        for tidx in range((int)(ncycles/gm_dt) + 1):
+        for it in range(0, args.maxiter):
+            ne_tol = gm_bte.xp_module.linalg.norm(ne0 - ne) / gm_bte.xp_module.linalg.norm(ne0)
             
-            if (tidx % gm_freq ==0):
-                vnp      = gm_bte.bte_solver.asnumpy(v)
-                m_bte    = gm_bte.mfuncs_ops_ords @ vnp
-                m_bte_np = gm_bte.asnumpy(m_bte)
-                m_np     = gm_bte.asnumpy(m)
+            if (it > 0):
+                print("it = %04d ne_tol = %.4E"%(it, ne_tol))
+                ne0    = gm_bte.xp_module.copy(ne)
 
-                a1 = np.linalg.norm(m_bte_np[0] - m0_bte_np[0]) / np.linalg.norm(m0_bte_np[0])
-                b1 = np.linalg.norm(m_np[0] - m0_np[0]) / np.linalg.norm(m0_np[0])
-
-
-                a2 = np.linalg.norm(m_bte_np[1]/m_bte_np[0] - m0_bte_np[1]/m0_bte_np[0]) / np.linalg.norm(m0_bte_np[1]/m0_bte_np[0])
-                b2 = np.linalg.norm(m_np[1]/m_np[0]         - m0_np[1]/m0_np[0]) / np.linalg.norm(m0_np[1]/m0_np[0])
-
-
-                print("it ", it, " cycle = %04d bte ne : (%.4E, %.4E) gm ne : (%.4E, %.4E) | bte Te : (%.4E, %.4E) gm Te : (%.4E, %.4E) | delta_ne (gm): %.4E delta_ne (bte): %.4E delta_Te (gm): %.4E delta_Te (bte): %.4E"%(tidx//gm_freq, np.min(m_bte_np[0]), np.max(m_bte_np[0]),
-                                                                    np.min(m_np[0]), np.max(m_np[0]),
-                                                                    np.min(m_bte_np[1]/m_bte_np[0]), np.max(m_bte_np[1]/m_bte_np[0]),
-                                                                    np.min(m_np[1]/m_np[0]), np.max(m_np[1]/m_np[0]),
-                                                                    b1, a1, b2, a2))
-                
-
-                m0_bte_np = np.copy(m_bte_np)
-                m0_np     = np.copy(m_np)
-
-                xx = bte.xp
-                plt.figure(figsize=(12, 4), dpi=200)
-                plt.subplot(1, 2, 1)
-                
-                if run_bte==True:
-                    plt.plot(xx, params.np0 * m_bte_np[0]       , label="BTE");
-                
-                plt.plot(xx, params.np0 * m_np[0]           , label="GM");
-                plt.legend() 
-                plt.xlabel(r"$\hat{x}$")
-                plt.ylabel(r"$n_e[m^{-3}]$")
-                plt.grid(visible=True)
-
-                plt.subplot(1, 2, 2)
-                
-                if run_bte==True:
-                    plt.plot(xx, m_bte_np[1]/m_bte_np[0], label="BTE");
-                
-                plt.plot(xx, m_np[1]/m_np[0]        , label="GM");
-                plt.legend()
-                plt.xlabel(r"$\hat{x}$")
-                plt.ylabel(r"$T_e [eV]$")
-                plt.grid(visible=True)
-
-                plt.suptitle("t = %.2E"%(tidx * gm_dt))
-                plt.tight_layout()
-                plt.savefig("%s_gm_bte_iter_%04d_%04d.png"%(params.fname, it, tidx//gm_freq))
-                plt.close()
-
-                #m = gm_bte.xp_module.einsum("ijk,ik->ij", Mop, m)
+                if (it > 0 and ne_tol < rtol):
+                    print("ne relative change : %.4E"%(ne_tol))
+                    break
             
-            if (tidx == (int)(ncycles/gm_dt)):
-                break
+            mxt, jxt, sxt, vT , delta_ne, delta_Te = gm_bte.eval_bte(gm_bte.asnumpy(ne), gm_bte.asnumpy(Te), Ext, params.dt, args.wc, it)
+            #bte.store_checkpoint(xp.asarray(vT), 0.0, params.dt, "%s_gmbte_hybrid_cp_%04d"%(params.fname, it))
+            
 
-            m   = gm_bte.step(m, jxt, sxt, tidx * gm_dt, gm_dt, tidx)
-            # #m   = (LpD @ m.T).T
-            if run_bte==True:
-                v   = gm_bte.bte_solver.step(Ext(tidx * gm_dt), v, None, tidx * gm_dt, gm_dt, verbose=0)
+            #Mop               = gm_bte.assemble_cycle_step_op(jxt, sxt, params.dt)
+            gm_dt             = params.dt
+            gm_freq           = int(1/ gm_dt)
+            ncycles           = args.hybrid_solver_freq
+            v                 = xp.asarray(vT) 
+            vnp               = gm_bte.bte_solver.asnumpy(v)
+            m                 = gm_bte.mfuncs_ops_ords @ vnp
+
+            Te0               = m[1]/m[0]
+
+            m0_bte_np         = np.copy(m)
+            m0_np             = np.copy(m)
+            for tidx in range((int)(ncycles/gm_dt) + 1):
                 
+                if (tidx % gm_freq ==0):
+                    vnp      = gm_bte.bte_solver.asnumpy(v)
+                    m_bte    = gm_bte.mfuncs_ops_ords @ vnp
+                    m_bte_np = gm_bte.asnumpy(m_bte)
+                    m_np     = gm_bte.asnumpy(m)
 
-        ne, Te = m[0], m[1]/m[0]
-        gm_bte.store_checkpoint(m, 0.0, params.dt, "%s_gm_cp_%04d"%(params.fname, it))
-        #Te     = Te0 #gm_bte.xp_module.ones_like(Te) * params.Te
+                    a1 = np.linalg.norm(m_bte_np[0] - m0_bte_np[0]) / np.linalg.norm(m0_bte_np[0])
+                    b1 = np.linalg.norm(m_np[0] - m0_np[0]) / np.linalg.norm(m0_np[0])
 
+
+                    a2 = np.linalg.norm(m_bte_np[1]/m_bte_np[0] - m0_bte_np[1]/m0_bte_np[0]) / np.linalg.norm(m0_bte_np[1]/m0_bte_np[0])
+                    b2 = np.linalg.norm(m_np[1]/m_np[0]         - m0_np[1]/m0_np[0]) / np.linalg.norm(m0_np[1]/m0_np[0])
+
+
+                    print("it ", it, " cycle = %04d bte ne : (%.4E, %.4E) gm ne : (%.4E, %.4E) | bte Te : (%.4E, %.4E) gm Te : (%.4E, %.4E) | delta_ne (gm): %.4E delta_ne (bte): %.4E delta_Te (gm): %.4E delta_Te (bte): %.4E"%(tidx//gm_freq, np.min(m_bte_np[0]), np.max(m_bte_np[0]),
+                                                                        np.min(m_np[0]), np.max(m_np[0]),
+                                                                        np.min(m_bte_np[1]/m_bte_np[0]), np.max(m_bte_np[1]/m_bte_np[0]),
+                                                                        np.min(m_np[1]/m_np[0]), np.max(m_np[1]/m_np[0]),
+                                                                        b1, a1, b2, a2))
+                    
+
+                    m0_bte_np = np.copy(m_bte_np)
+                    m0_np     = np.copy(m_np)
+
+                    xx = bte.xp
+                    plt.figure(figsize=(12, 4), dpi=200)
+                    plt.subplot(1, 2, 1)
+                    
+                    if run_bte==True:
+                        plt.plot(xx, params.np0 * m_bte_np[0]       , label="BTE");
+                    
+                    plt.plot(xx, params.np0 * m_np[0]           , label="GM");
+                    plt.legend() 
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$n_e[m^{-3}]$")
+                    plt.grid(visible=True)
+
+                    plt.subplot(1, 2, 2)
+                    
+                    if run_bte==True:
+                        plt.plot(xx, m_bte_np[1]/m_bte_np[0], label="BTE");
+                    
+                    plt.plot(xx, m_np[1]/m_np[0]        , label="GM");
+                    plt.legend()
+                    plt.xlabel(r"$\hat{x}$")
+                    plt.ylabel(r"$T_e [eV]$")
+                    plt.grid(visible=True)
+
+                    plt.suptitle("t = %.2E"%(tidx * gm_dt))
+                    plt.tight_layout()
+                    plt.savefig("%s_gm_bte_iter_%04d_%04d.png"%(params.fname, it, tidx//gm_freq))
+                    plt.close()
+
+                    #m = gm_bte.xp_module.einsum("ijk,ik->ij", Mop, m)
+                
+                if (tidx == (int)(ncycles/gm_dt)):
+                    break
+
+                m   = gm_bte.step(m, jxt, sxt, tidx * gm_dt, gm_dt, tidx)
+                # #m   = (LpD @ m.T).T
+                if run_bte==True:
+                    v   = gm_bte.bte_solver.step(Ext(tidx * gm_dt), v, None, tidx * gm_dt, gm_dt, verbose=0)
+                    
+
+            ne, Te = m[0], m[1]/m[0]
+            gm_bte.store_checkpoint(m, 0.0, params.dt, "%s_gm_cp_%04d"%(params.fname, it))
+            #Te     = Te0 #gm_bte.xp_module.ones_like(Te) * params.Te
+
+    else:
+        _, _, m = gm_bte.restore_checkpoint(args.gm_restore)
+        ne      = m[0]
+        Te      = m[1]/ne
 
     v       = bte.maxwellian_eedf(ne, Te)
 

@@ -9,6 +9,8 @@ import enum
 from scipy.special import sph_harm
 import enum
 from advection_operator_spherical_polys import *
+import mesh 
+import scipy.constants
 
 class QuadMode(enum.Enum):
     GMX     = 0 # default
@@ -51,6 +53,9 @@ class SpectralExpansionSpherical:
 
     def _sph_harm_real(self, l, m, theta, phi):
         # in python's sph_harm phi and theta are swapped
+        # theta = np.array(theta)
+        # phi   = np.array(phi)
+        # assert theta.shape == phi.shape, "theta and phi must have the same shape"
         Y = sph_harm(abs(m), l, phi, theta)
         if m < 0:
             Y = np.sqrt(2) * (-1)**m * Y.imag
@@ -60,6 +65,32 @@ class SpectralExpansionSpherical:
             Y = Y.real
 
         return Y 
+    
+    def _hemi_sph_harm_real(self, l, m, theta, phi, mode):
+        # theta = np.array(theta)
+        # phi   = np.array(phi)
+        # assert theta.shape == phi.shape, "theta and phi must have the same shape"
+        Y = np.zeros_like(theta)
+        t = np.zeros_like(theta)
+        if mode=="+":
+            #assert (theta <= np.pi/2).all() and (theta >= 0).all(), "theta out of range for north pole hemisphere"
+            idx      = np.logical_and(theta <= np.pi/2, theta >= 0)
+            t[idx]   = np.arccos(2 * np.cos(theta[idx]) - 1)
+        else:
+            assert mode=="-", "invalid hemisphere mode"
+            idx      = np.logical_and(theta >= np.pi/2, theta <= np.pi)
+            t[idx]   = np.arccos(2 * np.cos(theta[idx]) + 1)
+            
+        
+        Ysh  = sph_harm(abs(m), l, phi[idx], t[idx])
+        if m < 0:
+            Y[idx] = np.sqrt(2) * (-1)**m * Ysh.imag
+        elif m > 0:
+            Y[idx] = np.sqrt(2) * (-1)**m * Ysh.real
+        else:
+            Y[idx] = Ysh.real
+
+        return np.sqrt(2) * Y 
     
     def basis_eval_full(self,r,theta,phi,k,l,m):
         """
@@ -284,7 +315,6 @@ class SpectralExpansionSpherical:
             Vq[p, idx_set] = self._r_basis_p[e_i].Pn(p)(v_r[idx_set],l)
         #print(Vq)
         return Vq
-
 
     def Vdq_r(self, v_r, l, d_order=1, scale=1):
         """
@@ -659,3 +689,172 @@ class SpectralExpansionSpherical:
             return diffusion_op
         else:
             raise NotImplementedError
+    
+    def compute_advection_matrix_ordinates(self, xp_vt, use_vt_upwinding=False):
+        """
+        ordinaltes v-space advection operator
+        """
+        assert self.get_radial_basis_type() == basis.BasisType.SPLINES, "only spline basis is implemented for v-advection with ordinates"
+
+        xp                = np
+        Nr                = self._p+1
+        Nvt               = len(xp_vt)
+        
+        sp_order          = self._basis_p._sp_order
+        k_vec             = self._basis_p._t
+        dg_idx            = self._basis_p._dg_idx
+        num_p             = Nr
+
+        def __galerkin_vr__():
+            k_vec    = self._basis_p._t
+            dg_idx   = self._basis_p._dg_idx
+            sp_order = self._basis_p._sp_order
+    
+            [gx, gw] = self._basis_p.Gauss_Pn((sp_order + 8) * self._basis_p._num_knot_intervals)
+            mm1      = np.zeros((num_p, num_p))
+            mm2      = np.zeros((num_p, num_p))
+            
+            assert len(dg_idx) == 2, "DG in vr is not implemented yet"
+
+            for e_id in range(0,len(dg_idx),2):
+                ib=dg_idx[e_id]
+                ie=dg_idx[e_id+1]
+
+                xb=k_vec[ib]
+                xe=k_vec[ie+sp_order+1]
+                
+                idx_set     = np.logical_and(gx>=xb, gx <=xe)
+                gx_e , gw_e = gx[idx_set],gw[idx_set]
+
+                for p in range(ib, ie+1):
+                    k_min   = k_vec[p]
+                    k_max   = k_vec[p + sp_order + 1]
+                    qx_idx  = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                    gmx     = gx_e[qx_idx]
+                    gmw     = gw_e[qx_idx]
+                    b_p     = self.basis_eval_radial(gmx, p, 0)  
+
+                    for k in range(max(ib, p - (sp_order+3) ), min(ie+1, p + (sp_order+3))):
+                        db_k      = self.basis_derivative_eval_radial(gmx, k, 0, 1)
+                        b_k       = self.basis_eval_radial(gmx, k, 0)  
+                        
+                        mm1[p,k]  = np.dot((gmx**2) * b_p * db_k, gmw)
+                        mm2[p,k]  = np.dot((gmx) * b_p * b_k , gmw)
+            
+            return mm1, mm2
+        
+        if (use_vt_upwinding == True):
+            Dvt_LtoR          = xp.asarray(mesh.upwinded_dx(xp_vt, "LtoR"))
+            Dvt_RtoL          = xp.asarray(mesh.upwinded_dx(xp_vt, "RtoL"))
+            
+            DvtEp             = xp.zeros((Nvt, Nvt)) # E > 0
+            DvtEn             = xp.zeros((Nvt, Nvt)) # E < 0
+
+            # DvtEp             = Dvt_LtoR
+            # DvtEn             = Dvt_RtoL
+
+            # note: this is only because, xp_vt grid is [pi, 0] (i.e., decending order)
+            DvtEp       = Dvt_RtoL
+            DvtEn       = Dvt_LtoR
+
+            B, C        = __galerkin_vr__()
+            B, C        = xp.asarray(B), xp.asarray(C)
+            xp_cos_vt   = xp.cos(xp_vt)
+            xp_sin_vt   = xp.sin(xp_vt)
+
+            B           = xp.kron(B, xp.diag(xp_cos_vt)).reshape((Nr * Nvt, Nr * Nvt))
+            C           = xp.kron(C, xp.diag(xp_sin_vt)).reshape((Nr * Nvt, Nr * Nvt))
+            DvtEp       = xp.kron(xp.eye(Nr), DvtEp).reshape((Nr * Nvt, Nr * Nvt))
+            DvtEn       = xp.kron(xp.eye(Nr), DvtEn).reshape((Nr * Nvt, Nr * Nvt))
+
+            op_adv_v_Ep = (B - xp.dot(C, DvtEp))
+            op_adv_v_En = (B - xp.dot(C, DvtEn))
+
+            return op_adv_v_Ep, op_adv_v_En
+        else:
+            Dvt         = xp.asarray(mesh.central_dx(xp_vt))
+            B, C        = __galerkin_vr__()
+            B, C        = xp.asarray(B), xp.asarray(C)
+
+            xp_cos_vt   = xp.cos(xp_vt)
+            xp_sin_vt   = xp.sin(xp_vt)
+
+            B           = xp.kron(B, xp.diag(xp_cos_vt)).reshape((Nr * Nvt, Nr * Nvt))
+            C           = xp.kron(C, xp.diag(xp_sin_vt)).reshape((Nr * Nvt, Nr * Nvt))
+            Dvt         = xp.kron(xp.eye(Nr), Dvt).reshape((Nr * Nvt, Nr * Nvt))
+            op_adv_v    = (B - xp.dot(C, Dvt))
+
+            return op_adv_v
+
+    
+    def Vq_hsph_mg(self, v_theta, v_phi, scale=1):
+        """
+        compute the basis Vandermonde for the all the basis function
+        for the specified quadrature points.  
+        """
+
+        num_sph_harm = len(self._sph_harm_lm)
+        num_q_v_theta   = len(v_theta)
+        num_q_v_phi     = len(v_phi)
+
+        [Vt,Vp]      = np.meshgrid(v_theta, v_phi,indexing='ij')
+
+        Vq = np.zeros((2 * num_sph_harm, num_q_v_theta,num_q_v_phi))
+        for didx, d in enumerate(["+", "-"]):
+            for lm_i, lm in enumerate(self._sph_harm_lm):
+                Vq[didx * num_sph_harm + lm_i] = scale * self._hemi_sph_harm_real(lm[0], lm[1], Vt, Vp, d)
+        
+        return Vq
+
+    def Vq_hsph(self, v_theta, v_phi, scale=1):
+        """
+        compute the basis Vandermonde for the all the basis function
+        for the specified quadrature points.  
+        """
+
+        num_sph_harm = len(self._sph_harm_lm)
+        assert v_theta.shape == v_phi.shape, "invalid shapes, use mesh grid to get matching shapes"
+        _shape = tuple([2 * num_sph_harm]) + v_theta.shape
+        Vq = np.zeros(_shape)
+
+        for didx, d in enumerate(["+", "-"]):
+            for lm_i, lm in enumerate(self._sph_harm_lm):
+                Vq[didx * num_sph_harm + lm_i] = scale * self._hemi_sph_harm_real(lm[0], lm[1], v_theta, v_phi, d)
+        
+        return Vq
+
+    def sph_ords_projections_ops(self, xp_vt, xp_vt_qw, mode):
+        if (mode == "hsph"):
+            Ps           = np.matmul(self.Vq_hsph(xp_vt, np.zeros_like(xp_vt)), np.diag(xp_vt_qw) ) * 2 * np.pi
+            Po           = np.transpose(self.Vq_hsph(xp_vt, np.zeros_like(xp_vt))) 
+        else:
+            assert mode == "sph"
+            Ps           = np.matmul(self.Vq_sph(xp_vt, np.zeros_like(xp_vt)), np.diag(xp_vt_qw) ) * 2 * np.pi
+            Po           = np.transpose(self.Vq_sph(xp_vt, np.zeros_like(xp_vt))) 
+        
+        # to check if the oridinates to spherical and spherical to ordinates projection is true (weak test not sufficient but necessary condition)
+        assert np.allclose(np.dot(Po, np.dot(Ps, 1 + np.cos(xp_vt))), 1 + np.cos(xp_vt))
+        return Po, Ps
+
+
+    def gl_vt(self, Nvt, hspace_split=True):
+
+        if hspace_split == True:
+            gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
+            gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
+            gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw
+            xp_vt              = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
+            xp_vt_qw           = np.append(gw_m1_0, gw_p1_0)
+        else:
+            gx, gw             = basis.Legendre().Gauss_Pn(Nvt)
+            xp_vt              = np.arccos(gx)
+            xp_vt_qw           = gw
+   
+        return xp_vt, xp_vt_qw
+
+    def gl_vp(self, Nvp):
+        gp, gwp = basis.Legendre().Gauss_Pn(Nvp)
+        xp_vp   = np.pi * gp + np.pi
+        xp_vp_qw= np.pi * gwp
+        return xp_vp, xp_vp_qw
+

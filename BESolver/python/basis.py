@@ -296,7 +296,7 @@ class BSpline(Basis):
         
         if knots_vec is None:
             if dg_splines:
-                if len(sig_pts)==0:
+                if sig_pts is None or len(sig_pts)==0:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots(k_domain, num_p, spline_order)
                 else:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots_1(k_domain, num_p, spline_order,sig_pts)

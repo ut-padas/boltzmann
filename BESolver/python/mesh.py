@@ -50,6 +50,19 @@ def central_dxx(x):
 
     return Lp
 
+def central_dx(x):
+    xp = np
+    Np = len(x)
+    Dx = xp.zeros((Np, Np))
+
+    for i in range(1, Np-1):
+        Dx[i, (i-1):(i+2)] = fd_coefficients(x[i-1:i+2], 1)[1]
+
+    Dx[0 , 0:2]       = fd_coefficients(x[0:2], 1)      [ 0]
+    Dx[-1, (Np-2):Np] = fd_coefficients(x[(Np-2):Np], 1)[-1]
+
+    return Dx
+
 
 
 class mesh():

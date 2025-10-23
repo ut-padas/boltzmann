@@ -172,6 +172,9 @@ class bte_0d3v():
         
         self._sig_pts = np.sort(np.array(list(set(sig_pts))))
         self._sig_pts = np.sqrt(self._sig_pts) * self._c_gamma / self._vth
+        
+        if args.use_dg == 0:
+            self._sig_pts = None
 
         ev_range = ((0*self._vth/self._c_gamma)**2, self._args.ev_max)
         k_domain = (np.sqrt(ev_range[0]) * self._c_gamma / self._vth, np.sqrt(ev_range[1]) * self._c_gamma / self._vth)

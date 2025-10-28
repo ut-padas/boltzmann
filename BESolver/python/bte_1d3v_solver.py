@@ -384,7 +384,6 @@ class bte_1d3v():
             if (self.sph_mode == sph_type.HSPH):
                 FOp         = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=self.params.threads, use_hsph=True)
                 sigma_m    += g.total_cross_section(gx_ev)
-                print(FOp.shape, self.op_po2sh.shape, self.op_psh2o.shape)
             else:
                 assert self.sph_mode == sph_type.SPH
                 if col_data["type"] == "ELASTIC":
@@ -589,6 +588,11 @@ class bte_1d3v():
             # self.LpD_inv        = cp.asarray(self.LpD_inv)
             
             self.op_adv_v       = cp.asarray(self.op_adv_v)
+            
+            if self.sph_mode == sph_type.HSPH:
+                self.op_adv_v_En    = cp.asarray(self.op_adv_v_En)
+                self.op_adv_v_Ep    = cp.asarray(self.op_adv_v_Ep)
+
             self.op_adv_x       = cp.asarray(self.op_adv_x)
             self.op_adv_x_d     = cp.asarray(self.op_adv_x_d)
             self.op_adv_x_q     = cp.asarray(self.op_adv_x_q)
@@ -625,6 +629,11 @@ class bte_1d3v():
             #self.LpD_inv        = cp.asnumpy(self.LpD_inv)
             
             self.op_adv_v       = cp.asnumpy(self.op_adv_v)
+            
+            if self.sph_mode == sph_type.HSPH:
+                self.op_adv_v_En    = cp.asnumpy(self.op_adv_v_En)
+                self.op_adv_v_Ep    = cp.asnumpy(self.op_adv_v_Ep)
+
             self.op_adv_x       = cp.asnumpy(self.op_adv_x)
             self.op_adv_x_d     = cp.asnumpy(self.op_adv_x_d)
             self.op_adv_x_q     = cp.asnumpy(self.op_adv_x_q)
@@ -932,6 +941,9 @@ class bte_1d3v():
                     v               = v.reshape((dof_v, self.params.Np))
         
             else:
+                if self.sph_mode == sph_type.HSPH:
+                    self.op_adv_v = self.op_adv_v_Ep if E[0] >= 0 else self.op_adv_v_En
+                
                 vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
                 Lop           = self.I_Nv - dt * self.params.tau * E[0] * self.op_adv_v - dt * self.params.tau * vmat
                 gmres_c       = gmres_counter(disp=False)

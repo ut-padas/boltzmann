@@ -837,24 +837,45 @@ class SpectralExpansionSpherical:
         return Po, Ps
 
 
-    def gl_vt(self, Nvt, hspace_split=True):
+    def gl_vt(self, Nvt, hspace_split=True, mode="npsp"):
 
         if hspace_split == True:
-            gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
-            gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
-            gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw
-            xp_vt              = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
-            xp_vt_qw           = np.append(gw_m1_0, gw_p1_0)
+            if (mode == "npsp"):
+                gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
+                gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
+                gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw
+                xp_vt              = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
+                xp_vt_qw           = np.append(gw_m1_0, gw_p1_0)
+            elif (mode == "np"):
+                gx, gw             = basis.Legendre().Gauss_Pn(Nvt)
+                gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw
+                xp_vt              = np.arccos(gx_p1_0)
+                xp_vt_qw           = gw_p1_0
+            elif (mode == "sp"):
+                gx, gw             = basis.Legendre().Gauss_Pn(Nvt)
+                gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
+                xp_vt              = np.arccos(gx_m1_0)
+                xp_vt_qw           = gw_m1_0
+            else:
+                return NotImplementedError
         else:
             gx, gw             = basis.Legendre().Gauss_Pn(Nvt)
             xp_vt              = np.arccos(gx)
             xp_vt_qw           = gw
    
         return xp_vt, xp_vt_qw
-
+    
     def gl_vp(self, Nvp):
-        gp, gwp = basis.Legendre().Gauss_Pn(Nvp)
-        xp_vp   = np.pi * gp + np.pi
-        xp_vp_qw= np.pi * gwp
+        # gp, gwp = basis.Legendre().Gauss_Pn(Nvp)
+        # xp_vp   = np.pi * gp + np.pi
+        # xp_vp_qw= np.pi * gwp
+        # return xp_vp, xp_vp_qw
+
+        # peridoic trapizoidal rule
+        xp_vp    = np.linspace(0, 2 * np.pi, Nvp, endpoint=False)
+        xp_vp_qw = (2 * np.pi / Nvp) * np.ones_like(xp_vp)
         return xp_vp, xp_vp_qw
+
+
+
 

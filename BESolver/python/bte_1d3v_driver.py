@@ -93,10 +93,10 @@ if __name__ == "__main__":
            bte.store_checkpoint(v, tt, params.dt, "%s_cp_%04d"%(params.fname, ts_idx//io_freq))
            
           
-        #v  = bte.step(Ext(tt), v, None, tt, dt, params.verbose)
+        v  = bte.step(Ext(tt), v, None, tt, dt, params.verbose)
         #v = bte.step_bte_x(v, tt           , 0.5 * dt, verbose=1)
         #v = bte.step_bte_x(v, tt + 0.5 * dt, 0.5 * dt, verbose=1)
-        v = bte.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
+        #v = bte.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
         tt += 0.5 * dt
 
         #tt+= dt

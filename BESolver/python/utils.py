@@ -1118,16 +1118,13 @@ def assemble_moment_ops(spec_sp: spec_spherical.SpectralExpansionSpherical, NUM_
 
     return mf_op
 
-def assemble_moment_ops_ords(spec_sp: spec_spherical.SpectralExpansionSpherical, vt_q, vt_w, NUM_Q_VR, NUM_Q_VP, mf, scale=1.0, 
-                        dvr=None, dvp=(0, 2 *np.pi)):
-    
+def assemble_moment_ops_ords(spec_sp: spec_spherical.SpectralExpansionSpherical, num_vt, NUM_Q_VR, NUM_Q_VT, NUM_Q_VP, mf, scale=1.0):
     num_p        = spec_sp._p +1
     sph_harm_lm  = spec_sp._sph_harm_lm
-    num_vt       = len(vt_q)
     
-    [glx,glw]    = basis.Legendre().Gauss_Pn(NUM_Q_VP)
-    vp_q, vp_w   = 0.5 * (dvp[1] -dvp[0]) * glx + 0.5 * (dvp[1] + dvp[0]) , 0.5 * (dvp[1] -dvp[0]) * glw
     vr_q, vr_w   = spec_sp._basis_p.Gauss_Pn(NUM_Q_VR)
+    vt_q, vt_w   = spec_sp.gl_vt(NUM_Q_VT, hspace_split=True, mode="npsp")
+    vp_q, vp_w   = spec_sp.gl_vp(NUM_Q_VP)
 
     vg           = np.meshgrid(vr_q, vt_q, vp_q, indexing="ij")
     

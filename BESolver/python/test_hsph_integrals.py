@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # plt.show()
 
     #++
-    
+    folder_name = "plot_scripts/hsph_integrands"
     for didx, di in enumerate(["+", "-"]):
         for djdx, dj in enumerate(["+", "-"]):
             vt, vtw   =  spec_sp.gl_vt(Nvt, mode="np") if dj == "+" else  spec_sp.gl_vt(Nvt, mode="sp")
@@ -78,21 +78,22 @@ if __name__ == "__main__":
                     Ylm = spec_sp._hemi_sph_harm_real(lm[0], lm[1], mg[0], mg[1], mode=dj)
                     Wqs[didx * num_sh + qs_idx, djdx * num_sh + lm_idx] = np.einsum("abcd,a,b,c,d->", Yqs * Ylm, vtw, vpw, vtsw, vpsw)
                     
-                    # plt.figure(figsize=(24, 24), dpi=100)
-                    # plt_idx = 1
-                    # for mi in range(len(vt)):
-                    #     for mj in range(len(vp)):
-                    #         #print(Ylm[mi, mj])
-                    #         plt.subplot(len(vt), len(vp), plt_idx)
-                    #         plt.title(r"$Y^{%s}_{%d%d} Y^{%s}_{%d%d} [%d, %d]$"%(di, qs[0], qs[1], dj, lm[0], lm[1], mi, mj))
-                    #         plt.imshow((Ylm * Yqs)[mi, mj], extent=(0, 2*np.pi, 0, np.pi))
-                    #         plt.colorbar()
-                    #         #print(plt_idx)
-                    #         plt_idx+=1
+                    plt.figure(figsize=(4 * len(vt) , 4 * len(vp)), dpi=300)
+                    plt_idx = 1
+                    for mi in range(len(vt)):
+                        for mj in range(len(vp)):
+                            #print(Ylm[mi, mj])
+                            plt.subplot(len(vt), len(vp), plt_idx)
+                            plt.title(r"$Y^{%s}_{%d%d} Y^{%s}_{%d%d} [%d, %d]$"%(di, qs[0], qs[1], dj, lm[0], lm[1], mi, mj))
+                            plt.imshow((Ylm * Yqs)[mi, mj], extent=(0, 2*np.pi, 0, np.pi))
+                            plt.colorbar()
+                            #print(plt_idx)
+                            plt_idx+=1
                     
-                    # plt.tight_layout()
-                    # plt.show()
-                    # plt.close()
+                    plt.tight_layout()
+                    #plt.show()
+                    plt.savefig("%s/integrand_qs%d_lm%d_didj_%s%s.png"%(folder_name,qs_idx, lm_idx, di, dj))
+                    plt.close()
 
             
 

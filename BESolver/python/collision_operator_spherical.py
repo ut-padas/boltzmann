@@ -1295,7 +1295,7 @@ class CollisionOpSP():
             
 
             Wqs_lm_0 = __Wqs_lm__(Nvt, Nvp, Nvts, Nvps)
-            Wqs_lm_1 = __Wqs_lm__(Nvt, Nvp, 2 * Nvts, 2 * Nvps)
+            Wqs_lm_1 = __Wqs_lm__(2 * Nvt, 2 * Nvp, 2 * Nvts, 2 * Nvps)
 
             
             for i in range(len(Wqs_lm_0)):

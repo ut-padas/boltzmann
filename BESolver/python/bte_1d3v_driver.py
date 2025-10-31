@@ -19,6 +19,7 @@ class qoi_idx():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-par_file", "--par_file" , help="toml par file to specify run parameters" , type=str)
+    parser.add_argument("-ef_mode" , "--ef_mode",   help="E-field mode" , type=int)
     
     args    = parser.parse_args()
     bte     = bte_1d3v_solver.bte_1d3v(args)
@@ -37,7 +38,43 @@ if __name__ == "__main__":
 
     output_cycle_averaged_qois = True
     xp    = bte.xp_module
-    Ext   = lambda t : xp.ones(params.Np) * 1e4 * xp.sin(2 * xp.pi * t)
+    if (args.ef_mode == 0):
+        Ext   = lambda t : xp.ones(params.Np) * 1e4 * xp.sin(2 * xp.pi * t)
+    elif (args.ef_mode == 1):
+        xx    = xp.asarray(bte.xp)
+        Ext   = lambda t : xx**3 * 1e4 * xp.sin(2 * xp.pi * t)
+    elif (args.ef_mode == 2):
+        import h5py
+        import scipy.interpolate
+        ff        = h5py.File("1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+        tt_sp     = np.array(ff["time[T]"][()])
+        E_sp      = np.array(ff['E[Vm^-1]'][()])
+        xx_sp     = np.array(ff['x[-1,1]'][()])
+        if(len(xx_sp)!=bte.params.Np):
+            print("resampling E field to match BTE grid")
+            E_sp      = scipy.interpolate.interp1d(xx_sp, E_sp, axis=1, bounds_error=True)(np.asarray(bte.xp))
+
+        Et_inp    = scipy.interpolate.interp1d(tt_sp, E_sp, axis=0, bounds_error=True)
+
+        dt        = bte.params.dt
+        
+        def Ext(t):
+            idx  = int(np.round(t / dt))
+            cfrq = int(1 / dt)
+            if (t > 0):
+                assert (np.abs(idx * dt - t)/np.abs(t) < 1e-10) , "time = %.14E idx * dt = %.14E"%(t, idx * dt)
+            tta  = (idx % cfrq) * dt
+            return xp.array(Et_inp(tta))
+    elif (args.ef_mode == 3):
+        Ext   = lambda t : xp.ones(params.Np) * 1e4
+    elif (args.ef_mode == 4):
+        Ext   = lambda t : xp.ones(params.Np) * 0.0
+    elif (args.ef_mode == 5):
+        Ext   = lambda t : xp.ones(params.Np) * 1e3
+
+    else:
+        raise NotImplementedError
+    
     dt    = params.dt
     steps = int(params.T / params.dt)+1
 

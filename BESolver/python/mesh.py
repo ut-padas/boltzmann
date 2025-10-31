@@ -37,6 +37,71 @@ def upwinded_dx(x, dir):
 
     return Dx
 
+def dx(x, dorder, pw):
+    xp = np
+    Np = len(x)
+    Dx = xp.zeros((Np, Np))
+
+    assert pw % 2 == 0
+    sz = 2*pw +1
+
+    m  = fd_coefficients(x[0:sz], dorder)
+    for i in range(pw):
+        Dx[i, 0:sz] = m[i]
+
+    for i in range(pw, Np-pw):
+        Dx[i, (i-pw):(i+pw+1)] = fd_coefficients(x[(i-pw):(i+pw+1)], dorder)[pw]
+    
+    m  = fd_coefficients(x[-sz:], dorder)
+    for i in range(pw):
+        Dx[-(i+1), -sz:] = m[-(i+1)]
+    
+    return Dx
+
+
+
+def upwinded_dvt(x, dir, pw):
+    xp = np
+    Np = len(x)
+    Dx = xp.zeros((Np, Np))
+
+    assert Np %2 ==0
+    mp = Np//2
+    Dx[0:mp, 0:mp] = dx(x[0:mp], 1, pw=pw)
+    Dx[mp: , mp:]  = dx(x[mp:], 1, pw=pw)
+    
+    if (dir == "LtoR"):
+        Dx[mp]                  = 0.0
+        Dx[mp, mp-1:mp+1]       = fd_coefficients(x[mp-1:mp+1], 1)[-1]
+    
+    else:
+        assert dir == "RtoL"
+        Dx[mp-1]              = 0.0
+        Dx[mp-1, mp-1:mp+1]   = fd_coefficients(x[mp-1:mp+1], 1)[0]
+
+    return Dx
+
+# def upwinded_dvt(x, dir):
+#     xp = np
+#     Np = len(x)
+#     Dx = xp.zeros((Np, Np))
+
+#     assert Np %2 ==0
+#     mp = Np//2
+#     Dx[0:mp, 0:mp] = fd_coefficients(x[0:mp], 1)
+#     Dx[mp: , mp:]  = fd_coefficients(x[mp:], 1)
+    
+#     if (dir == "LtoR"):
+#         Dx[mp]                  = 0.0
+#         Dx[mp, mp-1:mp+1]       = fd_coefficients(x[mp-1:mp+1], 1)[-1]
+    
+#     else:
+#         assert dir == "RtoL"
+#         Dx[mp-1]              = 0.0
+#         Dx[mp-1, mp-1:mp+1]   = fd_coefficients(x[mp-1:mp+1], 1)[0]
+
+#     return Dx
+
 def central_dxx(x):
     xp = np
     Np = len(x)

@@ -101,6 +101,7 @@ class params():
 
         self.pcEmin        = tp["abs_efield_min"]
         self.pcEmax        = tp["abs_efield_max"]
+        self.pcN           = tp["num_pc_ops"]
         self.vts_type      = tp["vspace_ts_type"]
 
         self.restore       = tp["restore"]
@@ -126,7 +127,9 @@ class params():
         self.xadv_type = tp["xadv_type"]
         self.sph_mode  = tp["sph_type"]
         
-        
+    def __str__(self):
+        attrs = vars(self)
+        return ', '.join("%s: %s" % item for item in attrs.items())
 
 class gmres_counter(object):
     def __init__(self, disp=True):
@@ -141,6 +144,14 @@ class bte_1d3v():
 
     def __init__(self, args):
         self.params        = params(args.par_file)
+
+        print("===========params========================")
+        print(self.params)
+        with open("%s_args.txt"%(self.params.fname), "w") as ff:
+            ff.write("args: %s"%(self.params))
+            ff.close()
+        print("===========params========================")
+
         self.qe            = scipy.constants.e
         self.me            = scipy.constants.electron_mass
         self.kB            = scipy.constants.Boltzmann
@@ -306,6 +317,9 @@ class bte_1d3v():
         assert num_p == self.params.Nr + 1
         self.op_psh2o, self.op_po2sh = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "sph")
 
+        if (self.sph_mode == sph_type.HSPH):
+            self.op_po_hsph, self.op_ps_hsph = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "hsph")
+            
 
         self.par_ev_range       = ev_range  
         mm_mat                  = spec_sp.compute_mass_matrix()
@@ -404,6 +418,11 @@ class bte_1d3v():
         
         self.op_mass      = bte_utils.mass_op(spec_sp, 1) #* maxwellian(0) * vth**3
         self.op_temp      = bte_utils.temp_op(spec_sp, 1) * (vth**2) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
+
+        # self.params.spline_qpts * spec_sp._basis_p._t_unique
+        # self.op_vz_ords   = bte_utils.assemble_moment_ops_ords(spec_sp, self.params.Nvt, spec_sp._num_q_radial, 32, 8, [lambda vr, vt, vp : vr * np.cos(vt)])[0]
+        
+
         
         # note non-dimentionalized electron mobility and diffusion,  ## not used at the moment, but needs to check.          
         self.op_mobility  = bte_utils.mobility_op(spec_sp, maxwellian, vth) #* self.params.V0 * self.params.tau/self.params.L**2
@@ -429,7 +448,7 @@ class bte_1d3v():
 
             adv_mat_v                 = self.op_inv_mm_full @ spec_sp.compute_advection_matrix_ordinates(self.xp_vt, use_vt_upwinding=False)
             self.op_adv_v             = ((1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO) * adv_mat_v
-            
+
             adv_x                     = np.dot(self.op_inv_mm,  vth  * (self.params.tau/self.params.L) * compute_spatial_advection_op())
             self.op_adv_x             = adv_x
             adv_x_d, adv_x_q          = np.linalg.eig(adv_x)
@@ -438,7 +457,7 @@ class bte_1d3v():
             self.op_adv_x_qinv        = np.linalg.inv(adv_x_q)
 
             self.op_inv_mm_full_sph   = np.kron(self.op_inv_mm, np.eye(2 * num_sh))
-            op_psh2o, op_po2sh        = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "hsph")
+            op_psh2o, op_po2sh        = self.op_po_hsph, self.op_ps_hsph 
             
             def psh2o_C_po2sh(opM):
                 opM = opM.reshape((num_p, 2 * num_sh, num_p, 2 * num_sh))
@@ -592,6 +611,8 @@ class bte_1d3v():
             if self.sph_mode == sph_type.HSPH:
                 self.op_adv_v_En    = cp.asarray(self.op_adv_v_En)
                 self.op_adv_v_Ep    = cp.asarray(self.op_adv_v_Ep)
+                self.op_po_hsph     = cp.asarray(self.op_po_hsph)
+                self.op_ps_hsph     = cp.asarray(self.op_ps_hsph)
 
             self.op_adv_x       = cp.asarray(self.op_adv_x)
             self.op_adv_x_d     = cp.asarray(self.op_adv_x_d)
@@ -608,6 +629,7 @@ class bte_1d3v():
             
             self.op_mass        = cp.asarray(self.op_mass)
             self.op_temp        = cp.asarray(self.op_temp)
+            #self.op_vz_ords     = cp.asarray(self.op_vz_ords)
             self.op_rate        = [cp.asarray(self.op_rate[i]) for i in range(len(self.op_rate))]
             self.op_mobility    = cp.asarray(self.op_mobility)
             self.op_diffusion   = cp.asarray(self.op_diffusion)
@@ -633,6 +655,8 @@ class bte_1d3v():
             if self.sph_mode == sph_type.HSPH:
                 self.op_adv_v_En    = cp.asnumpy(self.op_adv_v_En)
                 self.op_adv_v_Ep    = cp.asnumpy(self.op_adv_v_Ep)
+                self.op_po_hsph     = cp.asnumpy(self.op_po_hsph)
+                self.op_ps_hsph     = cp.asnumpy(self.op_ps_hsph)
 
             self.op_adv_x       = cp.asnumpy(self.op_adv_x)
             self.op_adv_x_d     = cp.asnumpy(self.op_adv_x_d)
@@ -649,6 +673,7 @@ class bte_1d3v():
             
             self.op_mass        = cp.asnumpy(self.op_mass)
             self.op_temp        = cp.asnumpy(self.op_temp)
+            #self.op_vz_ords     = cp.asnumpy(self.op_vz_ords)
             
             self.op_rate        = [cp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
             self.op_mobility    = cp.asnumpy(self.op_mobility)
@@ -898,20 +923,71 @@ class bte_1d3v():
                 pcEval      = self.Evals
                 pc_emat_idx = self.vspace_pc_setup(E)
                 
-                def Lmat_mvec(x):
-                    x      = x.reshape((dof_v, self.params.Np))
-                    y      = self.params.tau * (self.params.n0 * self.params.np0 * (xp.dot(self.op_col_en, x) + self.params.Tg * xp.dot(self.op_col_gT, x))  + E * xp.dot(self.op_adv_v, x))
-                    y      = x - dt * y
-                    return y.reshape((-1))
-                
-                def Mmat_mvec(x):
-                    x      = x.reshape((dof_v, self.params.Np))
-                    y      = xp.copy(x)
+                if (self.sph_mode == sph_type.HSPH):
                     
-                    for idx_id, idx in enumerate(pc_emat_idx):
-                        y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+                    Po     = self.op_po_hsph
+                    Ps     = self.op_ps_hsph
+
+                    num_p  = self.op_spec_sp._p + 1
+                    num_vt = len(self.xp_vt)
+                    num_sh = len(self.op_spec_sp._sph_harm_lm)
+
+                    assert dof_v == num_p * num_vt
+
+                    def Lmat_mvec(x):
+                        x      = x.reshape((dof_v, self.params.Np))
+                        #uz     = xp.einsum("l,la->a", self.op_vz_ords, x) 
+                        idxEp  = (E>1e-6)
+                        idxEn  = (E<-1e-6)
+                        idxEm  = xp.logical_and(E>=-1e-6, E<=1e-6)
+                        yE     = xp.zeros_like(x)
                         
-                    return y.reshape((-1))
+                        yE[:, idxEp]         = self.op_adv_v_Ep @ x[:, idxEp]
+                        yE[:, idxEn]         = self.op_adv_v_En @ x[:, idxEn]
+                        yE[:, idxEm]         = self.op_adv_v @ x[:, idxEm]
+
+                        y      = self.params.tau * (self.params.n0 * self.params.np0 * (xp.dot(self.op_col_en, x) + self.params.Tg * xp.dot(self.op_col_gT, x))  + E * yE)
+                        y      = x - dt * y
+                        return y.reshape((-1))
+                    
+                    # def Mmat_mvec(x):
+                    #     x      = x.reshape((num_p, num_vt, self.params.Np))
+                    #     x      = xp.einsum("li,rix->rlx", Ps, x).reshape((num_p * (2 * num_sh), self.params.Np))
+                    #     y      = xp.copy(x)
+                        
+                    #     for idx_id, idx in enumerate(pc_emat_idx):
+                    #         y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+
+                    #     y      = y.reshape((num_p, 2 * num_sh, self.params.Np))
+                    #     y      = xp.einsum("li,rix->rlx", Po, y).reshape((num_p * num_vt, self.params.Np))
+                            
+                    #     return y.reshape((-1))
+
+                    def Mmat_mvec(x):
+                        x      = x.reshape((dof_v, self.params.Np))
+                        y      = xp.copy(x)
+                        
+                        for idx_id, idx in enumerate(pc_emat_idx):
+                            y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+                            
+                        return y.reshape((-1))
+
+                    
+                else:
+                    def Lmat_mvec(x):
+                        x      = x.reshape((dof_v, self.params.Np))
+                        y      = self.params.tau * (self.params.n0 * self.params.np0 * (xp.dot(self.op_col_en, x) + self.params.Tg * xp.dot(self.op_col_gT, x))  + E * xp.dot(self.op_adv_v, x))
+                        y      = x - dt * y
+                        return y.reshape((-1))
+                    
+                    def Mmat_mvec(x):
+                        x      = x.reshape((dof_v, self.params.Np))
+                        y      = xp.copy(x)
+                        
+                        for idx_id, idx in enumerate(pc_emat_idx):
+                            y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
+                            
+                        return y.reshape((-1))
                 
                 norm_b    = xp.linalg.norm(u.reshape((-1)))
                 Ndof      = dof_v * self.params.Np
@@ -920,7 +996,7 @@ class bte_1d3v():
                     Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
                     Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
                     gmres_c   = gmres_counter(disp=False)
-                    v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_rsrt * 50, callback=gmres_c)
+                    v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_rsrt * 50, callback=gmres_c)
                 else:
                     Lmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
                     Mmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
@@ -942,10 +1018,19 @@ class bte_1d3v():
         
             else:
                 if self.sph_mode == sph_type.HSPH:
-                    self.op_adv_v = self.op_adv_v_Ep if E[0] >= 0 else self.op_adv_v_En
+                    #adv_v = self.op_adv_v_Ep if E[0] >= 0 else self.op_adv_v_En
+                    if E[0] > 1e-6:
+                        adv_v = self.op_adv_v_Ep
+                    elif E[0] < -1e-6:
+                        adv_v = self.op_adv_v_En
+                    else:
+                        adv_v = self.op_adv_v
+
+                else:
+                    adv_v = self.op_adv_v
                 
                 vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
-                Lop           = self.I_Nv - dt * self.params.tau * E[0] * self.op_adv_v - dt * self.params.tau * vmat
+                Lop           = self.I_Nv - dt * self.params.tau * E[0] * adv_v - dt * self.params.tau * vmat
                 gmres_c       = gmres_counter(disp=False)
                 v             = xp.linalg.solve(Lop, u)
                 norm_b        = xp.linalg.norm(u)
@@ -1087,15 +1172,49 @@ class bte_1d3v():
 
     def init(self, dt):
         xp            = self.xp_module
-        num_pc_evals  = 30
+        num_pc_evals  = self.params.pcN
         ep            = xp.logspace(xp.log10(self.params.pcEmin), xp.log10(self.params.pcEmax), num_pc_evals//2, base=10)
         self.Evals    = -xp.flip(ep)
         self.Evals    = xp.append(self.Evals,ep)
-        vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
-        #self.PmatC   = xp.linalg.inv(self.I_Nv - 1.0 * dt * self.params.tau * vmat)
-        Iv            = xp.eye(self.op_adv_v.shape[0])
-        self.PmatE    = list()
-        self.PmatE    = xp.array([xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v - dt * self.params.tau * vmat) for i in range(num_pc_evals)])
+
+        if (self.sph_mode == sph_type.HSPH):
+            spec_sp                   = self.op_spec_sp
+            op_psh2o, op_po2sh        = self.op_po_hsph, self.op_ps_hsph 
+            
+            num_p                     = spec_sp._p + 1
+            num_sh                    = len(spec_sp._sph_harm_lm)
+            num_vt                    = len(self.xp_vt)
+
+            
+            def hsph_op(opM):
+                return opM
+                # opM = opM.reshape((num_p , num_vt, num_p , num_vt))
+                # opM = xp.einsum("qi,pikl->pqkl", op_po2sh, np.einsum("pqki,il->pqkl", opM, op_psh2o))
+                # return opM.reshape((num_p * 2 * num_sh, num_p *  2 * num_sh)) 
+            
+            vmat          = self.params.n0 * self.params.np0 * (hsph_op(self.op_col_en) + self.params.Tg * hsph_op(self.op_col_gT))
+            self.PmatE    = xp.zeros((num_pc_evals, vmat.shape[0], vmat.shape[1]))
+            
+            advEp         = hsph_op(self.op_adv_v_Ep)
+            advEn         = hsph_op(self.op_adv_v_En)
+            advEm         = hsph_op(self.op_adv_v)
+            Iv            = xp.eye(vmat.shape[0])
+
+            for i in range(num_pc_evals):
+                #advE          = advEp  if self.Evals[i]>=0 else advEn
+                if self.Evals[i] > 1e-6:
+                    advE = advEp
+                elif self.Evals[i] < -1e-6:
+                    advE = advEn
+                else:
+                    advE = advEm
+            
+                self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * advE - dt * self.params.tau * vmat)
+            
+        else:
+            vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
+            Iv            = xp.eye(self.op_adv_v.shape[0])
+            self.PmatE    = xp.array([xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v - dt * self.params.tau * vmat) for i in range(num_pc_evals)])
         
         print("v-space advection mat preconditioner gird : \n", self.Evals)
         self.__initialize_bte_adv_x__(0.5 * dt)

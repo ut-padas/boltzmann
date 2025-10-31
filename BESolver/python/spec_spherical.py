@@ -30,7 +30,7 @@ class SpectralExpansionSpherical:
         """
         self._sph_harm_lm = sph_harm_lm
         self._p = p_order
-        self._num_q_radial=270
+        self._num_q_radial=None
         self._domain = domain
         self._window = window
 
@@ -743,9 +743,28 @@ class SpectralExpansionSpherical:
             
             return mm1, mm2
         
+        try:
+            import cupy as cp
+            cp.cuda.Device(0).use()  # Attempt to use the first CUDA device
+            xp = cp 
+            print("using GPUs for adv_v assembly")
+    
+        except Exception as e:
+            print(f"CUDA device not found or accessible: {e} using CPU based assembly")
+
+        def asnumpy(x):
+            if (xp == np):
+                return x            
+            else:
+                return cp.asnumpy(x)
+                
         if (use_vt_upwinding == True):
-            Dvt_LtoR          = xp.asarray(mesh.upwinded_dx(xp_vt, "LtoR"))
-            Dvt_RtoL          = xp.asarray(mesh.upwinded_dx(xp_vt, "RtoL"))
+            # Dvt_LtoR          = xp.asarray(mesh.upwinded_dx(xp_vt, "LtoR"))
+            # Dvt_RtoL          = xp.asarray(mesh.upwinded_dx(xp_vt, "RtoL"))
+
+            Dvt_LtoR          = xp.asarray(mesh.upwinded_dvt(xp_vt, "LtoR",pw=2))
+            Dvt_RtoL          = xp.asarray(mesh.upwinded_dvt(xp_vt, "RtoL",pw=2))
+
             
             DvtEp             = xp.zeros((Nvt, Nvt)) # E > 0
             DvtEn             = xp.zeros((Nvt, Nvt)) # E < 0
@@ -759,32 +778,31 @@ class SpectralExpansionSpherical:
 
             B, C        = __galerkin_vr__()
             B, C        = xp.asarray(B), xp.asarray(C)
-            xp_cos_vt   = xp.cos(xp_vt)
-            xp_sin_vt   = xp.sin(xp_vt)
+            xp_cos_vt   = xp.cos(xp.asarray(xp_vt))
+            xp_sin_vt   = xp.sin(xp.asarray(xp_vt))
 
             B           = xp.kron(B, xp.diag(xp_cos_vt)).reshape((Nr * Nvt, Nr * Nvt))
-            C           = xp.kron(C, xp.diag(xp_sin_vt)).reshape((Nr * Nvt, Nr * Nvt))
-            DvtEp       = xp.kron(xp.eye(Nr), DvtEp).reshape((Nr * Nvt, Nr * Nvt))
-            DvtEn       = xp.kron(xp.eye(Nr), DvtEn).reshape((Nr * Nvt, Nr * Nvt))
+            DvtEp       = xp.kron(C, xp.diag(xp_sin_vt) @ DvtEp).reshape((Nr * Nvt, Nr * Nvt))
+            DvtEn       = xp.kron(C, xp.diag(xp_sin_vt) @ DvtEn).reshape((Nr * Nvt, Nr * Nvt))
 
-            op_adv_v_Ep = (B - xp.dot(C, DvtEp))
-            op_adv_v_En = (B - xp.dot(C, DvtEn))
+            op_adv_v_Ep = (B - DvtEp)
+            op_adv_v_En = (B - DvtEn)
 
-            return op_adv_v_Ep, op_adv_v_En
+            return asnumpy(op_adv_v_Ep), asnumpy(op_adv_v_En)
         else:
             Dvt         = xp.asarray(mesh.central_dx(xp_vt))
             B, C        = __galerkin_vr__()
             B, C        = xp.asarray(B), xp.asarray(C)
 
-            xp_cos_vt   = xp.cos(xp_vt)
-            xp_sin_vt   = xp.sin(xp_vt)
+            xp_cos_vt   = xp.cos(xp.asarray(xp_vt))
+            xp_sin_vt   = xp.sin(xp.asarray(xp_vt))
+
+            op_adv_v    = xp.kron(B, xp.diag(xp_cos_vt)).reshape((Nr * Nvt, Nr * Nvt)) - xp.kron(C, xp_sin_vt * Dvt).reshape((Nr * Nvt, Nr * Nvt))
 
             B           = xp.kron(B, xp.diag(xp_cos_vt)).reshape((Nr * Nvt, Nr * Nvt))
-            C           = xp.kron(C, xp.diag(xp_sin_vt)).reshape((Nr * Nvt, Nr * Nvt))
-            Dvt         = xp.kron(xp.eye(Nr), Dvt).reshape((Nr * Nvt, Nr * Nvt))
-            op_adv_v    = (B - xp.dot(C, Dvt))
-
-            return op_adv_v
+            Dvt         = xp.kron(C, xp.diag(xp_sin_vt) @ Dvt).reshape((Nr * Nvt, Nr * Nvt))
+            op_adv_v    = (B - Dvt)
+            return asnumpy(op_adv_v)
 
     
     def Vq_hsph_mg(self, v_theta, v_phi, scale=1):
@@ -840,7 +858,43 @@ class SpectralExpansionSpherical:
     def gl_vt(self, Nvt, hspace_split=True, mode="npsp"):
 
         if hspace_split == True:
+            # if (mode == "npsp1"):
+            #     gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
+            #     gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
+            #     gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw
+            #     xp_vt              = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
+            #     xp_vt_qw           = np.append(gw_m1_0, gw_p1_0)
+
+            # el
             if (mode == "npsp"):
+                # gx, gw               = basis.gauss_radau_quadrature(Nvt//2, fixed_point=-1)
+                # gx_m1_0 , gw_m1_0    = 0.5 * gx - 0.5, 0.5 * gw
+                # gx, gw               = -np.flip(gx), np.flip(gw)
+                # gx_p1_0 , gw_p1_0    = 0.5 * gx + 0.5, 0.5 * gw
+                
+                # assert np.abs(gx_m1_0[0]  +1) < 1e-12
+                # assert np.abs(gx_p1_0[-1] -1) < 1e-12
+
+                # gx_m1_0[0]  = -1.0
+                # gx_p1_0[-1] =  1.0
+
+                # xp_vt                = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
+                # xp_vt_qw             = np.append(gw_m1_0, gw_p1_0)
+
+                
+                # gx_p1_0 = np.flip(np.linspace(0, 0.5 * np.pi, Nvt//2, endpoint=False))
+                # gx_m1_0 = np.flip(np.linspace(0.5 * np.pi, np.pi, Nvt//2))
+                # xp_vt        = np.linspace(0, np.pi, Nvt)
+                # xp_vt_qw     = np.ones_like(xp_vt)
+
+                # xp_vt_qw[0]  = 0.5
+                # xp_vt_qw[-1] = 0.5
+                # xp_vt_qw     = (np.pi/(Nvt-1)) * xp_vt_qw * np.sin(xp_vt)
+
+                # xp_vt        = np.flip(xp_vt)
+                # xp_vt_qw     = np.flip(xp_vt_qw)
+
+                
                 gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
                 gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
                 gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw

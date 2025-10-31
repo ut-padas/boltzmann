@@ -46,6 +46,35 @@ def gauss_legendre_quad(deg, a, b):
 
     return qx, qw
 
+def gauss_radau_quadrature(n, fixed_point=-1):
+    if n == 1:
+        return np.array([fixed_point]), np.array([2.0]) # Weight for fixed point is 2 for n=1
+
+    L           = np.polynomial.Legendre
+    if (fixed_point ==-1):
+        p = L.basis(n) + L.basis(n - 1)
+    else:
+        assert fixed_point == 1
+        p = L.basis(n) - L.basis(n - 1)
+    
+    nodes = p.roots()
+    # Calculate weights using the method of undetermined coefficients
+    # We set up a system of equations for the weights based on integrating monomials
+    # The system is V @ w = rhs, where V is the Vandermonde matrix and rhs are
+    # the exact integrals of monomials.
+    max_degree = len(nodes) - 1
+    powers     = np.arange(max_degree + 1)
+    V          = nodes ** powers.reshape(-1, 1)
+    
+    # Exact integrals of x^k over [-1, 1]
+    # For even k: 2/(k+1)
+    # For odd k: 0
+    rhs = np.zeros(max_degree + 1)
+    rhs[::2] = 2 / (powers[::2] + 1)
+
+    weights = np.linalg.solve(V, rhs)
+    return nodes, weights
+
 class Basis(abc.ABC):
     abc.abstractmethod
     def __init__(self, domain, window):

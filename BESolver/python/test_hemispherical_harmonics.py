@@ -38,22 +38,22 @@ if __name__ == "__main__":
     Vq                  = spec_sp.Vq_hsph(mm[0], mm[1])
     mm_sph              = np.einsum("pij,qij,i, j->pq", Vq, Vq, xp_vt_qw, xp_vp_qw)
 
-    plt_cnt = 1
-    plt.figure(figsize=(4 * len(sph_harm_lm), 8), dpi=100)
-    for didx, d in enumerate(["+", "-"]):
-        for lm_i, lm in enumerate(sph_harm_lm):
-            plt.subplot(2, len(sph_harm_lm), plt_cnt)
-            plt.imshow(Vq[didx * num_sh + lm_i], extent=(0, 2 * np.pi, 0, np.pi), origin='lower')
-            plt.colorbar()
-            plt.title(r"$Y_{%d%d}^{%s}$"%(lm[0], lm[1], d))
-            plt.xlabel(r"$v_{\phi}$")
-            plt.ylabel(r"$v_{\theta}$")
+    # plt_cnt = 1
+    # plt.figure(figsize=(4 * len(sph_harm_lm), 8), dpi=100)
+    # for didx, d in enumerate(["+", "-"]):
+    #     for lm_i, lm in enumerate(sph_harm_lm):
+    #         plt.subplot(2, len(sph_harm_lm), plt_cnt)
+    #         plt.imshow(Vq[didx * num_sh + lm_i], extent=(0, 2 * np.pi, 0, np.pi), origin='lower')
+    #         plt.colorbar()
+    #         plt.title(r"$Y_{%d%d}^{%s}$"%(lm[0], lm[1], d))
+    #         plt.xlabel(r"$v_{\phi}$")
+    #         plt.ylabel(r"$v_{\theta}$")
         
-            plt_cnt += 1
+    #         plt_cnt += 1
 
-    plt.tight_layout()
-    plt.show()
-    plt.close()
+    # plt.tight_layout()
+    # plt.show()
+    # plt.close()
 
     print("||M_{++} - I||/ || I|| = %.8E" % (np.linalg.norm(mm_sph[0:num_sh, 0:num_sh] - np.eye(num_sh)) / np.linalg.norm(np.eye(num_sh))))
     print("||M_{--} - I||/ || I|| = %.8E" % (np.linalg.norm(mm_sph[num_sh:, num_sh:]   - np.eye(num_sh)) / np.linalg.norm(np.eye(num_sh))))
@@ -71,13 +71,23 @@ if __name__ == "__main__":
     # plt.plot(xp_vt, Po @ Ps @ fvt, '--')
     
     
-    fvt = np.zeros_like(xp_vt)
-    idx = xp_vt>=0.5 * np.pi
-    fvt[idx] = 1+ np.cos(xp_vt[idx])
-    plt.plot(xp_vt, fvt, '-')
-    plt.plot(xp_vt, Po @ Ps @ fvt, '--')
-    plt.show()
+    # fvt = np.zeros_like(xp_vt)
+    # idx = xp_vt>=0.5 * np.pi
+    # fvt[idx] = 1+ np.cos(xp_vt[idx])
+    # plt.plot(xp_vt, fvt, '-')
+    # plt.plot(xp_vt, Po @ Ps @ fvt, '--')
+    # plt.show()
     
     #plt.savefig("hemi_sph_harmonics.png")
 
-    
+    xp_vt, xp_vt_qw     = spec_sp.gl_vt(16, hspace_split=True)
+    import mesh
+    DxL = mesh.upwinded_dvt(xp_vt, "LtoR", pw=2)
+    DxR = mesh.upwinded_dvt(xp_vt, "RtoL", pw=2)
+
+    y   = np.sin(xp_vt)
+    plt.plot(xp_vt, np.cos(xp_vt), label="y'")
+    plt.plot(xp_vt, DxL @ y, label="DxL @ y")
+    plt.plot(xp_vt, DxR @ y, label="DxR @ y")
+    plt.legend()
+    plt.show()

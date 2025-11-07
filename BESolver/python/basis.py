@@ -493,7 +493,8 @@ class BSpline(Basis):
         
         fig = plt.figure(figsize=(8,3),dpi=300)
         for i in range(self._num_p):
-            plt.plot(x, self.Pn(i)(x,0), linewidth=0.8)
+            plt.semilogy(x, self.Pn(i)(x,0), linewidth=0.8)
+            #print(i, self.Pn(i)(x,0)[-1])
 
         plt.xlabel(r"v")
         #plt.legend()
@@ -636,6 +637,14 @@ class BSpline(Basis):
         t          = (k_domain[0])*np.ones(sp_order)
         t          = np.append(t,np.linspace(k_domain[0] , k_domain[1] , num_p-sp_order , endpoint=False))
         t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+        return t
+
+    @staticmethod
+    def legendre_knots(k_domain, num_p, sp_order):
+        t            = (k_domain[0])*np.ones(sp_order+1)
+        gx, gw       = np.polynomial.legendre.leggauss(num_p-sp_order-1)
+        t            = np.append(t, 0.5 * (k_domain[1]-k_domain[0]) * gx + 0.5 * (k_domain[0] + k_domain[1]))
+        t            = np.append(t, k_domain[1]*np.ones(sp_order+1))
         return t
 
     @staticmethod

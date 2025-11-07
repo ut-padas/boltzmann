@@ -13,13 +13,23 @@ import utils as BEUtils
 import parameters as params
 import collisions
 import argparse
-
+import os
+import utils as bte_utils
 plt.rcParams.update({
     "text.usetex": False,
     "font.size": 10,
     #"font.family": "Helvetica",
     "lines.linewidth":1.0
 })
+
+def make_dir(dir_name):
+    # Check whether the specified path exists or not
+    isExist = os.path.exists(dir_name)
+    if not isExist:
+       # Create a new directory because it does not exist
+       os.makedirs(dir_name)
+       print("directory %s is created!"%(dir_name))
+
 
 def create_xlbspline_spec(spline_order, k_domain, Nr, sph_harm_lm, sig_pts=None):
     splines      = basis.BSpline(k_domain,spline_order,Nr+1, sig_pts=sig_pts, knots_vec=None, dg_splines=args.use_dg)
@@ -32,7 +42,13 @@ def assemble_advection_matrix_lp(spec: sp.SpectralExpansionSpherical):
 def assemble_advection_matrix_dg(spec: sp.SpectralExpansionSpherical):
     return spec.compute_advection_matix_dg()
     
-def backward_euler(FOp,y0,t_end,nsteps):
+def backward_euler(spec_sp:sp.SpectralExpansionSpherical, FOp,y0,t_end,nsteps):
+    xp_vt, xp_vt_qw          = spec_sp.gl_vt(args.num_ords, hspace_split=True, mode="npsp")
+    Po, Ps                   = spec_sp.sph_ords_projections_ops(xp_vt, xp_vt_qw, mode="sph")
+
+    num_p   = spec_sp._p + 1
+    num_sph = len(spec_sp._sph_harm_lm)
+
     dt = t_end/nsteps
     A  = np.linalg.inv(np.eye(FOp.shape[0]) + dt* FOp)
     #A  = np.linalg.matrix_power(A,nsteps)
@@ -43,51 +59,190 @@ def backward_euler(FOp,y0,t_end,nsteps):
 
     for i in range(1, nsteps+1):
         tt[i]   = i * dt
+
+        if (i==1 or i %5 ==0):
+            plot_ords_solution(np.einsum("il,vl->vi", Po, y[:, i-1].reshape((num_p, num_sph))).reshape((-1))
+                               , spec_sp, np.linspace(V_DOMAIN[0], (1-1e-8) * V_DOMAIN[1], 1000), xp_vt, xp_vt_qw, Po, Ps,
+                               "%s/idx_%04d.png"%("plot_scripts/sph", i))
+
         y[:, i] = np.matmul(A,y[:, i-1])
 
     return tt, y
 
-def sph_harm_real(l, m, theta, phi):
-    # in python's sph_harm phi and theta are swapped
-    Y = sph_harm(abs(m), l, phi, theta)
-    if m < 0:
-        Y = np.sqrt(2) * (-1)**m * Y.imag
-    elif m > 0:
-        Y = np.sqrt(2) * (-1)**m * Y.real
-    else:
-        Y = Y.real
+def plot_ords_solution(x, spec_sp:sp.SpectralExpansionSpherical, vr, xp_vt, xp_vt_w, Po, Ps, fname):
+    # xp_vt, xp_vt_qw          = spec_sp.gl_vt(num_vt, hspace_split=True, mode="npsp")
+    # Po, Ps                   = spec_sp.sph_ords_projections_ops(xp_vt, xp_vt_qw, mode="sph")
+    num_p                    = spec_sp._p + 1
+    num_sph                  = len(spec_sp._sph_harm_lm)
+    num_vt                   = len(xp_vt)
+    Vqr                      = spec_sp.Vq_r(vr, l=0, scale=1)
 
-    return Y 
+    x                        = x.reshape((num_p, num_vt))
+    y                        = Vqr.T @ x
 
-def Vq_sph(lm_modes, v_theta, v_phi, scale=1):
-    """
-    compute the basis Vandermonde for the all the basis function
-    for the specified quadrature points.  
-    """
+    plt.figure(figsize=(10, 10), dpi=200)
+    #plt.subplot(2, num_vt//2, 1)
+    for i in range(num_vt):
+        #plt.subplot(2, num_vt//2, i+1)
+        # if(xp_vt[i]< np.pi * 0.5):
+        #     continue
 
-    num_sph_harm = len(lm_modes)
-    assert v_theta.shape == v_phi.shape, "invalid shapes, use mesh grid to get matching shapes"
-    _shape = tuple([num_sph_harm]) + v_theta.shape
-    Vq = np.zeros(_shape)
+        plt.semilogy(vr, np.abs(y[:, i]), label=r"$v_{\theta}$=%.2f"%(xp_vt[i]))
+        plt.xlabel(r"$v_r$")
+        
+        #plt.title(r"$v_{\theta}$ = %.4E"%(xp_vt[i]))
+    plt.grid(visible=True)
+    plt.legend(loc='lower left')
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig(fname)
+    plt.close()
 
-    for lm_i, lm in enumerate(lm_modes):
-        Vq[lm_i] = scale * sph_harm_real(lm[0], lm[1], v_theta, v_phi) 
+
+def plot_vr_ords_solution(x, spec_sp:sp.SpectralExpansionSpherical, xp_vr, xp_vr_w, xp_vt, xp_vt_w, Po, Ps, fname):
+    # xp_vt, xp_vt_qw          = spec_sp.gl_vt(num_vt, hspace_split=True, mode="npsp")
     
-    return Vq
+    num_p                    = spec_sp._p + 1
+    num_sph                  = len(spec_sp._sph_harm_lm)
+    num_vt                   = len(xp_vt)
+    num_vr                   = len(xp_vr)
 
-def compute_proj_ops(Nvt,  lmax):
-    gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
-    gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
-    gx_0_p1 , gw_0_p1  = 0.5 * gx + 0.5, 0.5 * gw
-    xp_vt              = np.append(np.arccos(gx_m1_0), np.arccos(gx_0_p1)) 
-    xp_vt_qw           = np.append(gw_m1_0, gw_0_p1)
-
-    Vq                 = Vq_sph([(l,0) for l in range(lmax+1)], xp_vt, np.zeros_like(xp_vt))
+    Pr , Pb                  = spec_sp.radial_to_vr_projection_ops(xp_vr, xp_vr_w)
+    Po, Ps                   = spec_sp.sph_ords_projections_ops(xp_vt, xp_vt_w, mode="hsph")
     
-    op_po2sh           = (Vq @ np.diag(xp_vt_qw)) * 2 * np.pi
-    op_psh2o           = Vq.T 
 
-    return xp_vt, xp_vt_qw, op_po2sh, op_psh2o
+    # idx                      = np.logical_and(xp_vr>1e-4, xp_vr < V_DOMAIN[1] * (1-1e-2))
+    # y                        = x.reshape((num_vr, num_vt))[idx,:]
+    # vr                       = xp_vr[idx]
+
+    y                        = x.reshape((num_vr, num_vt))
+    vr                       = xp_vr
+
+    #yp                      = np.einsum("ia,jb, ab->ij", (Pr @ Pb), (Po @ Ps), x.reshape((num_vr, num_vt)))
+    #yp                       = np.einsum("jb,kb->kj", (Po @ Ps), x.reshape((num_vr, num_vt))).reshape((num_vr, num_vt))
+    
+
+    
+    
+
+    plt.figure(figsize=(10, 10), dpi=200)
+    #plt.subplot(2, num_vt//2, 1)
+    for i in range(num_vt):
+        #plt.subplot(2, num_vt//2, i+1)
+        # if(xp_vt[i]< np.pi * 0.5):
+        #     continue
+
+        plt.semilogy(vr, np.abs(y[:, i]) , label=r"$v_{\theta}$=%.2f"%(xp_vt[i]))
+        #plt.semilogy(xp_vr, (yp[:, i]),'--', label=r"$v_{\theta}$=%.2f"%(xp_vt[i]))
+        #plt.semilogy(xp_vt, np.abs(y.T[:, 1::30]))
+        plt.xlabel(r"$v_r$")
+
+        
+        #plt.title(r"$v_{\theta}$ = %.4E"%(xp_vt[i]))
+    plt.ylim((1e-16, 1))
+    plt.grid(visible=True)
+    plt.legend(loc='lower left')
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig(fname)
+    plt.close()
+
+
+def backward_euler_ords(spec_sp:sp.SpectralExpansionSpherical, num_vt, FOp, y0, t_end, nsteps):
+    xp_vt, xp_vt_qw          = spec_sp.gl_vt(num_vt, hspace_split=True, mode="npsp")
+    Po, Ps                   = spec_sp.sph_ords_projections_ops(xp_vt, xp_vt_qw, mode="sph")
+
+
+    num_p   = spec_sp._p + 1
+    num_sph = len(spec_sp._sph_harm_lm)
+
+    dt      = t_end/nsteps
+    A       = np.linalg.inv(np.eye(FOp.shape[0]) + dt* FOp)
+    k_vec   = spec_sp._basis_p._t_unique
+
+    def to_ords(x):
+        return np.einsum("il,vl->vi", Po, x.reshape((num_p , num_sph))).reshape((-1))
+    
+    def to_sph(x):
+        return np.einsum("il,vl->vi", Ps, x.reshape((num_p , num_vt))).reshape((-1))
+    
+    y      = np.zeros((y0.shape[0], nsteps+1))
+    tt     = np.zeros(nsteps+1)
+    
+    y1     = to_sph(to_ords(y0))
+    x0     = to_ords(y0)
+    y[:,0]  = y0
+    #print(y0[-32:])
+
+    for i in range(1, nsteps+1):
+        tt[i]   = i * dt
+
+        if (i==1 or i %5 ==0):
+            plot_ords_solution(x0, spec_sp, np.linspace(V_DOMAIN[0], (1-1e-8) * V_DOMAIN[1], 1000), xp_vt, xp_vt_qw, Po, Ps,
+                               "%s/idx_%04d.png"%("plot_scripts/ords", i))
+
+        
+
+        x0 = x0.reshape((num_p, num_vt))
+        if args.Vz > 0:
+            x0[-1, xp_vt > 0.5 * np.pi] = 0.0
+        else:
+            x0[-1, xp_vt < 0.5 * np.pi] = 0.0
+        x0 = x0.reshape((-1))
+
+        x0 = np.matmul(A,x0)
+
+        y[:, i] = to_sph(x0)
+
+    return tt, y
+
+def backward_euler_vr_ords(spec_sp:sp.SpectralExpansionSpherical, num_vt, FOp, y0, t_end, nsteps):
+    num_p                    = spec_sp._p + 1
+    num_sph                  = len(spec_sp._sph_harm_lm)
+    mr_inv                   = spec_sp.inverse_mass_mat(spec_sp.compute_mass_matrix())[0::num_sph, 0::num_sph]
+
+
+    xp_vr, xp_vr_qw          = spec_sp.gl_vr(args.spline_qpts, use_bspline_qgrid=True)
+    xp_vt, xp_vt_qw          = spec_sp.gl_vt(num_vt, hspace_split=True, mode="npsp")
+    Po , Ps                  = spec_sp.sph_ords_projections_ops(xp_vt, xp_vt_qw, mode="sph")
+    Pr , Pb                  = spec_sp.radial_to_vr_projection_ops(xp_vr, xp_vr_qw)
+    
+    
+    num_vr                   = len(xp_vr)
+    dt                       = t_end/nsteps
+    A                        = np.linalg.inv(np.eye(FOp.shape[0]) + dt* FOp)
+    k_vec                    = spec_sp._basis_p._t_unique
+
+    def to_bs(x):
+        return np.einsum("il,lm->im", Pb, x.reshape((num_vr , -1))).reshape((-1))
+
+    def to_vr_ords(x):
+        return np.einsum("il,jm,lm->ij", Pr, Po, x.reshape((num_p , num_sph))).reshape((-1))
+    
+    def to_bs_sph(x):
+        return np.einsum("il,jm,lm->ij", Pb, Ps, x.reshape((num_vr , num_vt))).reshape((-1))
+    
+    y      = np.zeros((y0.shape[0], nsteps+1))
+    tt     = np.zeros(nsteps+1)
+    
+    x0     = to_vr_ords(y0)
+    y1     = to_bs_sph(x0)
+    y[:,0]  = y0
+    
+    print("norm: %.2E"%(np.linalg.norm(y1-y0)/np.linalg.norm(y0)))
+
+    for i in range(0, nsteps):
+        tt[i]   = i * dt
+
+        if (i %10 ==0):
+            plot_vr_ords_solution(x0, spec_sp, xp_vr, xp_vr_qw, xp_vt, xp_vt_qw, Po, Ps,
+                               "%s/idx_%04d.png"%("plot_scripts/ords", i))
+
+        x0 = np.matmul(A,x0)
+        y[:, i] = to_bs_sph(x0)
+
+    return tt, y
+
 
 def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
 
@@ -96,7 +251,7 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     V_DOMAIN      = v_doamin
     VTH           = 1.0
     spline_order  = sp_order
-    basis.BSPLINE_NUM_Q_PTS_PER_KNOT = args.spline_q_pts_per_knot
+    basis.BSPLINE_NUM_Q_PTS_PER_KNOT = args.spline_qpts
     basis.BSPLINE_BASIS_ORDER=spline_order
 
     num_p = NR+1
@@ -134,29 +289,46 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     maxwellian   = BEUtils.get_maxwellian_3d(VTH_C, 1)
     hv           = lambda v,vt,vp : np.exp(-v**2)
     h_vec        = BEUtils.function_to_basis(spec_xlbspline,hv,maxwellian,NUM_Q_VR, NUM_Q_VT, NUM_Q_VP,Minv=Minv)
-
-    spec_sp        = spec_xlbspline
+    spec_sp      = spec_xlbspline
     
-    if(args.use_ords==1):
+    if(args.use_fv==1):
         # ordinate based advection
-        Nvt                      = args.num_ords
-        xp_vt, xp_vt_qw, Ps, Po  = compute_proj_ops(Nvt, lmax=L_MODE_MAX)
-        mm_inv_ords              = np.kron(Minv[0::num_sph, 0::num_sph], np.eye(Nvt))
-        advmatEp, advmatEn       = spec_sp.compute_advection_matrix_ordinates(xp_vt, use_vt_upwinding=True)
-        advmat                   = advmatEp if args.Vz > 0 else advmatEn
+        num_vt                   = args.num_ords
+        xp_vt, xp_vt_qw          = spec_sp.gl_vt(num_vt, hspace_split=True, mode="npsp")
+        Po, Ps                   = spec_sp.sph_ords_projections_ops(xp_vt, xp_vt_qw, mode="sph")
+
+        # tau_supg                 = spec_sp.supg_param()
+        # mm_supg                  = np.kron(spec_sp.compute_mass_matrix_supg(), np.diag(np.cos(xp_vt)))
+        # mm_mat                   = np.kron(M[0::num_sph, 0::num_sph], np.eye(num_vt))  + tau_supg *  mm_supg
+        #mm_inv_ords              = bte_utils.choloskey_inv(mm_mat) #spec_sp.inverse_mass_mat(mm_mat)
         
-        #advmat                   = spec_sp.compute_advection_matrix_ordinates(xp_vt, use_vt_upwinding=False)
-        advmat                   = mm_inv_ords @ advmat
-        advmat                   = advmat.reshape((num_p, Nvt, num_p, Nvt))
+        
+        # mm_inv_ords              = np.kron(Minv[0::num_sph, 0::num_sph], np.eye(num_vt))
+        # advmatEp, advmatEn       = spec_sp.compute_advection_matrix_ordinates(xp_vt, use_vt_upwinding=True)
+        # advmat                   = advmatEn if args.Vz > 0 else advmatEp
+        # advmat                   = mm_inv_ords @ advmat
+        # advmat                   = advmat.reshape((num_p, num_vt, num_p, num_vt))
+
+        # if args.Vz > 0:
+        #     advmat[-1, xp_vt > 0.5 * np.pi, :, :] = 0.0
+        # else:
+        #     advmat[-1, xp_vt < 0.5 * np.pi, :, :] = 0.0
+
+        # advmat = advmat.reshape((num_p * num_vt, num_p * num_vt))
+        xp_vr, xp_vr_qw          = spec_sp.gl_vr(args.spline_qpts, use_bspline_qgrid=True)
+        num_vr                   = len(xp_vr)
+        advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(xp_vr, xp_vt, sw_vr=2, sw_vt=2, use_upwinding=True)
+        advmat                   = advmatEn if args.Vz > 0 else advmatEp
+        advmat                   = advmat.reshape((num_vr, num_vt, num_vr, num_vt))
+        advmat = advmat.reshape((num_vr * num_vt, num_vr * num_vt))
         
         #print(advmat.reshape((num_p, Nvt, num_p, Nvt)).shape, Po.shape)
-        advmat                   = np.einsum("pqki,il->pqkl" , advmat.reshape((num_p, Nvt, num_p, Nvt)), Po)
-        advmat                   = np.einsum("qi,pikl->pqkl" , Ps, advmat).reshape((num_p * num_sph, num_p * num_sph))
+        # advmat                   = np.einsum("pqki,il->pqkl" , advmat.reshape((num_p, num_vt, num_p, num_vt)), Po)
+        # advmat                   = np.einsum("qi,pikl->pqkl" , Ps, advmat).reshape((num_p * num_sph, num_p * num_sph))
+
         advmat                   = (advmat) * args.Vz
-        qA                       = np.eye(advmat.shape[0])
-        #h_vec       = Po @ h_vec.reshape((num_p, num_sph)).T
-
-
+        qA                       = np.eye(num_p * num_sph)
+        
         
     else:
         if(args.use_dg==0):
@@ -176,16 +348,17 @@ def solve_advection(nr, sph_lm, sp_order, v_doamin,t_end=5e-1):
     coeffs_new  = np.matmul(np.transpose(qA), h_vec)
     coeffs      = np.matmul(np.transpose(qA), h_vec)
     
-        
-    
-    func = lambda t,a: -np.matmul(advmat, a)  
+    #func = lambda t,a: -np.matmul(advmat, a)  
     #sol  = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=DT, method='RK45', t_eval=np.linspace(0,t_end,10), rtol=1e-10, atol=1e-30)
     #sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=DT, method='RK45',atol=1e-15, rtol=2.220446049250313e-14,t_eval=np.linspace(0,t_end,10))
     #sol = scipy.integrate.solve_ivp(func, (0,t_end), coeffs, max_step=DT, method='BDF',atol=1e-30, rtol=1e-3, jac=-advmat, t_eval=np.linspace(0,t_end,10))
     #y    = sol.y
     #tt   = sol.t
-
-    tt, y      = backward_euler(advmat, coeffs, t_end, int(t_end/args.T_DT))
+    if(args.use_fv==1):
+        #tt, y      = backward_euler_ords(spec_sp, num_vt, advmat, coeffs, t_end, int(t_end/args.T_DT))
+        tt, y      = backward_euler_vr_ords(spec_sp, num_vt, advmat, coeffs, t_end, int(t_end/args.T_DT))
+    else:
+        tt, y      = backward_euler(spec_sp, advmat, coeffs, t_end, int(t_end/args.T_DT))
     coeffs_new = np.matmul(qA, y[:,-1])
     coeffs     = np.matmul(qA, coeffs)
 
@@ -239,17 +412,19 @@ parser.add_argument("-q_vp", "--quad_phi"                     , help="quadrature
 parser.add_argument("-q_st", "--quad_s_theta"                 , help="quadrature in scattering polar"    , type=int, default=8)
 parser.add_argument("-q_sp", "--quad_s_phi"                   , help="quadrature in scattering azimuthal", type=int, default=8)
 parser.add_argument("-sp_order", "--spline_order"             , help="b-spline order", type=int, default=1)
-parser.add_argument("-spline_qpts", "--spline_q_pts_per_knot" , help="q points per knots", type=int, default=4)
+parser.add_argument("-spline_qpts", "--spline_qpts"           , help="q points per knots", type=int, default=4)
 parser.add_argument("-E", "--E_field"                         , help="Electric field in V/m", type=float, default=100)
 parser.add_argument("-dv", "--dv_target"                      , help="target displacement of distribution in v_th units", type=float, default=0)
 parser.add_argument("-nt", "--num_timesteps"                  , help="target number of time steps", type=float, default=100)
 parser.add_argument("-dg", "--use_dg"                         , help="enable dg splines", type=int, default=0)
 parser.add_argument("-Vz", "--Vz"                             , help="z - speed ", type=float, default=1)
-parser.add_argument("-use_ords", "--use_ords"                 , help="use ordinates based advection", type=int, default=0)
+parser.add_argument("-use_fv", "--use_fv"                     , help="use grid based FV solver", type=int, default=0)
 parser.add_argument("-num_ords", "--num_ords"                 , help="num ordinates", type=int, default=8)
 
 args         = parser.parse_args()
 print(args)
+make_dir("plot_scripts/ords")
+make_dir("plot_scripts/sph")
 
 num_dofs_all  = [(nr, args.l_max) for nr in args.NUM_P_RADIAL]
 error_linf    = np.zeros(len(num_dofs_all))
@@ -259,11 +434,11 @@ error_l2_2d   = np.zeros(len(num_dofs_all))
 
 DT       = args.T_DT
 T_END    = args.T_END
-V_DOMAIN = (0,6)
+V_DOMAIN = (0,4)
 SP_ORDER = args.spline_order
 
-x = np.linspace(0, 0.9999 * V_DOMAIN[1], 50)
-z = np.linspace(0, 0.9999 * V_DOMAIN[1], 50)
+x = np.linspace(-0.9999 * V_DOMAIN[1], 0.9999 * V_DOMAIN[1], 50)
+z = np.linspace(-0.9999 * V_DOMAIN[1], 0.9999 * V_DOMAIN[1], 50)
 quad_grid = np.meshgrid(x,z,indexing='ij')
 y = np.zeros_like(quad_grid[0])
 
@@ -358,7 +533,7 @@ plt.ylabel('error')
 plt.xlabel("Nr")
 plt.grid()
 
-if(args.use_ords==1):
+if(args.use_fv==1):
     fig.savefig("%s_ords.png"%(args.out_fname), dpi=300)
 else:
     if len(spec_xlbspline._basis_p._dg_idx)==2:

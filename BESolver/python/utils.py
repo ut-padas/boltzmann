@@ -470,15 +470,16 @@ def function_to_basis(spec_sp: spec_spherical.SpectralExpansionSpherical, hv, ma
     legendre     = basis.Legendre()
     [glx,glw]    = legendre.Gauss_Pn(NUM_Q_VT)
     VTheta_q     = np.arccos(glx)
-    VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
+    # VPhi_q       = np.linspace(0,2*np.pi,NUM_Q_VP)
 
-    assert NUM_Q_VP>1
-    sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
-    WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
+    # assert NUM_Q_VP>1
+    # sq_fac_v = (2*np.pi/(NUM_Q_VP-1))
+    # WVPhi_q  = np.ones(NUM_Q_VP)*sq_fac_v
 
-    #trap. weights
-    WVPhi_q[0]  = 0.5 * WVPhi_q[0]
-    WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
+    # #trap. weights
+    # WVPhi_q[0]  = 0.5 * WVPhi_q[0]
+    # WVPhi_q[-1] = 0.5 * WVPhi_q[-1]
+    VPhi_q, WVPhi_q = spec_sp.gl_vp(NUM_Q_VP)
 
     l_modes      = list(set([l for l,_ in spec_sp._sph_harm_lm])) 
     mm_g         = np.array([])

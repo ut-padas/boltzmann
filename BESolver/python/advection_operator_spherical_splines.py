@@ -231,15 +231,16 @@ def backward_euler_vr_ords(spec_sp:sp.SpectralExpansionSpherical, num_vt, FOp, y
     
     print("norm: %.2E"%(np.linalg.norm(y1-y0)/np.linalg.norm(y0)))
 
-    for i in range(0, nsteps):
+    for i in range(0, nsteps+1):
         tt[i]   = i * dt
+        y[:, i] = to_bs_sph(x0)
 
         if (i %10 ==0):
             plot_vr_ords_solution(x0, spec_sp, xp_vr, xp_vr_qw, xp_vt, xp_vt_qw, Po, Ps,
                                "%s/idx_%04d.png"%("plot_scripts/ords", i))
 
         x0 = np.matmul(A,x0)
-        y[:, i] = to_bs_sph(x0)
+        
 
     return tt, y
 

@@ -15,6 +15,8 @@ import scipy.integrate
 import scipy.sparse
 import sym_cc
 import sympy
+import scipy.interpolate
+import mesh
 from multiprocess import Pool
 
 class CollissionOp(abc.ABC):
@@ -1329,7 +1331,92 @@ class CollisionOpSP():
         else:
             raise NotImplementedError("only splines basis is implemented for hsph lop eulerian")
         
+    def _Lop_eulerian_strong_form(self, xp_vr, xp_vt, collision, maxwellian, vth, tgK, Nvts=32, Nvps=32, azimuthal_symmetry=True):
+        assert azimuthal_symmetry, "only azimuthal symmetry is implemented for binary collisions operator"
+        g        = collision
+        c_gamma  = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+
+        try:
+            import cupy as cp
+            import cupyx.scipy.interpolate
+            _  = cp.random.rand(3)
+            xp = cp
+            lin_ip = cupyx.scipy.interpolate.interp1d
+        except Exception as e:
+            print(e)
+            xp       = np
+            lin_ip   = scipy.interpolate.interp1d
+        
+        def asnumpy(x):
+            a = cp.asnumpy(x) if xp == cp else x
+            return a 
+
+        spec_sp     = self._spec
+        vr, vr_qw   = xp.asarray(xp_vr[0]), xp.asarray(xp_vr[1])
+        vt, vt_qw   = xp.asarray(xp_vt[0]), xp.asarray(xp_vt[1])
+        vp, vp_qw   = xp.asarray([0]), xp.asarray([2 * np.pi])
+
+        num_vr      = len(vr)
+        num_vt      = len(vt)
+        mvrvt       = xp.kron(vr**2 * vr_qw, vt_qw) * 2 * np.pi
+        rmax        = xp.sum(vr_qw)
+        domain      = spec_sp._basis_p._domain
+        assert xp.abs((domain[1]-domain[0]) - rmax) < 1e-14
+
+        ## no need for this since we use iostropic scattering
+        # svt, svt_qw = spec_sp.gl_vt(Nvts, hspace_split=True)
+        # svp, svp_qw = spec_sp.gl_vp(Nvps)
+
+        # svt, svt_qw = xp.asarray(svt), xp.asarray(svt_qw)
+        # svp, svp_qw = xp.asarray(svp), xp.asarray(svp_qw)
+        # v_mg        = xp.meshgrid(vt, svt, svp, indexing="ij")
+        
+        detJ        = 1.0
+        if(g._type == collisions.CollisionType.EAR_G0):
+            c_mu             = 2 * g._mByM 
+            v_scale          = xp.sqrt(1- c_mu)
+            vpre             = lambda x : x/v_scale 
+            detJ             = (1/v_scale)**3
+        elif(g._type == collisions.CollisionType.EAR_G1):
+            vpre             = lambda x : xp.sqrt(x**2 + (c_gamma/vth)**2 * g._reaction_threshold)
+            detJ             = vpre(vr)/vr
+        elif(g._type == collisions.CollisionType.EAR_G2):
+            vpre             = lambda x : xp.sqrt(2 * x**2 + (c_gamma/vth)**2 * g._reaction_threshold)
+            detJ             = 2.0 * vpre(vr) / vr
+            #print(rmax, vr[-1], (c_gamma/vth)**1 * np.sqrt(g._reaction_threshold))
+        else:
+            raise NotImplementedError("only EAR G0, G1, G2 are implemented for hsph lop eulerian")
+
+        vr_pre      = vpre(vr)
+        dcs         = (1/(4 * xp.pi)) * vr**1     * vth * xp.asarray(g.total_cross_section(asnumpy((vr * vth / c_gamma)**2)))
+        dcs_pre     = (1/(4 * xp.pi)) * vr_pre**1 * vth * xp.asarray(g.total_cross_section(asnumpy((vr_pre * vth / c_gamma)**2)))
+
+        
+        cminus      = 4 * xp.pi * xp.kron(xp.diag(dcs), xp.eye(num_vt))
+        Lvr         = lin_ip(vr, xp.eye(num_vr), kind="linear", axis=0, bounds_error=False, fill_value=0.0)(vr_pre)
+        bidx        = xp.arange(num_vr)[xp.logical_and(vr_pre>vr[-1], vr_pre<=rmax)]
+        
+        if len(bidx)>0:
+            assert (Lvr[bidx,:]==0).all()==True
+            Lvr[bidx, -1] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
+        
+        #print(bidx, num_vr)
+        #print(Lvr)
+        #print(vr)
+        #print(vpre(vr))
+        #np.savetxt("Lvr.txt", Lvr)
+        # if(g._type == collisions.CollisionType.EAR_G0):
+        #     bidx = [vr_pre>vr[-1]]
+        #     assert (Lvr[bidx,:]==0).all()==True
+        #     Lvr[bidx, bidx] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
             
+        f0_op       = xp.repeat(vt_qw * np.pi* 2, repeats=num_vt, axis=0).reshape((num_vt, num_vt)).T
+        assert (np.abs(xp.sum(f0_op, axis=1) - 4 * np.pi) < 1e-12).all() == True
+        cplus       = xp.kron(xp.diag(dcs_pre * detJ) @ Lvr, f0_op) 
+        return cplus - cminus
+        
+
+
 
 
         

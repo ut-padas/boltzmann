@@ -913,8 +913,8 @@ class SpectralExpansionSpherical:
             Dvr_LtoR          = xp.asarray(mesh.upwinded_dx(xp_vr,1 , sw_vr, "L"))
             Dvr_RtoL          = xp.asarray(mesh.upwinded_dx(xp_vr,1 , sw_vr, "R"))
 
-            Dvr_LtoR[0,:]     = 0.0
-            Dvr_LtoR[0,0]     = 1/(xp_vr[0] - k_domain[0])
+            # Dvr_LtoR[0,:]     = 0.0
+            # Dvr_LtoR[0,0]     = 1/(xp_vr[0] - k_domain[0])
 
             Dvr_RtoL[-1 , :]  = 0.0
             Dvr_RtoL[-1 ,-1]  = -1/(k_domain[1] - xp_vr[-1])
@@ -1017,19 +1017,19 @@ class SpectralExpansionSpherical:
 
             # el
             if (mode == "npsp"):
-                gx, gw               = basis.gauss_radau_quadrature(Nvt//2, fixed_point=-1)
-                gx_m1_0 , gw_m1_0    = 0.5 * gx - 0.5, 0.5 * gw
-                gx, gw               = -np.flip(gx), np.flip(gw)
-                gx_p1_0 , gw_p1_0    = 0.5 * gx + 0.5, 0.5 * gw
+                # gx, gw               = basis.gauss_radau_quadrature(Nvt//2, fixed_point=-1)
+                # gx_m1_0 , gw_m1_0    = 0.5 * gx - 0.5, 0.5 * gw
+                # gx, gw               = -np.flip(gx), np.flip(gw)
+                # gx_p1_0 , gw_p1_0    = 0.5 * gx + 0.5, 0.5 * gw
                 
-                assert np.abs(gx_m1_0[0]  +1) < 1e-12
-                assert np.abs(gx_p1_0[-1] -1) < 1e-12
+                # assert np.abs(gx_m1_0[0]  +1) < 1e-12
+                # assert np.abs(gx_p1_0[-1] -1) < 1e-12
 
-                gx_m1_0[0]  = -1.0
-                gx_p1_0[-1] =  1.0
+                # gx_m1_0[0]  = -1.0
+                # gx_p1_0[-1] =  1.0
 
-                xp_vt                = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
-                xp_vt_qw             = np.append(gw_m1_0, gw_p1_0)
+                # xp_vt                = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
+                # xp_vt_qw             = np.append(gw_m1_0, gw_p1_0)
                 #print(xp_vt)
                 
                 # gx_p1_0 = np.flip(np.linspace(0, 0.5 * np.pi, Nvt//2, endpoint=False))
@@ -1045,11 +1045,11 @@ class SpectralExpansionSpherical:
                 # xp_vt_qw     = np.flip(xp_vt_qw)
 
                 
-                # gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
-                # gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
-                # gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw
-                # xp_vt              = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
-                # xp_vt_qw           = np.append(gw_m1_0, gw_p1_0)
+                gx, gw             = basis.Legendre().Gauss_Pn(Nvt//2)
+                gx_m1_0 , gw_m1_0  = 0.5 * gx - 0.5, 0.5 * gw
+                gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw
+                xp_vt              = np.append(np.arccos(gx_m1_0), np.arccos(gx_p1_0)) 
+                xp_vt_qw           = np.append(gw_m1_0, gw_p1_0)
             elif (mode == "np"):
                 gx, gw             = basis.Legendre().Gauss_Pn(Nvt)
                 gx_p1_0 , gw_p1_0  = 0.5 * gx + 0.5, 0.5 * gw

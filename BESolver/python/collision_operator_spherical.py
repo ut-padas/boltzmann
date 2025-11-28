@@ -1411,9 +1411,9 @@ class CollisionOpSP():
         #     Lvr[bidx, bidx] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
             
         f0_op       = xp.repeat(vt_qw * np.pi* 2, repeats=num_vt, axis=0).reshape((num_vt, num_vt)).T
-        assert (np.abs(xp.sum(f0_op, axis=1) - 4 * np.pi) < 1e-12).all() == True
+        assert (xp.abs(xp.sum(f0_op, axis=1) - 4 * xp.pi) < 1e-12).all() == True
         cplus       = xp.kron(xp.diag(dcs_pre * detJ) @ Lvr, f0_op) 
-        return cplus - cminus
+        return asnumpy(cplus - cminus)
         
 
 

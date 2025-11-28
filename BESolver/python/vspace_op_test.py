@@ -154,7 +154,7 @@ class bte_ops():
             n0         = args.n0
             bolsig_grid_pts = 1024
             bolsig_precision = 1e-11
-            bolsig_convergence = 1e-8
+            bolsig_convergence = 1e-12
             ns_by_n0           = [1 for i in range(5)]
             E_field            = args.E
             Tg                 = args.Tg
@@ -206,24 +206,37 @@ class bte_ops():
         except Exception as e:
            print("running Bolsig+ solver failed with error: %s"%(e))
 
+    def _select_device(self):
+        try:
+            import cupy as cp
+            import cupyx.scipy.interpolate
+            _  = cp.random.rand(3)
+            xp = cp
+        except Exception as e:
+            xp           = np
 
-        
+        def asnumpy(x):
+            a = cp.asnumpy(x) if xp == cp else x
+            return a
 
-
+        return xp, asnumpy
 
     def _uQRQT(self, u, rmidx):
+        
+        xp, asnumpy     = self._select_device()
         mw              = bte_utils.get_maxwellian_3d(self.vth)
-        p_vec           = u.reshape((u.shape[0], 1)) / np.sqrt(np.dot(u, u))
-        Imat            = np.eye(u.shape[0])
-        Impp            = (Imat - np.outer(p_vec, p_vec))
-        Qm,Rm           = np.linalg.qr(Impp)
+        u0              = xp.asarray(u)
+        p_vec           = u0.reshape((u0.shape[0], 1)) / xp.sqrt(xp.dot(u0, u0))
+        Imat            = xp.eye(u0.shape[0])
+        Impp            = (Imat - xp.outer(p_vec, p_vec))
+        Qm,Rm           = xp.linalg.qr(Impp)
 
-        Q               = np.delete(Qm,rmidx, axis=1)
-        R               = np.delete(Rm,rmidx, axis=0)
-        QT              = np.transpose(Q)
+        Q               = xp.delete(Qm,rmidx, axis=1)
+        R               = xp.delete(Rm,rmidx, axis=0)
+        QT              = xp.transpose(Q)
 
-        qr_error1       = np.linalg.norm(Impp - np.dot(Q,R)) / np.linalg.norm(Impp)
-        qr_error2       = np.linalg.norm(np.dot(QT,Q)-np.eye(QT.shape[0]))
+        qr_error1       = xp.linalg.norm(Impp - xp.dot(Q,R)) / xp.linalg.norm(Impp)
+        qr_error2       = xp.linalg.norm(xp.dot(QT,Q)-xp.eye(QT.shape[0]))
 
         print("|Impp - QR|/|Impp| = %.8E"%(qr_error1))
         print("|I - QT Q|         = %.8E"%(qr_error2))
@@ -232,13 +245,13 @@ class bte_ops():
         assert qr_error2 < 1e-10
 
 
-        return u, Q, R, QT
+        return asnumpy(u0), asnumpy(Q), asnumpy(R), asnumpy(QT)
     
     def _step_normalized(self, x0, t, dt, u, Q, R, QT, Cmat, Emat, E, xp, verbose=0):
         vth               = self.vth
         f1                = u / xp.dot(u, u)
         Cmat_p_Emat       = Cmat + Emat * E
-        QT_Cmat_p_Emat_Q  = xp.dot(QT, np.dot(Cmat_p_Emat,Q))
+        QT_Cmat_p_Emat_Q  = xp.dot(QT, xp.dot(Cmat_p_Emat,Q))
         QT_Cmat_p_Emat_f1 = xp.dot(xp.dot(QT, Cmat_p_Emat),f1)
         Wmat              = xp.dot(u, Cmat_p_Emat)
         #Wmat              = 0*xp.dot(u, Cmat)
@@ -259,7 +272,7 @@ class bte_ops():
         #rhs_vec     = fb_prev + dt * QT_Cmat_p_Emat_f1 - dt * np.dot(np.dot(Wmat,h_prev) * QT, h_prev)
         #fb_curr     = np.dot(Pmat_inv,rhs_vec)
                 
-        h_curr      = f1 + np.dot(Q,fb_curr)
+        h_curr      = f1 + xp.dot(Q,fb_curr)
 
         rtol= (xp.linalg.norm(h_prev - h_curr))/xp.linalg.norm(h_curr)
         atol= (xp.linalg.norm(h_prev - h_curr))
@@ -270,20 +283,8 @@ class bte_ops():
         return h_curr
     
     def evolve(self, dt, T, plot_sol=False):
-        args = self.args
-        try:
-            import cupy as cp
-            import cupyx.scipy.interpolate
-            _  = cp.random.rand(3)
-            xp = cp
-            lin_ip = cupyx.scipy.interpolate.interp1d
-        except Exception as e:
-            xp           = np
-
-        def asnumpy(x):
-            a = cp.asnumpy(x) if xp == cp else x
-            return x
-
+        args         = self.args
+        xp, asnumpy  = self._select_device()
 
         mw           = bte_utils.get_maxwellian_3d(self.vth)
         io_freq      = args.io
@@ -301,7 +302,7 @@ class bte_ops():
         # y0           = xp.repeat((mw(xp_vr) * vth**3).reshape((-1,1)), num_vt, axis=1).reshape((-1))
         # hv           = lambda v,vt,vp : (1/np.sqrt(np.pi)**3 ) * (np.exp(-((v)**2))) 
 
-        y0           = xp.kron(mw(xp_vr) * vth**3, 1+np.cos(xp_vt)).reshape((-1))
+        y0           = xp.asarray(np.kron(mw(xp_vr) * vth**3, 1+np.cos(xp_vt)).reshape((-1)))
         hv           = lambda v,vt,vp : (1/np.sqrt(np.pi)**3 ) * (np.exp(-((v)**2))) * (1 + np.cos(vt))
         y0_bsp       = xp.asarray(bte_utils.function_to_basis(spec_sp, hv, mw, spec_sp._num_q_radial, 8, 2, Minv=minv))
 
@@ -336,23 +337,27 @@ class bte_ops():
 
         qoi          = [[] for i in range(5)]
 
-        ev_bg     = self._bolsig_data["ev"]
-        bolsig_f0 = self._bolsig_data["f0"]
-        bolsig_a  = (self._bolsig_data["f1"] / bolsig_f0) * np.sqrt(3)
+        if (len(self._bolsig_data.items()) > 0):
+            ev_bg     = self._bolsig_data["ev"]
+            bolsig_f0 = self._bolsig_data["f0"]
+            bolsig_a  = (self._bolsig_data["f1"] / bolsig_f0) * np.sqrt(3)
 
-        f0_cf = scipy.interpolate.interp1d(ev_bg, bolsig_f0, kind='cubic', bounds_error=False, fill_value=(bolsig_f0[0],bolsig_f0[-1]))
-        fa_cf = scipy.interpolate.interp1d(ev_bg, bolsig_a,  kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
-        ff    = lambda v,vt,vp : f0_cf(.5*(v* vth)**2/collisions.ELECTRON_CHARGE_MASS_RATIO) * (1. - fa_cf(.5*(v* vth)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
+            f0_cf = scipy.interpolate.interp1d(ev_bg, bolsig_f0, kind='cubic', bounds_error=False, fill_value=(bolsig_f0[0],bolsig_f0[-1]))
+            fa_cf = scipy.interpolate.interp1d(ev_bg, bolsig_a,  kind='cubic', bounds_error=False, fill_value=(bolsig_a[0],bolsig_a[-1]))
+            ff    = lambda v,vt,vp : f0_cf(.5*(v* vth)**2/collisions.ELECTRON_CHARGE_MASS_RATIO) * (1. - fa_cf(.5*(v* vth)**2/collisions.ELECTRON_CHARGE_MASS_RATIO)*np.cos(vt))
 
-        hh    =  bte_utils.function_to_basis(spec_sp, ff, self.mw, spec_sp._num_q_radial, 2, 2, Minv=self.minv)
-        hh    =  bte_utils.normalized_distribution(spec_sp, self.m0_bsp, hh, self.mw, vth)
+            hh    =  bte_utils.function_to_basis(spec_sp, ff, self.mw, spec_sp._num_q_radial, 2, 2, Minv=self.minv)
+            hh    =  bte_utils.normalized_distribution(spec_sp, self.m0_bsp, hh, self.mw, vth)
 
-        self._bolsig_data["bolsig_hh"] = hh
-        self._bolsig_data["bolsig_fvrvt"] = ff
+            self._bolsig_data["bolsig_hh"] = hh
+            self._bolsig_data["bolsig_fvrvt"] = ff
 
-        vg    = np.meshgrid(xp_vr, xp_vt, indexing="ij")
-        y0_bg = ff(vg[0], vg[1], 0.0).reshape((-1))
-        #print(y0_bg.shape)
+            vg    = np.meshgrid(xp_vr, xp_vt, indexing="ij")
+            y0_bg = xp.asarray(ff(vg[0], vg[1], 0.0).reshape((-1)))
+            szl   = (1/xp.dot(mass_vrvt , y0_bg))
+            y0_bg*= szl
+        else:
+            y0_bg = xp.zeros((num_vr * num_vt))
 
         for tidx in range(steps+1):
             t  = tidx * dt
@@ -365,30 +370,29 @@ class bte_ops():
                 ne_bsp  = xp.dot(mass_bsp,y0_bsp)
                 te_bsp  = xp.dot(temp_bsp,y0_bsp)/ne_bsp
 
-                qoi[0].append(t)
-                qoi[1].append(ne_fvm)
-                qoi[2].append(te_fvm)
+                qoi[0].append(float(t))
+                qoi[1].append(float(ne_fvm))
+                qoi[2].append(float(te_fvm))
 
-                qoi[3].append(ne_bsp)
-                qoi[4].append(te_bsp)
+                qoi[3].append(float(ne_bsp))
+                qoi[4].append(float(te_bsp))
 
                 print("time = %.4E mass = %.12E temp=%12E mass (bsp) = %.12E temp = %.12E"%(t, ne_fvm, te_fvm, ne_bsp, te_bsp))
 
                 if plot_sol:
-                    plt.figure(figsize=(8,4), dpi=200)
+                    plt.figure(figsize=(4 * num_sh + 2 , 4), dpi=200)
                     ev = (xp_vr * vth/ c_gamma)**2
                     
-                    plt.subplot(1, 2, 1)
-                    sxl   = (1/np.dot(mass_vrvt, y0)) 
-                    syl   = (1/np.dot(mass_bsp , y0_bsp))
+                    sxl   = (1/xp.dot(mass_vrvt, y0)) 
+                    syl   = (1/xp.dot(mass_bsp , y0_bsp))
                     #szl   = (1/np.dot(mass_bsp , y0_bg))
-                    szl   = (1/np.dot(mass_vrvt , y0_bg))
+                    szl   = (1/xp.dot(mass_vrvt , y0_bg))
                     
                     print(sxl, syl, szl)
-                    xl    = asnumpy(xp.einsum("li,vi->vl", Ps,y0.reshape((num_vr, num_vt)))    ) * sxl 
-                    yl    = asnumpy(xp.einsum("vi,il->vl", Pr,y0_bsp.reshape((num_p, num_sh))) ) * syl 
-                    #zl    = asnumpy(xp.einsum("vi,il->vl", Pr,y0_bg.reshape((num_p, num_sh))) ) * szl 
-                    zl    = asnumpy(xp.einsum("li,vi->vl", Ps,y0_bg.reshape((num_vr, num_vt)))    ) * szl 
+                    xl    = asnumpy(xp.einsum("li,vi->vl", Ps,y0.reshape((num_vr, num_vt)))    * sxl )  
+                    yl    = asnumpy(xp.einsum("vi,il->vl", Pr,y0_bsp.reshape((num_p, num_sh))) * syl )  
+                    #zl    = asnumpy(xp.einsum("vi,il->vl", Pr,y0_bg.reshape((num_p, num_sh))) * szl)  
+                    zl    = asnumpy(xp.einsum("li,vi->vl", Ps,y0_bg.reshape((num_vr, num_vt))) * szl )  
 
                     xl    = scipy.interpolate.interp1d(ev, xl, axis=0, bounds_error=True)
                     yl    = scipy.interpolate.interp1d(ev, yl, axis=0, bounds_error=True)
@@ -401,24 +405,32 @@ class bte_ops():
                     zl    = zl(evg)
 
                     idx   = evg>0#xl[:, 0]>1e-16
+                    for l in range(num_sh):
+                        plt.subplot(1, num_sh, l+1)
+                        plt.semilogy(evg[idx], np.abs(xl[idx, l])  , "-"  , markersize=0.2, color='C0', label=r"FVM")
+                        plt.semilogy(evg[idx], np.abs(yl[idx, l])  , "--" , markersize=0.2, color='C1', label=r"Bsp + SPH")
+                        
+                        if (l < 2):
+                            plt.semilogy(evg[idx], np.abs(zl[idx, l])  , "--" , markersize=0.2, color='C2', label=r"Bolsig+")
+
+                        plt.grid(visible=True)
+                        plt.legend()
+                        plt.title("$l=%d$"%(l))
+                        plt.xlabel(r"energy (eV)")
+                        plt.ylabel(r"$f_%d$"%(l))
+
                     
-                    plt.semilogy(evg[idx], (xl[idx, 0])  , "-"  , markersize=0.2, color='C0', label=r"l=0 w FVM")
-                    plt.semilogy(evg[idx], (yl[idx, 0])  , "--" , markersize=0.2, color='C1', label=r"l=0 w Bsp + SPH")
-                    plt.semilogy(evg[idx], (zl[idx, 0])  , "--" , markersize=0.2, color='C2', label=r"l=0 Bolsig+")
-                    plt.grid(visible=True)
-                    plt.legend()
-                    plt.xlabel(r"energy (eV)")
-                    plt.title(r"t = %.4E s"%(t))
+
                     #plt.ylim(1e-16, None)
 
-                    plt.subplot(1, 2, 2)
-                    plt.semilogy(evg[idx], np.abs(xl[idx, 1])  , "-" , markersize=0.2, color='C0', label=r"l=1 w FVM")
-                    plt.semilogy(evg[idx], np.abs(yl[idx, 1])  , "--", markersize=0.2, color='C1', label=r"l=1 w Bsp + SPH")
-                    plt.semilogy(evg[idx], np.abs(zl[idx, 1])  , "--", markersize=0.2, color='C2', label=r"l=1 Bolsig+")
-                    plt.grid(visible=True)
-                    plt.legend()
-                    plt.xlabel(r"energy (eV)")
-                    plt.title(r"t = %.4E s"%(t))
+                    # plt.subplot(1, 2, 2)
+                    # plt.semilogy(evg[idx], np.abs(xl[idx, 1])  , "-" , markersize=0.2, color='C0', label=r"l=1 w FVM")
+                    # plt.semilogy(evg[idx], np.abs(yl[idx, 1])  , "--", markersize=0.2, color='C1', label=r"l=1 w Bsp + SPH")
+                    # plt.semilogy(evg[idx], np.abs(zl[idx, 1])  , "--", markersize=0.2, color='C2', label=r"l=1 Bolsig+")
+                    # plt.grid(visible=True)
+                    # plt.legend()
+                    # plt.xlabel(r"energy (eV)")
+                    # plt.title(r"t = %.4E s"%(t))
                     #plt.ylim(1e-16, None)
                 
                     plt.tight_layout()
@@ -431,42 +443,59 @@ class bte_ops():
                                 xp.asarray(uQRQt_bsp[1]),
                                 xp.asarray(uQRQt_bsp[2]),
                                 xp.asarray(uQRQt_bsp[3]),
-                                self.cmat_bsp, self.amat_bsp, args.E, xp, verbose=(tidx%io_freq))
+                                cmat_bsp, amat_bsp, args.E, xp, verbose=(tidx%io_freq))
             
             y0     = self._step_normalized(y0,     t, dt,
                                 xp.asarray(uQRQt_fvm[0]),
                                 xp.asarray(uQRQt_fvm[1]),
                                 xp.asarray(uQRQt_fvm[2]),
                                 xp.asarray(uQRQt_fvm[3]),
-                                self.cmat_fvm, self.amat_fvm, args.E, xp, verbose=(tidx%io_freq))
+                                cmat_fvm, amat_fvm, args.E, xp, verbose=(tidx%io_freq))
 
             # y0_bsp = Linv_bsp @ (y0_bsp ) #+ 0.5 * dt * L_bsp @y0_bsp)
             # y0     = Linv     @ (y0     ) #+ 0.5 * dt * L @ y0)
 
-        if plot_sol:
-            plt.figure(figsize=(10, 5), dpi=200)
-            plt.subplot(2, 1, 1)
-            plt.plot(qoi[0], qoi[1], label=r"$n_e$ - FVM")
-            plt.plot(qoi[0], qoi[3], label=r"$n_e$ - Galerkin(BSP+SPH)")
-            plt.ylabel(r"mass [m^{-3}]")
-            plt.grid(visible=True)
-            plt.legend()
+        qoi=np.array(qoi)#asnumpy(xp.array(qoi))
+        # if plot_sol:
+        #     #plt.figure(figsize=(8, 4), dpi=200)
+        #     # plt.subplot(2, 1, 1)
+        #     # plt.plot(qoi[0], qoi[1], label=r"FVM")
+        #     # plt.plot(qoi[0], qoi[3], label=r"BSP+SPH")
+        #     # plt.ylabel(r"mass [$m^{-3}$]")
+        #     # plt.grid(visible=True)
+        #     # plt.legend()
 
-            plt.subplot(2, 1, 2)
-            plt.plot(qoi[0], qoi[2], label=r"$n_e$ - FVM")
-            plt.plot(qoi[0], qoi[4], label=r"$n_e$ - Galerkin(BSP+SPH)")
-            plt.ylabel(r"temperature [eV]")
-            plt.grid(visible=True)
-            plt.legend()
-            #plt.show()
-            plt.savefig("%s/%s_qoi_NrNvt_%d_%d.png"%(args.odir, args.o, nr, nvt))
-            plt.close()
+        #     # plt.subplot(1, 2, 1)
+        #     # plt.plot(qoi[0], qoi[2], label=r"FVM")
+        #     # plt.plot(qoi[0], qoi[4], label=r"BSP+SPH")
+        #     # plt.plot(qoi[0], np.ones(len(qoi[0])) * self._bolsig_data["energy"]/1.5, label=r"Bolsig+")
+        #     # plt.ylabel(r"temperature [eV]")
+        #     # plt.grid(visible=True)
+        #     # plt.legend()
 
-        return {"qoi": asnumpy(qoi), "bsp": asnumpy(y0_bsp), "fvm": asnumpy(y0), "Nr": nr, "Nvt": nvt, "dt": dt, "T":T, "bte": self}
+        #     # plt.subplot(1, 2, 1)
+        #     # plt.plot(qoi[0], qoi[2], label=r"FVM")
+        #     # plt.plot(qoi[0], qoi[4], label=r"BSP+SPH")
+        #     # plt.plot(qoi[0], np.ones(len(qoi[0])) * self._bolsig_data["energy"]/1.5, label=r"Bolsig+")
+        #     # plt.ylabel(r"temperature [eV]")
+        #     # plt.grid(visible=True)
+        #     # plt.legend()
+
+
+        #     #plt.show()
+        #     plt.savefig("%s/%s_qoi_NrNvt_%d_%d.png"%(args.odir, args.o, nr, nvt))
+        #     plt.close()
+        return {"qoi": qoi, "bsp": asnumpy(y0_bsp), "fvm": asnumpy(y0), "Nr": nr, "Nvt": nvt, "dt": dt, "T":T, "bte": self, "bolsig": asnumpy(y0_bg)}
+
 
 
 
 if __name__ == "__main__":
+    """
+    Example usage
+    python3 vspace_op_test.py -E 32.2e0 -nr 63 -nvt 4 -sp_order 1 -sp_qpts 8 -l_max 1 -n0 3.22e22 -T 5e-3 -dt 1e-4 -c lxcat_data/eAr_crs.Biagi.3sp2r -io 10 -ev 0.3059 -odir vcop.3sp2r.bg -o 3sp2r.E1e0Td
+
+    """
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-n0", "--n0"                             , help="n0", type=float, default= 3.22e22)
@@ -493,6 +522,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
+
     isExist = os.path.exists(args.odir)
     if not isExist:
        # Create a new directory because it does not exist
@@ -504,21 +534,27 @@ if __name__ == "__main__":
         nr  = args.nr[i]
         nvt = args.nvt[i]
         bte = bte_ops(args, nr, nvt)
-        runs.append(bte.evolve(args.dt/(2**i), args.T, plot_sol=(i==len(args.nr)-1)))
+        runs.append(bte.evolve(args.dt/(2**0), args.T, plot_sol=True))#(i==len(args.nr)-1)))
 
-    plt.figure(figsize=(8, 8), dpi=200)
-    yl_fvm_hr     = np.einsum("li,vi->vl", runs[-1]["bte"].Ps, runs[-1]["fvm"].reshape((-1, runs[-1]["Nvt"])))
-    ev_hr         = ((bte.vth/bte.c_gamma) * runs[-1]["bte"].vr_g[0])**2
-    qx            = runs[-1]["bte"].vr_g
-    rel_error_l2  = list()
-    num_sh        = args.l_max + 1
     
+    yl_fvm_hr        = np.einsum("li,vi->vl", runs[-1]["bte"].Ps, runs[-1]["fvm"].reshape((-1, runs[-1]["Nvt"])))
+    ev_hr            = ((bte.vth/bte.c_gamma) * runs[-1]["bte"].vr_g[0])**2
+    qx               = runs[-1]["bte"].vr_g
+    rel_error_l2     = list()
+    rel_error_l2_bg  = list()
+    rel_error_Te     = list()
+    num_sh           = args.l_max + 1
+    
+    plt.figure(figsize=(4 * num_sh, 8), dpi=200)
     for i in range(len(args.nr)):
         bte : bte_ops = runs[i]["bte"]
         ev            = ((bte.vth/bte.c_gamma) * bte.vr_g[0])**2
 
+        qoi           = runs[i]["qoi"]
         y_bsp         = runs[i]["bsp"]
         y_fvm         = runs[i]["fvm"]
+        y_bg          = runs[i]["bolsig"]
+
         dt            = runs[i]["dt"]
         Ps            = bte.Ps
         Pr            = bte.Pr
@@ -534,49 +570,82 @@ if __name__ == "__main__":
 
         yl_fvm         = np.zeros((num_vr+2, num_vt))
         yl_fvm[1:-1,:] = y_fvm.reshape((num_vr, num_vt))
-
-        yl_fvm        = scipy.interpolate.interp1d(vr, np.einsum("li,vi->vl", Ps, yl_fvm), axis=0, bounds_error=True) 
-        lbl           = r"$N_r$=%d,$N_\theta$=%d, dt=%.2E"%(num_vr, num_vt, dt)
-
         
+        yl_bg          = np.zeros((num_vr+2, num_vt))
+        yl_bg[1:-1, :] = y_bg.reshape((num_vr, num_vt))
+        
+        yl_fvm         = scipy.interpolate.interp1d(vr, np.einsum("li,vi->vl", Ps, yl_fvm), axis=0, bounds_error=True) 
+        yl_bg          = scipy.interpolate.interp1d(vr, np.einsum("li,vi->vl", Ps, yl_bg), axis=0, bounds_error=True) 
+        lbl            = r"$N_r$=%d,$N_\theta$=%d"%(num_vr, num_vt)
 
         yl_fvm_i      = np.einsum("li,vi->vl", Ps, y_fvm.reshape((num_vr, num_vt)))
-        
+        yl_bg_i       = np.einsum("li,vi->vl", Ps, y_bg.reshape((num_vr, num_vt)))
+        yl_bsp_i      = np.einsum("vi,il->vl", Pr, y_bsp.reshape((-1, num_sh)))
         
         
         assert num_sh  == Ps.shape[0]
         for l in range(num_sh):
-            plt.subplot(2, 2, l+1)
+            plt.subplot(2, num_sh, l+1)
+            idx = ev>0 
+            
+            if (i==0 and l < 2):
+                plt.semilogy(ev[idx], np.abs(yl_bg_i[:, l])[idx], label="Bolsig+")
 
-            #idx = np.abs(yl_fvm(qx[0])[:, l]) > 1e-21
-            #plt.semilogy(ev_hr[idx], np.abs(yl_fvm(qx[0])[:, l])[idx], label=lbl)
-            idx = np.abs(yl_fvm_i[:, l]) > 1e-21
-            plt.semilogy(ev[idx], np.abs(yl_fvm_i[:, l])[idx], label=lbl)
+            plt.semilogy(ev[idx], np.abs(yl_fvm_i[:, l])[idx], label="FVM "+ lbl)
             plt.xlabel(r"energy [eV]")
             plt.ylabel(r"$f_l$")
             plt.grid(visible=True)
             plt.legend()
-            plt.ylim((1e-20, None))
+            #plt.ylim((1e-20, None))
 
         a1 = np.dot(qx[1], np.einsum("v, vl->vl", qx[0]**2, (yl_fvm(qx[0]) - yl_fvm_hr)**2))
         a2 = np.dot(qx[1], np.einsum("v, vl->vl", qx[0]**2, (yl_fvm_hr)**2))
-        print(i, a1, np.min(np.abs((yl_fvm(qx[0]) - yl_fvm_hr))), np.max(np.abs((yl_fvm(qx[0]) - yl_fvm_hr))))
+
+        b1 = np.dot(qx[1], np.einsum("v, vl->vl", qx[0]**2, (yl_fvm(qx[0]) - yl_bg(qx[0]))**2))
+        b2 = np.dot(qx[1], np.einsum("v, vl->vl", qx[0]**2, (yl_bg(qx[0]))**2))
+        
         rel_error_l2.append( a1/a2 )
+        rel_error_l2_bg.append( b1/b2 )
+        rel_error_Te.append([np.abs(1-1.5 * qoi[2][-1]/bte._bolsig_data["energy"]), np.abs(1-1.5 * qoi[4][-1]/bte._bolsig_data["energy"])])
 
-    rel_error_l2 = np.array(rel_error_l2)
+
+    rel_error_l2    = np.array(rel_error_l2)
+    rel_error_l2_bg = np.array(rel_error_l2_bg)
+    rel_error_Te    = np.array(rel_error_Te)
+    print(rel_error_Te)
     
-    plt.subplot(2, 2, 3)
-    plt.semilogy(np.arange(len(runs))[:-1], rel_error_l2[:-1, 0], "x--")
-    plt.xlabel(r"run id")
-    plt.ylabel(r"$||y_l - y_h||_{L^2}/||y_h||_{L^2}$")
-    plt.grid(visible=True)
-    plt.xticks(range(1,len(args.nr)))
-
+    for l in range(num_sh):
+        plt.subplot(2, num_sh, l + num_sh+1)
+        plt.semilogy(np.arange(len(runs))[:-1], rel_error_l2[:-1, l], "x--", label=r"FVM vs. (self)")
+        if (l < 2):
+            plt.semilogy(np.arange(len(runs))[:-1], rel_error_l2_bg[:-1, l], "x--", label=r"FVM vs. Bolsig+")
+        plt.xlabel(r"run id")
+        plt.ylabel(r"$||y_l - y_h||_{L^2}/||y_h||_{L^2}$")
+        plt.grid(visible=True)
+        plt.legend()
+        plt.xticks(range(len(args.nr)))
+        
     plt.tight_layout()
     plt.savefig("%s/%s.png"%(args.odir, args.o))
     print("saving to ", "%s/%s.png"%(args.odir, args.o))
-    #plt.show()
     plt.close()
+
+    plt.figure(figsize=(4, 4), dpi=200)
+    plt.semilogy(np.arange(len(args.nr)), rel_error_Te[:, 0], label=r"$T_e$ - FVM vs. Bolsig+")
+    plt.semilogy(np.arange(len(args.nr)), rel_error_Te[:, 1], label=r"$T_e$ - Bsp+SPH vs. Bolsig+")
+    plt.legend()
+    plt.xlabel(r"run id")
+    plt.ylabel(r"relative error")
+    plt.grid(visible=True)
+    plt.xticks(range(len(args.nr)))
+    plt.savefig("%s/%s_qoi.png"%(args.odir, args.o))
+    print("saving to ", "%s/%s_qoi.png"%(args.odir, args.o))
+    plt.close()
+
+
+
+    #plt.show()
+    
 
     
 

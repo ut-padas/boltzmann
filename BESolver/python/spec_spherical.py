@@ -901,9 +901,9 @@ class SpectralExpansionSpherical:
         num_vr            = len(xp_vr)
         num_vt            = len(xp_vt)
 
-        xp_cos_vt         = xp.cos(xp_vt)
-        xp_sin_vt         = xp.sin(xp_vt)
-        vr_inv            = 1/xp_vr
+        xp_cos_vt         = xp.cos(xp.asarray(xp_vt))
+        xp_sin_vt         = xp.sin(xp.asarray(xp_vt))
+        vr_inv            = 1/xp.asarray(xp_vr)
         k_domain          = self._basis_p._domain
 
         if (use_upwinding):
@@ -937,14 +937,14 @@ class SpectralExpansionSpherical:
             adv_mat_Ep    = Ep.reshape((num_vr * num_vt, num_vr * num_vt)) - xp.kron(xp.diag(vr_inv), xp.diag(xp_sin_vt) @ Dvt_RtoL)
             adv_mat_En    = En.reshape((num_vr * num_vt, num_vr * num_vt)) - xp.kron(xp.diag(vr_inv), xp.diag(xp_sin_vt) @ Dvt_LtoR)
 
-            return adv_mat_Ep, adv_mat_En
+            return asnumpy(adv_mat_Ep), asnumpy(adv_mat_En)
         else:
             Dvt          = xp.asarray(mesh.central_dx(xp_vt, 1, sw_vt)) 
             Dvr          = xp.asarray(mesh.central_dx(xp_vr, 1, sw_vr))
 
             adv_mat      = xp.kron(Dvr, xp.diag(xp_cos_vt)) - xp.kron(xp.diag(vr_inv), xp.diag(xp_sin_vt) @ Dvt)
         
-            return adv_mat
+            return asnumpy(adv_mat)
 
     def Vq_hsph_mg(self, v_theta, v_phi, scale=1):
         """

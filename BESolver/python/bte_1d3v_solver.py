@@ -35,9 +35,13 @@ except:
     print("Cupy module not found !")
     #raise ModuleNotFoundError
 
-class bte_xspace_adv_type():
-    USE_BE_CHEB   = 0 
-    USE_BE_UPW_FD = 1
+class xspace_discretization():
+    BE_UPW_FD  = 0  
+    BE_CHEB    = 1
+
+class vspace_discretization():
+    FVM            = 0
+    SPECTRAL_BSPH  = 1
 
 class sph_type():
     SPH  = "sph" # spherical harmonics based solve. 
@@ -123,9 +127,9 @@ class params():
       
         self.fname=str(dir)+"/"+self.fname
 
-        self.vtDe      = tp["vtDe"] #0.25
-        self.xadv_type = tp["xadv_type"]
-        self.sph_mode  = tp["sph_type"]
+        self.xspace_type = tp["xspace_type"]
+        self.vspace_type = tp["vspace_type"]
+        self.sph_mode    = sph_type.SPH
         
     def __str__(self):
         attrs = vars(self)
@@ -156,10 +160,6 @@ class bte_1d3v():
         self.me            = scipy.constants.electron_mass
         self.kB            = scipy.constants.Boltzmann
         self.c_gamma       = np.sqrt(2 * (self.qe/ self.me))
-        self.xadv_bw       = 1
-        self.xspace_adv_type  = self.params.xadv_type
-        
-        self.sph_mode      = self.params.sph_mode
         Nvt                = self.params.Nvt
         
         if (self.params.xgrid_type == "chebyshev-collocation"):
@@ -172,18 +172,6 @@ class bte_1d3v():
         self.xp            = self.mesh.xcoord[0]
         self.Dp            = self.mesh.D1[0]
         self.DpT           = self.mesh.D1[0].T
-
-        if self.sph_mode == sph_type.HSPH:
-            dof_v              = (self.params.Nr + 1) * Nvt
-        else:
-            dof_v              = (self.params.Nr + 1) * (self.params.l_max+1)
-
-        Imat               = np.eye(self.params.Np)
-        self.I_Nx          = Imat
-
-        self.I_Nv          = np.eye(dof_v)
-        self.I_Nxv_stacked = np.eye(dof_v)
-        
         self.bs_Te         = self.params.Te 
         self.bs_nr         = self.params.Nr
         self.bs_lm         = [[l,0] for l in range(self.params.l_max+1)]
@@ -221,9 +209,7 @@ class bte_1d3v():
         self.weak_bc_bte   = False
         
         
-        #self.vth_fac       = 100
-        self.ev_lim         = (0,self.params.ev_max)
-        
+        self.ev_lim                       = (0,self.params.ev_max)
         self.collision_names              = list()
         self.coll_list                    = list()
 
@@ -247,8 +233,6 @@ class bte_1d3v():
         
         assert (len(self.avail_species)==1), "currently supports for all reactions from 1 common state"
         
-
-        
         sig_pts             =  list()
         for col_idx, g in enumerate(self.bs_coll_list):
           g  = self.bs_coll_list[col_idx]
@@ -262,21 +246,11 @@ class bte_1d3v():
         maxwellian             = bte_utils.get_maxwellian_3d(vth, 1.0)
       
         dg_nodes               = None #np.sqrt(np.array(sig_pts)) * self.c_gamma / vth
-        ev_range               = (self.ev_lim[0], self.ev_lim[1])#((0 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
+        ev_range               = (self.ev_lim[0], self.ev_lim[1]) #((0 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
         k_domain               = (np.sqrt(ev_range[0]) * self.c_gamma / vth, np.sqrt(ev_range[1]) * self.c_gamma / vth)
         use_ee                 = self.params.ee_collisions
-        self.bs_use_dg         = 1
-      
-        if use_ee==1:
-          self.bs_use_dg=0
-        else:
-          self.bs_use_dg=0
-          
-        if self.bs_use_dg==1:
-            print("DG boltzmann grid v-space ev=", ev_range, " v/vth=",k_domain)
-            print("DG points \n", sig_pts)
-        else:
-            print("CG boltzmann grid v-space ev=", ev_range, " v/vth=",k_domain)
+        self.bs_use_dg         = 0
+        print("boltzmann grid v-space ev=", ev_range, " v/vth=",k_domain)
       
       
         # construct the spectral class 
@@ -294,196 +268,203 @@ class bte_1d3v():
         spec_sp._num_q_radial  = bb._num_knot_intervals * self.params.spline_qpts
         collision_op           = collOpSp.CollisionOpSP(spec_sp)
         self.op_spec_sp        = spec_sp
-      
+
+
+        if self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH:
+            dof_v              = (self.params.l_max+1) * (self.params.Nr + 1)
+            self.dof_vr        = (self.params.Nr + 1)
+            self.dof_vt        = (self.params.l_max+1)
+            self.dof_vp        = 1
+            self.dof_x         = self.params.Np
+            self.dof_v         = dof_v
+            
+        elif self.params.vspace_type == vspace_discretization.FVM:
+            dof_v              = (Nvt) * spec_sp._num_q_radial
+            self.dof_vr        = spec_sp._num_q_radial
+            self.dof_vt        = Nvt
+            self.dof_vp        = 1
+            self.dof_x         = self.params.Np
+            self.dof_v         = dof_v
+
+
+        self.I_Nx              = np.eye(self.params.Np)
+        self.I_Nv              = np.eye(dof_v)
+        self.I_Nxv_stacked     = np.eye(dof_v)
+
         num_p                  = spec_sp._p + 1
         num_sh                 = len(self.bs_lm)
         num_vt                 = self.params.Nvt
+        num_vr                 = spec_sp._num_q_radial
 
+
+        assert num_p == self.params.Nr + 1
+
+        self.op_psh2o, self.op_po2sh = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "sph")
+        #self.op_po_hsph, self.op_ps_hsph = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "hsph")
+        
         self.xp_vt, self.xp_vt_qw = spec_sp.gl_vt(num_vt, hspace_split=True)
         self.xp_cos_vt            = np.cos(self.xp_vt)
         self.xp_vt_l              = np.array([i * Nvt + j for i in range(self.params.Nr + 1) for j in list(np.where(self.xp_vt <= 0.5 * np.pi)[0])])
         self.xp_vt_r              = np.array([i * Nvt + j for i in range(self.params.Nr + 1) for j in list(np.where(self.xp_vt > 0.5 * np.pi)[0])])
 
-        LpDvt                     = mesh.central_dxx(self.xp_vt)
-        I_Nvt                     = np.eye(len(self.xp_vt))
-        LpDvt                     = I_Nvt - self.params.vtDe * LpDvt
+        mm_mat                    = spec_sp.compute_mass_matrix()
+        inv_mm_mat                = spec_sp.inverse_mass_mat(Mmat = mm_mat)
+        mm_mat                    = mm_mat[0::num_sh, 0::num_sh]
+        inv_mm_mat                = inv_mm_mat[0::num_sh, 0::num_sh]
         
-        #dirichlet BCs
-        LpDvt[0]           = I_Nvt[0]
-        LpDvt[-1]          = I_Nvt[-1]
-        self.LpDvt         = np.linalg.inv(LpDvt)
-
-
-        assert num_p == self.params.Nr + 1
-        self.op_psh2o, self.op_po2sh = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "sph")
-
-        if (self.sph_mode == sph_type.HSPH):
-            self.op_po_hsph, self.op_ps_hsph = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "hsph")
-            
-
-        self.par_ev_range       = ev_range  
-        mm_mat                  = spec_sp.compute_mass_matrix()
-        inv_mm_mat              = spec_sp.inverse_mass_mat(Mmat = mm_mat)
-        mm_mat                  = mm_mat[0::num_sh, 0::num_sh]
-        inv_mm_mat              = inv_mm_mat[0::num_sh, 0::num_sh]
+        self.op_inv_mm            = inv_mm_mat
+        self.op_inv_mm_full       = np.kron(self.op_inv_mm, np.eye(num_vt))
         
-        I_Nvt                   = np.eye(Nvt)
-        # at the moment no need to store the mass-mat itself, what we need is the inverse of mass matrix. 
-        #self.op_mm_full        = np.zeros((num_p * num_vt, num_p * num_vt))
-        self.op_inv_mm_full     = np.zeros((num_p * num_vt, num_p * num_vt))
-        self.op_inv_mm          = inv_mm_mat
-        
-        # for vt_idx in range(num_vt):
-        #     self.op_inv_mm_full[vt_idx :: num_vt, vt_idx::num_vt] = inv_mm_mat
-        
-        self.op_inv_mm_full     = np.kron(self.op_inv_mm, np.eye(num_vt))
-        
-        gx, gw                  = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
-        sigma_m                 = np.zeros(len(gx))
-        c_gamma                 = self.c_gamma
-        gx_ev                   = (gx * vth / c_gamma)**2
+        if (self.params.vspace_type == vspace_discretization.FVM):
+            self.xp_vr, self.xp_vr_qw   = spec_sp.gl_vr(args.spline_qpts, use_bspline_qgrid=True)
+            num_vr                      = len(self.xp_vr)
+            num_vt                      = len(self.xp_vt)
 
-        FOp                     = 0
-        sigma_m                 = 0
-        FOp_g                   = 0
-      
-      
-        def compute_spatial_advection_op():
-            spec_sp = self.op_spec_sp
-            if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
-                num_p  = spec_sp._p+1
-                num_sh = len(spec_sp._sph_harm_lm)
+            self.Po, self.Ps            = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, mode="sph")
+            self.Pr, self.Pb            = spec_sp.radial_to_vr_projection_ops(self.xp_vr, self.xp_vr_qw)
 
-                k_vec    = spec_sp._basis_p._t
-                dg_idx   = spec_sp._basis_p._dg_idx
-                sp_order = spec_sp._basis_p._sp_order
-        
-                [gx, gw] = spec_sp._basis_p.Gauss_Pn((sp_order + 8) * spec_sp._basis_p._num_knot_intervals)
-                mm=np.zeros((num_p*num_sh, num_p*num_sh))
-                
-                for e_id in range(0,len(dg_idx),2):
-                    ib=dg_idx[e_id]
-                    ie=dg_idx[e_id+1]
+            self.PbPs                   = np.kron(self.Pb, self.Ps)
+            self.PrPo                   = np.kron(self.Pr, self.Po)
 
-                    xb=k_vec[ib]
-                    xe=k_vec[ie+sp_order+1]
-                    
-                    idx_set     = np.logical_and(gx>=xb, gx <=xe)
-                    gx_e , gw_e = gx[idx_set],gw[idx_set]
+            vth                         = self.bs_vth
+            maxwellian                  = bte_utils.get_maxwellian_3d(vth, 1)
+            collOp                      = collision_op 
 
-                    mm_l = np.zeros((num_p,num_p))
-                    for p in range(ib, ie+1):
-                        k_min   = k_vec[p]
-                        k_max   = k_vec[p + sp_order + 1]
-                        qx_idx  = np.logical_and(gx_e >= k_min, gx_e <= k_max)
-                        gmx     = gx_e[qx_idx]
-                        gmw     = gw_e[qx_idx]
-                        b_p     = spec_sp.basis_eval_radial(gmx, p, 0)  
+            c_gamma                     = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+            gx_ev                       = (self.xp_vr * vth / c_gamma)**2
 
-                        for k in range(max(ib, p - (sp_order+3) ), min(ie+1, p + (sp_order+3))):
-                            b_k       = spec_sp.basis_eval_radial(gmx, k, 0)
-                            mm_l[p,k] = np.dot((gmx**3) * b_p * b_k, gmw)
-                return mm_l
-      
-        t1 = perf_counter()
-        print("assembling collision operators")
-        for col_idx, (col_str, col_data) in enumerate(self.cross_section_data.items()):
-            g = self.bs_coll_list[col_idx]
-            g.reset_scattering_direction_sp_mat()
-            col = g._col_name
-            
-            if self.params.verbose==1:
-                print("collision %d  %s %s"%(col_idx, col, col_data["type"]))
+            FOp      = 0
+            sigma_m  = 0
+            t1       = perf_counter()
+            for col_idx, (col_str, col_data) in enumerate(self._cross_section_data.items()):
+                g         = self._coll_list[col_idx]
+                g.reset_scattering_direction_sp_mat()
+                cmat      = collOp._Lop_eulerian_strong_form((self.xp_vr, self.xp_vr_qw), (self.xp_vt, self.xp_vt_qw), g, maxwellian, vth, tgK=args.Tg, Nvts=64, Nvps=64)
+                sigma_m  += g.total_cross_section(gx_ev)
+                FOp       = FOp + cmat
 
-            if (self.sph_mode == sph_type.HSPH):
-                FOp         = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=self.params.threads, use_hsph=True)
-                sigma_m    += g.total_cross_section(gx_ev)
-            else:
-                assert self.sph_mode == sph_type.SPH
-                if col_data["type"] == "ELASTIC":
-                    FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=self.params.threads)
-                
-                FOp         = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=self.params.threads)
-                sigma_m    += g.total_cross_section(gx_ev)
+            FOp_g         = np.zeros_like(FOp)
+            t2 = perf_counter()
+            print("Assembled the collision op. for Vth : ", vth)
+            print("Collision Operator assembly time (s): ",(t2-t1))
 
+            t1 = perf_counter()
+            advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self.xp_vr, self.xp_vt, sw_vr=3, sw_vt=2, use_upwinding=True)
+            t2 = perf_counter()
+            print("Advection Operator assembly time (s): ",(t2-t1))
 
-            #collision_op._Lop_eulerian_hsph(g, maxwellian, vth, tgK=0.0)
-            
-        t2 = perf_counter()
-        print("assembly = %.4E"%(t2-t1))
-      
-        t1 = perf_counter()
-        print("bte qoi op assembly")    
-        self.op_sigma_m   = sigma_m
-        
-        self.op_mass      = bte_utils.mass_op(spec_sp, 1) #* maxwellian(0) * vth**3
-        self.op_temp      = bte_utils.temp_op(spec_sp, 1) * (vth**2) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
+            self.op_adv_x             = np.array([0])
+            self.op_adv_d             = self.xp_vr * vth  * (self.params.tau/self.params.L)
+            self.op_adv_q             = np.array([0])
 
-        # self.params.spline_qpts * spec_sp._basis_p._t_unique
-        # self.op_vz_ords   = bte_utils.assemble_moment_ops_ords(spec_sp, self.params.Nvt, spec_sp._num_q_radial, 32, 8, [lambda vr, vt, vp : vr * np.cos(vt)])[0]
-        
-
-        
-        # note non-dimentionalized electron mobility and diffusion,  ## not used at the moment, but needs to check.          
-        self.op_mobility  = bte_utils.mobility_op(spec_sp, maxwellian, vth) #* self.params.V0 * self.params.tau/self.params.L**2
-        self.op_diffusion = bte_utils.diffusion_op(spec_sp, self.bs_coll_list, maxwellian, vth) #* self.params.tau/self.params.L**2
-            
-        rr_op  = [None] * len(self.bs_coll_list)
-        for col_idx, g in enumerate(self.bs_coll_list):
-            rr_op[col_idx] = bte_utils.reaction_rates_op(spec_sp, [g], maxwellian, vth) 
-            
-        self.op_rate      = rr_op
-        t2 = perf_counter()
-        print("assembly = %.4E"%(t2-t1))
-        
-        t1 = perf_counter()
-        print("assembling v-space advection op")
-        
-        if (self.sph_mode == sph_type.HSPH):
-            adv_mat_v_Ep, adv_mat_v_En  = spec_sp.compute_advection_matrix_ordinates(self.xp_vt, use_vt_upwinding=True)
-            adv_mat_v_Ep                = self.op_inv_mm_full @ adv_mat_v_Ep
-            adv_mat_v_En                = self.op_inv_mm_full @ adv_mat_v_En
-            self.op_adv_v_Ep            = ((1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO) * adv_mat_v_Ep
-            self.op_adv_v_En            = ((1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO) * adv_mat_v_En
-
-            adv_mat_v                 = self.op_inv_mm_full @ spec_sp.compute_advection_matrix_ordinates(self.xp_vt, use_vt_upwinding=False)
-            self.op_adv_v             = ((1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO) * adv_mat_v
-
-            adv_x                     = np.dot(self.op_inv_mm,  vth  * (self.params.tau/self.params.L) * compute_spatial_advection_op())
-            self.op_adv_x             = adv_x
-            adv_x_d, adv_x_q          = np.linalg.eig(adv_x)
-            self.op_adv_x_d           = adv_x_d
-            self.op_adv_x_q           = adv_x_q
-            self.op_adv_x_qinv        = np.linalg.inv(adv_x_q)
-
-            self.op_inv_mm_full_sph   = np.kron(self.op_inv_mm, np.eye(2 * num_sh))
-            op_psh2o, op_po2sh        = self.op_po_hsph, self.op_ps_hsph 
-            
-            def psh2o_C_po2sh(opM):
-                opM = opM.reshape((num_p, 2 * num_sh, num_p, 2 * num_sh))
-                opM = np.einsum("qi,pikl->pqkl", op_psh2o, np.einsum("pqki,il->pqkl", opM, op_po2sh))
-                return opM.reshape((num_p * num_vt, num_p * num_vt))
-
-            FOp                       = psh2o_C_po2sh(np.dot(self.op_inv_mm_full_sph, FOp)) 
-            FOp_g                     = np.zeros_like(FOp) 
+            self.op_adv_v_Ep          = (1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO * advmatEp
+            self.op_adv_v_En          = (1 / vth) * collisions.ELECTRON_CHARGE_MASS_RATIO * advmatEn
+            self.op_adv_v             = self.op_adv_v_Ep
 
             self.op_col_en            = FOp
             self.op_col_gT            = FOp_g
 
-        else:
-            if self.bs_use_dg == 1 : 
-                adv_mat_v, eA, qA = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
-                qA              = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
-            else:
-                # cg advection
-                adv_mat_v       = spec_sp.compute_advection_matix()
 
-                # adv_mat_v        = spec_sp.compute_advection_matrix_ordinates(self.xp_vt, use_vt_upwinding=False)
-                # adv_mat_v        = np.einsum("pqki,il->pqkl" , adv_mat_v.reshape((num_p, Nvt, num_p, Nvt)), self.op_psh2o)
-                # adv_mat_v        = np.einsum("qi,pikl->pqkl" , self.op_po2sh, adv_mat_v).reshape((num_p * num_sh, num_p * num_sh))
+            ev_fac                    = 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
+            self.op_mass              = 2 * np.pi * np.kron(self.xp_vr**2 * self.xp_vr_qw , self.xp_vt_qw)
+            self.temp_op              = 2 * np.pi * np.kron(self.xp_vr**4 * self.xp_vr_qw , self.xp_vt_qw) * ev_fac
+
+            rr_op                     = [None] * len(self.bs_coll_list)
+            for col_idx, g in enumerate(self.bs_coll_list):
+                crs_data      = g.total_cross_section((self.xp_vr * vth/ c_gamma)**2)
+                rr_op[col_idx] = (2 * np.pi) * (2 * vth**4 / c_gamma**3) * np.kron(self.xp_vr**3 * self.xp_vr_qw * crs_data, self.xp_vt_qw)
+            
 
 
-                qA              = np.eye(adv_mat_v.shape[0])
+        elif(self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            gx, gw                  = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
+            sigma_m                 = np.zeros(len(gx))
+            c_gamma                 = self.c_gamma
+            gx_ev                   = (gx * vth / c_gamma)**2
+
+            FOp                     = 0
+            sigma_m                 = 0
+            FOp_g                   = 0
+        
+      
+            def compute_spatial_advection_op():
+                spec_sp = self.op_spec_sp
+                if spec_sp.get_radial_basis_type() == basis.BasisType.SPLINES:
+                    num_p  = spec_sp._p+1
+                    num_sh = len(spec_sp._sph_harm_lm)
+
+                    k_vec    = spec_sp._basis_p._t
+                    dg_idx   = spec_sp._basis_p._dg_idx
+                    sp_order = spec_sp._basis_p._sp_order
+            
+                    [gx, gw] = spec_sp._basis_p.Gauss_Pn((sp_order + 8) * spec_sp._basis_p._num_knot_intervals)
+                    mm=np.zeros((num_p*num_sh, num_p*num_sh))
+                    
+                    for e_id in range(0,len(dg_idx),2):
+                        ib=dg_idx[e_id]
+                        ie=dg_idx[e_id+1]
+
+                        xb=k_vec[ib]
+                        xe=k_vec[ie+sp_order+1]
+                        
+                        idx_set     = np.logical_and(gx>=xb, gx <=xe)
+                        gx_e , gw_e = gx[idx_set],gw[idx_set]
+
+                        mm_l = np.zeros((num_p,num_p))
+                        for p in range(ib, ie+1):
+                            k_min   = k_vec[p]
+                            k_max   = k_vec[p + sp_order + 1]
+                            qx_idx  = np.logical_and(gx_e >= k_min, gx_e <= k_max)
+                            gmx     = gx_e[qx_idx]
+                            gmw     = gw_e[qx_idx]
+                            b_p     = spec_sp.basis_eval_radial(gmx, p, 0)  
+
+                            for k in range(max(ib, p - (sp_order+3) ), min(ie+1, p + (sp_order+3))):
+                                b_k       = spec_sp.basis_eval_radial(gmx, k, 0)
+                                mm_l[p,k] = np.dot((gmx**3) * b_p * b_k, gmw)
+                    return mm_l
+        
+            t1 = perf_counter()
+            print("assembling collision operators")
+            for col_idx, (col_str, col_data) in enumerate(self.cross_section_data.items()):
+                g = self.bs_coll_list[col_idx]
+                g.reset_scattering_direction_sp_mat()
+                col = g._col_name
+                
+                if self.params.verbose==1:
+                    print("collision %d  %s %s"%(col_idx, col, col_data["type"]))
+
+                if col_data["type"] == "ELASTIC":
+                    FOp_g     = collision_op.electron_gas_temperature(g, maxwellian, vth, mp_pool_sz=self.params.threads)
+                    
+                FOp         = FOp + collision_op.assemble_mat(g, maxwellian, vth, tgK=0.0, mp_pool_sz=self.params.threads)
+                sigma_m    += g.total_cross_section(gx_ev)
+
+            t2 = perf_counter()
+            print("assembly = %.4E"%(t2-t1))
+        
+            t1 = perf_counter()
+            print("bte qoi op assembly")    
+            self.op_sigma_m   = sigma_m
+            self.op_mass      = bte_utils.mass_op(spec_sp, 1) #* maxwellian(0) * vth**3
+            self.op_temp      = bte_utils.temp_op(spec_sp, 1) * (vth**2) * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
+
+            self.op_mobility  = bte_utils.mobility_op(spec_sp, maxwellian, vth) #* self.params.V0 * self.params.tau/self.params.L**2
+            self.op_diffusion = bte_utils.diffusion_op(spec_sp, self.bs_coll_list, maxwellian, vth) #* self.params.tau/self.params.L**2
+                
+            rr_op  = [None] * len(self.bs_coll_list)
+            for col_idx, g in enumerate(self.bs_coll_list):
+                rr_op[col_idx] = bte_utils.reaction_rates_op(spec_sp, [g], maxwellian, vth) 
+                
+            self.op_rate      = rr_op
+            t2 = perf_counter()
+            print("assembly = %.4E"%(t2-t1))
+            
+            t1 = perf_counter()
+            print("assembling v-space advection op")
+            
+            adv_mat_v       = spec_sp.compute_advection_matix()
+            qA              = np.eye(adv_mat_v.shape[0])
                 
             self.op_diag_dg         = qA
             FOp                     = np.matmul(np.transpose(qA), np.matmul(FOp, qA))
@@ -503,11 +484,7 @@ class bte_1d3v():
             self.op_adv_x_d           = adv_x_d
             self.op_adv_x_q           = adv_x_q
             self.op_adv_x_qinv        = np.linalg.inv(adv_x_q)
-
-            # self.op_inv_mm_full  = np.zeros((num_p * num_sh, num_p * num_sh))
-            # for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
-            #     self.op_inv_mm_full[lm_idx::num_sh, lm_idx::num_sh] = inv_mm_mat
-
+            
             self.op_inv_mm_full_sph   = np.kron(self.op_inv_mm, np.eye(num_sh))
             FOp                       = np.dot(self.op_inv_mm_full_sph, FOp)
             FOp_g                     = np.dot(self.op_inv_mm_full_sph, FOp_g)
@@ -521,71 +498,45 @@ class bte_1d3v():
             # sanity check for eigen decomposition
             eig_rtol                  = np.linalg.norm(self.op_adv_x - np.dot(self.op_adv_x_q * self.op_adv_x_d, self.op_adv_x_qinv)) / np.linalg.norm(self.op_adv_x)
             print("Adv_x : ||A - Q D Q^{-1}||/ ||A|| =%.8E"%(eig_rtol))
+            
+            t2 = perf_counter()
+            print("assembly = %.4E"%(t2-t1))
+            
+        else:
+            raise NotImplementedError
+
+        # xp=np
+        # xp.save("%s_bte_mass_op.npy"   %(self.params.fname), self.op_mass)
+        # xp.save("%s_bte_temp_op.npy"   %(self.params.fname), self.op_temp)
+        # xp.save("%s_bte_po2sh.npy"     %(self.params.fname), self.op_po2sh)
+        # xp.save("%s_bte_psh2o.npy"     %(self.params.fname), self.op_psh2o)
+        # xp.save("%s_bte_mobility.npy"  %(self.params.fname), self.op_mobility)
+        # xp.save("%s_bte_diffusion.npy" %(self.params.fname), self.op_diffusion)
+        # xp.save("%s_bte_op_g0.npy"     %(self.params.fname), self.op_rate[0])
         
-        t2 = perf_counter()
-        print("assembly = %.4E"%(t2-t1))
-        #print(self.op_adv_x_d)
-        #plt.plot(self.op_adv_x_d)
-        #plt.show()
-        #print("x-space advection diagonalization rel error = %.8E"%(np.linalg.norm(np.dot(self.op_adv_x_d * self.op_adv_x_q, self.op_adv_x_qinv) - adv_x)/np.linalg.norm(adv_x)))
-        # adv_mat_x                 = np.zeros((num_p * num_vt, num_p * num_vt))
-        # for vt_idx in range(num_vt):
-        #   adv_mat_x[vt_idx::num_vt, vt_idx :: num_vt] = adv_x * np.cos(self.xp_vt[vt_idx])
+        # if (len(self.op_rate) > 1):
+        #     xp.save("%s_bte_op_g2.npy"  %(self.params.fname), self.op_rate[1])
+            
+        # save_bte_mat = True
+        # if save_bte_mat == True:
+        #     xp.save("%s_bte_cmat.npy"   %(self.params.fname), self.op_col_en + self.params.Tg * self.op_col_gT)
+        #     xp.save("%s_bte_emat.npy"   %(self.params.fname), self.op_adv_v)
+        #     xp.save("%s_bte_xmat.npy"   %(self.params.fname), self.op_adv_x)
         
-        xp=np
-        xp.save("%s_bte_mass_op.npy"   %(self.params.fname), self.op_mass)
-        xp.save("%s_bte_temp_op.npy"   %(self.params.fname), self.op_temp)
-        xp.save("%s_bte_po2sh.npy"     %(self.params.fname), self.op_po2sh)
-        xp.save("%s_bte_psh2o.npy"     %(self.params.fname), self.op_psh2o)
-        xp.save("%s_bte_mobility.npy"  %(self.params.fname), self.op_mobility)
-        xp.save("%s_bte_diffusion.npy" %(self.params.fname), self.op_diffusion)
-        xp.save("%s_bte_op_g0.npy"     %(self.params.fname), self.op_rate[0])
-        
-        if (len(self.op_rate) > 1):
-            xp.save("%s_bte_op_g2.npy"  %(self.params.fname), self.op_rate[1])
-            
-        save_bte_mat = True
-        if save_bte_mat == True:
-            xp.save("%s_bte_cmat.npy"   %(self.params.fname), self.op_col_en + self.params.Tg * self.op_col_gT)
-            xp.save("%s_bte_emat.npy"   %(self.params.fname), self.op_adv_v)
-            xp.save("%s_bte_xmat.npy"   %(self.params.fname), self.op_adv_x)
-            
-        if(use_ee == 1):
-            assert self.sph_mode == sph_type.SPH, "not implemented for hemi-spherical harmonics"
-            print("e-e collision assembly begin")
-            
-            hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=self.params.threads)
-            cc_op_a, cc_op_b     = collision_op.coulomb_collision_op_assembly(maxwellian, vth, mp_pool_sz=self.params.threads)
-            
-            xp                   = self.xp_module
-            qA                   = self.op_diag_dg
-            mmat_inv             = self.op_inv_mm_full
-            
-            cc_op                = xp.dot(cc_op_a, hl_op) + xp.dot(cc_op_b, gl_op)
-            cc_op                = xp.dot(cc_op,qA)
-            cc_op                = xp.dot(xp.swapaxes(cc_op,1,2),qA)
-            cc_op                = xp.swapaxes(cc_op,1,2)
-            cc_op                = xp.dot(xp.transpose(qA), cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
-            cc_op                = xp.dot(mmat_inv, cc_op.reshape((num_p*num_sh,-1))).reshape((num_p * num_sh, num_p * num_sh, num_p * num_sh))
-            
-            self.op_col_ee       = cc_op
-            
-            print("e-e collision assembly end")
-    
     def ords_to_sph(self, x):
-        num_p   = self.op_spec_sp._p + 1
+        num_p   = self.dof_vr
         num_sh  = len(self.op_spec_sp._sph_harm_lm)
-        num_vt  = len(self.xp_vt)
-        num_x   = len(self.xp)
+        num_vt  = self.dof_vt
+        num_x   = self.dof_x
         xp      = self.xp_module
 
         return xp.einsum("li,rix->rlx", self.op_po2sh, x.reshape((num_p, num_vt, num_x))).reshape((num_p * num_sh, num_x))
     
     def sph_to_ords(self, x):
-        num_p   = self.op_spec_sp._p + 1
+        num_p   = self.dof_vr
         num_sh  = len(self.op_spec_sp._sph_harm_lm)
-        num_vt  = len(self.xp_vt)
-        num_x   = len(self.xp)
+        num_vt  = self.dof_vt
+        num_x   = self.dof_x
         xp      = self.xp_module
 
         return xp.einsum("li,rix->rlx", self.op_psh2o, x.reshape((num_p, num_sh, num_x))).reshape((num_p * num_vt, num_x))
@@ -602,18 +553,13 @@ class bte_1d3v():
             
             self.Dp             = cp.asarray(self.Dp)
             self.DpT            = cp.asarray(self.DpT)
-            # self.LpD            = cp.asarray(self.LpD)
-            # self.Lp             = cp.asarray(self.Lp)
-            # self.LpD_inv        = cp.asarray(self.LpD_inv)
-            
             self.op_adv_v       = cp.asarray(self.op_adv_v)
-            
-            if self.sph_mode == sph_type.HSPH:
-                self.op_adv_v_En    = cp.asarray(self.op_adv_v_En)
-                self.op_adv_v_Ep    = cp.asarray(self.op_adv_v_Ep)
-                self.op_po_hsph     = cp.asarray(self.op_po_hsph)
-                self.op_ps_hsph     = cp.asarray(self.op_ps_hsph)
 
+            if (self.params.vspace_type == vspace_discretization.FVM):
+                self.op_adv_v_Ep = cp.asarray(self.op_adv_v_Ep)
+                self.op_adv_v_En = cp.asarray(self.op_adv_v_En)
+
+            
             self.op_adv_x       = cp.asarray(self.op_adv_x)
             self.op_adv_x_d     = cp.asarray(self.op_adv_x_d)
             self.op_adv_x_q     = cp.asarray(self.op_adv_x_q)
@@ -624,17 +570,12 @@ class bte_1d3v():
             self.op_col_en      = cp.asarray(self.op_col_en)
             self.op_col_gT      = cp.asarray(self.op_col_gT)
             
-            if self.params.ee_collisions==1:
-                self.op_col_ee    = cp.asarray(self.op_col_ee)
-            
             self.op_mass        = cp.asarray(self.op_mass)
             self.op_temp        = cp.asarray(self.op_temp)
-            #self.op_vz_ords     = cp.asarray(self.op_vz_ords)
             self.op_rate        = [cp.asarray(self.op_rate[i]) for i in range(len(self.op_rate))]
             self.op_mobility    = cp.asarray(self.op_mobility)
             self.op_diffusion   = cp.asarray(self.op_diffusion)
-            self.LpDvt          = cp.asarray(self.LpDvt)
-
+            
         return
     
     def copy_operators_D2H(self, dev_id):
@@ -648,16 +589,13 @@ class bte_1d3v():
             
             self.Dp             = cp.asnumpy(self.Dp)
             self.DpT            = cp.asnumpy(self.DpT)
-            #self.LpD_inv        = cp.asnumpy(self.LpD_inv)
             
             self.op_adv_v       = cp.asnumpy(self.op_adv_v)
-            
-            if self.sph_mode == sph_type.HSPH:
-                self.op_adv_v_En    = cp.asnumpy(self.op_adv_v_En)
-                self.op_adv_v_Ep    = cp.asnumpy(self.op_adv_v_Ep)
-                self.op_po_hsph     = cp.asnumpy(self.op_po_hsph)
-                self.op_ps_hsph     = cp.asnumpy(self.op_ps_hsph)
 
+            if (self.params.vspace_type == vspace_discretization.FVM):
+                self.op_adv_v_Ep = cp.asnumpy(self.op_adv_v_Ep)
+                self.op_adv_v_En = cp.asnumpy(self.op_adv_v_En)
+            
             self.op_adv_x       = cp.asnumpy(self.op_adv_x)
             self.op_adv_x_d     = cp.asnumpy(self.op_adv_x_d)
             self.op_adv_x_q     = cp.asnumpy(self.op_adv_x_q)
@@ -678,7 +616,6 @@ class bte_1d3v():
             self.op_rate        = [cp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
             self.op_mobility    = cp.asnumpy(self.op_mobility)
             self.op_diffusion   = cp.asnumpy(self.op_diffusion)
-            self.LpDvt          = cp.asnumpy(self.LpDvt)
             
         return  
     
@@ -689,27 +626,23 @@ class bte_1d3v():
         self.adv_setup_dt = dt 
         #assert xp == np
         
-        Nr  = self.params.Nr+1
-        Nvt = self.params.Nvt
+        Nr  = self.dof_vr
+        Nvt = self.dof_vt        
         Nx  = self.params.Np 
 
-        assert Nr == self.op_spec_sp._p + 1
-        assert Nvt == len(self.xp_vt)
-        assert Nx == len(self.xp)
-
-        if (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+        if (self.xspace_adv_type == xspace_discretization.BE_CHEB):
             DpL        = xp.zeros((Nx, Nx))
             DpR        = xp.zeros((Nx, Nx))
             
             DpL[1:,:]  = self.Dp[1:,:]
             DpR[:-1,:] = self.Dp[:-1,:]
 
-        elif (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+        elif (self.xspace_adv_type == xspace_discretization.BE_UPW_FD):
             DpL        = xp.zeros((Nx, Nx))
             DpR        = xp.zeros((Nx, Nx))
 
-            DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, "LtoR"))[1:,:]
-            DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, "RtoL"))[:-1,:]
+            DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, 1, 2, "L"))[1:,:]
+            DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, 1, 2, "R"))[:-1,:]
         
         else:
             raise NotImplementedError
@@ -717,7 +650,7 @@ class bte_1d3v():
         f1 = 1.0
         f2 = 1-f1
 
-        if (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+        if (self.xspace_adv_type == xspace_discretization.BE_CHEB):
             self.bte_x_shift      = xp.zeros((Nr, Nvt, Nx, Nx))
             #self.bte_x_shift_rmat = xp.zeros((Nr, Nvt, Nx, Nx))
       
@@ -733,7 +666,7 @@ class bte_1d3v():
             
             self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
 
-        elif (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+        elif (self.xspace_adv_type == xspace_discretization.BE_UPW_FD):
             self.bte_x_shift_diag    = xp.zeros((Nr, Nvt, Nx))
             self.bte_x_shift_sdiag   = xp.zeros((Nr, Nvt, Nx-1))
         
@@ -834,22 +767,23 @@ class bte_1d3v():
                 cp.cuda.runtime.deviceSynchronize()
             t1 = perf_counter()
         
-        Nr        = self.params.Nr + 1
-        Nvt       = self.params.Nvt
+        ## we need to use diagonalization based on the v-space representations. 
+        Nr        = self.dof_vr
+        Nvt       = self.dof_vt
         Nx        = self.params.Np
 
-        Vin       = v.reshape((Nr, Nvt , Nx)).reshape(Nr, Nvt * Nx)
-        Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, Nvt, Nx)).reshape((Nr * Nvt , Nx))
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            Vin       = v.reshape((Nr, Nvt , Nx)).reshape(Nr, Nvt * Nx)
+            Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, Nvt, Nx))
         
-        #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((Nr, self.params.Nvt, self.params.Np))).reshape((Nr*self.params.Nvt, self.params.Np)) 
-        # enforce rhs BCs
+        Vin                   = Vin.reshape((Nr * Nvt , Nx))
         Vin[self.xp_vt_l, 0]  = 0.0
         Vin[self.xp_vt_r, -1] = 0.0
 
-        if(self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+        if(self.xspace_adv_type == xspace_discretization.BE_CHEB):
             Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, Nvt, Nx)))
       
-        elif(self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+        elif(self.xspace_adv_type == xspace_discretization.BE_UPW_FD):
             z         = Vin.reshape((Nr, Nvt, Nx))
             Vin_adv_x = xp.zeros_like(z)
             idx_lr    = self.xp_vt <= 0.5 * xp.pi
@@ -874,15 +808,13 @@ class bte_1d3v():
         else:
             raise NotImplementedError
 
-        Vin_adv_x  = Vin_adv_x.reshape((Nr, self.params.Nvt *  self.params.Np))
-        Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((Nr , self.params.Nvt, self.params.Np)).reshape((Nr * self.params.Nvt, self.params.Np))
-        
-        # print((Vin_adv_x[self.xp_vt_l , 0] ==0).all())
-        # print((Vin_adv_x[self.xp_vt_r , -1]==0).all())
 
-        # if (self.params.vtDe > 0):
-        #     Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * Nvt, Nx))
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            Vin_adv_x  = Vin_adv_x.reshape((Nr, Nvt *  Nx))
+            Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((Nr , Nvt, Nx))
         
+
+        Vin_adv_x = Vin_adv_x.reshape((Nr * Nvt, Nx))
         if PROFILE_SOLVERS==1:
             if xp == cp:
                 cp.cuda.runtime.deviceSynchronize()
@@ -902,10 +834,10 @@ class bte_1d3v():
         
         time    = time
         dt      = dt
-        if self.sph_mode == sph_type.HSPH:
-            u       = xp.copy(v)
-        else:
-            u       = self.ords_to_sph(v)
+        u       = xp.copy(v)
+        
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            u       = self.ords_to_sph(u)
 
         if self.params.vts_type == "BE":
             rtol            = self.params.rtol
@@ -917,52 +849,31 @@ class bte_1d3v():
             steps_cycle     = int(1/dt)
             pmat_freq       = steps_cycle//50
             step            = int(time/dt)
+            num_vt          = self.dof_vt
+            num_sh          = len(self.op_spec_sp._sph_harm_lm)
+            num_x           = len(self.xp)
+            num_p           = self.dof_vr
+
             
             if use_gmres == True:
                 pcEmat      = self.PmatE
                 pcEval      = self.Evals
                 pc_emat_idx = self.vspace_pc_setup(E)
                 
-                if (self.sph_mode == sph_type.HSPH):
-                    
-                    Po     = self.op_po_hsph
-                    Ps     = self.op_ps_hsph
-
-                    num_p  = self.op_spec_sp._p + 1
-                    num_vt = len(self.xp_vt)
-                    num_sh = len(self.op_spec_sp._sph_harm_lm)
-
-                    assert dof_v == num_p * num_vt
-
+                if (self.params.vspace_type == vspace_discretization.FVM):
                     def Lmat_mvec(x):
                         x      = x.reshape((dof_v, self.params.Np))
-                        #uz     = xp.einsum("l,la->a", self.op_vz_ords, x) 
-                        idxEp  = (E>1e-6)
-                        idxEn  = (E<-1e-6)
-                        idxEm  = xp.logical_and(E>=-1e-6, E<=1e-6)
+                        idxEp  = (E>=0)
+                        idxEn  = (E<0)
                         yE     = xp.zeros_like(x)
                         
                         yE[:, idxEp]         = self.op_adv_v_Ep @ x[:, idxEp]
                         yE[:, idxEn]         = self.op_adv_v_En @ x[:, idxEn]
-                        yE[:, idxEm]         = self.op_adv_v @ x[:, idxEm]
-
+                        
                         y      = self.params.tau * (self.params.n0 * self.params.np0 * (xp.dot(self.op_col_en, x) + self.params.Tg * xp.dot(self.op_col_gT, x))  + E * yE)
                         y      = x - dt * y
                         return y.reshape((-1))
                     
-                    # def Mmat_mvec(x):
-                    #     x      = x.reshape((num_p, num_vt, self.params.Np))
-                    #     x      = xp.einsum("li,rix->rlx", Ps, x).reshape((num_p * (2 * num_sh), self.params.Np))
-                    #     y      = xp.copy(x)
-                        
-                    #     for idx_id, idx in enumerate(pc_emat_idx):
-                    #         y[:,idx[1]] = xp.dot(pcEmat[idx[0]], y[:, idx[1]])
-
-                    #     y      = y.reshape((num_p, 2 * num_sh, self.params.Np))
-                    #     y      = xp.einsum("li,rix->rlx", Po, y).reshape((num_p * num_vt, self.params.Np))
-                            
-                    #     return y.reshape((-1))
-
                     def Mmat_mvec(x):
                         x      = x.reshape((dof_v, self.params.Np))
                         y      = xp.copy(x)
@@ -972,7 +883,6 @@ class bte_1d3v():
                             
                         return y.reshape((-1))
 
-                    
                 else:
                     def Lmat_mvec(x):
                         x      = x.reshape((dof_v, self.params.Np))
@@ -1017,12 +927,17 @@ class bte_1d3v():
                     v               = v.reshape((dof_v, self.params.Np))
         
             else:
-                if self.sph_mode == sph_type.HSPH:
-                    #adv_v = self.op_adv_v_Ep if E[0] >= 0 else self.op_adv_v_En
-                    if E[0] > 1e-6:
+                if (self.params.vspace_type == vspace_discretization.FVM):
+                    if E[0] >=0:
                         adv_v = self.op_adv_v_Ep
-                    elif E[0] < -1e-6:
+                        # u     = u.reshape((num_p, num_vt, num_x))
+                        # u[-1, self.xp_vt < 0.5 * xp.pi,:] = 0.0
+                        # u     = u.reshape((num_p * num_vt, num_x))
+                    elif E[0] < 0:
                         adv_v = self.op_adv_v_En
+                        # u     = u.reshape((num_p, num_vt, num_x))
+                        # u[-1, self.xp_vt > 0.5 * xp.pi, :] = 0.0
+                        # u     = u.reshape((num_p * num_vt, num_x))
                     else:
                         adv_v = self.op_adv_v
 
@@ -1041,7 +956,7 @@ class bte_1d3v():
         else:
             raise NotImplementedError    
         
-        if self.sph_mode == sph_type.SPH:
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
             v       = self.sph_to_ords(v)
 
         if PROFILE_SOLVERS==1:
@@ -1056,25 +971,45 @@ class bte_1d3v():
 
         return v 
       
-    def compute_radial_components(self, ev: np.array, ff):
-        ff_cpu = ff
+    def compute_radial_components(self, ev: np.array, v):
         
-        ff_cpu   = np.transpose(ff_cpu)
-        vth      = self.bs_vth
-        spec_sp  = self.op_spec_sp
-        
-        vr       = np.sqrt(ev) * self.c_gamma/ vth
-        num_p    = spec_sp._p +1 
         num_sh   = len(spec_sp._sph_harm_lm)
-        n_pts    = ff.shape[1]
-        
-        output   = np.zeros((n_pts, num_sh, len(vr)))
-        Vqr      = spec_sp.Vq_r(vr,0,1)
-        
-        for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
+        n_pts    = v.shape[1]
+        output   = np.zeros((n_pts, num_sh, len(ev)))
+        vsh      = self.ords_to_sph(v)
+            
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            ff_cpu   = vsh
+            
+            ff_cpu   = np.transpose(ff_cpu)
+            vth      = self.bs_vth
+            spec_sp  = self.op_spec_sp
+            
+            vr       = np.sqrt(ev) * self.c_gamma/ vth
+            num_p    = spec_sp._p +1 
+            
+            Vqr      = spec_sp.Vq_r(vr,0,1)
+            
+            for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
                 output[:, l_idx, :] = np.dot(ff_cpu[:,l_idx::num_sh], Vqr)
 
-        return output
+            return output
+        elif (self.params.vspace_type == vspace_discretization.FVM):
+            vth      = self.bs_vth
+            spec_sp  = self.op_spec_sp
+
+            Nr       = self.dof_vr
+            Nx       = self.dof_x
+            vsh      = vsh.reshape((Nr, num_sh, Nx))
+
+            vsh      = self.asnumpy(vsh)
+            vsh_inp  = scipy.interpolate.interp1d(self.xp_vr, vsh, axis=0, bounds_error=True)
+            
+            vr       = np.sqrt(ev) * self.c_gamma/ vth
+            for l_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                    output[:, l_idx, :] = np.swapaxes(vsh_inp(vr)[:, l_idx, :], 0, 2)
+            
+            return output
     
     def compute_qoi(self, v, time, dt):
         xp       = self.xp_module
@@ -1095,8 +1030,8 @@ class bte_1d3v():
         rr_rates = xp.array([xp.dot(self.op_rate[col_idx], v_lm_n[0::num_sh, :]) for col_idx in range(num_collisions)]).reshape((num_collisions, self.params.Np)).T
         
         # these are computed from SI units qoi/n0
-        D_e      = xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma / 3.) / n0 
-        mu_e     = xp.dot(self.op_mobility, v_lm_n[1::num_sh])  * ((c_gamma / (3 * ( 1 / n0)))) /n0
+        D_e      = 0.0#xp.dot(self.op_diffusion, v_lm_n[0::num_sh]) * (c_gamma / 3.) / n0 
+        mu_e     = 0.0#xp.dot(self.op_mobility, v_lm_n[1::num_sh])  * ((c_gamma / (3 * ( 1 / n0)))) /n0
         
         return {"rates": rr_rates, "mu": mu_e, "D": D_e}
     
@@ -1158,17 +1093,33 @@ class bte_1d3v():
         return xp.array(Vin)
         
     def initial_condition(self, type=0):
-       xp   = np #self.xp_module
-       assert xp == np
+        xp = self.xp_module
+        xx = self.params.L * (self.xp + 1)
+        
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
 
-       xx = self.params.L * (self.xp + 1)
-       if (type == 0):
-          ne = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
-          Te = xp.ones_like(ne) * self.params.Te
-          v  = self.maxwellian_eedf(ne, Te)
-          return self.xp_module.array(v)
-       else:
-          raise NotImplementedError
+            if (type == 0):
+                ne = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
+                Te = xp.ones_like(ne) * self.params.Te
+                v  = self.maxwellian_eedf(self.asnumpy(ne), self.asnumpy(Te))
+                return xp.array(v)
+            else:
+                raise NotImplementedError
+            
+        elif (self.params.vspace_type == vspace_discretization.FVM):
+
+            if (type == 0):
+                ne  = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
+                Te  = xp.ones_like(ne) * self.params.Te
+                Nr  = self.dof_vr
+                Nvt = self.dof_vt
+                Nx  = self.params.Np
+                v   = xp.array([xp.kron(bte_utils.get_maxwellian_3d(xp.sqrt(Te[i]) * self.c_gamma), xp.ones(Nvt)).reshape((-1)) for i in range(Nx)])
+                return v.T
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError
 
     def init(self, dt):
         xp            = self.xp_module
@@ -1177,45 +1128,21 @@ class bte_1d3v():
         self.Evals    = -xp.flip(ep)
         self.Evals    = xp.append(self.Evals,ep)
 
-        if (self.sph_mode == sph_type.HSPH):
-            spec_sp                   = self.op_spec_sp
-            op_psh2o, op_po2sh        = self.op_po_hsph, self.op_ps_hsph 
-            
-            num_p                     = spec_sp._p + 1
-            num_sh                    = len(spec_sp._sph_harm_lm)
-            num_vt                    = len(self.xp_vt)
-
-            
-            def hsph_op(opM):
-                return opM
-                # opM = opM.reshape((num_p , num_vt, num_p , num_vt))
-                # opM = xp.einsum("qi,pikl->pqkl", op_po2sh, np.einsum("pqki,il->pqkl", opM, op_psh2o))
-                # return opM.reshape((num_p * 2 * num_sh, num_p *  2 * num_sh)) 
-            
-            vmat          = self.params.n0 * self.params.np0 * (hsph_op(self.op_col_en) + self.params.Tg * hsph_op(self.op_col_gT))
-            self.PmatE    = xp.zeros((num_pc_evals, vmat.shape[0], vmat.shape[1]))
-            
-            advEp         = hsph_op(self.op_adv_v_Ep)
-            advEn         = hsph_op(self.op_adv_v_En)
-            advEm         = hsph_op(self.op_adv_v)
-            Iv            = xp.eye(vmat.shape[0])
-
-            for i in range(num_pc_evals):
-                #advE          = advEp  if self.Evals[i]>=0 else advEn
-                if self.Evals[i] > 1e-6:
-                    advE = advEp
-                elif self.Evals[i] < -1e-6:
-                    advE = advEn
-                else:
-                    advE = advEm
-            
-                self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * advE - dt * self.params.tau * vmat)
-            
-        else:
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
             vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
             Iv            = xp.eye(self.op_adv_v.shape[0])
             self.PmatE    = xp.array([xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v - dt * self.params.tau * vmat) for i in range(num_pc_evals)])
-        
+        elif (self.params.vspace_type == vspace_discretization.FVM):
+            vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
+            Iv            = xp.eye(self.op_adv_v.shape[0])
+            self.PmatE    = xp.zeros((num_pc_evals, self.dof_v, self.dof_v))
+
+            for i in range(num_pc_evals):
+                if self.Evals[i] >=0:
+                    self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v_Ep - dt * self.params.tau * vmat)
+                else:
+                    self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v_En - dt * self.params.tau * vmat)
+            
         print("v-space advection mat preconditioner gird : \n", self.Evals)
         self.__initialize_bte_adv_x__(0.5 * dt)
         
@@ -1247,31 +1174,27 @@ class bte_1d3v():
     
     def normalize_edf(self, v):
         xp    = self.xp_module
-        v_lm  = self.ords_to_sph(v)
-        
-        # normalization of the distribution function before computing the reaction rates
-        mm_fac                   = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
-        mm_op                    = self.op_mass
-        c_gamma                  = self.c_gamma
-        vth                      = self.bs_vth
-        
-        scale                    = xp.dot(mm_op / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
-        return v / scale
-    
-    def normalize_edf_lm(self, v_lm):
-        xp    = self.xp_module
-      
-        # normalization of the distribution function before computing the reaction rates
-        mm_fac                   = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
-        mm_op                    = self.op_mass
-        c_gamma                  = self.c_gamma
-        vth                      = self.bs_vth
-        
-        scale                    = xp.dot(mm_op / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
-        return v_lm / scale
-    
-    def store_checkpoint(self, v, time, dt, fprefix):
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            v_lm                     = self.ords_to_sph(v)
+            # normalization of the distribution function before computing the reaction rates
+            mm_fac                   = self.op_spec_sp._sph_harm_real(0, 0, 0, 0) * 4 * np.pi
+            mm_op                    = self.op_mass
+            c_gamma                  = self.c_gamma
+            vth                      = self.bs_vth
+            
+            scale                    = xp.dot(mm_op / mm_fac, v_lm) * (2 * (vth/c_gamma)**3)
+            return v / scale
+        elif (self.params.vspace_type == vspace_discretization.FVM):
+            mm_op                    = self.op_mass
+            c_gamma                  = self.c_gamma
+            vth                      = self.bs_vth
+            
+            scale                    = xp.dot(mm_op, v) * (2 * (vth/c_gamma)**3)
+            return v / scale
+        else:
+            raise NotImplementedError
 
+    def store_checkpoint(self, v, time, dt, fprefix):
         xp  = self.xp_module
         vsh = self.ords_to_sph(v)
 
@@ -1306,22 +1229,22 @@ class bte_1d3v():
         return time, dt, v
              
     def plot(self, E, v, fname, time):
-        xp  = self.xp_module
-        fig = plt.figure(figsize=(26,10), dpi=300)
+        xp      = self.xp_module
+        fig     = plt.figure(figsize=(26,10), dpi=300)
+        asnumpy = self.asnumpy
       
-        def asnumpy(a):
-            if self.xp_module == cp:
-                return cp.asnumpy(a)
-            else:
-                return a
-      
-        vsh = self.ords_to_sph(v)
-        ne  = asnumpy(self.op_mass @ vsh)
-        Te  = asnumpy(self.op_temp @ vsh)/ne
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            vsh = self.ords_to_sph(v)
+            ne  = asnumpy(self.op_mass @ vsh)
+            Te  = asnumpy(self.op_temp @ vsh)/ne
+        else:
+            v   = self.ords_to_sph(v)
+            ne  = asnumpy(self.op_mass @ v)
+            Te  = asnumpy(self.op_temp @ v)/ne
+        
         
         plt.subplot(2, 4, 1)
         plt.semilogy(self.xp, self.params.np0 * ne, 'b',   label=r"$n_e$")
-        #plt.semilogy(self.xp, self.params.np0 * ni, '--r', label=r"$n_i$")
         plt.xlabel(r"x/L")
         plt.ylabel(r"$density (m^{-3})$")
         plt.grid(visible=True)
@@ -1329,24 +1252,17 @@ class bte_1d3v():
       
         plt.subplot(2, 4, 2)
         plt.plot(self.xp, self.params.np0 * ne, 'b',  label=r"$n_e$")
-        #plt.plot(self.xp, self.params.np0 * ni, '--r',label=r"$n_i$")
         plt.xlabel(r"x/L")
-        #plt.ylabel(r"$(n_i -n_e)(m^{-3})$")
         plt.ylabel(r"$density (m^{-3})$")
         plt.legend()
         plt.grid(visible=True)
       
         plt.subplot(2, 4, 3)
-        # plt.plot(self.xp, ne * Te * self.params.np0, 'b')
-        # plt.ylabel(r"$n_e T_e (eV m^{-3})$")
-        
         plt.plot(self.xp, Te, 'b')
         plt.ylabel(r"$T_e (eV)$")
-        
         plt.xlabel(r"x/L")
         
         plt.grid(visible=True)
-        
         plt.subplot(2, 4, 4)
         E   = asnumpy(E) 
         
@@ -1354,47 +1270,40 @@ class bte_1d3v():
         plt.xlabel(r"x/L")
         plt.ylabel(r"$E (V/m)$")
         plt.grid(visible=True)
-      
-        # plt.subplot(2, 4, 5)
-        # plt.plot(self.xp, phi * self.params.V0, 'b')
-        # plt.xlabel(r"x/L")
-        # plt.ylabel(r"$\phi (V)$")
-        # plt.grid(visible=True)
-        
+
+
+
+        vn      = self.normalize_edf(v)
+        if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            vsh = self.ords_to_sph(vn)
+            rr  = xp.array([asnumpy(xp.dot(self.op_rate[i], vsh[0::num_sh,:])) for i in range(len(self.op_rate))])
+        elif (self.params.vspace_type == vspace_discretization.FVM):
+            rr  = xp.array([asnumpy(xp.dot(self.op_rate[i], vn)) for i in range(len(self.op_rate))])
+
         
         num_p   = self.op_spec_sp._p + 1
         num_sh  = len(self.op_spec_sp._sph_harm_lm)
         Vin_lm  = vsh
         
         plt.subplot(2, 4, 5)
-        Vin_lm1      = self.normalize_edf_lm(Vin_lm)
-        #r_elastic    = ne * self.params.np0 * asnumpy(xp.dot(self.op_rate[0], Vin_lm1[0::num_sh,:]))
-        r_elastic    = asnumpy(xp.dot(self.op_rate[0], Vin_lm1[0::num_sh,:]))
-        plt.semilogy(self.xp, r_elastic    , 'b', label="elastic")
-        
-        if (len(self.op_rate) > 1):
-            #r_ionization = ne * self.params.np0 * asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
-            r_ionization = asnumpy(xp.dot(self.op_rate[1], Vin_lm1[0::num_sh,:]))
-            plt.semilogy(self.xp, r_ionization , 'r', label="ionization")
+        for i in range(len(self.op_rate)):
+            plt.semilogy(self.xp, rr[i]    , 'b', label=r"C%d"%(i))
         
         plt.xlabel(r"x/L")
         plt.ylabel(r"rate coefficients ($m^3 s^{-1}$)")
-        #plt.ylabel(r"rate coefficients ($s^{-1}$)")
         plt.legend()
         plt.grid(visible=True)
       
         vth       = self.bs_vth
         kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
-        #ev_range  = (self.ev_lim[0] + 1e-6, (kx_max * vth/self.c_gamma)**2 - 1e-6) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
-        #ev_range  = (self.ev_lim[0], self.ev_lim[1] * 4) #((1e-1 * vth /self.c_gamma)**2, (self.vth_fac * vth /self.c_gamma)**2)
         ev_range  = (self.ev_lim[0], self.ev_lim[1])
         
         ev_grid   = np.linspace(max(ev_range[0],1e-2), ev_range[1], 1024)
-        
-        ff_v      = self.compute_radial_components(ev_grid, asnumpy(Vin_lm1))
+        ff_v      = self.compute_radial_components(ev_grid, asnumpy(vn))
         
         pts = 2
         plt.subplot(2, 4, 6)
+
         for i in range(pts):
             plt.semilogy(ev_grid, np.abs(ff_v[i][0]),'-', label="x=%.4f"%(self.xp[i]))
         for i in range(pts):

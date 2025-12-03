@@ -26,7 +26,6 @@ if __name__ == "__main__":
     params  = bte.params
 
     v       = bte.initial_condition(type=0)
-
     if params.use_gpu == 1:
         print("using GPUs")
         cp.cuda.Device(params.dev_id).use()
@@ -97,10 +96,17 @@ if __name__ == "__main__":
     num_sh              = len(bte.op_spec_sp._sph_harm_lm)
 
     def qoi(v, xp):
-        vsh                 = bte.ords_to_sph(v)
-        qoi                 = xp.zeros((qoi_idx.LAST, params.Np))
-        qoi[qoi_idx.NE_IDX] = bte.op_mass @ vsh
-        qoi[qoi_idx.TE_IDX] = (bte.op_temp @ vsh) / qoi[qoi_idx.NE_IDX]
+
+        if (bte.params.vspace_type == bte_1d3v_solver.vspace_discretization.SPECTRAL_BSPH):
+            vsh                 = bte.ords_to_sph(v)
+            qoi                 = xp.zeros((qoi_idx.LAST, params.Np))
+            qoi[qoi_idx.NE_IDX] = bte.op_mass @ vsh
+            qoi[qoi_idx.TE_IDX] = (bte.op_temp @ vsh) / qoi[qoi_idx.NE_IDX]
+        elif(bte.params.vspace_type == bte_1d3v_solver.vspace_discretization.FVM):
+            qoi                 = xp.zeros((qoi_idx.LAST, params.Np))
+            print("q", bte.op_mass.shape, v.shape)
+            qoi[qoi_idx.NE_IDX] = bte.op_mass  @ v
+            qoi[qoi_idx.TE_IDX] = (bte.op_temp @ v) / qoi[qoi_idx.NE_IDX]
 
         return qoi
     

@@ -332,8 +332,10 @@ class BSpline(Basis):
             else:
                 if extend_domain == True:
                     self._t     = BSpline.uniform_knots((k_domain[0], 1.2 * k_domain[1]), num_p, spline_order)
+                    self._domain= (k_domain[0], 1.2 * k_domain[1])
                 elif extend_domain_with_log == True:
                     self._t     = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = (5) * k_domain[1])
+                    self._domain= (k_domain[0], 5 * k_domain[1])
                     #self._t       = BSpline.logspace_knots(k_domain, num_p, spline_order, 1e-3, base=2)
                 else:
                     self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
@@ -373,7 +375,7 @@ class BSpline(Basis):
             
         self._splines            = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(self._num_p)]
         self._t_unique           = np.unique(self._t)
-        self._num_knot_intervals = len(self._t_unique)
+        self._num_knot_intervals = len(self._t_unique)-1
 
         if self._ele >1:
             self._dg_idx    = list()

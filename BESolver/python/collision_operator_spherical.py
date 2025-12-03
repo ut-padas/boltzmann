@@ -1361,7 +1361,7 @@ class CollisionOpSP():
         mvrvt       = xp.kron(vr**2 * vr_qw, vt_qw) * 2 * np.pi
         rmax        = xp.sum(vr_qw)
         domain      = spec_sp._basis_p._domain
-        assert xp.abs((domain[1]-domain[0]) - rmax) < 1e-14
+        assert xp.abs((domain[1]-domain[0]) - rmax) < 1e-14, "domain : %.2E rmax: %.2E"%(domain[1]-domain[0], rmax)
 
         ## no need for this since we use iostropic scattering
         # svt, svt_qw = spec_sp.gl_vt(Nvts, hspace_split=True)

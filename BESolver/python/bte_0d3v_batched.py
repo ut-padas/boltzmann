@@ -26,6 +26,8 @@ import enum
 from os import environ
 from profile_t import profile_t
 
+from mpi4py import MPI
+
 try:
     import cupy as cp
     import cupyx.scipy.sparse
@@ -145,6 +147,9 @@ class bte_0d3v_batched():
         collision model : collision string detailing which collisions to perform
         """
         
+        comm = MPI.COMM_WORLD
+        rank_ = comm.Get_rank()
+
         self.profile_nn     = ["all","setup", "e-n c_op", "e-e c_op", "adv op", "initialize", "solve", "rhs", "jac", "jac_solve", "H2D", "D2H", "last"]
         self.profile_tt_all = list()
         for i in range(n_vspace_grids):
@@ -201,17 +206,20 @@ class bte_0d3v_batched():
             cross_section.CROSS_SECTION_DATA = cs_data_all
             coll_names     = list()
             coll_list      = list()
-
-            print("==========read collissions===========")
+            
+            if rank_ == 0:
+                print("==========read collissions===========")
             collision_count = 0
             for col_str, col_data in cs_data_all.items():
-                print(col_str, col_data["type"])
+                if rank_ == 0:
+                    print(col_str, col_data["type"])
                 g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
                 coll_list.append(g)
                 coll_names.append("C%d"%(collision_count)) 
                 collision_count+=1
-            print("=====================================")
-            print("number of total collisions = %d " %(len(coll_list)))
+            if rank_ == 0:
+                print("=====================================")
+                print("number of total collisions = %d " %(len(coll_list)))
             self.num_collisions = len(coll_list)
             
             for i in range(self._par_nvgrids):
@@ -234,13 +242,14 @@ class bte_0d3v_batched():
                 coll_names      = list()
                 coll_list       = list()
                 for col_str, col_data in cs_data_all.items():
-                    print(col_str, col_data["type"])
+                    if rank_ == 0:
+                        print(col_str, col_data["type"])
                     g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
                     coll_list.append(g)
                     coll_names.append("C%d"%(collision_count)) 
                     collision_count+=1
-
-                print("number of total collisions = %d " %(len(coll_list)))
+                if rank_ == 0:
+                    print("number of total collisions = %d " %(len(coll_list)))
                 self.num_collisions = len(coll_list)
                 self._coll_list.append(coll_list)
                 self._collision_names.append(coll_names)
@@ -294,8 +303,7 @@ class bte_0d3v_batched():
         # mole_fraction = np.array(self._args.ns_by_n0)[0:len(species)]
         # assert np.allclose(np.sum(mole_fraction),1), "mole fractions does not add up to 1.0"
         
-        profile_tt[pp.C_CS_SETUP].stop()
-        
+        profile_tt[pp.C_CS_SETUP].stop()        
         return
     
     def get_collision_list(self):
@@ -311,6 +319,12 @@ class bte_0d3v_batched():
         """
         perform the operator setup for grid_idx
         """
+
+        comm = MPI.COMM_WORLD
+        rank_ = comm.Get_rank()
+
+        # print("Rank = ", rank_, ", starting operator assembly for BTE")
+
         idx             = grid_idx
         args            = self._args
         collision_model = self._par_col_model
@@ -350,7 +364,7 @@ class bte_0d3v_batched():
             raise NotImplementedError
 
         #bb                    = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain_with_log=True)
-        print("grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1])
+        print("Rank = ", rank_, "grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1])
         
         spec_sp                = sp.SpectralExpansionSpherical(self._par_nr[idx], bb, self._par_lm[idx])
         spec_sp._num_q_radial  = bb._num_knot_intervals * self._args.spline_qpts
@@ -440,9 +454,12 @@ class bte_0d3v_batched():
         
         self._op_qmat[idx] = Qmat
         self._op_rmat[idx] = Rmat
+
+        # print("Rank = ", rank_, "about to begin e-e collision assembly")
         
         if(use_ee == 1):
-            print("e-e collision assembly begin")
+            if rank_ == 0:
+                print("e-e collision assembly begin")
             profile_tt[pp.C_EE_SETUP].start()
             
             hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=args.threads)
@@ -473,7 +490,8 @@ class bte_0d3v_batched():
                 
             self._op_col_ee[idx] = cc_op
             profile_tt[pp.C_EE_SETUP].stop()
-            print("e-e collision assembly end")
+            if rank_ == 0:
+                print("e-e collision assembly end")
         
         profile_tt[pp.SETUP].stop()
         return
@@ -847,6 +865,9 @@ class bte_0d3v_batched():
         return Jmat_inv
             
     def steady_state_solve(self, grid_idx : int, f0 : np.array, atol, rtol, max_iter):
+        comm = MPI.COMM_WORLD
+        rank_ = comm.Get_rank()
+
         xp           = self.xp_module
         profile_tt   = self.profile_tt_all[grid_idx]
         
@@ -912,20 +933,20 @@ class bte_0d3v_batched():
                 
             
             if(is_diverged):
-                print("grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
+                print("Rank = ", rank_, ", grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
                 break
             
             h_curr      = h_prev + alpha * p
             
             if iteration_steps % 10 == 0:
                 rel_error = xp.linalg.norm(h_prev-h_curr, axis=0)/xp.linalg.norm(h_curr, axis=0)
-                print("grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
+                print("Rank = ", rank_, ", grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
             
             #fb_prev      = np.dot(Rmat,h_curr)
             h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
             iteration_steps+=1
 
-        print("grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        print("Rank = ", rank_, ", grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
         profile_tt[pp.SOLVE].stop()

@@ -39,7 +39,7 @@ plt.rcParams.update({
 })
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-Nr", "--NUM_P_RADIAL"                       , help="Number of polynomials in radial direction", type=int, default=16)
+parser.add_argument("-Nr", "--Nr"                                 , help="Number of polynomials in radial direction", type=int, default=16)
 parser.add_argument("-T", "--T_END"                               , help="Simulation time", type=float, default=1e-4)
 parser.add_argument("-dt", "--T_DT"                               , help="Simulation time step size ", type=float, default=1e-7)
 parser.add_argument("-o",  "--out_fname"                          , help="output file name", type=str, default='boltzsim')
@@ -72,10 +72,15 @@ parser.add_argument("-bolsig", "--bolsig_dir"                     , help="Bolsig
 parser.add_argument("-bolsig_precision", "--bolsig_precision"     , help="precision value for bolsig code", type=float, default=1e-11)
 parser.add_argument("-bolsig_convergence", "--bolsig_convergence" , help="convergence value for bolsig code", type=float, default=1e-8)
 parser.add_argument("-bolsig_grid_pts", "--bolsig_grid_pts"       , help="grid points for bolsig code"      , type=int, default=1024)
+parser.add_argument("-vstype", "--vstype"                         , help="0 - Bsplines + SPH, 1- FVM"      , type=int, default=0)
+parser.add_argument("-Nvt","--Nvt"                                , help="number of vt points (FVM form. )", type=int, default=16)
+
+
 #python3 collision_driver_spherical_eulerian_dg.py -l_max 1 -c g0 g2 -sp_order 3 -spline_qpts 5 -steady 1 --sweep_values 31 63 127  -EbyN 1e-1 1 5 -Tg 5000 -ion_deg 0
 args                = parser.parse_args()
 EbyN_Td             = np.logspace(np.log10(args.EbyN[0]), np.log10(args.EbyN[1]), int(args.EbyN[2]), base=10)
 e_values            = EbyN_Td * args.n0 * 1e-21
+print(e_values)
 ion_deg_values      = np.array(args.ion_deg)
 
 SAVE_EEDF    = args.store_eedf
@@ -100,7 +105,7 @@ for run_id in range(len(run_params)):
     else:
         args.ee_collisions = 1
         args.use_dg        = 0
-
+    args.use_dg        = 0
     bte_solver = bte_0d3v.bte_0d3v(args)
     bte_solver.run_bolsig_solver()
     ev = bte_solver._bolsig_data["ev"]
@@ -134,7 +139,7 @@ for run_id in range(len(run_params)):
 
     for i, value in enumerate(args.sweep_values):
         if args.sweep_param == "Nr":
-            args.NUM_P_RADIAL = int(value)
+            args.Nr = int(value)
         else:
             raise NotImplementedError
         
@@ -263,7 +268,7 @@ for run_id in range(len(run_params)):
 
                 writer.writerow(header)
             
-            normL2 = lambda f1, f2, x : np.trapz(x * (f1 - f2)**2, x) / np.trapz(x * f2**2 , x)
+            normL2 = lambda f1, f2, x : np.trapezoid(x * (f1 - f2)**2, x) / np.trapezoid(x * f2**2 , x)
 
             for i, value in enumerate(args.sweep_values):
                 # write the data
@@ -445,14 +450,14 @@ for run_id in range(len(run_params)):
         colfname = args.collisions.split("/")[-1].strip()
         if len(spec_sp._basis_p._dg_idx)==2:
             if args.steady_state == 1 : 
-                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +"_Eperiod_%.2E"%(args.efield_period) +".png")
+                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +"_Eperiod_%.2E"%(args.efield_period) +".png")
         else:
             if args.steady_state == 1 : 
-                plt.savefig("boltzsim_dg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("boltzsim_dg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("boltzsim_dg_" + colfname + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.NUM_P_RADIAL)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) + "_Eperiod_%.2E"%(args.efield_period) +".png")
+                plt.savefig("boltzsim_dg_" + colfname + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) + "_Eperiod_%.2E"%(args.efield_period) +".png")
 
         plt.close()
 

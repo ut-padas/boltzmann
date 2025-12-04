@@ -16,41 +16,88 @@ def fd_coefficients(x, order):
     Vdx = xp.array([L[i].deriv(order)(x) for i in range(len(L))]).T
     return Vdx
 
-def upwinded_dx(x, dir):
+
+def upwinded_dx(x, dorder, sw, dir):
+    """
+    x- collocation points
+    dorder - derivative order
+    dir    - "L" or "R" denoting left vs. right upwinding
+    sw     - stencil width
+    """
     xp = np
     Np = len(x)
     Dx = xp.zeros((Np, Np))
-    
-    if (dir == "LtoR"):
-        Dx[0, 0:2] = fd_coefficients(x[0:2], 1)[0]
-    
-        for i in range(1, Np):
-            Dx[i, (i-1):(i+1)] = fd_coefficients(x[i-1:i+1], 1)[1]
+        
+    if (dir == "L"):
+        m  = fd_coefficients(x[0:sw], dorder)
+        for i in range(sw):
+            Dx[i, 0:sw] = m[i]
+
+        for i in range(sw, Np):
+            Dx[i, (i-(sw-1)):(i+1)] = fd_coefficients(x[(i-(sw-1)):(i+1)], dorder)[-1]
     
     else:
-        assert dir == "RtoL"
+        assert dir == "R"
+        for i in range(0, Np-(sw-1)):
+            Dx[i, i:(i+sw)] = fd_coefficients(x[i:(i+sw)], dorder)[0]
 
-        for i in range(0, Np-1):
-            Dx[i, i:(i+2)] = fd_coefficients(x[i:i+2], 1)[0]
-
-        Dx[-1, -2:] = fd_coefficients(x[-2:], 1)[1]
+        m  = fd_coefficients(x[-sw:], dorder)
+        for i in range(sw):
+            Dx[-(i+1), -sw:] = m[-(i+1)]
 
     return Dx
 
-def central_dxx(x):
+def central_dx(x, dorder, sw):
     xp = np
     Np = len(x)
-    Lp = xp.zeros((Np, Np))
+    Dx = xp.zeros((Np, Np))
 
-    for i in range(1, Np-1):
-        Lp[i, (i-1):(i+2)] = fd_coefficients(x[i-1:i+2], 2)[1]
+    assert sw % 2 == 1
+    pw = (sw-1)//2
+    sz = 2 * pw + 1
 
-    Lp[0 , 0:3]       = fd_coefficients(x[0:3], 2)[0]
-    Lp[-1, (Np-3):Np] = fd_coefficients(x[(Np-3):Np], 2)[-1]
+    m  = fd_coefficients(x[0:sz], dorder)
+    for i in range(pw):
+        Dx[i, 0:sz] = m[i]
 
-    return Lp
+    for i in range(pw, Np-pw):
+        Dx[i, (i-pw):(i+pw+1)] = fd_coefficients(x[(i-pw):(i+pw+1)], dorder)[pw]
+    
+    m  = fd_coefficients(x[-sz:], dorder)
+    for i in range(pw):
+        Dx[-(i+1), -sz:] = m[-(i+1)]
+    
+    return Dx
 
+def upwinded_dvt(x, dorder, sw, dir, use_cdx_internal=False):
+    xp = np
+    Np = len(x)
+    Dx = xp.zeros((Np, Np))
 
+    assert Np %2 ==0
+    mp = Np//2
+    if use_cdx_internal:
+        Dx[0:mp, 0:mp]          = central_dx(x[0:mp], 1, 2 * sw + 1)
+        Dx[mp: , mp:]           = central_dx(x[mp:] , 1, 2 * sw + 1)
+    
+    if (dir == "L"):
+        if not use_cdx_internal:
+            Dx[0:mp, 0:mp]          = upwinded_dx(x[0:mp], 1, sw, "L")
+            Dx[mp: , mp:]           = upwinded_dx(x[mp:] , 1, sw, "L")
+
+        Dx[mp]                      = 0.0
+        Dx[mp, mp-1:mp+1]           = fd_coefficients(x[mp-1:mp+1], 1)[-1]
+    
+    else:
+        assert dir == "R"
+        if not use_cdx_internal:
+            Dx[0:mp, 0:mp]          = upwinded_dx(x[0:mp], 1, sw, "R")
+            Dx[mp: , mp:]           = upwinded_dx(x[mp:] , 1, sw, "R")
+
+        Dx[mp-1]                    = 0.0
+        Dx[mp-1, mp-1:mp+1]         = fd_coefficients(x[mp-1:mp+1], 1)[0]
+
+    return Dx
 
 class mesh():
     

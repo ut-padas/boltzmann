@@ -15,7 +15,11 @@ import sys
 import scipy.interpolate
 import scipy.constants
 import cross_section
+import enum
 
+class vs_discretization(enum.Enum):
+    BSP_SPH = 0 # use B-splines + spherical harmonics in Galerkin method
+    FVM     = 1 # use finite volume method in v-space
 
 def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol = 1e-5, atol=1e-5, max_iter=1000, xp=np):
 
@@ -76,9 +80,16 @@ class bte_0d3v():
         """
 
         """parameters for the problem"""
-        self._args = args
-        self._n0   = args.n0
-        self._tgK  = args.Tg
+        self._args  = args
+        self._n0    = args.n0
+        self._tgK   = args.Tg
+        if args.vstype == 0:
+            self._vstype= vs_discretization.BSP_SPH
+        elif args.vstype == 1:
+            self._vstype= vs_discretization.FVM
+        else:
+            raise ValueError("Invalid v-space discretization type")
+        
         
         self._collision_names              = list()
         self._coll_list                    = list()
@@ -100,7 +111,6 @@ class bte_0d3v():
         species       = cross_section.read_available_species(self._args.collisions)
         # mole_fraction = np.array(self._args.ns_by_n0)[0:len(species)]
         # assert np.allclose(np.sum(mole_fraction),1), "mole fractions does not add up to 1.0"
-        
     
     def get_collision_list(self):
         return self._coll_list    
@@ -148,32 +158,24 @@ class bte_0d3v():
         self._args.ev_max        = (1.2) * bolsig_ev[-1]
         return 
 
-    def setup(self):
-        """
-        setup for the boltzmann solver
-            1). Compute the mass matrix, and its inverse
-            2). Compute the advection matrix
-            3). Compute the collision matrix
-            4). Compute the Coulomb collision tensors
-        """
-
+    def _setup_bsp_sph(self):
+        assert self._vstype == vs_discretization.BSP_SPH
         args                = self._args
-        self._mw_ne         = 1.0
-        self._mw_tmp        = args.electron_volt * collisions.TEMP_K_1EV
-        self._vth           = collisions.electron_thermal_velocity(self._mw_tmp)
-        self._mw            = bte_utils.get_maxwellian_3d(self._vth, self._mw_ne)
-        self._c_gamma       = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
 
-        sig_pts   =  list()
-        for col_idx, g in enumerate(self._coll_list):
-            g  = self._coll_list[col_idx]
-            if g._reaction_threshold != None and g._reaction_threshold >0:
-                sig_pts.append(g._reaction_threshold)
-        
-        self._sig_pts = np.sort(np.array(list(set(sig_pts))))
-        self._sig_pts = np.sqrt(self._sig_pts) * self._c_gamma / self._vth
+        if args.use_dg == 0:
+            self._sig_pts = None
+        else:
+            sig_pts   =  list()
+            for col_idx, g in enumerate(self._coll_list):
+                g  = self._coll_list[col_idx]
+                if g._reaction_threshold != None and g._reaction_threshold >0:
+                    sig_pts.append(g._reaction_threshold)
+            
+            self._sig_pts = np.sort(np.array(list(set(sig_pts))))
+            self._sig_pts = np.sqrt(self._sig_pts) * self._c_gamma / self._vth
 
-        ev_range = ((0*self._vth/self._c_gamma)**2, self._args.ev_max)
+
+        ev_range = ((0*self._vth/self._c_gamma)**2, args.ev_max)
         k_domain = (np.sqrt(ev_range[0]) * self._c_gamma / self._vth, np.sqrt(ev_range[1]) * self._c_gamma / self._vth)
 
         print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
@@ -183,9 +185,9 @@ class bte_0d3v():
         """currently using the azimuthal symmetry case"""
         self._sph_lm   = [[l,0] for l in range(args.l_max+1)]
         
-        bb                    = basis.BSpline(k_domain, self._args.sp_order, self._args.NUM_P_RADIAL + 1, sig_pts=self._sig_pts, knots_vec=None, dg_splines=args.use_dg)
-        spec_sp               = sp.SpectralExpansionSpherical(self._args.NUM_P_RADIAL, bb, self._sph_lm)
-        spec_sp._num_q_radial = bb._num_knot_intervals * self._args.spline_qpts
+        bb                    = basis.BSpline(k_domain, args.sp_order, args.Nr + 1, sig_pts=self._sig_pts, knots_vec=None, dg_splines=args.use_dg)
+        spec_sp               = sp.SpectralExpansionSpherical(args.Nr, bb, self._sph_lm)
+        spec_sp._num_q_radial = bb._num_knot_intervals * args.spline_qpts
 
         self._collision_op    = collOpSp.CollisionOpSP(spec_sp)
         
@@ -235,20 +237,6 @@ class bte_0d3v():
         print("Assembled the collision op. for Vth : ", vth)
         print("Collision Operator assembly time (s): ",(t2-t1))
 
-        gg_list = self._coll_list
-
-        self._mass_op               = bte_utils.mass_op(spec_sp, 1)
-        self._temp_op               = bte_utils.temp_op(spec_sp, 1)
-        self._temp_op_ev            = self._temp_op * 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
-
-        mw  = self._mw
-        self._mobility_op           = bte_utils.mobility_op(spec_sp, mw, vth)
-        self._diffusion_op          = bte_utils.diffusion_op(spec_sp, self._coll_list, mw, vth)
-        self._rr_op                 = np.zeros((len(gg_list),num_p))
-
-        for col_idx, g in enumerate(gg_list):
-            self._rr_op[col_idx,:] = bte_utils.reaction_rates_op(spec_sp, [g], mw, vth)
-
         if args.use_dg == 1 : 
             advmat, eA, qA = spec_sp.compute_advection_matix_dg(advection_dir=-1.0)
             qA     = np.kron(np.eye(spec_sp.get_num_radial_domains()), np.kron(np.eye(num_p), qA))
@@ -287,6 +275,219 @@ class bte_0d3v():
             t2 = time()
             print("Coulomb collision Op. assembly %.8E"%(t2-t1))
 
+    def _setup_fvm(self):
+        assert self._vstype == vs_discretization.FVM
+        args                = self._args
+        
+        self._sig_pts       = None
+        # sig_pts   =  list()
+        # for col_idx, g in enumerate(self._coll_list):
+        #     g  = self._coll_list[col_idx]
+        #     if g._reaction_threshold != None and g._reaction_threshold >0:
+        #         sig_pts.append(g._reaction_threshold)
+        
+        # self._sig_pts = np.sort(np.array(list(set(sig_pts))))
+        # self._sig_pts = np.sqrt(self._sig_pts) * self._c_gamma / self._vth
+
+        ev_range            = ((0*self._vth/self._c_gamma)**2, args.ev_max)
+        k_domain            = (np.sqrt(ev_range[0]) * self._c_gamma / self._vth, np.sqrt(ev_range[1]) * self._c_gamma / self._vth)
+
+        print("target ev range : (%.4E, %.4E) ----> knots domain : (%.4E, %.4E)" %(ev_range[0], ev_range[1], k_domain[0],k_domain[1]))
+        if(self._sig_pts is not None):
+            print("singularity pts : ", self._sig_pts, "v/vth and" , (self._sig_pts * self._vth/self._c_gamma)**2, "eV")
+
+        """currently using the azimuthal symmetry case"""
+        self._sph_lm                = [[l,0] for l in range(args.l_max+1)]
+        bb                          = basis.BSpline(k_domain, args.sp_order, args.Nr + 1, sig_pts=self._sig_pts, knots_vec=None, dg_splines=0)
+        spec_sp                     = sp.SpectralExpansionSpherical(args.Nr, bb, self._sph_lm)
+        spec_sp._num_q_radial       = bb._num_knot_intervals * args.spline_qpts
+        self._collision_op          = collOpSp.CollisionOpSP(spec_sp)
+        self._spec_sp               = spec_sp
+        
+        self._xp_vr, self._xp_vr_qw = spec_sp.gl_vr(args.spline_qpts, use_bspline_qgrid=True)
+        #self._xp_vr, self._xp_vr_qw = spec_sp.gl_vr(spec_sp._num_q_radial, use_bspline_qgrid=False)
+        self._xp_vt, self._xp_vt_qw = spec_sp.gl_vt(args.Nvt, hspace_split=True)
+        num_vr                      = len(self._xp_vr)
+        num_vt                      = len(self._xp_vt)
+
+        self._Po, self._Ps          = spec_sp.sph_ords_projections_ops(self._xp_vt, self._xp_vt_qw, mode="sph")
+        self._Pr, self._Pb          = spec_sp.radial_to_vr_projection_ops(self._xp_vr, self._xp_vr_qw)
+
+        self._PbPs                  = np.kron(self._Pb, self._Ps)
+        self._PrPo                  = np.kron(self._Pr, self._Po)
+
+        vth                         = self._vth
+        maxwellian                  = self._mw
+        collOp                      = self._collision_op 
+
+        c_gamma                     = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+        gx_ev                       = (self._xp_vr * vth / c_gamma)**2
+
+        FOp      = 0
+        sigma_m  = 0
+        minv     = spec_sp.inverse_mass_mat(spec_sp.compute_mass_matrix())
+        t1 = time()
+        for col_idx, (col_str, col_data) in enumerate(self._cross_section_data.items()):
+            g         = self._coll_list[col_idx]
+            g.reset_scattering_direction_sp_mat()
+            mole_idx  = self._avail_species.index(col_data["species"]) 
+            cmat      = collOp._Lop_eulerian_strong_form((self._xp_vr, self._xp_vr_qw), (self._xp_vt, self._xp_vt_qw), g, maxwellian, vth, tgK=args.Tg, Nvts=64, Nvps=64)
+            
+            print("collision %d: type=%s, ||C||=%.8E"%(col_idx, col_data["type"], np.linalg.norm(cmat)))
+            print("min/max C diag: %.8E / %.8E"%(np.min(np.diag(cmat)), np.max(np.diag(cmat))))
+
+            # cmat1     = collOp._Lop_eulerian_strong_form(self._xp_vr, self._xp_vt, g, maxwellian, vth, tgK=args.Tg, Nvts=32, Nvps=32)
+            # cmat1     = self._PrPo @ (minv @ collOp.assemble_mat(g, maxwellian, vth, tgK=args.Tg)) @ self._PbPs
+            #print(np.linalg.norm(cmat - cmat1)/np.linalg.norm(cmat))
+            sigma_m  += g.total_cross_section(gx_ev)
+
+            if (col_data["type"]=="ATTACHMENT"):
+                FOp       = FOp + (args.ns_by_n0[mole_idx] * self._n0)**2 * cmat
+            else:
+                FOp       = FOp + args.ns_by_n0[mole_idx] * self._n0 * cmat
+            
+        t2 = time()
+        print("Assembled the collision op. for Vth : ", vth)
+        print("Collision Operator assembly time (s): ",(t2-t1))
+
+        t1 = time()
+        advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self._xp_vr, self._xp_vt, sw_vr=3, sw_vt=2, use_upwinding=True)
+        advmat                   = advmatEp
+        #advmat                    = spec_sp.compute_advection_matrix_vrvt_fv(self._xp_vr, self._xp_vt, sw_vr=5, sw_vt=3, use_upwinding=False)
+
+        # advmat                   = spec_sp.compute_advection_matix()
+        # advmat                   = self._PrPo @ (minv @ advmat) @ self._PbPs    
+        qA                       = np.eye(advmat.shape[0])
+        
+        t2 = time()
+        print("Advection Operator assembly time (s): ",(t2-t1))
+
+        
+        self._Cmat   = FOp
+        self._Emat   = advmat
+        self._Qa     = qA
+        self._mass_mat     = np.eye(self._Cmat.shape[0])
+        self._inv_mass_mat = np.eye(self._Cmat.shape[0])
+
+    def _qoi_ops(self):
+        spec_sp = self._spec_sp
+        vth     = self._vth
+        num_p   = spec_sp._p + 1
+        gg_list = self._coll_list
+
+        self._mass_op               = bte_utils.mass_op(spec_sp, 1)
+        self._temp_op               = bte_utils.temp_op(spec_sp, 1)
+        ev_fac                      = 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
+        self._temp_op_ev            = self._temp_op * ev_fac
+
+        mw  = self._mw
+        self._mobility_op           = bte_utils.mobility_op(spec_sp, mw, vth)
+        self._diffusion_op          = bte_utils.diffusion_op(spec_sp, self._coll_list, mw, vth)
+        self._rr_op                 = np.zeros((len(gg_list),num_p))
+
+        for col_idx, g in enumerate(gg_list):
+            self._rr_op[col_idx,:] = bte_utils.reaction_rates_op(spec_sp, [g], mw, vth)
+        
+        if (self._vstype == vs_discretization.FVM):
+            self._mass_op_vrvt = 2 * np.pi * np.kron(self._xp_vr**2 * self._xp_vr_qw, np.ones_like(self._xp_vt) * self._xp_vt_qw)
+            self._temp_op_vrvt = 2 * np.pi * np.kron(self._xp_vr**4 * self._xp_vr_qw, np.ones_like(self._xp_vt) * self._xp_vt_qw) * ev_fac
+
+
+            # num_vr = len(self._xp_vr)
+            # num_vt = len(self._xp_vt)
+
+            # print("mass ", np.dot(np.kron(self._xp_vr_qw, self._xp_vt_qw), np.kron(np.ones_like(self._xp_vr), np.ones_like(self._xp_vt))))
+            # print(np.sum(self._xp_vr_qw), np.sum(self._xp_vt_qw))
+
+        return 
+
+    def _QRQt(self):
+        mass_op  = self._mass_op if self._vstype == vs_discretization.BSP_SPH else self._mass_op_vrvt
+        spec_sp  = self._spec_sp
+        mw       = self._mw
+        vth      = self._vth
+        qA       = self._Qa
+
+        mm_op    = mass_op * mw(0) * vth**3
+        u        = mm_op
+        u        = np.dot(np.transpose(mm_op),qA)
+        p_vec    = u.reshape((u.shape[0], 1)) / np.sqrt(np.dot(u, u))
+
+        Imat     = np.eye(u.shape[0])
+        Impp     = (Imat - np.outer(p_vec, p_vec))
+        Qm,Rm    = np.linalg.qr(Impp)
+        args     = self._args
+
+        #print(Qm.shape, Rm.shape, np.linalg.norm(Rm, axis=1))
+        #plt.plot(np.linalg.norm(Rm, axis=1))
+
+        if (self._vstype == vs_discretization.BSP_SPH):
+            num_p   = spec_sp._p + 1
+            num_sh  = len(spec_sp._sph_harm_lm)
+        
+            if args.use_dg == 1 : 
+                Q           = np.delete(Qm,(num_p-1) * num_sh + num_sh-1, axis=1)
+                R           = np.delete(Rm,(num_p-1) * num_sh + num_sh-1, axis=0)
+                QT          = np.transpose(Q)
+            else:
+                Q           = np.delete(Qm,(num_p-1) * num_sh + 0, axis=1)
+                R           = np.delete(Rm,(num_p-1) * num_sh + 0, axis=0)
+                QT          = np.transpose(Q)
+        elif (self._vstype == vs_discretization.FVM):
+            num_vr   = len(self._xp_vr)
+            num_vt   = len(self._xp_vt)
+            # np.set_printoptions(precision=2)
+            # import sys
+            # np.set_printoptions(threshold=sys.maxsize)
+            # print("Q\n", Qm)
+            # print("R\n",Rm)
+
+            Q           = np.delete(Qm,(num_vr * num_vt)-1, axis=1)
+            R           = np.delete(Rm,(num_vr * num_vt)-1, axis=0)
+            QT          = np.transpose(Q)
+        else:
+            raise NotImplementedError
+        
+        qr_error1       = np.linalg.norm(Impp - np.dot(Q,R)) / np.linalg.norm(Impp)
+        qr_error2       = np.linalg.norm(np.dot(QT,Q)-np.eye(QT.shape[0]))
+
+        print("|Impp - QR|/|Impp| = %.8E"%(qr_error1))
+        print("|I - QT Q|         = %.8E"%(qr_error2))
+
+        assert qr_error1 < 1e-10
+        assert qr_error2 < 1e-10
+
+        return u, Q, R, QT
+
+    def setup(self):
+        """
+        setup for the boltzmann solver
+            1). Compute the mass matrix, and its inverse
+            2). Compute the advection matrix
+            3). Compute the collision matrix
+            4). Compute the Coulomb collision tensors
+        """
+
+        args                = self._args
+        self._mw_ne         = 1.0
+        self._mw_tmp        = args.electron_volt * collisions.TEMP_K_1EV
+        self._vth           = collisions.electron_thermal_velocity(self._mw_tmp)
+        self._mw            = bte_utils.get_maxwellian_3d(self._vth, self._mw_ne)
+        self._c_gamma       = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+
+        if (self._vstype == vs_discretization.BSP_SPH):
+            self._setup_bsp_sph()
+        elif (self._vstype == vs_discretization.FVM):
+            self._setup_fvm()
+        else:
+            raise NotImplementedError
+        
+        self._qoi_ops()
+        
+        vth       = self._vth
+        maxwellian= self._mw
+        spec_sp   = self._spec_sp
+        Minv      = spec_sp.inverse_mass_mat(spec_sp.compute_mass_matrix())
         ev        = self._bolsig_data["ev"]
         bolsig_f0 = self._bolsig_data["f0"]
         bolsig_a  = (self._bolsig_data["f1"] / bolsig_f0) * np.sqrt(3)
@@ -299,6 +500,7 @@ class bte_0d3v():
         hh    =  bte_utils.normalized_distribution(spec_sp, self._mass_op, hh, maxwellian, vth)
 
         self._bolsig_data["bolsig_hh"] = hh
+        self._bolsig_data["bolsig_fvrvt"] = ff
 
         return
         
@@ -312,28 +514,50 @@ class bte_0d3v():
         mw        = self._mw
         vth       = self._vth
 
-        mass_op   = self._mass_op 
-        temp_op   = self._temp_op_ev
+        if self._vstype == vs_discretization.FVM:
+            mass_op   = self._mass_op_vrvt 
+            temp_op   = self._temp_op_vrvt
 
-        if init_type == "maxwellian":
-            v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
-            hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
-            h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=Minv)
-        elif init_type == "anisotropic":
-            v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
-            hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3 ) * (np.exp(-((v/v_ratio)**2)) / v_ratio**3) * (1 + np.cos(vt))
-            h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 4, 2, Minv=Minv)
-        else:
-            raise NotImplementedError
-        
-        m0 = np.dot(mass_op,h_init) 
-        print("initial data")
-        print("  mass = %.8E"%(m0))
-        print("  temp = %.8E"%(np.dot(temp_op,h_init) * vth**2 /m0))
-        return h_init
+            xp_vr     = self._xp_vr
+            xp_vt     = self._xp_vt
+            num_vt    = len(xp_vt)
+
+            if init_type == "maxwellian":
+                h_init  = np.repeat((mw(xp_vr) * vth**3).reshape((-1,1)), num_vt, axis=1).reshape((-1))
+            elif init_type == "anisotropic":
+                h_init  = np.kron(mw(xp_vr) * vth**3, 1+np.cos(xp_vt)).reshape((-1))
+            else:
+                raise NotImplementedError
+            
+            m0 = np.dot(mass_op,h_init) 
+            print("initial data")
+            print("  mass = %.8E"%(m0))
+            print("  temp = %.8E"%(np.dot(temp_op,h_init) * vth**2 /m0))
+            return h_init
+
+        elif self._vstype == vs_discretization.BSP_SPH:
+            mass_op   = self._mass_op 
+            temp_op   = self._temp_op_ev
+
+            if init_type == "maxwellian":
+                v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
+                hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
+                h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 2, 2, Minv=Minv)
+            elif init_type == "anisotropic":
+                v_ratio = 1.0 #np.sqrt(1.0/args.basis_scale)
+                hv      = lambda v,vt,vp : (1/np.sqrt(np.pi)**3 ) * (np.exp(-((v/v_ratio)**2)) / v_ratio**3) * (1 + np.cos(vt))
+                h_init  = bte_utils.function_to_basis(spec_sp,hv,mw, spec_sp._num_q_radial, 4, 2, Minv=Minv)
+            else:
+                raise NotImplementedError
+            
+            m0 = np.dot(mass_op,h_init) 
+            print("initial data")
+            print("  mass = %.8E"%(m0))
+            print("  temp = %.8E"%(np.dot(temp_op,h_init) * vth**2 /m0))
+            return h_init
 
     def steady_state_solver_two_term(self,h_init=None):
-
+        assert self._vstype == vs_discretization.BSP_SPH
         args = self._args
         if args.ee_collisions == 1 or args.use_dg==1:
             raise NotImplementedError
@@ -358,26 +582,13 @@ class bte_0d3v():
 
         sigma_m  = 0
         gx_ev    = (gx * vth / c_gamma)**2
-        for col_idx, col in enumerate(args.collisions):
+        for col_idx in range(len(self._coll_list)):
+            print("collision %d included %s"%(col_idx, self._collision_names[col_idx]))
             g = self._coll_list[col_idx]
             g.reset_scattering_direction_sp_mat()
-            assert col == g._col_name
-            print("collision %d included %s"%(col_idx, col))
+            sigma_m  += g.total_cross_section(gx_ev)
             
-            if "g0NoLoss" == col:
-                sigma_m  += g.total_cross_section(gx_ev)
-            elif "g0ConstNoLoss" == col:
-                sigma_m  += g.total_cross_section(gx_ev)
-            elif "g0" in col:
-                sigma_m  += g.total_cross_section(gx_ev)
-            elif "g1" in col:
-                sigma_m  += g.total_cross_section(gx_ev)
-            elif "g2" in col:
-                sigma_m  += g.total_cross_section(gx_ev)
-            else:
-                print("%s unknown collision"%(col))
-                sys.exit(0)
-
+            
         num_p  = spec_sp._p + 1
         num_sh = len(spec_sp._sph_harm_lm)
         
@@ -566,71 +777,83 @@ class bte_0d3v():
                 Lmat        = np.dot(Lmat, Q)
                 return Lmat
             
-        spec_sp = self._spec_sp
-        num_p   = spec_sp._p +1 
-        num_sh  = len(spec_sp._sph_harm_lm)
-
-        mm_op   = mass_op * mw(0) * vth**3
-        u       = mm_op
-        u       = np.dot(np.transpose(mm_op),qA)
-        p_vec   = u.reshape((u.shape[0], 1)) / np.sqrt(np.dot(u, u))
+        spec_sp     = self._spec_sp
+        u, Q, R, QT = self._QRQt()
+        
 
         ion_deg     = args.ion_deg
         Cmat_p_Emat = Cmat + Emat
         Cmat_p_Emat = np.matmul(Minv, Cmat_p_Emat)
         Wmat        = np.dot(u,Cmat_p_Emat)
+        print("||wmat||=", np.linalg.norm(np.dot(u,Minv @ Cmat)), np.linalg.norm(np.dot(u,Minv @ Emat)), np.linalg.norm(Wmat))
+        #Wmat        = np.dot(u, Minv @ Emat)
+        #Wmat        = np.dot(u, Minv @ Emat)
+        #print(Minv)
+        #Wmat        = np.dot(u,Emat)
+        #print("||wmat||=", np.linalg.norm(Wmat), np.linalg.norm(np.dot(u, Cmat)))
+        #print(self._rr_op[1], Wmat, np.dot(u, Cmat))
         
-        Imat        = np.eye(Cmat.shape[0])
-        Imat_r      = np.eye(Imat.shape[0]-1)
-        Impp        = (Imat - np.outer(p_vec, p_vec))
-        Qm,Rm       = np.linalg.qr(Impp)
-        
-        if args.use_dg == 1 : 
-            Q           = np.delete(Qm,(num_p-1) * num_sh + num_sh-1, axis=1)
-            R           = np.delete(Rm,(num_p-1) * num_sh + num_sh-1, axis=0)
-            QT          = np.transpose(Q)
-        else:
-            Q           = np.delete(Qm,(num_p-1) * num_sh + 0, axis=1)
-            R           = np.delete(Rm,(num_p-1) * num_sh + 0, axis=0)
-            QT          = np.transpose(Q)
-        
-        qr_error1       = np.linalg.norm(Impp - np.dot(Q,R)) / np.linalg.norm(Impp)
-        qr_error2       = np.linalg.norm(np.dot(QT,Q)-np.eye(QT.shape[0]))
-
-        print("|Impp - QR|/|Impp| = %.8E"%(qr_error1))
-        print("|I - QT Q|         = %.8E"%(qr_error2))
-
-        assert qr_error1 < 1e-10
-        assert qr_error2 < 1e-10
-
-        gg_list         = self._coll_list
-        f1              = u / np.dot(u, u)
-        eff_rr_op       = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * self._n0
-
-        # g_rate  = np.zeros(FOp.shape[0])
-        # for col_idx, col in enumerate(collisions_included):
-        # if "g2" in col:
-        #     g  = collisions.eAr_G2(cross_section=col)
-        #     g.reset_scattering_direction_sp_mat()
-        #     g_rate[0::num_sh] += self._n0 *  BEUtils.reaction_rates_op(spec_sp, [g], maxwellian, vth)
-        # Wmat[0::num_sh] = np.dot(u[0::num_sh], np.dot(Minv[0::num_sh, 0::num_sh], Cmat[0::num_sh, 0::num_sh]))
-        # Wmat[1::num_sh] = 0.0
+        gg_list     = self._coll_list
+        f1          = u / np.dot(u, u)
+        eff_rr_op   = bte_utils.reaction_rates_op(spec_sp, gg_list, mw, vth) * self._n0
 
         if h_init is None:
             h_init                = self.initialize(init_type="maxwellian")
-            # hh                    = bte_utils.normalized_distribution(spec_sp, self._mass_op, h_init, self._mw, vth)
-            # qois                  = self.compute_QoIs(hh, None)
-            # print("Maxwellian at Te= %.4E (ev) ev_max=%.4E g0=%.8E g2=%.8E"%(self._args.electron_volt, self._args.ev_max, qois["rates"][0], qois["rates"][1]))
-
-        h_init                = h_init/np.dot(mm_op,h_init)
+        
+        h_init                = h_init/np.dot(u,h_init)
         h_init                = np.dot(np.transpose(qA),h_init)
 
         h_curr , atol, rtol   = newton_solve(spec_sp, h_init, res_func, jac_func, f1, Q, R, u, rtol = 1e-13, atol=1e-8, max_iter=300)
-        h_pde                 = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
+        h_init                = np.dot(qA,h_init)
+        h_curr                = np.dot(qA,h_curr)
 
+        if (self._vstype == vs_discretization.FVM):
+
+            # xp_vr     = self._xp_vr
+            # xp_vt     = self._xp_vt
+
+            # fvrt      = self._bolsig_data["bolsig_fvrvt"]
+            # num_vr, num_vt = len(xp_vr), len(xp_vt)
+
+            # f         = (np.array([fvrt(xp_vr, xp_vt[i], 0) for i in range(len(xp_vt))]).reshape(num_vt, num_vr).T).reshape((-1))
+            # f         = np.sqrt(4 * np.pi) * (f / (np.dot(self._mass_op_vrvt, f) * (2 * (vth/self._c_gamma)**3))). reshape((num_vr, num_vt))
+            # g         = np.sqrt(4 * np.pi) * (h_curr / (np.dot(self._mass_op_vrvt, h_curr) * (2 * (vth/self._c_gamma)**3))). reshape((num_vr, num_vt))
+
+            # import matplotlib.pyplot as plt
+            # plt.figure(figsize=(10,10), dpi=200)
+            # # for i in range(num_vt):
+            # #     plt.semilogy((xp_vr * vth / self._c_gamma)**2, f[:,i], '-' ,color="C%d"%(i), label="vt=%.2f - bolsig"%(xp_vt[i]))
+            # #     plt.semilogy((xp_vr * vth / self._c_gamma)**2, g[:,i],'--' ,color="C%d"%(i), label="vt=%.2f - fvm"%(xp_vt[i]))
+                
+            # f = np.einsum('li,vi->vl', self._Ps, f)
+            # g = np.einsum('li,vi->vl', self._Ps, g)
+
+            # for i in range(self._Ps.shape[0]):
+            #     if i > 0:
+            #         plt.semilogy((xp_vr * vth / self._c_gamma)**2, np.abs(f[:,i]), '-' ,color="C%d"%(i), label=r"$f_%d$ - bolsig"%(i))
+            #         plt.semilogy((xp_vr * vth / self._c_gamma)**2, np.abs(g[:,i]),'--' ,color="C%d"%(i), label=r"$f_%d$ - fvm"%(i))
+            #     else:
+            #         plt.semilogy((xp_vr * vth / self._c_gamma)**2, np.abs(f[:,i]), '-' ,color="C%d"%(i), label=r"$f_%d$ - bolsig"%(i))
+            #         plt.semilogy((xp_vr * vth / self._c_gamma)**2, np.abs(g[:,i]),'--' ,color="C%d"%(i), label=r"$f_%d$ - fvm"%(i))
+            
+            # plt.xlabel(r"Energy (eV)")
+            # plt.ylabel(r"f(vr,vt)")
+            # plt.legend(fontsize=8)
+            # plt.grid(visible=True, which='both', linestyle='--', linewidth=0.5)
+            # plt.show()
+            # plt.close()
+            # sys.exit(0)
+            
+            
+            
+
+
+            h_init = self._PbPs @ h_init
+            h_curr = self._PbPs @ h_curr
+        
         solution_vector = np.zeros((2, h_init.shape[0]))
-        solution_vector[0,:] = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_init), mw, vth)
-        solution_vector[1,:] = bte_utils.normalized_distribution(spec_sp, mass_op, np.dot(qA,h_curr), mw, vth)
+        solution_vector[0,:] = bte_utils.normalized_distribution(spec_sp, mass_op, h_init, mw, vth)
+        solution_vector[1,:] = bte_utils.normalized_distribution(spec_sp, mass_op, h_curr, mw, vth)
         h_bolsig             = self._bolsig_data["bolsig_hh"]
 
         return {'sol':solution_vector, 'h_bolsig': h_bolsig, 'atol': atol, 'rtol':rtol, 'tgrid':None}

@@ -20,16 +20,19 @@ import collision_operator_spherical as collOpSp
 import scipy.constants
 import os
 import scipy.sparse.linalg
+import scipy.linalg
 import cross_section
 from time import perf_counter, sleep
 import glowdischarge_1d
 import mesh
 
 CUDA_NUM_DEVICES      = 0
-PROFILE_SOLVERS       = 0
+PROFILE_SOLVERS       = 1
 try:
   import cupy as cp
   import cupyx.scipy.sparse.linalg
+  import cupyx.scipy.linalg as cpx_la
+  import rawkernel as cp_rk
   #CUDA_NUM_DEVICES=cp.cuda.runtime.getDeviceCount()
 except ImportError:
   print("Please install CuPy for GPU use")
@@ -84,6 +87,7 @@ class glow1d_boltzmann():
       self.ts_op_split_factor  = 1/1
       self.heavies_freeze_E    = True
       self.xspace_adv_type     = args.xadv_type #bte_xspace_adv_type.USE_BE_UPW_FD
+      self.xadv_bw             = 1
        
       dir            = args.dir
       if os.path.exists(dir):
@@ -716,21 +720,26 @@ class glow1d_boltzmann():
       xp                = self.xp_module
       self.adv_setup_dt = dt 
       #assert xp == np
-      
-      self.bte_x_shift      = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
-      #self.bte_x_shift_rmat = xp.zeros((self.Nr, self.Nvt, self.Np, self.Np))
+
+      assert self.Nr == self.op_spec_sp._p + 1
+      assert self.Nvt == len(self.xp_vt)
+      assert self.Np  == len(self.xp)
+
+      Nx  = self.Np
+      Nvt = self.Nvt
+      Nr  = self.Nr
       
       if (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
-        DpL        = xp.zeros((self.Np, self.Np))
-        DpR        = xp.zeros((self.Np, self.Np))
+        DpL        = xp.zeros((Nx, Nx))
+        DpR        = xp.zeros((Nx, Nx))
         
         DpL[1:,:]  = self.Dp[1:,:]
         DpR[:-1,:] = self.Dp[:-1,:]
 
       elif (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
 
-        DpL        = xp.zeros((self.Np, self.Np))
-        DpR        = xp.zeros((self.Np, self.Np))
+        DpL        = xp.zeros((Nx, Nx))
+        DpR        = xp.zeros((Nx, Nx))
 
         DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, "LtoR"))[1:,:]
         DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, "RtoL"))[:-1,:]
@@ -741,19 +750,39 @@ class glow1d_boltzmann():
       f1 = 1.0
       f2 = 1-f1
 
-      for j in range(self.Nvt):
-        if (self.xp_vt[j] <= 0.5 * xp.pi):
-          for i in range(self.Nr):
-            self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
-            #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
-        else:
-          for i in range(self.Nr):
-            self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
-            #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+      if (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+        self.bte_x_shift      = xp.zeros((Nr, Nvt, Nx, Nx))
+        #self.bte_x_shift_rmat = xp.zeros((Nr, Nvt, Nx, Nx))
       
-      #self.tmp1        = self.bte_x_shift   
-      self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
-      #self.bte_x_shift = cp.asnumpy(cp.linalg.inv(cp.asarray(self.bte_x_shift)))
+        for j in range(Nvt):
+          if (self.xp_vt[j] <= 0.5 * xp.pi):
+            for i in range(Nr):
+              self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+              #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+          else:
+            for i in range(Nr):
+              self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+              #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+        
+        self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
+
+      elif (self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+        self.bte_x_shift_diag    = xp.zeros((Nr, Nvt, Nx))
+        self.bte_x_shift_sdiag   = xp.zeros((Nr, Nvt, Nx-1))
+        
+        for j in range(Nvt):
+          if (self.xp_vt[j] <= 0.5 * xp.pi):
+            for i in range(Nr):
+              self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=0)
+              self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=-1)
+              
+          else:
+            for i in range(Nr):
+              self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=0)
+              self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=1)
+              
+      else:
+        raise NotImplementedError
       
       # adv_mat = cp.asnumpy(self.bte_x_shift)
       # v1 = -self.xp**2 + 1.2
@@ -1188,7 +1217,7 @@ class glow1d_boltzmann():
       
       return Rni_ni, jac_bc
     
-    def step_bte_x(self, v, time, dt):
+    def step_bte_x(self, v, time, dt, verbose=0):
       "perform the bte x-advection analytically"
       xp        = self.xp_module
       assert self.adv_setup_dt == dt
@@ -1202,30 +1231,58 @@ class glow1d_boltzmann():
           cp.cuda.runtime.deviceSynchronize()
         t1 = perf_counter()
       
-      Vin       = v.reshape((self.Nr, self.Nvt , self.Np)).reshape(self.Nr, self.Nvt * self.Np)
-      Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((self.Nr, self.Nvt, self.Np)).reshape((self.Nr * self.Nvt , self.Np))
+      Vin       = v.reshape((Nr, Nvt, Nx)).reshape(Nr, Nvt * Nx)
+      Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, Nvt, Nx)).reshape((Nr * Nvt , Nx))
       
-      #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((self.Nr, self.Nvt, self.Np))).reshape((self.Nr*self.Nvt, self.Np)) 
+      #Vin       += xp.einsum("ijkl,ijl->ijk",self.bte_x_shift_rmat, Vin.reshape((Nr, Nvt, Nx))).reshape((Nr*Nvt, Nx)) 
       # enforce rhs BCs
       Vin[self.xp_vt_l,  0] = 0.0
       Vin[self.xp_vt_r, -1] = 0.0
+
+      if(self.xspace_adv_type == bte_xspace_adv_type.USE_BE_CHEB):
+        Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, Nvt, Nx)))
       
-      Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((self.Nr, self.Nvt, self.Np)))
-      Vin_adv_x  = Vin_adv_x.reshape((self.Nr, self.Nvt *  self.Np))
-      Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((self.Nr , self.Nvt, self.Np)).reshape((self.Nr * self.Nvt, self.Np))
+      elif(self.xspace_adv_type == bte_xspace_adv_type.USE_BE_UPW_FD):
+        z         = Vin.reshape((Nr, Nvt, Nx))
+        Vin_adv_x = xp.zeros_like(z)
+        idx_lr    = self.xp_vt <= 0.5 * xp.pi
+        idx_rl    = self.xp_vt  > 0.5 * xp.pi
+
+        if xp == cp:
+          Vin_adv_x[:, idx_lr] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_lr],
+                                                          self.bte_x_shift_sdiag[:, idx_lr], z[:, idx_lr], lower=True)
+          
+          Vin_adv_x[:, idx_rl] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_rl],
+                                                          self.bte_x_shift_sdiag[:, idx_rl], z[:, idx_rl], lower=False)
+        else:
+          raise NotImplementedError
+          # for j in range(self.Nvt):
+          #   if (self.xp_vt[j] <= 0.5 * xp.pi):
+          #     for i in range(Nr):
+          #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=True)
+          #   else:
+          #     for i in range(Nr):
+          #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=False)
+      else:
+        raise NotImplementedError
+
+      Vin_adv_x  = Vin_adv_x.reshape((Nr, self.Nvt *  self.Np))
+      Vin_adv_x  = xp.dot(self.op_adv_x_q, Vin_adv_x).reshape((Nr , self.Nvt, self.Np)).reshape((Nr * self.Nvt, self.Np))
       
       # print((Vin_adv_x[self.xp_vt_l , 0] ==0).all())
       # print((Vin_adv_x[self.xp_vt_r , -1]==0).all())
-      
+
+      # if (self.args.vtDe > 0):
+      #   Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * self.Nvt, self.Np))
+
       if PROFILE_SOLVERS==1:
         if xp == cp:
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
-        print("BTE x-advection cost = %.4E (s)" %(t2-t1), flush=True)
+        
+        if(verbose==1):
+          print("BTE x-advection cost = %.4E (s)" %(t2-t1), flush=True)
       
-      #Vin_adv_x[Vin_adv_x<0] = 1e-16
-      # if (self.args.vtDe > 0):
-      #   Vin_adv_x = xp.einsum("il,rlx->rix", self.LpDvt, Vin_adv_x.reshape((Nr, Nvt, Nx))).reshape((Nr * Nvt, Nx))
 
       return Vin_adv_x
       
@@ -1364,7 +1421,8 @@ class glow1d_boltzmann():
         if xp == cp:
           cp.cuda.runtime.deviceSynchronize()
         t2 = perf_counter()
-        print("fluid solver cost = %.4E (s)" %(t2-t1), flush=True)
+        if (verbose==1):
+          print("fluid solver cost = %.4E (s)" %(t2-t1), flush=True)
         
       return u1
     
@@ -1443,8 +1501,9 @@ class glow1d_boltzmann():
         rtol            = self.args.rtol
         atol            = self.args.atol
         iter_max        = self.args.max_iter
-        use_gmres       = True
         E               = self.bs_E
+
+        use_gmres       = not((E[0] == E).all()==True)
             
         dof_v           = self.dof_v
         
@@ -1479,7 +1538,7 @@ class glow1d_boltzmann():
             Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
             Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
             gmres_c   = glow1d_utils.gmres_counter(disp=False)
-            v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), tol=rtol, atol=atol, M=Mmat_op, restart=self.args.gmres_rsrt, maxiter=self.args.gmres_rsrt * 50, callback=gmres_c)
+            v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.args.gmres_rsrt, maxiter=self.args.gmres_rsrt * 50, callback=gmres_c)
           else:
             Lmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
             Mmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
@@ -1500,7 +1559,18 @@ class glow1d_boltzmann():
           else:
             v               = v.reshape((self.dof_v, self.Np))
         else:
-          raise NotImplementedError
+          norm_b          = xp.linalg.norm(u.reshape((-1)))
+          dof_v           = self.dof_v
+          Imat            = self.I_Nv
+          gmres_c         = glow1d_utils.gmres_counter(disp=False)
+      
+          Jmat            = self.param.tau * self.param.n0 * self.param.np0 * (self.op_col_en + self.param.Tg * self.op_col_gT) + self.param.tau * E[0] * self.op_adv_v
+          Lmat            = Imat -dt * Jmat
+          Lmat_inv        = xp.linalg.inv(Lmat)
+          v               = Lmat_inv @ u
+          norm_res_abs    = xp.linalg.norm((Lmat @ v).reshape((-1)) -  u.reshape((-1)))
+          norm_res_rel    = xp.linalg.norm((Lmat @ v).reshape((-1)) -  u.reshape((-1))) / norm_b
+          
         
         v       = self.sph_to_ords(v)
         
@@ -2411,10 +2481,10 @@ class glow1d_boltzmann():
           cycle_avg_u     += u
           cycle_avg_v     += (v/u[ : , ele_idx])
         
-        v           = self.step_bte_x(v, tt, dt * 0.5)
+        v           = self.step_bte_x(v, tt, dt * 0.5, verbose=(ts_idx % 100 == 0))
         #self.bs_E   = Et(tt + 0.5 * dt)
         self.bs_E   = Et(tt)
-        v           = self.step_bte_v(v, None, tt, dt, self.ts_type_bte_v , verbose=0)
+        v           = self.step_bte_v(v, None, tt, dt, self.ts_type_bte_v , verbose=(ts_idx % 100 == 0))
         v           = self.step_bte_x(v, tt + 0.5 * dt, dt * 0.5)
         
         #v, a1, a2  = self.step_bte_vx_imp(v,None, tt, dt, None, 1)
@@ -3450,6 +3520,33 @@ if __name__ == "__main__":
     uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
   elif(args.bte_with_E == 4):
     uu,vv     = glow_1d.evolve_1dbte_adv_x(u, v, output_cycle_averaged_qois=True)
+  elif(args.bte_with_E == 5):
+    xp        = cp #glow_1d.xp_module 
+    import h5py
+    import scipy.interpolate
+    ff        = h5py.File("1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+    tt_sp     = np.array(ff["time[T]"][()])
+    E_sp      = np.array(ff['E[Vm^-1]'][()])
+    xx_sp     = np.array(ff['x[-1,1]'][()])
+    if(len(xx_sp)!=glow_1d.Np):
+      print("resampling E field to match BTE grid")
+      E_sp      = scipy.interpolate.interp1d(xx_sp, E_sp, axis=1, bounds_error=True)(glow_1d.xp)
+
+    Et_inp    = scipy.interpolate.interp1d(tt_sp, E_sp, axis=0, bounds_error=True)
+
+    dt        = args.cfl
+    
+    def Et(t):
+      idx  = int(np.round(t / dt))
+      cfrq = int(1 / dt)
+      if (t > 0):
+        assert (np.abs(idx * dt - t)/np.abs(t) < 1e-10) , "time = %.14E idx * dt = %.14E"%(t, idx * dt)
+      tta  = (idx % cfrq) * dt
+      return xp.array(Et_inp(tta))
+
+    uu,vv     = glow_1d.evolve_1dbte_given_E(u, v, Et, output_cycle_averaged_qois=True)
+
+    
   else:
     uu,vv     = glow_1d.solve(u, v, output_cycle_averaged_qois=True)
     

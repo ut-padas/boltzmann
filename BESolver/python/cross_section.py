@@ -64,7 +64,8 @@ def read_cross_section_data(file: str):
             mass_ratio       = data.cross_sections[i].mass_ratio
             sp               = data.cross_sections[i].species
             cs_dict[process] = {"info": data.cross_sections[i].info, "type": process_str, "species": sp, "energy": energy, "cross section": cross_section, "threshold": threshold, "mass_ratio": mass_ratio, "raw": data.cross_sections[i]}
-    
+    global CROSS_SECTION_DATA
+    CROSS_SECTION_DATA = cs_dict    
     return cs_dict
 
 def compute_mw_reaction_rates(Te:np.array, cs_data:list, normalized_v_domain=(0, 30), num_vr_pts = 1000):

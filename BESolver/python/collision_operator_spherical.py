@@ -15,6 +15,8 @@ import scipy.integrate
 import scipy.sparse
 import sym_cc
 import sympy
+import scipy.interpolate
+import mesh
 from multiprocess import Pool
 
 class CollissionOp(abc.ABC):
@@ -35,11 +37,11 @@ class CollisionOpSP():
     direc delta distribution function. 
     """
     
-    def __init__(self, spec_sp) -> None:
+    def __init__(self, spec_sp:sp.SpectralExpansionSpherical) -> None:
         
         self._spec              = spec_sp
         self._r_basis_type      = spec_sp.get_radial_basis_type()
-
+        
         self._num_p               = spec_sp._p +1
         self._num_sh              = len(spec_sp._sph_harm_lm)
         self._sph_harm_lm         = spec_sp._sph_harm_lm  
@@ -153,8 +155,8 @@ class CollisionOpSP():
                         gw_e             = gw_e[check_1]
                         v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
                     
-                    # elif (g._type == collisions.CollisionType.EAR_G3):
-                    #     v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  + g._attachment_energy)) / V_TH
+                    elif (g._type == collisions.CollisionType.EAR_G3):
+                        v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  + g._attachment_energy)) / V_TH
                     else:
                         raise ValueError
 
@@ -575,10 +577,14 @@ class CollisionOpSP():
         else:
             raise NotImplementedError
     
-    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3), tgK=0.0, mp_pool_sz=4):
-        Lij = self._LOp_eulerian_radial_only(collision,maxwellian, vth, tgK, mp_pool_sz)
+    def assemble_mat(self,collision : collisions.Collisions , maxwellian, vth,v0=np.zeros(3), tgK=0.0, mp_pool_sz=4, use_hsph=False):
+        if (use_hsph):
+            Lij  = self._Lop_eulerian_full(collision, maxwellian, vth, tgK, use_hemi_sph_harm=True, azimuthal_symmetry=True)
+        else:
+            Lij = self._LOp_eulerian_radial_only(collision,maxwellian, vth, tgK, mp_pool_sz)
+        
         return Lij
-
+    
     def rosenbluth_potentials(self, hl_op, gl_op, fb, mw, vth):
         
         spec_sp  :sp.SpectralExpansionSpherical     = self._spec
@@ -1112,6 +1118,304 @@ class CollisionOpSP():
                         
 
         return cc_mat_a, cc_mat_b
+
+    ### hemispherical harmonics related collision operator discretization
+    def _Lop_eulerian_full(self, collision, maxwellian, vth, tgK, use_hemi_sph_harm = False, azimuthal_symmetry = True):
+        V_TH          = vth     
+        g             = collision
+        spec_sp       = self._spec
+        num_p         = spec_sp._p+1
+        num_sh        = len(spec_sp._sph_harm_lm)
+        
+        assert azimuthal_symmetry, "only azimuthal symmetry is implemented for binary collisions operator"
+        
+        if self._r_basis_type == basis.BasisType.SPLINES:
+            k_vec        = spec_sp._basis_p._t
+            dg_idx       = spec_sp._basis_p._dg_idx
+            sp_order     = spec_sp._basis_p._sp_order
+            cc_collision = spec_sp.create_mat()
+            c_gamma      = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+
+            k_vec_uq     = np.unique(k_vec)
+            k_vec_dx     = k_vec_uq[1] - k_vec_uq[0]
+
+            assert len(dg_idx) == 2, "only CG allowed for hsph lop eulerian"
+            gx_e , gw_e        = spec_sp._basis_p.Gauss_Pn(self._NUM_Q_VR)
+            
+            if(g._type == collisions.CollisionType.EAR_G0):
+                energy_split     = 1
+                c_mu             = 2 * g._mByM 
+                v_scale          = np.sqrt(1- c_mu)
+                v_post           = gx_e * v_scale
+                
+            elif(g._type == collisions.CollisionType.EAR_G1):
+                energy_split     = 1
+                check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
+                gx_e             = gx_e[check_1]
+                gw_e             = gw_e[check_1]
+                v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+            elif(g._type == collisions.CollisionType.EAR_G2):
+                energy_split     = 2
+                check_1          = (gx_e * V_TH/c_gamma)**2 >= g._reaction_threshold
+                gx_e             = gx_e[check_1]
+                gw_e             = gw_e[check_1]
+                v_post           = c_gamma * np.sqrt( (1/energy_split) * ((gx_e * V_TH /c_gamma)**2  - g._reaction_threshold)) / V_TH
+            else:
+                raise NotImplementedError("only EAR G0, G1, G2 are implemented for hsph lop eulerian")
+            
+            total_cs           = g.total_cross_section((gx_e * V_TH / c_gamma)**2) 
+            if (use_hemi_sph_harm==True):
+                
+                Nvt      = 32#(spec_sp._sph_harm_lm[-1][0] * 2 + 2) 
+                Nvp      = 32
+                Nvts     = 128
+                Nvps     = 128
+
+                def __Wqs_lm__(Nvt, Nvp, Nvts, Nvps):
+                    try:
+                        import cupy as cp
+                        import cupyx.scipy
+                        _  = cp.random.rand(3)
+                        xp = cp
+                        print("using cupy for angular integrals")
+                        
+                        def sph_func(l, m, theta, phi, mode):
+                            Y            = xp.zeros_like(theta)
+                            t            = xp.zeros_like(theta)
+                        
+                            if mode=="+":
+                                idx      = xp.logical_and(theta <= xp.pi/2, theta >= 0)
+                                t[idx]   = xp.arccos(2 * xp.cos(theta[idx]) - 1)
+                            else:
+                                assert mode=="-", "invalid hemisphere mode"
+                                idx      = xp.logical_and(theta >= xp.pi/2, theta <= xp.pi)
+                                t[idx]   = xp.arccos(2 * xp.cos(theta[idx]) + 1)
+                            
+                            Ysh  = cupyx.scipy.special.sph_harm(abs(m), l, phi[idx], t[idx])
+                        
+                            if m < 0:
+                                Y[idx] = xp.sqrt(2) * (-1)**m * Ysh.imag
+                            elif m > 0:
+                                Y[idx] = xp.sqrt(2) * (-1)**m * Ysh.real
+                            else:
+                                Y[idx] = Ysh.real
+
+                            return xp.sqrt(2) * Y
+                        
+
+                    except Exception as e:
+                        print(e)
+                        xp = np
+                        sph_func = spec_sp._hemi_sph_harm_real
+                    
+                    Wqs_lm_p    = xp.zeros((2 * num_sh, 2 * num_sh))
+                    Wqs_lm_m    = xp.zeros((2 * num_sh, 2 * num_sh))
+
+                    for didx_i, di in enumerate(["+", "-"]):
+                        for didx_j, dj in enumerate(["+", "-"]):
+                            for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                                vt, vtw   =  spec_sp.gl_vt(Nvt, mode="np") if dj == "+" else  spec_sp.gl_vt(Nvt, mode="sp")
+                                vp, vpw   =  spec_sp.gl_vp(Nvp)
+                                
+                                vts, vtsw = spec_sp.gl_vt(Nvts, mode="npsp")
+                                vps, vpsw = spec_sp.gl_vp(Nvps)
+
+                                mg        = xp.meshgrid(xp.asarray(vt), xp.asarray(vp), xp.asarray(vts), xp.asarray(vps), indexing="ij")
+                                vt_p      = xp.acos(xp.cos(mg[0]) * xp.cos(mg[2]) + xp.sin(mg[0]) * xp.sin(mg[2]) * xp.cos(mg[1] - mg[3]))
+                                vp_p      = 0 * vt_p
+                                Ylm       = xp.asarray(sph_func(lm[0], lm[1], mg[0], mg[1], dj))
+                                
+                                
+                                for ps_idx, qs in enumerate(spec_sp._sph_harm_lm):
+                                    Yqs = xp.asarray(sph_func(qs[0], qs[1], vt_p, vp_p, di))
+                                    Wqs_lm_p[didx_i * num_sh + ps_idx, didx_j * num_sh + lm_idx] = xp.einsum("abcd,a,b,c,d->", Yqs * Ylm, xp.asarray(vtw), xp.asarray(vpw), xp.asarray(vtsw), xp.asarray(vpsw))
+
+
+                                # for ps_idx, qs in enumerate(spec_sp._sph_harm_lm):
+                                #     Yqs = xp.asarray(sph_func(qs[0], qs[1], mg[0], mg[1], di))
+                                #     Wqs_lm_m[didx_i * num_sh + ps_idx, didx_j * num_sh + lm_idx] = xp.einsum("abcd,a,b,c,d->", Yqs * Ylm, xp.asarray(vtw), xp.asarray(vpw), xp.asarray(vtsw), xp.asarray(vpsw))
+                                        
+
+                    Wqs_lm_m[0:num_sh, 0:num_sh] = 4 * xp.pi * xp.diag(xp.ones(num_sh))
+                    Wqs_lm_m[num_sh: , num_sh: ] = 4 * xp.pi * xp.diag(xp.ones(num_sh))
+
+                    # print("p\n", Wqs_lm_p)
+                    # print("m\n", Wqs_lm_m)
+
+                    if (xp == cp):
+                        Wqs_lm_p = cp.asnumpy(Wqs_lm_p)
+                        Wqs_lm_m = cp.asnumpy(Wqs_lm_m)
+
+                    return Wqs_lm_p, Wqs_lm_m
+            else:
+                sph_func = spec_sp._sph_harm_real
+                Nvt      = spec_sp._sph_harm_lm[-1][0] * 2 + 2
+                Nvp      = 8
+                Nvts     = Nvt
+                Nvps     = Nvp
+
+                def __Wqs_lm__(Nvt, Nvp, Nvts, Nvps):
+                    Wqs_lm_p    = np.zeros((num_sh, num_sh))
+                    Wqs_lm_m    = np.zeros((num_sh, num_sh))
+
+                    vt, vt_qw   = spec_sp.gl_vt(Nvt, hspace_split=True)
+                    vp, vp_qw   = spec_sp.gl_vp(Nvp)
+                    
+                    svt, svt_qw = spec_sp.gl_vt(Nvts, hspace_split=True)
+                    svp, svp_qw = spec_sp.gl_vp(Nvps)
+
+                    mg      = np.meshgrid(vt, vp, svt, svp, indexing='ij')
+                    vt_p    = (np.cos(mg[0]) * np.cos(mg[2]) + np.sin(mg[0]) * np.sin(mg[2]) * np.cos(mg[1] - mg[3]))
+                    
+                    if (np.max(vt_p) > 1):
+                        assert np.abs(np.max(vt_p) - 1) < 1e-10
+                        vt_p[vt_p > 1]  = 1.0
+                    
+                    if (np.min(vt_p) < -1):
+                        assert np.abs(np.min(vt_p) + 1) < 1e-10
+                        vt_p[vt_p < -1] = -1.0
+
+                    vt_p    = np.arccos(vt_p)
+                    vp_p    = 0 * vt_p  # does not matter for aszimuthally symmetric distributions. 
+
+                    for ps_idx, qs in enumerate(spec_sp._sph_harm_lm):
+                        Yqs = sph_func(qs[0], qs[1], vt_p, vp_p)
+                        for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                            Ylm = sph_func(lm[0], lm[1], mg[0], mg[1])
+                            Wqs_lm_p[ps_idx, lm_idx] = np.einsum("abcd,a,b,c,d->", Yqs * Ylm, vt_qw, vp_qw, svt_qw, svp_qw)
+
+                    # for ps_idx, qs in enumerate(spec_sp._sph_harm_lm):
+                    #     Yqs = sph_func(qs[0], qs[1], mg[0], mg[1])
+                    #     for lm_idx, lm in enumerate(spec_sp._sph_harm_lm):
+                    #         Ylm = sph_func(lm[0], lm[1], mg[0], mg[1])
+                    #         Wqs_lm_m[ps_idx, lm_idx] = np.einsum("abcd,a,b,c,d->", Yqs * Ylm, vt_qw, vp_qw, svt_qw, svp_qw)
+                    
+                    Wqs_lm_m[0:num_sh, 0:num_sh] = 4 * np.pi * np.diag(np.ones(num_sh))
+
+                    return Wqs_lm_p, Wqs_lm_m
+            
+            
+
+            Wqs_lm_0 = __Wqs_lm__(Nvt, Nvp, Nvts, Nvps)
+            Wqs_lm_1 = __Wqs_lm__(2 * Nvt, 2 * Nvp, 2 * Nvts, 2 * Nvps)
+
+            
+            for i in range(len(Wqs_lm_0)):
+                rel_error_angular = np.linalg.norm(Wqs_lm_0[i] - Wqs_lm_1[i])/np.linalg.norm(Wqs_lm_1[i])
+                print("angular quadrature error term %d : %.8E"%(i, rel_error_angular))
+
+            Wqs_lm = Wqs_lm_1
+            assert Wqs_lm[0].shape == Wqs_lm[1].shape
+            assert Wqs_lm[0].shape[0] == Wqs_lm[0].shape[1]
+
+            nl           = Wqs_lm[0].shape[0]
+            cc_collision = np.zeros((num_p , nl, num_p , nl))
+            
+            for p in range(num_p):
+                bp     = spec_sp.basis_eval_radial(gx_e,   p, 0)
+                bp_vp  = spec_sp.basis_eval_radial(v_post, p, 0)
+                for k in range(num_p):
+                    bk = spec_sp.basis_eval_radial(gx_e, k, 0)
+                    
+                    cc_collision[p, :, k, :] =  np.einsum("p,prs->rs", gw_e, np.einsum("p,prs->prs", (1/4/np.pi) * gx_e**3 * total_cs * bk,
+                                                                            (energy_split * np.einsum("p,rs->prs", bp_vp, Wqs_lm[0]) - np.einsum("p,rs->prs", bp, Wqs_lm[1]))))
+
+
+            cc_collision = vth * cc_collision.reshape((num_p * nl, num_p * nl))                    
+            return cc_collision
+                      
+
+
+                    
+
+        else:
+            raise NotImplementedError("only splines basis is implemented for hsph lop eulerian")
+        
+    def _Lop_eulerian_strong_form(self, xp_vr, xp_vt, collision, maxwellian, vth, tgK, Nvts=32, Nvps=32, azimuthal_symmetry=True):
+        assert azimuthal_symmetry, "only azimuthal symmetry is implemented for binary collisions operator"
+        g        = collision
+        c_gamma  = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
+
+        try:
+            import cupy as cp
+            import cupyx.scipy.interpolate
+            _  = cp.random.rand(3)
+            xp = cp
+            lin_ip = cupyx.scipy.interpolate.interp1d
+        except Exception as e:
+            print(e)
+            xp       = np
+            lin_ip   = scipy.interpolate.interp1d
+        
+        def asnumpy(x):
+            a = cp.asnumpy(x) if xp == cp else x
+            return a 
+
+        spec_sp     = self._spec
+        vr, vr_qw   = xp.asarray(xp_vr[0]), xp.asarray(xp_vr[1])
+        vt, vt_qw   = xp.asarray(xp_vt[0]), xp.asarray(xp_vt[1])
+        vp, vp_qw   = xp.asarray([0]), xp.asarray([2 * np.pi])
+
+        num_vr      = len(vr)
+        num_vt      = len(vt)
+        mvrvt       = xp.kron(vr**2 * vr_qw, vt_qw) * 2 * np.pi
+        rmax        = xp.sum(vr_qw)
+        domain      = spec_sp._basis_p._domain
+        assert xp.abs((domain[1]-domain[0]) - rmax) < 1e-14, "domain : %.2E rmax: %.2E"%(domain[1]-domain[0], rmax)
+
+        ## no need for this since we use iostropic scattering
+        # svt, svt_qw = spec_sp.gl_vt(Nvts, hspace_split=True)
+        # svp, svp_qw = spec_sp.gl_vp(Nvps)
+
+        # svt, svt_qw = xp.asarray(svt), xp.asarray(svt_qw)
+        # svp, svp_qw = xp.asarray(svp), xp.asarray(svp_qw)
+        # v_mg        = xp.meshgrid(vt, svt, svp, indexing="ij")
+        
+        detJ        = 1.0
+        if(g._type == collisions.CollisionType.EAR_G0):
+            c_mu             = 2 * g._mByM 
+            v_scale          = xp.sqrt(1- c_mu)
+            vpre             = lambda x : x/v_scale 
+            detJ             = (1/v_scale)**3
+        elif(g._type == collisions.CollisionType.EAR_G1):
+            vpre             = lambda x : xp.sqrt(x**2 + (c_gamma/vth)**2 * g._reaction_threshold)
+            detJ             = vpre(vr)/vr
+        elif(g._type == collisions.CollisionType.EAR_G2):
+            vpre             = lambda x : xp.sqrt(2 * x**2 + (c_gamma/vth)**2 * g._reaction_threshold)
+            detJ             = 2.0 * vpre(vr) / vr
+            #print(rmax, vr[-1], (c_gamma/vth)**1 * np.sqrt(g._reaction_threshold))
+        else:
+            raise NotImplementedError("only EAR G0, G1, G2 are implemented for hsph lop eulerian")
+
+        vr_pre      = vpre(vr)
+        dcs         = (1/(4 * xp.pi)) * vr**1     * vth * xp.asarray(g.total_cross_section(asnumpy((vr * vth / c_gamma)**2)))
+        dcs_pre     = (1/(4 * xp.pi)) * vr_pre**1 * vth * xp.asarray(g.total_cross_section(asnumpy((vr_pre * vth / c_gamma)**2)))
+
+        
+        cminus      = 4 * xp.pi * xp.kron(xp.diag(dcs), xp.eye(num_vt))
+        Lvr         = lin_ip(vr, xp.eye(num_vr), kind="linear", axis=0, bounds_error=False, fill_value=0.0)(vr_pre)
+        bidx        = xp.arange(num_vr)[xp.logical_and(vr_pre>vr[-1], vr_pre<=rmax)]
+        
+        if len(bidx)>0:
+            assert (Lvr[bidx,:]==0).all()==True
+            Lvr[bidx, -1] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
+        
+        #print(bidx, num_vr)
+        #print(Lvr)
+        #print(vr)
+        #print(vpre(vr))
+        #np.savetxt("Lvr.txt", Lvr)
+        # if(g._type == collisions.CollisionType.EAR_G0):
+        #     bidx = [vr_pre>vr[-1]]
+        #     assert (Lvr[bidx,:]==0).all()==True
+        #     Lvr[bidx, bidx] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
+            
+        f0_op       = xp.repeat(vt_qw * np.pi* 2, repeats=num_vt, axis=0).reshape((num_vt, num_vt)).T
+        assert (xp.abs(xp.sum(f0_op, axis=1) - 4 * xp.pi) < 1e-12).all() == True
+        cplus       = xp.kron(xp.diag(dcs_pre * detJ) @ Lvr, f0_op) 
+        return asnumpy(cplus - cminus)
+        
+
 
 
 

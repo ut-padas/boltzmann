@@ -56,8 +56,9 @@ class Collisions(abc.ABC):
         self._col_name                    = cross_section
         self._reaction_threshold          = 0.0
         #self._cs_interp_type              = CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT
-        self._cs_extrapolate              = True # extrapolate cs as factor of ln(e)/e
-        self._cs_interp_type              = CollisionInterpolationType.USE_BSPLINE_PROJECTION #CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT
+        self._cs_extrapolate              = False#True # extrapolate cs as factor of ln(e)/e
+        #self._cs_interp_type              = CollisionInterpolationType.USE_BSPLINE_PROJECTION #CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT
+        self._cs_interp_type              = CollisionInterpolationType.USE_PICEWICE_LINEAR_INTERPOLATION
         pass
     
     def load_cross_section(self, collision_str: str)->None:
@@ -241,6 +242,7 @@ class Collisions(abc.ABC):
             Vq       = np.array([bb.Pn(p)(energy, 0) for p in range(num_p)]).reshape((num_p, len(energy)))
             total_cs = np.abs(np.dot(self._sigma_k, Vq))
             if self._cs_extrapolate == True:
+                print("::: using crs extrapolation")
                 idx           = np.where(energy > self._energy[-1])[0]
                 if (len(idx)>0):
                     idx0 = max(0, idx[0]-1)
@@ -249,8 +251,10 @@ class Collisions(abc.ABC):
         elif self._cs_interp_type == CollisionInterpolationType.USE_ANALYTICAL_FUNCTION_FIT:
             return Collisions.synthetic_tcs(energy,self._col_name)  
         else:
+            #print("using linear fit")
             total_cs = self._total_cs_interp1d(energy)
             if self._cs_extrapolate == True:
+                print("::: using crs extrapolation")
                 idx           = np.where(energy > self._energy[-1])[0]
                 if (len(idx)>0):
                     idx0 = max(0, idx[0]-1)

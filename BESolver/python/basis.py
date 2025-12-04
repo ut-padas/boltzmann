@@ -46,6 +46,35 @@ def gauss_legendre_quad(deg, a, b):
 
     return qx, qw
 
+def gauss_radau_quadrature(n, fixed_point=-1):
+    if n == 1:
+        return np.array([fixed_point]), np.array([2.0]) # Weight for fixed point is 2 for n=1
+
+    L           = np.polynomial.Legendre
+    if (fixed_point ==-1):
+        p = L.basis(n) + L.basis(n - 1)
+    else:
+        assert fixed_point == 1
+        p = L.basis(n) - L.basis(n - 1)
+    
+    nodes = p.roots()
+    # Calculate weights using the method of undetermined coefficients
+    # We set up a system of equations for the weights based on integrating monomials
+    # The system is V @ w = rhs, where V is the Vandermonde matrix and rhs are
+    # the exact integrals of monomials.
+    max_degree = len(nodes) - 1
+    powers     = np.arange(max_degree + 1)
+    V          = nodes ** powers.reshape(-1, 1)
+    
+    # Exact integrals of x^k over [-1, 1]
+    # For even k: 2/(k+1)
+    # For odd k: 0
+    rhs = np.zeros(max_degree + 1)
+    rhs[::2] = 2 / (powers[::2] + 1)
+
+    weights = np.linalg.solve(V, rhs)
+    return nodes, weights
+
 class Basis(abc.ABC):
     abc.abstractmethod
     def __init__(self, domain, window):
@@ -296,15 +325,17 @@ class BSpline(Basis):
         
         if knots_vec is None:
             if dg_splines:
-                if len(sig_pts)==0:
+                if sig_pts is None or len(sig_pts)==0:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots(k_domain, num_p, spline_order)
                 else:
                     self._t , self._ele, self._ele_p  = BSpline.uniform_dg_knots_1(k_domain, num_p, spline_order,sig_pts)
             else:
                 if extend_domain == True:
                     self._t     = BSpline.uniform_knots((k_domain[0], 1.2 * k_domain[1]), num_p, spline_order)
+                    self._domain= (k_domain[0], 1.2 * k_domain[1])
                 elif extend_domain_with_log == True:
                     self._t     = BSpline.uniform_knots_with_extended_bdy(k_domain, num_p, spline_order, ext_kdomain = (5) * k_domain[1])
+                    self._domain= (k_domain[0], 5 * k_domain[1])
                     #self._t       = BSpline.logspace_knots(k_domain, num_p, spline_order, 1e-3, base=2)
                 else:
                     self._t     = BSpline.uniform_knots(k_domain, num_p, spline_order)
@@ -344,7 +375,7 @@ class BSpline(Basis):
             
         self._splines            = [scipy.interpolate.BSpline.basis_element(self._t[i:i+spline_order+2],False) for i in range(self._num_p)]
         self._t_unique           = np.unique(self._t)
-        self._num_knot_intervals = len(self._t_unique)
+        self._num_knot_intervals = len(self._t_unique)-1
 
         if self._ele >1:
             self._dg_idx    = list()
@@ -464,7 +495,8 @@ class BSpline(Basis):
         
         fig = plt.figure(figsize=(8,3),dpi=300)
         for i in range(self._num_p):
-            plt.plot(x, self.Pn(i)(x,0), linewidth=0.8)
+            plt.semilogy(x, self.Pn(i)(x,0), linewidth=0.8)
+            #print(i, self.Pn(i)(x,0)[-1])
 
         plt.xlabel(r"v")
         #plt.legend()
@@ -607,6 +639,14 @@ class BSpline(Basis):
         t          = (k_domain[0])*np.ones(sp_order)
         t          = np.append(t,np.linspace(k_domain[0] , k_domain[1] , num_p-sp_order , endpoint=False))
         t          = np.append(t, k_domain[1]*np.ones(sp_order+1))
+        return t
+
+    @staticmethod
+    def legendre_knots(k_domain, num_p, sp_order):
+        t            = (k_domain[0])*np.ones(sp_order+1)
+        gx, gw       = np.polynomial.legendre.leggauss(num_p-sp_order-1)
+        t            = np.append(t, 0.5 * (k_domain[1]-k_domain[0]) * gx + 0.5 * (k_domain[0] + k_domain[1]))
+        t            = np.append(t, k_domain[1]*np.ones(sp_order+1))
         return t
 
     @staticmethod

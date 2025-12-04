@@ -19,13 +19,13 @@ class qoi_idx():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-par_file", "--par_file" , help="toml par file to specify run parameters" , type=str)
+    parser.add_argument("-ef_mode" , "--ef_mode",   help="E-field mode" , type=int)
     
     args    = parser.parse_args()
     bte     = bte_1d3v_solver.bte_1d3v(args)
     params  = bte.params
 
     v       = bte.initial_condition(type=0)
-
     if params.use_gpu == 1:
         print("using GPUs")
         cp.cuda.Device(params.dev_id).use()
@@ -37,7 +37,43 @@ if __name__ == "__main__":
 
     output_cycle_averaged_qois = True
     xp    = bte.xp_module
-    Ext   = lambda t : xp.ones(params.Np) * 1e4 #* xp.sin(2 * xp.pi * t)
+    if (args.ef_mode == 0):
+        Ext   = lambda t : xp.ones(params.Np) * 1e4 * xp.sin(2 * xp.pi * t)
+    elif (args.ef_mode == 1):
+        xx    = xp.asarray(bte.xp)
+        Ext   = lambda t : xx**3 * 1e4 * xp.sin(2 * xp.pi * t)
+    elif (args.ef_mode == 2):
+        import h5py
+        import scipy.interpolate
+        ff        = h5py.File("1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+        tt_sp     = np.array(ff["time[T]"][()])
+        E_sp      = np.array(ff['E[Vm^-1]'][()])
+        xx_sp     = np.array(ff['x[-1,1]'][()])
+        if(len(xx_sp)!=bte.params.Np):
+            print("resampling E field to match BTE grid")
+            E_sp      = scipy.interpolate.interp1d(xx_sp, E_sp, axis=1, bounds_error=True)(np.asarray(bte.xp))
+
+        Et_inp    = scipy.interpolate.interp1d(tt_sp, E_sp, axis=0, bounds_error=True)
+
+        dt        = bte.params.dt
+        
+        def Ext(t):
+            idx  = int(np.round(t / dt))
+            cfrq = int(1 / dt)
+            if (t > 0):
+                assert (np.abs(idx * dt - t)/np.abs(t) < 1e-10) , "time = %.14E idx * dt = %.14E"%(t, idx * dt)
+            tta  = (idx % cfrq) * dt
+            return xp.array(Et_inp(tta))
+    elif (args.ef_mode == 3):
+        Ext   = lambda t : xp.ones(params.Np) * 1e4
+    elif (args.ef_mode == 4):
+        Ext   = lambda t : xp.ones(params.Np) * 0.0
+    elif (args.ef_mode == 5):
+        Ext   = lambda t : xp.ones(params.Np) * 1e3
+
+    else:
+        raise NotImplementedError
+    
     dt    = params.dt
     steps = int(params.T / params.dt)+1
 
@@ -60,10 +96,17 @@ if __name__ == "__main__":
     num_sh              = len(bte.op_spec_sp._sph_harm_lm)
 
     def qoi(v, xp):
-        vsh                 = bte.ords_to_sph(v)
-        qoi                 = xp.zeros((qoi_idx.LAST, params.Np))
-        qoi[qoi_idx.NE_IDX] = bte.op_mass @ vsh
-        qoi[qoi_idx.TE_IDX] = (bte.op_temp @ vsh) / qoi[qoi_idx.NE_IDX]
+
+        if (bte.params.vspace_type == bte_1d3v_solver.vspace_discretization.SPECTRAL_BSPH):
+            vsh                 = bte.ords_to_sph(v)
+            qoi                 = xp.zeros((qoi_idx.LAST, params.Np))
+            qoi[qoi_idx.NE_IDX] = bte.op_mass @ vsh
+            qoi[qoi_idx.TE_IDX] = (bte.op_temp @ vsh) / qoi[qoi_idx.NE_IDX]
+        elif(bte.params.vspace_type == bte_1d3v_solver.vspace_discretization.FVM):
+            qoi                 = xp.zeros((qoi_idx.LAST, params.Np))
+            print("q", bte.op_mass.shape, v.shape)
+            qoi[qoi_idx.NE_IDX] = bte.op_mass  @ v
+            qoi[qoi_idx.TE_IDX] = (bte.op_temp @ v) / qoi[qoi_idx.NE_IDX]
 
         return qoi
     
@@ -93,12 +136,13 @@ if __name__ == "__main__":
            bte.store_checkpoint(v, tt, params.dt, "%s_cp_%04d"%(params.fname, ts_idx//io_freq))
            
           
-        #v  = bte.step(Ext(tt), v, None, tt, dt, params.verbose)
-        v = bte.step_bte_x(v, tt           , 0.5 * dt, verbose=1)
-        v = bte.step_bte_x(v, tt + 0.5 * dt, 0.5 * dt, verbose=1)
+        v  = bte.step(Ext(tt), v, None, tt, dt, params.verbose)
+        #v = bte.step_bte_x(v, tt           , 0.5 * dt, verbose=1)
+        #v = bte.step_bte_x(v, tt + 0.5 * dt, 0.5 * dt, verbose=1)
         #v = bte.step_bte_v(Ext(tt), v, None, tt, dt, verbose=0)
+        tt += 0.5 * dt
 
-        tt+= dt
+        #tt+= dt
 
     
 

@@ -155,7 +155,7 @@ class bte_0d3v():
 
         #print("setting PDE code ev va")
         self._args.electron_volt = (bolsig_mu/1.5)
-        self._args.ev_max        = (1.0) * bolsig_ev[-1]
+        self._args.ev_max        = (1.2) * bolsig_ev[-1]
         return 
 
     def _setup_bsp_sph(self):

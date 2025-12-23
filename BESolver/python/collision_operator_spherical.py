@@ -1382,7 +1382,7 @@ class CollisionOpSP():
             detJ             = vpre(vr)/vr
         elif(g._type == collisions.CollisionType.EAR_G2):
             vpre             = lambda x : xp.sqrt(2 * x**2 + (c_gamma/vth)**2 * g._reaction_threshold)
-            detJ             = 2.0 * vpre(vr) / vr
+            detJ             = 4.0 * vpre(vr) / vr
             #print(rmax, vr[-1], (c_gamma/vth)**1 * np.sqrt(g._reaction_threshold))
         else:
             raise NotImplementedError("only EAR G0, G1, G2 are implemented for hsph lop eulerian")

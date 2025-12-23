@@ -224,7 +224,7 @@ class bte_1d3v():
             g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
             g.reset_scattering_direction_sp_mat()
             self.coll_list.append(g)
-            self.collision_names.append("C%d"%(collision_count)) 
+            self.collision_names.append(col_str + " - C%d "%(collision_count)) 
             collision_count+=1
         print("===============================================")
         print("number of total collisions = %d " %(len(self.coll_list)))
@@ -317,7 +317,6 @@ class bte_1d3v():
 
         if (self.params.vspace_type == vspace_discretization.FVM):
             self.xp_vr, self.xp_vr_qw   = spec_sp.gl_vr(self.params.spline_qpts, use_bspline_qgrid=True)
-            print("q", len(self.xp_vr), len(self.xp_vr_qw))
             num_vr                      = len(self.xp_vr)
             num_vt                      = len(self.xp_vt)
 
@@ -779,8 +778,11 @@ class bte_1d3v():
             Vin       = v.reshape((Nr, Nvt , Nx)).reshape(Nr, Nvt * Nx)
             Vin       = xp.dot(self.op_adv_x_qinv, Vin).reshape((Nr, Nvt, Nx))
             Vin       = Vin.reshape((Nr * Nvt , Nx))
+        elif(self.params.vspace_type == vspace_discretization.FVM):
+            Vin                   = v.reshape((Nr * Nvt, Nx))
+        else:
+            raise NotImplementedError
         
-        Vin                   = v.reshape((Nr * Nvt, Nx))
         Vin[self.xp_vt_l, 0]  = 0.0
         Vin[self.xp_vt_r, -1] = 0.0
 
@@ -944,7 +946,8 @@ class bte_1d3v():
                         # u[-1, self.xp_vt > 0.5 * xp.pi, :] = 0.0
                         # u     = u.reshape((num_p * num_vt, num_x))
                     else:
-                        adv_v = self.op_adv_v
+                        #adv_v = self.op_adv_v
+                        assert False
 
                 else:
                     adv_v = self.op_adv_v
@@ -984,7 +987,7 @@ class bte_1d3v():
         vsh      = self.ords_to_sph(v)
             
         if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
-            ff_cpu   = vsh
+            ff_cpu   = self.asnumpy(vsh)
             
             ff_cpu   = np.transpose(ff_cpu)
             vth      = self.bs_vth
@@ -1003,11 +1006,11 @@ class bte_1d3v():
             vth      = self.bs_vth
             spec_sp  = self.op_spec_sp
 
+            vsh      = self.asnumpy(vsh)
             Nr       = self.dof_vr
             Nx       = self.dof_x
             vsh      = vsh.reshape((Nr, num_sh, Nx))
 
-            vsh      = self.asnumpy(vsh)
             vsh_inp  = scipy.interpolate.interp1d(self.xp_vr, vsh, axis=0, bounds_error=True)
             
             vr       = np.sqrt(ev) * self.c_gamma/ vth
@@ -1327,7 +1330,7 @@ class bte_1d3v():
         num_sh  = len(self.op_spec_sp._sph_harm_lm)
         plt.subplot(2, 4, 5)
         for i in range(len(self.op_rate)):
-            plt.semilogy(self.xp, rr[i]    , 'b', label=r"C%d"%(i))
+            plt.semilogy(self.xp, rr[i], label=r"%s"%(self.collision_names[i]))
         
         plt.xlabel(r"x/L")
         plt.ylabel(r"rate coefficients ($m^3 s^{-1}$)")
@@ -1339,7 +1342,7 @@ class bte_1d3v():
         ev_range  = (self.ev_lim[0], self.ev_lim[1])
         
         ev_grid   = np.linspace(max(ev_range[0],1e-2), ev_range[1], 1024)
-        ff_v      = self.compute_radial_components(ev_grid, asnumpy(vn))
+        ff_v      = self.compute_radial_components(ev_grid, vn)
         
         pts = 2
         plt.subplot(2, 4, 6)

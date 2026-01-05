@@ -1341,7 +1341,12 @@ class bte_1d3v():
         kx_max    = self.op_spec_sp._basis_p._t_unique[-1]
         ev_range  = (self.ev_lim[0], self.ev_lim[1])
         
-        ev_grid   = np.linspace(max(ev_range[0],1e-2), ev_range[1], 1024)
+        if(self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+            ev_grid   = np.linspace(max(ev_range[0],1e-2), ev_range[1], 1024)
+        else:
+            ev_grid   = np.linspace((self.xp_vr[0]  * self.bs_vth/self.c_gamma)**2,
+                                    (self.xp_vr[-1] * self.bs_vth/self.c_gamma)**2, 1024)
+            
         ff_v      = self.compute_radial_components(ev_grid, vn)
         
         pts = 2

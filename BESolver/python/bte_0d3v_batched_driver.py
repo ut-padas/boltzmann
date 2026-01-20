@@ -45,9 +45,9 @@ parser.add_argument("-c", "--collisions"                          , help="collis
 parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-atol", "--atol"                             , help="absolute tolerance", type=float, default=1e-10)
-parser.add_argument("-rtol", "--rtol"                             , help="relative tolerance", type=float, default=1e-10)
-parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=30)
-parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)" , type=float, default=1.0)
+parser.add_argument("-rtol", "--rtol"                             , help="relative tolerance", type=float, default=1e-6)
+parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=100)
+parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)" , type=float, default=0.5)
 parser.add_argument("-n0"    , "--n0"                             , help="heavy density (1/m^3)" , type=float, default=3.22e22)
 parser.add_argument("-ev_max", "--ev_max"                         , help="max energy in the v-space grid" , type=float, default=30)
 parser.add_argument("-Nr", "--Nr"                                 , help="radial refinement", type=int, default=128)
@@ -61,9 +61,9 @@ parser.add_argument("-plot_data", "--plot_data"                   , help="plot d
 parser.add_argument("-ee_collisions", "--ee_collisions"           , help="enable electron-electron collisions", type=int, default=0)
 parser.add_argument("-verbose", "--verbose"                       , help="verbose with debug information", type=int, default=0)
 parser.add_argument("-use_gpu", "--use_gpu"                       , help="use gpus for batched solver", type=int, default=1)
-parser.add_argument("-cycles", "--cycles"                         , help="number of max cycles to evolve to compute cycle average rates", type=float, default=100)
+parser.add_argument("-cycles", "--cycles"                         , help="number of max cycles to evolve to compute cycle average rates", type=float, default=5)
 parser.add_argument("-dt"    , "--dt"                             , help="1/dt number of denotes the number of steps for cycle", type=float, default=1e-3)
-parser.add_argument("-Efreq" , "--Efreq"                          , help="electric field frequency Hz", type=float, default=13.56e6)
+parser.add_argument("-Efreq" , "--Efreq"                          , help="electric field frequency Hz", type=float, default=6e6)
 parser.add_argument("-input", "--input"                           , help="tps data file", type=str,  default="")
 #python3 bte_0d3v_batched_driver.py --threads 1 -out_fname bte_ss -solver_type steady-state -c lxcat_data/eAr_crs.synthetic.3sp2r -sp_order 3 -spline_qpts 5 -atol 1e-10 -rtol 1e-10 -max_iter 300 -Te 3 -n0 3.22e22 -ev_max 30 -Nr 127 -n_pts 1 -ee_collisions 1 -cycles 2 -dt 1e-3
 args                  = parser.parse_args()
@@ -87,10 +87,14 @@ if (read_input_from_file):
     Te            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
     Tg            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
     ns_by_n0      = np.load("%s_ns_by_n0_%02d.npy"      %(fprefix, file_idx))
+    ns_by_n0      = ns_by_n0.T
     n0            = np.load("%s_n0_%02d.npy"            %(fprefix, file_idx))
     ne            = np.load("%s_ne_%02d.npy"            %(fprefix, file_idx))
     ni            = np.load("%s_ni_%02d.npy"            %(fprefix, file_idx))
     E             = np.load("%s_E_%02d.npy"             %(fprefix, file_idx))
+    eRe           = np.load("%s_eRe_%02d.npy"             %(fprefix, file_idx))
+    eIm           = np.load("%s_eIm_%02d.npy"             %(fprefix, file_idx))
+
     EbyN          = E/n0/Td_fac
     Te_mean       = np.mean(Te/ev_to_K)
     vth           = np.sqrt(Te_mean) * c_gamma
@@ -109,6 +113,9 @@ else:
     n0          = np.linspace(1     , 1, n_pts) * 3.22e22
     ef          = np.linspace(1.8   , 2, n_pts)
     ef          = ef * n0 * Td_fac
+
+    eRe = ef
+    eIm = ef
     
     if(len(all_species)==1):
         ns_by_n0    = np.ones(n_pts).reshape((1, n_pts))
@@ -136,8 +143,8 @@ bte_solver.set_boltzmann_parameter(grid_idx, "n0"       , n0)
 bte_solver.set_boltzmann_parameter(grid_idx, "ne"       , ne)
 bte_solver.set_boltzmann_parameter(grid_idx, "ns_by_n0" , ns_by_n0)
 bte_solver.set_boltzmann_parameter(grid_idx, "Tg"       , Tg)
-bte_solver.set_boltzmann_parameter(grid_idx, "eRe"      , 0*ef)
-bte_solver.set_boltzmann_parameter(grid_idx, "eIm"      , ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "eRe"      , eRe)
+bte_solver.set_boltzmann_parameter(grid_idx, "eIm"      , eIm)
 bte_solver.set_boltzmann_parameter(grid_idx, "f0"       , f0)
 bte_solver.set_boltzmann_parameter(grid_idx,  "E"       , ef)
 
@@ -177,6 +184,7 @@ if args.use_gpu==1:
 ff_r     = cp.asnumpy(ff_r)
 for k, v in qoi.items():
     qoi[k] = cp.asnumpy(v)
+
 
 collision_names = bte_solver.get_collision_names()
 csv_write = args.store_csv

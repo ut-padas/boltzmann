@@ -76,6 +76,8 @@ Td_fac                = 1e-21
 c_gamma               = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.constants.electron_mass))
 all_species           = cross_section.read_available_species(args.collisions)
 
+print("all_species = ", all_species, len(all_species))
+
 if (read_input_from_file):
     
     n_grids       = 1
@@ -87,6 +89,9 @@ if (read_input_from_file):
     Te            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
     Tg            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
     ns_by_n0      = np.load("%s_ns_by_n0_%02d.npy"      %(fprefix, file_idx))
+    print("at start, ns_by_n0.shape = ", ns_by_n0.shape)
+    ns_by_n0      = ns_by_n0[:,0:len(all_species)]
+    print("after adjusting dimensions, ns_by_n0.shape = ", ns_by_n0.shape)
     ns_by_n0      = ns_by_n0.T
     n0            = np.load("%s_n0_%02d.npy"            %(fprefix, file_idx))
     ne            = np.load("%s_ne_%02d.npy"            %(fprefix, file_idx))
@@ -101,7 +106,7 @@ if (read_input_from_file):
     
     args.Te       = Te_mean
     args.n_pts    = len(Te)
-    args.ev_max   = (6 * vth / c_gamma)**2
+    args.ev_max   = (24 * vth / c_gamma)**2
     
     ef            = EbyN * n0 * Td_fac
 
@@ -147,6 +152,8 @@ bte_solver.set_boltzmann_parameter(grid_idx, "eRe"      , eRe)
 bte_solver.set_boltzmann_parameter(grid_idx, "eIm"      , eIm)
 bte_solver.set_boltzmann_parameter(grid_idx, "f0"       , f0)
 bte_solver.set_boltzmann_parameter(grid_idx,  "E"       , ef)
+
+print("ns_by_n0 = ", ns_by_n0.shape)
 
 if args.use_gpu==1:
     dev_id   = 0

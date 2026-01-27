@@ -450,14 +450,14 @@ for run_id in range(len(run_params)):
         colfname = args.collisions.split("/")[-1].strip()
         if len(spec_sp._basis_p._dg_idx)==2:
             if args.steady_state == 1 : 
-                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("%s_cg_"%(args.out_fname) + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("boltzsim_cg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +"_Eperiod_%.2E"%(args.efield_period) +".png")
+                plt.savefig("%s_cg_"%(args.out_fname) + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) +"_Eperiod_%.2E"%(args.efield_period) +".png")
         else:
             if args.steady_state == 1 : 
-                plt.savefig("boltzsim_dg_" + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
+                plt.savefig("%s_cg_"%(args.out_fname) + colfname + "_E%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg) +".png")
             else:
-                plt.savefig("boltzsim_dg_" + colfname + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) + "_Eperiod_%.2E"%(args.efield_period) +".png")
+                plt.savefig("%s_cg_"%(args.out_fname) + colfname + "_EbyN%.2ETd"%effective_efield + "_sp_"+ str(args.sp_order) + "_nr" + str(args.Nr)+"_qpn_" + str(args.spline_qpts) + "_sweeping_" + args.sweep_param + "_lmax_" + str(args.l_max) +"_ion_deg_%.2E"%(args.ion_deg) + "_Tg%.2E"%(args.Tg)+"_ts%.2E_T%.2E"%(args.T_DT, args.T_END) + "_Eperiod_%.2E"%(args.efield_period) +".png")
 
         plt.close()
 

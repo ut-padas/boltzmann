@@ -130,6 +130,10 @@ class params():
         self.xspace_type = xspace_discretization.BE_UPW_FD if tp["xspace_type"] == 0 else xspace_discretization.BE_CHEB
         self.vspace_type = vspace_discretization.FVM       if tp["vspace_type"] == 0 else vspace_discretization.SPECTRAL_BSPH 
         self.sph_mode    = sph_type.SPH
+
+        self.pvr        = 3
+        self.pvt        = 3
+        self.px         = 1
         
     def __str__(self):
         attrs = vars(self)
@@ -349,7 +353,7 @@ class bte_1d3v():
             print("Collision Operator assembly time (s): ",(t2-t1))
 
             t1 = perf_counter()
-            advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self.xp_vr, self.xp_vt, sw_vr=3, sw_vt=2, use_upwinding=True)
+            advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self.xp_vr, self.xp_vt, sw_vr=self.params.pvr+1, sw_vt=self.params.pvt+1, use_upwinding=True)
             t2 = perf_counter()
             print("Advection Operator assembly time (s): ",(t2-t1))
 
@@ -377,7 +381,7 @@ class bte_1d3v():
             self.op_rate      = rr_op
             self.op_mobility  = np.zeros_like(self.op_mass)
             self.op_diffusion = np.zeros_like(self.op_mass)
-      
+            
         elif(self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
             gx, gw                  = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
             sigma_m                 = np.zeros(len(gx))
@@ -503,7 +507,7 @@ class bte_1d3v():
             
             t2 = perf_counter()
             print("assembly = %.4E"%(t2-t1))
-            
+
         else:
             raise NotImplementedError
 
@@ -643,8 +647,21 @@ class bte_1d3v():
             DpL        = xp.zeros((Nx, Nx))
             DpR        = xp.zeros((Nx, Nx))
 
-            DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, 1, 2, "L"))[1:,:]
-            DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, 1, 2, "R"))[:-1,:]
+            if (self.params.px==1):
+                DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, 1, self.params.px+1, "L"))[1:,:]
+                DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, 1, self.params.px+1, "R"))[:-1,:]
+            else:
+                DpL[1:,:]  = xp.array(mesh.upwinded_dx(self.xp, 1, self.params.px+1, "L"))[1: ,:]
+                DpR[:-1,:] = xp.array(mesh.upwinded_dx(self.xp, 1, self.params.px+1, "R"))[:-1,:]
+
+                for i in range(1, self.params.px+1):
+                    DpL[i     , : ] = 0.0
+                    DpR[-(i+1), : ] = 0.0
+
+                    DpL[i,      0:(i+1)] = xp.array(mesh.fd_coefficients(self.xp[0:(i+1)], 1)[-1])
+                    DpR[-(i+1), -(i+1):] = xp.array(mesh.fd_coefficients(self.xp[-(i+1):], 1)[0 ])
+                
+
         
         else:
             raise NotImplementedError
@@ -661,27 +678,45 @@ class bte_1d3v():
                     for i in range(Nr):
                         self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
                         #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
-            else:
-                for i in range(Nr):
-                    self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
-                    #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+                else:
+                    for i in range(Nr):
+                        self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+                        #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
             
             self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
 
         elif (self.params.xspace_type == xspace_discretization.BE_UPW_FD):
-            self.bte_x_shift_diag    = xp.zeros((Nr, Nvt, Nx))
-            self.bte_x_shift_sdiag   = xp.zeros((Nr, Nvt, Nx-1))
+            
+            if (self.params.px ==1):
+
+                self.bte_x_shift_diag    = xp.zeros((Nr, Nvt, Nx))
+                self.bte_x_shift_sdiag   = xp.zeros((Nr, Nvt, Nx-1))
         
-            for j in range(Nvt):
-                if (self.xp_vt[j] <= 0.5 * xp.pi):
-                    for i in range(Nr):
-                        self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=0)
-                        self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=-1)
-              
-                else:
-                    for i in range(Nr):
-                        self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=0)
-                        self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=1)
+                for j in range(Nvt):
+                    if (self.xp_vt[j] <= 0.5 * xp.pi):
+                        for i in range(Nr):
+                            self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=0)
+                            self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpL, offset=-1)
+                
+                    else:
+                        for i in range(Nr):
+                            self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=0)
+                            self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=1)
+            else:
+                self.bte_x_shift      = xp.zeros((Nr, Nvt, Nx, Nx))
+                #self.bte_x_shift_rmat = xp.zeros((Nr, Nvt, Nx, Nx))
+      
+                for j in range(Nvt):
+                    if (self.xp_vt[j] <= 0.5 * xp.pi):
+                        for i in range(Nr):
+                            self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+                            #self.bte_x_shift_rmat[i,j,:,:]      = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpL
+                    else:
+                        for i in range(Nr):
+                            self.bte_x_shift[i, j, : , :]       = self.I_Nx + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+                            #self.bte_x_shift_rmat[i, j, : , :]  = -f2 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * DpR
+                
+                self.bte_x_shift = xp.linalg.inv(self.bte_x_shift)
               
         else:
             raise NotImplementedError
@@ -790,27 +825,33 @@ class bte_1d3v():
             Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, Nvt, Nx)))
       
         elif(self.params.xspace_type == xspace_discretization.BE_UPW_FD):
-            z         = Vin.reshape((Nr, Nvt, Nx))
-            Vin_adv_x = xp.zeros_like(z)
-            idx_lr    = self.xp_vt <= 0.5 * xp.pi
-            idx_rl    = self.xp_vt  > 0.5 * xp.pi
 
-            if xp == cp:
-                Vin_adv_x[:, idx_lr] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_lr],
-                                                                self.bte_x_shift_sdiag[:, idx_lr], z[:, idx_lr], lower=True)
-                
-                Vin_adv_x[:, idx_rl] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_rl],
-                                                                self.bte_x_shift_sdiag[:, idx_rl], z[:, idx_rl], lower=False)
-            else:
-                raise NotImplementedError
+            if (self.params.px ==1):
+                z         = Vin.reshape((Nr, Nvt, Nx))
+                Vin_adv_x = xp.zeros_like(z)
+                idx_lr    = self.xp_vt <= 0.5 * xp.pi
+                idx_rl    = self.xp_vt  > 0.5 * xp.pi
+
+                if xp == cp:
+                    Vin_adv_x[:, idx_lr] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_lr],
+                                                                    self.bte_x_shift_sdiag[:, idx_lr], z[:, idx_lr], lower=True)
+                    
+                    Vin_adv_x[:, idx_rl] = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag[:, idx_rl],
+                                                                    self.bte_x_shift_sdiag[:, idx_rl], z[:, idx_rl], lower=False)
+                else:
+                    raise NotImplementedError
             
-            # for j in range(self.Nvt):
-            #   if (self.xp_vt[j] <= 0.5 * xp.pi):
-            #     for i in range(Nr):
-            #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=True)
-            #   else:
-            #     for i in range(Nr):
-            #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=False)
+                # for j in range(self.Nvt):
+                #   if (self.xp_vt[j] <= 0.5 * xp.pi):
+                #     for i in range(Nr):
+                #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=True)
+                #   else:
+                #     for i in range(Nr):
+                #       Vin_adv_x[i, j] = scipy.linalg.solve_triangular(self.bte_x_shift[i, j, :, :], z[i, j, :], lower=False)
+            else:
+                # later we can use banded lower/upper triangular solver for better performance
+                Vin_adv_x = xp.einsum("ijkl,ijl->ijk",self.bte_x_shift, Vin.reshape((Nr, Nvt, Nx)))
+
         
         else:
             raise NotImplementedError
@@ -1344,8 +1385,8 @@ class bte_1d3v():
         if(self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
             ev_grid   = np.linspace(max(ev_range[0],1e-2), ev_range[1], 1024)
         else:
-            ev_grid   = np.linspace((self.xp_vr[0]  * self.bs_vth/self.c_gamma)**2,
-                                    (self.xp_vr[-1] * self.bs_vth/self.c_gamma)**2, 1024)
+            ev_grid   = np.linspace(((self.xp_vr[0] + 1e-8)  * self.bs_vth/self.c_gamma)**2,
+                                    ((self.xp_vr[-1]- 1e-8)  * self.bs_vth/self.c_gamma)**2, 1024)
             
         ff_v      = self.compute_radial_components(ev_grid, vn)
         

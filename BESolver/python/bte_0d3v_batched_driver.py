@@ -84,7 +84,7 @@ if (read_input_from_file):
     ev_to_K       = collisions.TEMP_K_1EV
     fprefix       = args.input
     
-    Te            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
+    
     Tg            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
     ns_by_n0      = np.load("%s_ns_by_n0_%02d.npy"      %(fprefix, file_idx))
     n0            = np.load("%s_n0_%02d.npy"            %(fprefix, file_idx))
@@ -92,11 +92,25 @@ if (read_input_from_file):
     ni            = np.load("%s_ni_%02d.npy"            %(fprefix, file_idx))
     E             = np.load("%s_E_%02d.npy"             %(fprefix, file_idx))
     EbyN          = E/n0/Td_fac
-    Te_mean       = np.mean(Te/ev_to_K)
-    vth           = np.sqrt(Te_mean) * c_gamma
     
+    if (ns_by_n0.shape[0] != len(all_species)):
+        assert ns_by_n0.shape[1] >= len(all_species)
+        ns_by_n0 = ns_by_n0.T
+
+
+    # enforce mixture mass is normalized
+    ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
+    # ne = 1e-3 * ne
+    # ni = 1e-3 * ni
+    # ns_by_n0[-1, :] *=1e-3
+    #### ensure proper scalling for the recomb. collisions, this is a hardcoded fix
+    ns_by_n0[-1, :] = (ne/n0)**2 * n0
+    
+    Te_mean       = max(0.1, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
+    vth           = np.sqrt(Te_mean) * c_gamma
+
     args.Te       = Te_mean
-    args.n_pts    = len(Te)
+    args.n_pts    = len(Tg)
     args.ev_max   = (6 * vth / c_gamma)**2
     
     ef            = EbyN * n0 * Td_fac
@@ -107,7 +121,7 @@ else:
     grid_idx    = 0
 
     n0          = np.linspace(1     , 1, n_pts) * 3.22e22
-    ef          = np.linspace(1.8   , 2, n_pts)
+    ef          = np.linspace(1.0e-2 , 0.1, n_pts)
     ef          = ef * n0 * Td_fac
     
     if(len(all_species)==1):
@@ -116,10 +130,11 @@ else:
         ns_by_n0    = np.linspace(0.999998   , 1, n_pts)
         ns_by_n0    = np.concatenate([ns_by_n0] + [(1-ns_by_n0)/(len(all_species)-1) for i in range(1, len(all_species))] ,  axis = 0).reshape(len(all_species), n_pts)
         print(ns_by_n0[:, -1])
+        print(ns_by_n0)
 
-    ne          = np.linspace(1     , 1, n_pts) * 3.22e18
-    ni          = np.linspace(1     , 1, n_pts) * 3.22e18
-    Tg          = np.linspace(1     , 1, n_pts) * 6000 #0.5 * collisions.TEMP_K_1EV
+    ne          = np.linspace(0.1     , 1, n_pts) * 3.22e15
+    ni          = np.linspace(0.1     , 1, n_pts) * 3.22e15
+    Tg          = np.linspace(0.8     , 1.2, n_pts) * 400 #0.5 * collisions.TEMP_K_1EV
     
 Te          = np.ones(n_grids) * args.Te 
 ev_max      = np.ones(n_grids) * args.ev_max     

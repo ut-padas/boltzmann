@@ -93,10 +93,19 @@ if (read_input_from_file):
     E             = np.load("%s_E_%02d.npy"             %(fprefix, file_idx))
     EbyN          = E/n0/Td_fac
     
+    n_pts         = len(Tg)
     if (ns_by_n0.shape[0] != len(all_species)):
-        assert ns_by_n0.shape[1] >= len(all_species)
+        assert ns_by_n0.shape[1] == len(all_species)
+        assert ns_by_n0.shape[0] == n_pts
         ns_by_n0 = ns_by_n0.T
 
+    assert ns_by_n0.shape == (len(all_species), n_pts)
+
+    for i in range(len(all_species)):
+        #### We should have more robust recombination detection process. 
+        if all_species[i] == 'Ar+':
+            print("Two body recombination detected")
+            ns_by_n0[i,:] = (ni/n0)**2 * n0
 
     # enforce mixture mass is normalized
     ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
@@ -104,9 +113,9 @@ if (read_input_from_file):
     # ni = 1e-3 * ni
     # ns_by_n0[-1, :] *=1e-3
     #### ensure proper scalling for the recomb. collisions, this is a hardcoded fix
-    ns_by_n0[-1, :] = (ne/n0)**2 * n0
-    
-    Te_mean       = max(0.1, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
+    #ns_by_n0[-1, :] = (ne/n0)**2 * n0
+
+    Te_mean       = max(1e-8, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
     vth           = np.sqrt(Te_mean) * c_gamma
 
     args.Te       = Te_mean

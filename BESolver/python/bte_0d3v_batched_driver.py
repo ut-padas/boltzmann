@@ -64,7 +64,7 @@ parser.add_argument("-use_gpu", "--use_gpu"                       , help="use gp
 parser.add_argument("-cycles", "--cycles"                         , help="number of max cycles to evolve to compute cycle average rates", type=float, default=100)
 parser.add_argument("-dt"    , "--dt"                             , help="1/dt number of denotes the number of steps for cycle", type=float, default=1e-3)
 parser.add_argument("-Efreq" , "--Efreq"                          , help="electric field frequency Hz", type=float, default=13.56e6)
-parser.add_argument("-input", "--input"                           , help="tps data file", type=str,  default="")
+parser.add_argument("-input", "--input"                           , help="tps csv file", type=str,  default="")
 #python3 bte_0d3v_batched_driver.py --threads 1 -out_fname bte_ss -solver_type steady-state -c lxcat_data/eAr_crs.synthetic.3sp2r -sp_order 3 -spline_qpts 5 -atol 1e-10 -rtol 1e-10 -max_iter 300 -Te 3 -n0 3.22e22 -ev_max 30 -Nr 127 -n_pts 1 -ee_collisions 1 -cycles 2 -dt 1e-3
 args                  = parser.parse_args()
 read_input_from_file  = 1
@@ -77,50 +77,49 @@ c_gamma               = np.sqrt(2 * (scipy.constants.elementary_charge/ scipy.co
 all_species           = cross_section.read_available_species(args.collisions)
 
 if (read_input_from_file):
-    
     n_grids       = 1
     grid_idx      = 0
-    file_idx      = 3
     ev_to_K       = collisions.TEMP_K_1EV
-    fprefix       = args.input
-    
-    
-    Tg            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
-    ns_by_n0      = np.load("%s_ns_by_n0_%02d.npy"      %(fprefix, file_idx))
-    n0            = np.load("%s_n0_%02d.npy"            %(fprefix, file_idx))
-    ne            = np.load("%s_ne_%02d.npy"            %(fprefix, file_idx))
-    ni            = np.load("%s_ni_%02d.npy"            %(fprefix, file_idx))
-    E             = np.load("%s_E_%02d.npy"             %(fprefix, file_idx))
+
+    import pandas as pd
+    try:
+        dat = pd.read_csv(args.input)
+        Tg            = np.array(dat["Tg"])
+        n0            = np.array(dat["n0"])
+        n_pts         = len(Tg)
+        ne            = np.array(dat["ne/n0"]) * n0
+        E             = np.array(dat["E"])
+        ni            = ne
+
+
+        ns_by_n0      = np.zeros((len(all_species), len(Tg)))
+        
+        for i in range(len(all_species)):
+            ns_by_n0[i] = np.array(dat["(%s)/n0"%(all_species[i])])
+
+        # enforce mixture mass is normalized
+        ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
+
+        for i in range(len(all_species)):
+            #### We should have more robust recombination detection process. 
+            if all_species[i] == 'Ar+':
+                print("Two body recombination detected")
+                ns_by_n0[i,:] = (ne/n0)**2 * n0
+        
+    except Exception as e:
+        print("Error reading file %s"%(args.input))
+        print(e)
+
     EbyN          = E/n0/Td_fac
-    
-    n_pts         = len(Tg)
-    if (ns_by_n0.shape[0] != len(all_species)):
-        assert ns_by_n0.shape[1] == len(all_species)
-        assert ns_by_n0.shape[0] == n_pts
-        ns_by_n0 = ns_by_n0.T
-
-    assert ns_by_n0.shape == (len(all_species), n_pts)
-
-    for i in range(len(all_species)):
-        #### We should have more robust recombination detection process. 
-        if all_species[i] == 'Ar+':
-            print("Two body recombination detected")
-            ns_by_n0[i,:] = (ni/n0)**2 * n0
-
-    # enforce mixture mass is normalized
-    ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
-    # ne = 1e-3 * ne
-    # ni = 1e-3 * ni
-    # ns_by_n0[-1, :] *=1e-3
-    #### ensure proper scalling for the recomb. collisions, this is a hardcoded fix
-    #ns_by_n0[-1, :] = (ne/n0)**2 * n0
-
-    Te_mean       = max(1e-8, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
+    Te_mean       = max(1e-1, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
     vth           = np.sqrt(Te_mean) * c_gamma
+
+    print("ns_by_n0=\n", ns_by_n0, "\nEbyN=\n", EbyN, "\nN=\n", n0, "\nne=\n", ne, "\nTg=\n", Tg)
+
 
     args.Te       = Te_mean
     args.n_pts    = len(Tg)
-    args.ev_max   = (6 * vth / c_gamma)**2
+    args.ev_max   = 36 * np.mean(Tg/ev_to_K) #(6 * vth / c_gamma)**2
     
     ef            = EbyN * n0 * Td_fac
 

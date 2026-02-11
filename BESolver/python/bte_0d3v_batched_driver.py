@@ -188,9 +188,10 @@ if args.profile==1:
     
     bte_solver.profile_stats()
     sys.exit(0)
-
+ls_c     = 1e-4 #min(0.9, np.exp(-(np.min(np.abs(ef))/2)**2))
 f0       = bte_solver.get_boltzmann_parameter(grid_idx,"f0")
-ff , qoi = bte_solver.solve(grid_idx, f0, args.atol, args.rtol, args.max_iter, args.solver_type)
+ff , qoi = bte_solver.solve(grid_idx, f0, args.atol, args.rtol, args.max_iter, args.solver_type,
+                            alpha_min = 1e-16, alpha_rho=0.5, line_search_c = ls_c)
 ev       = np.linspace(1e-3, bte_solver._par_ev_range[grid_idx][1], 500)
 ff_r     = bte_solver.compute_radial_components(grid_idx, ev, ff)
 

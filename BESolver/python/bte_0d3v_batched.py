@@ -208,18 +208,18 @@ class bte_0d3v_batched():
             coll_list      = list()
             
             if rank_ == 0:
-                print("==========read collissions===========")
+                print("==========read collissions===========", flush=True)
             collision_count = 0
             for col_str, col_data in cs_data_all.items():
                 if rank_ == 0:
-                    print(col_str, col_data["type"])
+                    print(col_str, col_data["type"], flush=True)
                 g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
                 coll_list.append(g)
                 coll_names.append("C%d"%(collision_count)) 
                 collision_count+=1
             if rank_ == 0:
-                print("=====================================")
-                print("number of total collisions = %d " %(len(coll_list)))
+                print("=====================================", flush=True)
+                print("number of total collisions = %d " %(len(coll_list)), flush=True)
             self.num_collisions = len(coll_list)
             
             for i in range(self._par_nvgrids):
@@ -364,7 +364,7 @@ class bte_0d3v_batched():
             raise NotImplementedError
 
         #bb                    = basis.BSpline(k_domain, self._args.sp_order, self._par_nr[idx] + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=use_dg, verbose = args.verbose, extend_domain_with_log=True)
-        print("Rank = ", rank_, "grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1])
+        # print("Rank = ", rank_, "grid idx: ", idx, " ev=", ev_range, " v/vth=",k_domain, "extended domain (ev) = ", (bb._t[-1] * vth/ self._c_gamma)**2 , "v/vth ext = ", bb._t[-1], flush=True)
         
         spec_sp                = sp.SpectralExpansionSpherical(self._par_nr[idx], bb, self._par_lm[idx])
         spec_sp._num_q_radial  = bb._num_knot_intervals * self._args.spline_qpts
@@ -454,12 +454,10 @@ class bte_0d3v_batched():
         
         self._op_qmat[idx] = Qmat
         self._op_rmat[idx] = Rmat
-
-        # print("Rank = ", rank_, "about to begin e-e collision assembly")
         
         if(use_ee == 1):
             if rank_ == 0:
-                print("e-e collision assembly begin")
+                print("e-e collision assembly begin", flush=True)
             profile_tt[pp.C_EE_SETUP].start()
             
             hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=args.threads)
@@ -491,7 +489,7 @@ class bte_0d3v_batched():
             self._op_col_ee[idx] = cc_op
             profile_tt[pp.C_EE_SETUP].stop()
             if rank_ == 0:
-                print("e-e collision assembly end")
+                print("e-e collision assembly end", flush=True)
         
         profile_tt[pp.SETUP].stop()
         return
@@ -524,7 +522,7 @@ class bte_0d3v_batched():
         
         m0 = np.dot(mass_op,h_init) 
         t0 = np.dot(temp_op,h_init) * vth**2 /m0
-        print("grid idx = %d -- initial data mass = %.8E temp (eV) = %.8E"%(grid_idx, m0, t0))
+        print("grid idx = %d -- initial data mass = %.8E temp (eV) = %.8E"%(grid_idx, m0, t0), flush=True)
         f0 = np.zeros((len(h_init), n_pts))
         
         for i in range(n_pts):
@@ -867,6 +865,7 @@ class bte_0d3v_batched():
     def steady_state_solve(self, grid_idx : int, f0 : np.array, atol, rtol, max_iter):
         comm = MPI.COMM_WORLD
         rank_ = comm.Get_rank()
+        size_ = comm.Get_size()
 
         xp           = self.xp_module
         profile_tt   = self.profile_tt_all[grid_idx]

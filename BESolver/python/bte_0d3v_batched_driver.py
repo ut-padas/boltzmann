@@ -85,28 +85,78 @@ if (read_input_from_file):
     file_idx      = 3
     ev_to_K       = collisions.TEMP_K_1EV
     fprefix       = args.input
+
+    import pandas as pd
+    try:
+        dat = pd.read_csv(args.input)
+        Tg            = np.array(dat["Tg"]) # assume Te = Tg (i.e.) ambipolarity
+        n0            = np.array(dat["n0"])
+        n_pts         = len(Tg)
+        ne            = np.array(dat["ne/n0"]) * n0
+        eRe           = np.array(dat["eRe"])
+        eIm           = np.array(dat["eIm"])
+        E             = np.array(dat["E"])
+        ni            = ne
+
+
+        ns_by_n0      = np.zeros((len(all_species), len(Tg)))
+        
+        for i in range(len(all_species)):
+            ns_by_n0[i] = np.array(dat["(%s)/n0"%(all_species[i])])
+
+        # enforce mixture mass is normalized
+        ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
+
+        for i in range(len(all_species)):
+            #### We should have more robust recombination detection process. 
+            if all_species[i] == 'Ar+':
+                print("Two body recombination detected")
+                ns_by_n0[i,:] = (ne/n0)**2 * n0
+    except Exception as e:
+        print("Error reading file %s"%(args.input))
+        print(e)
     
-    Te            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
-    Tg            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
-    ns_by_n0      = np.load("%s_ns_by_n0_%02d.npy"      %(fprefix, file_idx))
-    print("at start, ns_by_n0.shape = ", ns_by_n0.shape)
-    ns_by_n0      = ns_by_n0[:,0:len(all_species)]
-    print("after adjusting dimensions, ns_by_n0.shape = ", ns_by_n0.shape)
-    ns_by_n0      = ns_by_n0.T
-    n0            = np.load("%s_n0_%02d.npy"            %(fprefix, file_idx))
-    ne            = np.load("%s_ne_%02d.npy"            %(fprefix, file_idx))
-    ni            = np.load("%s_ni_%02d.npy"            %(fprefix, file_idx))
-    E             = np.load("%s_E_%02d.npy"             %(fprefix, file_idx))
-    eRe           = np.load("%s_eRe_%02d.npy"             %(fprefix, file_idx))
-    eIm           = np.load("%s_eIm_%02d.npy"             %(fprefix, file_idx))
+    # Te            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
+    # Tg            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
+    
+    # n0            = np.load("%s_n0_%02d.npy"            %(fprefix, file_idx))
+    # ne            = np.load("%s_ne_%02d.npy"            %(fprefix, file_idx))
+    # ni            = np.load("%s_ni_%02d.npy"            %(fprefix, file_idx))
+    # ns_by_n0      = np.load("%s_ns_by_n0_%02d.npy"      %(fprefix, file_idx))
+    # # print("at start, ns_by_n0.shape = ", ns_by_n0.shape)
+    # ns_by_n0      = ns_by_n0[:,0:len(all_species)]
+    # # print("after adjusting dimensions, ns_by_n0.shape = ", ns_by_n0.shape)
+    # ns_by_n0      = ns_by_n0.T
+    # for i in range(len(all_species)):
+    #     if all_species[i] == 'Ar+':
+    #         ns_by_n0[i,:] = ni/n0
+    
+    # print("ns_by_n0 = ", ns_by_n0)
+    # # enforce mixture mass is normalized
+    # ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
+
+
+    # for i in range(len(all_species)):
+    #     if all_species[i] == 'Ar+':
+    #         # RECOMBINATION REACTION PRESENT IN CROSS-SECTION FILE
+    #         # HERE, WE SCALE ns_by_n0 FOR THE RECOMBINATION COLLISIONS
+    #         ns_by_n0[i,:] = (ni/n0)**2 * n0
+
+    # E             = np.load("%s_E_%02d.npy"             %(fprefix, file_idx))
+    # eRe           = np.load("%s_eRe_%02d.npy"             %(fprefix, file_idx))
+    # eIm           = np.load("%s_eIm_%02d.npy"             %(fprefix, file_idx))
 
     EbyN          = E/n0/Td_fac
-    Te_mean       = np.mean(Te/ev_to_K)
+    Te_mean       = max(1e-1, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
     vth           = np.sqrt(Te_mean) * c_gamma
+
+    print("ns_by_n0=\n", ns_by_n0, "\nEbyN=\n", EbyN, "\nN=\n", n0, "\nne=\n", ne, "\nTg=\n", Tg)
     
     args.Te       = Te_mean
-    args.n_pts    = len(Te)
-    args.ev_max   = (24 * vth / c_gamma)**2
+    args.n_pts    = len(Tg)
+    args.ev_max   = 36 * np.mean(Tg/ev_to_K) #(6 * vth / c_gamma)**2
+
+    print("Te_mean = ", args.Te, Te_mean, ", vth = ", vth, ", ev_max = ", args.ev_max)
     
     ef            = EbyN * n0 * Td_fac
 
@@ -129,9 +179,9 @@ else:
         ns_by_n0    = np.concatenate([ns_by_n0] + [(1-ns_by_n0)/(len(all_species)-1) for i in range(1, len(all_species))] ,  axis = 0).reshape(len(all_species), n_pts)
         print(ns_by_n0[:, -1])
 
-    ne          = np.linspace(1     , 1, n_pts) * 3.22e18
-    ni          = np.linspace(1     , 1, n_pts) * 3.22e18
-    Tg          = np.linspace(1     , 1, n_pts) * 6000 #0.5 * collisions.TEMP_K_1EV
+    ne          = np.linspace(1     , 1, n_pts) * 3.22e15
+    ni          = np.linspace(1     , 1, n_pts) * 3.22e15
+    Tg          = np.linspace(1     , 1, n_pts) * 400 #0.5 * collisions.TEMP_K_1EV
     
 Te          = np.ones(n_grids) * args.Te 
 ev_max      = np.ones(n_grids) * args.ev_max     
@@ -194,8 +244,10 @@ for k, v in qoi.items():
 
 
 collision_names = bte_solver.get_collision_names()
+collision_list = bte_solver.get_collision_list()
 csv_write = args.store_csv
 if csv_write:
+    print(Tg, ef, ne/n0, qoi["energy"], qoi["mobility"], qoi["diffusion"], qoi["rates"], collision_list)
     fname = args.out_fname
     with open("%s_qoi.csv"%fname, 'w', encoding='UTF8') as f:
         writer = csv.writer(f,delimiter=',')
@@ -207,7 +259,7 @@ if csv_write:
         writer.writerow(header)
         
         data = np.concatenate((n0.reshape(-1,1), ne.reshape(-1,1), ni.reshape(-1,1), Tg.reshape(-1,1), ef.reshape(-1,1), qoi["energy"].reshape(-1,1), qoi["mobility"].reshape(-1,1), qoi["diffusion"].reshape(-1,1)), axis=1)
-        for col_idx, g in enumerate(collision_names):
+        for col_idx, g in enumerate(collision_list):
             data = np.concatenate((data, qoi["rates"][col_idx].reshape(-1,1)), axis=1)
         
         writer.writerows(data)

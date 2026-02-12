@@ -113,7 +113,7 @@ if __name__ == "__main__":
     u0   = qoi(v, xp)
     u1   = xp.copy(u0)
 
-    tp_rtol = 1e-4
+    tp_rtol = 1e-10
       
     for ts_idx in range(ts_idx_b, steps):
         tt   = ts_idx * params.dt
@@ -124,9 +124,9 @@ if __name__ == "__main__":
           a2 = xp.max(xp.abs((u1[:,0]-u0[:,0]) / xp.max(xp.abs(u0[:,0]))))
           u0 = u1
           
-          print("ne : ||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
-          if (a2 < tp_rtol):
-              break
+        #   print("ne : ||u(t+T) - u(t)|| = %.8E and ||u(t+T) - u(t)||/||u(t)|| = %.8E"% (a1, a2))
+        #   if (a2 < tp_rtol):
+        #       break
 
         if (ts_idx % io_freq == 0):
           print("time = %.2E step=%d/%d"%(tt, ts_idx, steps))

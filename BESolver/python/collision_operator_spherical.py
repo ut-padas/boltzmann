@@ -1361,7 +1361,8 @@ class CollisionOpSP():
         mvrvt       = xp.kron(vr**2 * vr_qw, vt_qw) * 2 * np.pi
         rmax        = xp.sum(vr_qw)
         domain      = spec_sp._basis_p._domain
-        assert xp.abs((domain[1]-domain[0]) - rmax) < 1e-14, "domain : %.2E rmax: %.2E"%(domain[1]-domain[0], rmax)
+        dsz         = domain[1] - domain[0]
+        assert xp.abs(1 - rmax/dsz) < 1e-14, "domain : %.2E rmax: %.2E error: %.8E"%(domain[1]-domain[0], rmax, xp.abs(1 - rmax/dsz))
 
         ## no need for this since we use iostropic scattering
         # svt, svt_qw = spec_sp.gl_vt(Nvts, hspace_split=True)
@@ -1382,7 +1383,7 @@ class CollisionOpSP():
             detJ             = vpre(vr)/vr
         elif(g._type == collisions.CollisionType.EAR_G2):
             vpre             = lambda x : xp.sqrt(2 * x**2 + (c_gamma/vth)**2 * g._reaction_threshold)
-            detJ             = 2.0 * vpre(vr) / vr
+            detJ             = 4.0 * vpre(vr) / vr
             #print(rmax, vr[-1], (c_gamma/vth)**1 * np.sqrt(g._reaction_threshold))
         else:
             raise NotImplementedError("only EAR G0, G1, G2 are implemented for hsph lop eulerian")

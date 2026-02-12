@@ -64,7 +64,7 @@ parser.add_argument("-use_gpu", "--use_gpu"                       , help="use gp
 parser.add_argument("-cycles", "--cycles"                         , help="number of max cycles to evolve to compute cycle average rates", type=float, default=5)
 parser.add_argument("-dt"    , "--dt"                             , help="1/dt number of denotes the number of steps for cycle", type=float, default=1e-3)
 parser.add_argument("-Efreq" , "--Efreq"                          , help="electric field frequency Hz", type=float, default=6e6)
-parser.add_argument("-input", "--input"                           , help="tps data file", type=str,  default="")
+parser.add_argument("-input", "--input"                           , help="tps csv file", type=str,  default="")
 #python3 bte_0d3v_batched_driver.py --threads 1 -out_fname bte_ss -solver_type steady-state -c lxcat_data/eAr_crs.synthetic.3sp2r -sp_order 3 -spline_qpts 5 -atol 1e-10 -rtol 1e-10 -max_iter 300 -Te 3 -n0 3.22e22 -ev_max 30 -Nr 127 -n_pts 1 -ee_collisions 1 -cycles 2 -dt 1e-3
 args                  = parser.parse_args()
 read_input_from_file  = 1
@@ -79,12 +79,9 @@ all_species           = cross_section.read_available_species(args.collisions)
 print("all_species = ", all_species, len(all_species))
 
 if (read_input_from_file):
-    
     n_grids       = 1
     grid_idx      = 0
-    file_idx      = 3
     ev_to_K       = collisions.TEMP_K_1EV
-    fprefix       = args.input
 
     import pandas as pd
     try:
@@ -115,36 +112,6 @@ if (read_input_from_file):
     except Exception as e:
         print("Error reading file %s"%(args.input))
         print(e)
-    
-    # Te            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
-    # Tg            = np.load("%s_Tg_%02d.npy"            %(fprefix, file_idx))
-    
-    # n0            = np.load("%s_n0_%02d.npy"            %(fprefix, file_idx))
-    # ne            = np.load("%s_ne_%02d.npy"            %(fprefix, file_idx))
-    # ni            = np.load("%s_ni_%02d.npy"            %(fprefix, file_idx))
-    # ns_by_n0      = np.load("%s_ns_by_n0_%02d.npy"      %(fprefix, file_idx))
-    # # print("at start, ns_by_n0.shape = ", ns_by_n0.shape)
-    # ns_by_n0      = ns_by_n0[:,0:len(all_species)]
-    # # print("after adjusting dimensions, ns_by_n0.shape = ", ns_by_n0.shape)
-    # ns_by_n0      = ns_by_n0.T
-    # for i in range(len(all_species)):
-    #     if all_species[i] == 'Ar+':
-    #         ns_by_n0[i,:] = ni/n0
-    
-    # print("ns_by_n0 = ", ns_by_n0)
-    # # enforce mixture mass is normalized
-    # ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
-
-
-    # for i in range(len(all_species)):
-    #     if all_species[i] == 'Ar+':
-    #         # RECOMBINATION REACTION PRESENT IN CROSS-SECTION FILE
-    #         # HERE, WE SCALE ns_by_n0 FOR THE RECOMBINATION COLLISIONS
-    #         ns_by_n0[i,:] = (ni/n0)**2 * n0
-
-    # E             = np.load("%s_E_%02d.npy"             %(fprefix, file_idx))
-    # eRe           = np.load("%s_eRe_%02d.npy"             %(fprefix, file_idx))
-    # eIm           = np.load("%s_eIm_%02d.npy"             %(fprefix, file_idx))
 
     EbyN          = E/n0/Td_fac
     Te_mean       = max(1e-1, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
@@ -166,7 +133,7 @@ else:
     grid_idx    = 0
 
     n0          = np.linspace(1     , 1, n_pts) * 3.22e22
-    ef          = np.linspace(1.8   , 2, n_pts)
+    ef          = np.linspace(1.0e-2 , 0.1, n_pts)
     ef          = ef * n0 * Td_fac
 
     eRe = ef
@@ -178,10 +145,11 @@ else:
         ns_by_n0    = np.linspace(0.999998   , 1, n_pts)
         ns_by_n0    = np.concatenate([ns_by_n0] + [(1-ns_by_n0)/(len(all_species)-1) for i in range(1, len(all_species))] ,  axis = 0).reshape(len(all_species), n_pts)
         print(ns_by_n0[:, -1])
+        print(ns_by_n0)
 
-    ne          = np.linspace(1     , 1, n_pts) * 3.22e15
-    ni          = np.linspace(1     , 1, n_pts) * 3.22e15
-    Tg          = np.linspace(1     , 1, n_pts) * 400 #0.5 * collisions.TEMP_K_1EV
+    ne          = np.linspace(0.1     , 1, n_pts) * 3.22e15
+    ni          = np.linspace(0.1     , 1, n_pts) * 3.22e15
+    Tg          = np.linspace(0.8     , 1.2, n_pts) * 400 #0.5 * collisions.TEMP_K_1EV
     
 Te          = np.ones(n_grids) * args.Te 
 ev_max      = np.ones(n_grids) * args.ev_max     
@@ -229,9 +197,10 @@ if args.profile==1:
     
     bte_solver.profile_stats()
     sys.exit(0)
-
+ls_c     = 1e-4 #min(0.9, np.exp(-(np.min(np.abs(ef))/2)**2))
 f0       = bte_solver.get_boltzmann_parameter(grid_idx,"f0")
-ff , qoi = bte_solver.solve(grid_idx, f0, args.atol, args.rtol, args.max_iter, args.solver_type)
+ff , qoi = bte_solver.solve(grid_idx, f0, args.atol, args.rtol, args.max_iter, args.solver_type,
+                            alpha_min = 1e-16, alpha_rho=0.5, line_search_c = ls_c)
 ev       = np.linspace(1e-3, bte_solver._par_ev_range[grid_idx][1], 500)
 ff_r     = bte_solver.compute_radial_components(grid_idx, ev, ff)
 

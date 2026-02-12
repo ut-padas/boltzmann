@@ -676,6 +676,30 @@ class bte_0d3v_batched():
                 gamma_a      = (xp.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
                 return gamma_a
             
+            def dgamma_a_df(fb):
+                m0           = mw(0) *  xp.dot(Mop, fb) * vth**3 
+                kT           = mw(0) * (xp.dot(Top, fb) / m0) * vth**5 * scipy.constants.Boltzmann 
+                kT           = xp.abs(kT).reshape((-1,))
+                
+                ne           = self._par_bte_params[grid_idx]["ne"]
+
+                uM           = mw(0) * Mop * vth**3 
+                uKT          = mw(0) * Top * vth**5 * scipy.constants.Boltzmann 
+
+                c_lambda     = ((12 * np.pi * (eps_0 * kT)**(1.5))/(qe**3 * xp.sqrt(ne)))
+                #gamma_a      = (xp.log(c_lambda) * (qe**4)) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3
+
+                m0           = m0.reshape((-1))
+                uM           = uM.reshape((-1))
+                uKT          = uKT.reshape((-1))
+                #print(m0.shape, uKT.shape, kT.shape, uM.shape)
+                Iv           = xp.eye(uKT.shape[0])
+                c_lambda_df  = xp.einsum("x,p->xp", 1/m0, uKT) - xp.einsum("x,p->xp", kT/m0, uM)
+                #print("c_lambda_df ", c_lambda_df[0])
+                gamma_a_df   = ((qe**4) / (4 * np.pi * (eps_0 * me)**2) / (vth)**3) * xp.einsum("x,xp->xp", 1/c_lambda, c_lambda_df)
+                return gamma_a_df
+                
+            
             def res_func(x, time, dt):
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
@@ -733,6 +757,15 @@ class bte_0d3v_batched():
                 QTccQ        = xp.einsum("be,aec->abc", QTmat       , ccQ )
                 
                 Lmat         = Lmat_pre + xp.einsum("a,bc->abc", E, QT_A_Q) + xp.einsum("a,abc->abc", ne * gamma_a(x), QTccQ)  -xp.einsum("a,bc->abc", mu, Imat)
+
+                ## Coulomb log term derivative - does not seem to help with convergence
+                # c_ee_x       = xp.dot(c_ee, x)
+                # c_ee_xx      = xp.einsum("abc,bc->ac", c_ee_x, x)
+                # #QT_c_ee     = xp.dot(QTmat, c_ee_xx)
+
+                # #print(QTmat.shape, c_ee_xx.shape, xp.einsum("x,xuv,ux->xuv", ne, dgamma_a_df(x), c_ee_xx).shape)
+                # Lmat        += xp.einsum("x,uk,kx,xm,mv->xuv", ne, QTmat, c_ee_xx, dgamma_a_df(x), Qmat)
+
                 
                 if xp==cp:
                     xp.cuda.runtime.deviceSynchronize()
@@ -891,10 +924,6 @@ class bte_0d3v_batched():
         
         res_func, jac_func = self.get_rhs_and_jacobian(grid_idx, n_pts)
         
-        abs_error       = np.ones(n_pts)
-        rel_error       = np.ones(n_pts) 
-        iteration_steps = 0
-
         f0       = f0 / xp.dot(u,f0)
         f0       = np.dot(qA.T, f0)
         
@@ -906,29 +935,40 @@ class bte_0d3v_batched():
             f1p[:,ii] = f1
             
         h_prev   = f1p + xp.dot(Qmat,fb_prev)
+
+        rhs_vec   =  res_func(h_prev, 0, 0)
+        r0        =  xp.linalg.norm(rhs_vec, axis=0, ord=2)
+
+        abs_error       = xp.copy(r0) 
+        rel_error       = abs_error/r0
+        iteration_steps = 0
         
-        while ((abs_error > atol).any() and (rel_error > rtol).any() and iteration_steps < max_iter):
+        while ((abs_error > atol + rtol * r0).any() and iteration_steps < max_iter):
             Lmat      =  jac_func(h_prev, 0, 0)
             rhs_vec   =  res_func(h_prev, 0, 0)
-            abs_error =  xp.linalg.norm(rhs_vec, axis=0)
+            abs_error =  xp.linalg.norm(rhs_vec, axis=0, ord=2)
             
             Lmat_inv  =  self.batched_inv(grid_idx, Lmat)
             
             pp_mat    =  xp.einsum("abc,ca->ba",Lmat_inv, -rhs_vec)
             p         =  xp.dot(Qmat,pp_mat)
 
-            alpha  = xp.ones(n_pts)
+            alpha       = xp.ones(n_pts)
             is_diverged = False
-            rf_new = xp.linalg.norm(res_func(h_prev + alpha * p, 0, 0), axis=0)
-            while ((rf_new  >  abs_error).any()):
-                rc = rf_new  >  abs_error
-                alpha[rc]*=0.5
+
+            # https://en.wikipedia.org/wiki/Backtracking_line_search
+            # uses merit function f(x) = 0.5 * ||res_func(x)||_2^2 and Armijo condition to find step size alpha
+
+            rf_new      = 0.5 * xp.linalg.norm(res_func(h_prev + alpha * p, 0, 0), axis=0, ord=2)**2
+            while ((rf_new   >  0.5 * abs_error**2 - line_search_c * alpha * abs_error**2).any()):
+                rc = rf_new  >  0.5 * abs_error**2 - line_search_c * alpha * abs_error**2
+                alpha[rc]*=alpha_rho
                 
-                if (alpha < 1e-16).all():
+                if (alpha < alpha_min).all():
                     is_diverged = True
                     break
                 
-                rf_new = xp.linalg.norm(res_func(h_prev + alpha * p, 0, 0), axis=0)
+                rf_new = 0.5 * xp.linalg.norm(res_func(h_prev + alpha * p, 0, 0), axis=0, ord=2)**2 
                 
             
             if(is_diverged):
@@ -938,14 +978,17 @@ class bte_0d3v_batched():
             h_curr      = h_prev + alpha * p
             
             if iteration_steps % 10 == 0:
-                rel_error = xp.linalg.norm(h_prev-h_curr, axis=0)/xp.linalg.norm(h_curr, axis=0)
-                print("Rank = ", rank_, ", grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
+                abs_error = xp.linalg.norm(res_func(h_curr, 0, 0), axis=0)
+                rel_error = abs_error/ r0
+                print("grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
             
             #fb_prev      = np.dot(Rmat,h_curr)
             h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
             iteration_steps+=1
 
-        print("Rank = ", rank_, ", grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        abs_error = xp.linalg.norm(res_func(h_curr, 0, 0), axis=0)
+        rel_error = abs_error/ r0
+        print("Rank ", rank_, ", grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
         profile_tt[pp.SOLVE].stop()
@@ -1008,7 +1051,7 @@ class bte_0d3v_batched():
         profile_tt[pp.SOLVE].stop()
         return v
         
-    def solve(self, grid_idx:int, f0:np.array, atol, rtol, max_iter:int, solver_type:str):
+    def solve(self, grid_idx:int, f0:np.array, atol, rtol, max_iter:int, solver_type:str, alpha_min = 1e-16, alpha_rho=0.01, line_search_c = 1e-3):
         xp           = self.xp_module
         profile_tt   = self.profile_tt_all[grid_idx]
         
@@ -1021,7 +1064,7 @@ class bte_0d3v_batched():
         mm_op        = self._op_mass[grid_idx] * mw(0) * vth**3
         
         if (solver_type == "steady-state"):
-            return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter)
+            return self.steady_state_solve(grid_idx, f0, atol, rtol, max_iter, alpha_min, alpha_rho, line_search_c)
         elif(solver_type== "transient"):
             dt              = self._args.dt     
             tT              = self._args.cycles

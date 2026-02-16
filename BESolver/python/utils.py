@@ -8,6 +8,20 @@ import basis
 import scipy.constants
 #from numba import jit
 
+class gmres_counter(object):
+    def __init__(self, disp=True, store_residuals=False):
+        self._disp = disp
+        self.niter = 0
+        self.residuals = list()
+        self.rs_store = store_residuals
+    def __call__(self, rk=None):
+        if self.rs_store:
+            self.residuals.append(rk)
+        self.niter += 1
+        if self._disp:
+            print('iter %3i\trk = %s' % (self.niter, str(rk)))
+
+
 MAX_GMX_Q_VR_PTS=278
 
 def choloskey_inv(M):
@@ -1155,6 +1169,95 @@ def assemble_moment_ops_ords(spec_sp: spec_spherical.SpectralExpansionSpherical,
 
     return mf_op
     
-    
+def gmres(xp, A, b, x0=None, atol=1e-20, rtol=1e-10, maxiter=None, restart=None, M=None, callback=None):
+    """
+    Standard GMRES implementation without restarts
+    :param xp: Array module (numpy or cupy)
+    :param A: Linear operator (matrix or object with matvec method)
+    :param b: right-hand side vector
+    :param x0: initial guess (optional)
+    :param atol: absolute tolerance for convergence
+    :param rtol: relative tolerance for convergence
+    :param maxiter: maximum number of iterations (optional)
+    :param M: preconditioner (optional, should have matvec method)
+    :param callback: function to call after each iteration with the current residual norm (optional)
+    """
 
+    n = A.shape[0]
+    
+    if n == 0:
+        return xp.empty_like(b), 0
+    
+    b_norm = xp.linalg.norm(b)
+
+    if b_norm == 0:
+        return b, 0
+    
+    if maxiter is None:
+        maxiter = n * 10
+
+    if restart is None:
+        restart = maxiter
+    
+    x      = xp.zeros_like(b) if x0 is None else xp.copy(x0)
+    
+    if M is not None:
+        psolve = M.matvec if hasattr(M, 'matvec') else lambda x: M @ x
+    else:
+        psolve = lambda x: x
+
+    matvec = A.matvec if hasattr(A, 'matvec') else lambda x: A @ x
+
+    tol    = max(atol, rtol * b_norm)
+    
+    it   = 0
+    while (it < maxiter):
+        V      = xp.empty((n, restart+1), dtype=A.dtype)
+        H      = xp.zeros((restart+2, restart+1), dtype=A.dtype)
+        e      = xp.zeros((restart+2,), dtype=A.dtype)
+
+        # using right-preconditioning, so we solve A M^{-1} y = b, where x = M^{-1} y
+        mx     = psolve(x)
+        r      = b - matvec(mx)
+        r_norm = xp.linalg.norm(r)
+
+        if (r_norm < tol):
+            return mx, 0
+        
+        V[:, 0] = r / r_norm
+        e[0]    = r_norm
+
+        for i in range(restart):
+            u = matvec(psolve(V[:, i]))
+
+            # Arnoldi iteration
+            for j in range(i+1):
+                H[j,i] = xp.dot(V[:,j], u)
+                u     -= H[j,i] * V[:,j]
+
+            H[i+1,i]   = xp.linalg.norm(u)
+            
+            if H[i+1,i] != 0:
+                V[:, i+1] = u / H[i+1,i]
+            
+            ## Debugging info (uncomment if needed) checks Arnoldi orthogonality 
+            # a1      = xp.linalg.norm(A @ M @ V[:, 0:i+1] - V[:,0:i+2] @ H[0:i+2, 0:i+1]) / xp.linalg.norm(A @ V[:, 0:i+1])  
+            # b1      = np.linalg.norm(xp.eye(i+2) - V[:, 0:i+2].T @ V[:, 0:i+2])
+            # print(i, b1, a1)
+
+            ret    = xp.linalg.lstsq(H[0:i+2, 0:i+1], e[0:i+2], rcond=None)
+            xn     = x +  V[:, 0:i+1] @ ret[0]
+
+            rn     = b - matvec(psolve(xn))
+            if callback is not None:
+                callback(xp.linalg.norm(rn) / b_norm)
+
+            if xp.linalg.norm(rn) < tol:
+                return psolve(xn), 0
+            
+            it+=1
+        
+        x = xn    
+    
+    return psolve(xn), it+1
     

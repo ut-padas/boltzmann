@@ -31,6 +31,7 @@ PROFILE_SOLVERS=1
 try:
     import cupy as cp
     import cupyx.scipy.sparse.linalg
+    import cupyx.scipy.interpolate
 except:
     print("Cupy module not found !")
     #raise ModuleNotFoundError
@@ -46,6 +47,24 @@ class vspace_discretization():
 class sph_type():
     SPH  = "sph" # spherical harmonics based solve. 
     HSPH = "hsph" # enable ordinates space solve with hemi-spherical harmonics
+
+class solver_type():
+    XVX_STRANG_SPLIT         = 0
+    SEMILAGRANGIAN_IMPLICIT  = 1
+    FULLY_IMPLICIT           = 2
+    FULLY_IMPLICIT_COULED_EM = 3
+
+class pc_type():
+    CXVTVR            = 0
+    XVX_SOLVE         = 1
+    XCVTVR            = 2
+    XVTVRC            = 3
+    CXVTVR_STRANG     = 4 # XVTVR C XVTVR
+    NONE              = 5
+
+    
+
+
 
 class params():
     def __init__(self, par_file):
@@ -103,6 +122,9 @@ class params():
         self.max_iter      = tp["max_iter"]
         self.gmres_rsrt    = tp["gmres_rsrt"]
 
+        self.gmres_rsrt_iter = tp["gmres_rsrt_iter"] if ("gmres_rsrt_iter" in tp) else 10
+        self.gmres_maxiter = self.gmres_rsrt_iter * self.gmres_rsrt
+
         self.pcEmin        = tp["abs_efield_min"]
         self.pcEmax        = tp["abs_efield_max"]
         self.pcN           = tp["num_pc_ops"]
@@ -110,12 +132,14 @@ class params():
 
         self.restore       = tp["restore"]
         self.rs_idx        = tp["rs_idx"] 
-        self.xgrid_type    = "chebyshev-collocation"
+        self.xgrid_type    = "uniform"#"chebyshev-collocation"
         self.dim           = 1
         self.ee_collisions = 0
         self.verbose       = tp["verbose"]
         self.threads       = tp["threads"]
         
+        # gmres relaxatoin parameter for the preconditioner application.
+        self.gmres_pc_omega= 0.5
 
         dir                = self.dir
         if os.path.exists(dir):
@@ -131,27 +155,46 @@ class params():
         self.vspace_type = vspace_discretization.FVM       if tp["vspace_type"] == 0 else vspace_discretization.SPECTRAL_BSPH 
         self.sph_mode    = sph_type.SPH
 
-        self.pvr        = 3
-        self.pvt        = 3
-        self.px         = 1
+        self.pvr        = tp["pvr"] if "pvr" in tp.keys()  else 3
+        self.pvt        = tp["pvt"] if "pvt" in tp.keys()  else 3
+        self.px         = tp["px"]  if "px"  in tp.keys()  else 1
+
+        self.pc_type    = pc_type.CXVTVR
+
+        if "pc_type" in tp.keys():
+            if tp["pc_type"] == "cxvtvr_solve":
+                self.pc_type = pc_type.CXVTVR
+            elif tp["pc_type"] == "xcvtvr_solve":
+                self.pc_type = pc_type.XCVTVR
+            elif tp["pc_type"] == "xvx_solve":
+                self.pc_type = pc_type.XVX_SOLVE
+            elif tp["pc_type"] == "none":
+                self.pc_type = pc_type.NONE
+            else:
+                raise NotImplementedError
+        
+        if tp["solver_type"] =="xvx_strang_split":
+            self.solver_type = solver_type.XVX_STRANG_SPLIT
+        elif tp["solver_type"] =="sl_implicit":
+            self.solver_type = solver_type.SEMILAGRANGIAN_IMPLICIT
+        elif tp["solver_type"] =="fully_implicit":
+            self.solver_type = solver_type.FULLY_IMPLICIT
+        elif tp["solver_type"] =="fully_implicit_coupled_em":
+            self.solver_type = solver_type.FULLY_IMPLICIT_COULED_EM
+        else:
+            raise NotImplementedError
+
+        
         
     def __str__(self):
         attrs = vars(self)
         return ', '.join("%s: %s" % item for item in attrs.items())
 
-class gmres_counter(object):
-    def __init__(self, disp=True):
-        self._disp = disp
-        self.niter = 0
-    def __call__(self, rk=None):
-        self.niter += 1
-        if self._disp:
-            print('iter %3i\trk = %s' % (self.niter, str(rk)))
-
 class bte_1d3v():
 
     def __init__(self, args):
-        self.params        = params(args.par_file)
+        self.is_op_split_init = False
+        self.params           = params(args.par_file)
 
         print("===========params========================")
         print(self.params)
@@ -323,6 +366,17 @@ class bte_1d3v():
             self.xp_vr, self.xp_vr_qw   = spec_sp.gl_vr(self.params.spline_qpts, use_bspline_qgrid=True)
             num_vr                      = len(self.xp_vr)
             num_vt                      = len(self.xp_vt)
+
+            # to check the boundary points are within the domain
+            assert self.xp_vr[0]  > k_domain[0]
+            assert self.xp_vr[-1] < k_domain[1]
+            assert self.xp_vt[0]  < np.pi
+            assert self.xp_vt[-1] > 0
+
+            self.grid_info          = {"x" : np.asarray(self.xp),     "x_qw": np.asarray(basis.trapz_w(self.xp)),
+                                       "vt": np.asarray(self.xp_vt), "vt_qw": np.asarray(self.xp_vt_qw),
+                                       "vr": np.asarray(self.xp_vr), "vr_qw": np.asarray(self.xp_vr_qw)}
+        
 
             self.Po, self.Ps            = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, mode="sph")
             self.Pr, self.Pb            = spec_sp.radial_to_vr_projection_ops(self.xp_vr, self.xp_vr_qw)
@@ -565,6 +619,10 @@ class bte_1d3v():
                 self.op_adv_v_Ep = cp.asarray(self.op_adv_v_Ep)
                 self.op_adv_v_En = cp.asarray(self.op_adv_v_En)
 
+                self.grid_info      = {"x" : cp.asarray(self.xp), "x_qw": cp.asarray(basis.trapz_w(self.xp)),
+                                       "vt": cp.asarray(self.xp_vt), "vt_qw": cp.asarray(self.xp_vt_qw),
+                                       "vr": cp.asarray(self.xp_vr), "vr_qw": cp.asarray(self.xp_vr_qw)}
+
             
             self.op_adv_x       = cp.asarray(self.op_adv_x)
             self.op_adv_x_d     = cp.asarray(self.op_adv_x_d)
@@ -581,6 +639,8 @@ class bte_1d3v():
             self.op_rate        = [cp.asarray(self.op_rate[i]) for i in range(len(self.op_rate))]
             self.op_mobility    = cp.asarray(self.op_mobility)
             self.op_diffusion   = cp.asarray(self.op_diffusion)
+
+            
             
         return
     
@@ -703,6 +763,7 @@ class bte_1d3v():
                             self.bte_x_shift_diag[i, j]       = xp.ones(Nx) + f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=0)
                             self.bte_x_shift_sdiag[i, j]      = f1 * dt * self.op_adv_x_d[i] * xp.cos(self.xp_vt[j]) * xp.diagonal(DpR, offset=1)
             else:
+                raise NotImplementedError("higher order fd not implemented yet")
                 self.bte_x_shift      = xp.zeros((Nr, Nvt, Nx, Nx))
                 #self.bte_x_shift_rmat = xp.zeros((Nr, Nvt, Nx, Nx))
       
@@ -721,54 +782,6 @@ class bte_1d3v():
         else:
             raise NotImplementedError
 
-        
-        # adv_mat = cp.asnumpy(self.bte_x_shift)
-        # v1 = -self.xp**2 + 1.2
-        # plt.figure(figsize=(10,4), dpi=300)
-        # plt.subplot(1, 2 , 1)
-        # plt.semilogy(self.xp, v1,"-b",label="t=0")
-        # y1 = np.copy(v1)
-        # for i in range(50):
-        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
-        #   y1[0]=0
-        #   y1=xp.dot(adv_mat[-1,-1],y1)
-        # plt.semilogy(self.xp, y1,"-r", label="left to right")
-        # y1 = np.copy(v1)
-        # for i in range(50):
-        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
-        #   y1[-1]=0
-        #   y1=xp.dot(adv_mat[-1,0],y1)
-        # plt.semilogy(self.xp, y1,"-y", label="right to left ")
-        # plt.legend()
-        # plt.grid()
-        
-        # plt.subplot(1, 2 , 2)
-        # plt.plot(self.xp, v1,"-b",label="t=0")
-        # y1 = np.copy(v1)
-        # for i in range(50):
-        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1,-1],y1)
-        #   y1[0]=0
-        #   y1=xp.dot(adv_mat[-1,-1],y1)
-        #   # print(y1<0)
-        #   # print("L to R", y1[0])
-        #   y1[y1<0]=1e-16
-            
-        # plt.plot(self.xp, y1,"-r", label="left to right")
-        # y1 = np.copy(v1)
-        # for i in range(50):
-        #   #y1 = y1 + xp.dot(self.bte_x_shift_rmat[-1, 0],y1)
-        #   y1[-1]=0
-        #   y1=xp.dot(adv_mat[-1,0],y1)
-        #   # print("R to L", y1[-1])
-        #   # y1[y1<0]=1e-16
-        # plt.plot(self.xp, y1,"-y", label="right to left ")
-        # plt.legend()
-        # plt.grid()
-        
-        # #plt.show()
-        # plt.savefig("test.png")
-        # plt.close()
-        # #sys.exit(0)
         return
     
     def vspace_pc_setup(self, E):
@@ -872,7 +885,7 @@ class bte_1d3v():
         
         return Vin_adv_x
     
-    def step_bte_v(self, E, v, dv, time, dt, verbose=0):
+    def step_bte_v(self, E, v, dv, time, dt, verbose=0, atol=None, rtol=None, max_iter=None):
         xp      = self.xp_module
       
         if PROFILE_SOLVERS==1:
@@ -888,9 +901,16 @@ class bte_1d3v():
             u       = self.ords_to_sph(u)
 
         if self.params.vts_type == "BE":
-            rtol            = self.params.rtol
-            atol            = self.params.atol
-            iter_max        = self.params.max_iter
+            if rtol is None:
+                rtol = self.params.rtol
+            
+            if atol is None:
+                atol = self.params.atol
+            
+            if max_iter is None:
+                max_iter = self.params.max_iter
+
+            
             use_gmres       = not((E[0] == E).all() == True)
             dof_v           = self.op_col_en.shape[0] 
             
@@ -953,13 +973,13 @@ class bte_1d3v():
                 if (self.params.use_gpu == 1):
                     Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
                     Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
-                    gmres_c   = gmres_counter(disp=False)
-                    v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_rsrt * 50, callback=gmres_c)
+                    gmres_c   = bte_utils.gmres_counter(disp=False)
+                    v, status = bte_utils.gmres(self.xp_module, Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=max_iter, callback=gmres_c)
                 else:
                     Lmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Lmat_mvec)
                     Mmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=Mmat_mvec)
-                    gmres_c   = gmres_counter(disp=False)
-                    v, status = scipy.sparse.linalg.gmres(Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_rsrt * 50, callback=gmres_c)
+                    gmres_c   = bte_utils.gmres_counter(disp=False)
+                    v, status = bte_utils.gmres(self.xp_module, Lmat_op, u.reshape((-1)), x0=u.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=max_iter, callback=gmres_c)
 
                 
                 norm_res_abs  = xp.linalg.norm(Lmat_mvec(v) -  u.reshape((-1)))
@@ -1210,13 +1230,15 @@ class bte_1d3v():
         self.Evals    = xp.append(self.Evals,ep)
 
         if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
-            vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
+            vmat          = self.params.tau * self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
             Iv            = xp.eye(self.op_adv_v.shape[0])
             self.PmatE    = xp.array([xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v - dt * self.params.tau * vmat) for i in range(num_pc_evals)])
+            self.PmatC    = xp.linalg.inv(Iv -dt * vmat)
         elif (self.params.vspace_type == vspace_discretization.FVM):
-            vmat          = self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
+            vmat          = self.params.tau * self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
             Iv            = xp.eye(self.op_adv_v.shape[0])
             self.PmatE    = xp.zeros((num_pc_evals, self.dof_v, self.dof_v))
+            self.PmatC    = xp.linalg.inv(Iv -dt * vmat)
 
             for i in range(num_pc_evals):
                 if self.Evals[i] >=0:
@@ -1225,22 +1247,519 @@ class bte_1d3v():
                     self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v_En - dt * self.params.tau * vmat)
             
         print("v-space advection mat preconditioner gird : \n", self.Evals)
-        self.__initialize_bte_adv_x__(0.5 * dt)
+        
+        # Cnorm = xp.linalg.norm(vmat)
+        # Anorm = xp.linalg.norm(self.params.tau * self.op_adv_v_Ep)
+        # print("v-space advection preconditioner ||C|| = %.4E ||A|| = %.4E ||C||/||A|| = %.4E " %(Cnorm, Anorm, Cnorm/Anorm))
+
+        self.__initialize_bte_adv_x__(self.params.gmres_pc_omega * dt)
+        # if (self.params.pc_type == pc_type.CXVTVR or self.params.pc_type == pc_type.XCVTVR or self.params.pc_type == pc_type.XVTVRC):
+        #     self.__initialize_bte_adv_x__(dt)
+        # else:
+        #     self.__initialize_bte_adv_x__(0.5 * dt)
+
+        #### op split solver udwinded operators setup 
+
+        Dvt_LtoR             = xp.asarray(mesh.upwinded_dvt(self.xp_vt,1, 2, "L", use_cdx_internal=False))
+        Dvt_RtoL             = xp.asarray(mesh.upwinded_dvt(self.xp_vt,1, 2, "R", use_cdx_internal=False))
+
+        Dvr_LtoR             = xp.asarray(mesh.upwinded_dx(self.xp_vr,1 , 2, "L"))
+        Dvr_RtoL             = xp.asarray(mesh.upwinded_dx(self.xp_vr,1 , 2, "R"))
+
+        k_domain             = self.op_spec_sp._basis_p._kdomain
+
+        Dvr_LtoR[0,:]        = 0.0
+        #Dvr_LtoR[0,0]       = 1/(xp_vr[0] - k_domain[0])
+        Dvr_RtoL[-1 , :]     = 0.0
+        Dvr_RtoL[-1 ,-1]     = -1/(k_domain[1] - self.xp_vr[-1])
+
+
+        Dvt_LtoR[0 , :]      = 0.0
+        Dvt_RtoL[-1, :]      = 0.0
+
+        self.Dvt_LtoR        = Dvt_LtoR
+        self.Dvt_RtoL        = Dvt_RtoL
+
+        self.Dvr_LtoR        = Dvr_LtoR
+        self.Dvr_RtoL        = Dvr_RtoL
+
         
         return 
     
+    def step_op_split_init(self, E, time, dt, verbose=0):
+        xp                  = self.xp_module
+        dof_v               = self.dof_v
+        Nx                  = self.dof_x
+        Nr                  = self.dof_vr
+        Nvt                 = self.dof_vt
+
+        xp_vt               = self.grid_info["vt"]
+        xp_vr               = self.grid_info["vr"]
+
+        idx_np              = xp_vt <= 0.5 * xp.pi
+        idx_sp              = xp_vt  > 0.5 * xp.pi
+
+        idxEp               = E >=0
+        idxEn               = E < 0 
+
+        Ndof                = dof_v * Nx
+        rtol                = self.params.rtol
+        atol                = self.params.atol
+        step                = int(time/dt)
+        
+        Dvt_LtoR            = self.Dvt_LtoR
+        Dvt_RtoL            = self.Dvt_RtoL
+
+        Dvr_LtoR            = self.Dvr_LtoR
+        Dvr_RtoL            = self.Dvr_RtoL
+        
+        aE                  = (self.params.tau * self.params.qe/self.params.me/self.bs_vth)
+        Ecos_vt             = aE * xp.einsum("i,l->il", E, xp.cos(xp_vt))
+        idx_rl_vr           = Ecos_vt >= 0
+        idx_lr_vr           = Ecos_vt <0
+
+        vr_diag             = xp.zeros((Nx, Nvt, Nr))
+        vr_sdiag            = xp.zeros((Nx, Nvt, Nr-1))
+
+        vr_diag [idx_rl_vr] =   - dt * xp.diagonal(Dvr_RtoL)
+        vr_sdiag[idx_rl_vr] =   - dt * xp.diagonal(Dvr_RtoL, offset=1)
+
+        vr_diag [idx_lr_vr] =   - dt * xp.diagonal(Dvr_LtoR)
+        vr_sdiag[idx_lr_vr] =   - dt * xp.diagonal(Dvr_LtoR, offset=-1)
+
+        vr_diag             = xp.einsum("abc,ab->abc", vr_diag , Ecos_vt) + 1
+        vr_sdiag            = xp.einsum("abc,ab->abc", vr_sdiag, Ecos_vt)
+
+        
+        vt_diag             = xp.zeros((Nx, Nr,  Nvt))
+        vt_sdiag            = xp.zeros((Nx, Nr,  Nvt-1))  
+
+        sin_vt              = xp.sin(xp_vt)
+        Ebyv                = aE * xp.einsum("i,k->ik", E, 1.0/xp_vr)
+        idx_lr_vt           = Ebyv >=0
+        idx_rl_vt           = Ebyv < 0
+
+        Dvt_LtoR            = xp.diag(sin_vt) @ Dvt_LtoR
+        Dvt_RtoL            = xp.diag(sin_vt) @ Dvt_RtoL
+
+
+        vt_diag [idx_lr_vt] = dt * xp.diagonal(Dvt_RtoL)
+        vt_sdiag[idx_lr_vt] = dt * xp.diagonal(Dvt_RtoL, offset=1)
+
+        vt_diag [idx_rl_vt] = dt * xp.diagonal(Dvt_LtoR)
+        vt_sdiag[idx_rl_vt] = dt * xp.diagonal(Dvt_LtoR, offset=-1)
+
+        vt_diag             = xp.einsum("abc,ab->abc", vt_diag , Ebyv) + 1
+        vt_sdiag            = xp.einsum("abc,ab->abc", vt_sdiag, Ebyv)
+
+        # ## code to test the advection operator in v-space
+
+        # y                   = xp.random.rand(Nr * Nvt, Nx)
+        # Ay                  = xp.zeros_like(y)
+        
+        # Ay[:, idxEp]        = (self.op_adv_v_Ep @ y[:, idxEp])
+        # Ay[:, idxEn]        = (self.op_adv_v_En @ y[:, idxEn])
+        # Ay                  = y - dt * self.params.tau * E * Ay 
+
+        # y                   = xp.swapaxes(y.reshape((Nr, Nvt, Nx)), 0, 2) # Nx, Nvt, Nr
+
+        # By                  = vr_diag * y
+        # By[idx_lr_vr, 1:]  += vr_sdiag[idx_lr_vr] * y[idx_lr_vr,   :-1]
+        # By[idx_rl_vr,:-1]  += vr_sdiag[idx_rl_vr] * y[idx_rl_vr,  1:  ] 
+
+        # By                  = xp.swapaxes(By, 0 , 2) # Nr Nvt Nx
+
+        # y                   = xp.swapaxes(y, 1, 2) # Nx, Nr, Nvt
+        # Cy                  = vt_diag  * y
+        # Cy[idx_lr_vt,:-1]  += vt_sdiag[idx_lr_vt] * y[idx_lr_vt,  1:]
+        # Cy[idx_rl_vt,1:]   += vt_sdiag[idx_rl_vt] * y[idx_rl_vt, :-1]
+
+        # Cy                  = xp.swapaxes(xp.swapaxes(Cy, 0, 2), 0, 1)
+        # y                   = xp.swapaxes(xp.swapaxes(y, 0, 2), 0, 1)
+        # By                  = (By + Cy -y).reshape((Nr * Nvt, Nx))
+
+        # #print(np.linalg.norm(Ay.reshape((Nr, Nvt, Nx))[1:, :, : ] - By.reshape((Nr, Nvt, Nx))[1:, :, :]))
+        # #print("rel error : %.8E" % (xp.linalg.norm(Ay - By.reshape((Nr * Nvt, Nx)))/ xp.linalg.norm(Ay)))
+        # By = By.reshape((Nr, Nvt, Nx))
+        # Ay = Ay.reshape((Nr, Nvt, Nx))
+        # print("||Ay-By|| = %.8E"%(xp.linalg.norm(Ay-By)/xp.linalg.norm(Ay)))
+
+        self.vt_diag   = vt_diag
+        self.vt_sdiag  = vt_sdiag
+
+        self.vr_diag   = vr_diag
+        self.vr_sdiag  = vr_sdiag
+
+        self.idx_lr_vr = idx_lr_vr
+        self.idx_rl_vr = idx_rl_vr
+
+        self.idx_lr_vt = idx_lr_vt
+        self.idx_rl_vt = idx_rl_vt
+
+        assert self.params.px == 1
+        return
+
+    def step_op_split(self, E, v, dv, time, dt, type, verbose=0):
+
+        vr_diag     = self.vr_diag
+        vr_sdiag    = self.vr_sdiag
+        
+        vt_diag     = self.vt_diag
+        vt_sdiag    = self.vt_sdiag
+        
+        idx_lr_vr   = self.idx_lr_vr
+        idx_rl_vr   = self.idx_rl_vr
+        
+        idx_lr_vt   = self.idx_lr_vt
+        idx_rl_vt   = self.idx_rl_vt
+
+        xp          = self.xp_module
+        dof_v       = self.dof_v
+        Nx          = self.dof_x
+        Nr          = self.dof_vr
+        Nvt         = self.dof_vt
+
+        xp_vt       = self.grid_info["vt"]
+        xp_vr       = self.grid_info["vr"]
+        
+        idx_np      = xp_vt <= 0.5 * xp.pi
+        idx_sp      = xp_vt  > 0.5 * xp.pi
+
+        idxEp       = E >=0
+        idxEn       = E < 0 
+        
+        Ndof        = dof_v * Nx
+        rtol        = self.params.rtol
+        atol        = self.params.atol
+        step        = int(time/dt)
+
+
+        if (type == pc_type.CXVTVR):
+            
+            y                   = xp.swapaxes(v.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
+            yvr                 = xp.zeros_like(y)
+            yvr[idx_lr_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_lr_vr],
+                                                            vr_sdiag[idx_lr_vr], y[idx_lr_vr], lower=True)
+            
+            yvr[idx_rl_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_rl_vr],
+                                                            vr_sdiag[idx_rl_vr], y[idx_rl_vr], lower=False)
+            
+            # vt-adv
+            yvr                 = xp.swapaxes(yvr, 1, 2) # (Nx, Nr, Nvt)
+            yvt                 = xp.zeros_like(yvr)
+
+            yvt[idx_lr_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_lr_vt],
+                                                            vt_sdiag[idx_lr_vt], yvr[idx_lr_vt], lower=False)
+
+            yvt[idx_rl_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_rl_vt],
+                                                            vt_sdiag[idx_rl_vt], yvr[idx_rl_vt], lower=True)
+            
+            # x-adv
+            yvt                 = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
+
+            yvt[:, idx_np, 0]   = 0.0
+            yvt[:, idx_sp, -1]  = 0.0
+            yx                  = xp.zeros_like(yvt)
+            yx[:, idx_np]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_np],
+                                                            self.bte_x_shift_sdiag[:, idx_np], yvt[:, idx_np], lower=True)
+            
+            yx[:, idx_sp]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_sp],
+                                                            self.bte_x_shift_sdiag[:, idx_sp], yvt[:, idx_sp], lower=False)
+            
+            
+            # collisions
+            yx                  = (self.PmatC @ yx.reshape(dof_v, Nx)).reshape((Nr, Nvt, Nx))
+            yx[:, idx_np, 0]    = 0.0
+            yx[:, idx_sp, -1]   = 0.0
+
+            return yx.reshape((dof_v, Nx))
+        elif (type == pc_type.XCVTVR):
+            y                   = xp.swapaxes(v.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
+            yvr                 = xp.zeros_like(y)
+            yvr[idx_lr_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_lr_vr],
+                                                            vr_sdiag[idx_lr_vr], y[idx_lr_vr], lower=True)
+            
+            yvr[idx_rl_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_rl_vr],
+                                                            vr_sdiag[idx_rl_vr], y[idx_rl_vr], lower=False)
+            
+            # vt-adv
+            yvr                 = xp.swapaxes(yvr, 1, 2) # (Nx, Nr, Nvt)
+            yvt                 = xp.zeros_like(yvr)
+
+            yvt[idx_lr_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_lr_vt],
+                                                            vt_sdiag[idx_lr_vt], yvr[idx_lr_vt], lower=False)
+
+            yvt[idx_rl_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_rl_vt],
+                                                            vt_sdiag[idx_rl_vt], yvr[idx_rl_vt], lower=True)
+            
+            
+            # collisions
+            yvt                 = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
+            yvt                 = (self.PmatC @ yvt.reshape(dof_v, Nx)).reshape((Nr, Nvt, Nx))
+            
+            # x-adv
+            yvt[:, idx_np, 0]   = 0.0
+            yvt[:, idx_sp, -1]  = 0.0
+
+            yx                  = xp.zeros_like(yvt)
+            yx[:, idx_np]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_np],
+                                                            self.bte_x_shift_sdiag[:, idx_np], yvt[:, idx_np], lower=True)
+            
+            yx[:, idx_sp]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_sp],
+                                                            self.bte_x_shift_sdiag[:, idx_sp], yvt[:, idx_sp], lower=False)
+            
+            return yx.reshape((dof_v, Nx))
+        elif(type == pc_type.XVTVRC):
+            
+            # collisions
+            yc                  = (self.PmatC @ v.reshape(dof_v, Nx))
+            
+            y                   = xp.swapaxes(yc.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
+            yvr                 = xp.zeros_like(y)
+            yvr[idx_lr_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_lr_vr],
+                                                            vr_sdiag[idx_lr_vr], y[idx_lr_vr], lower=True)
+            
+            yvr[idx_rl_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_rl_vr],
+                                                            vr_sdiag[idx_rl_vr], y[idx_rl_vr], lower=False)
+            
+            # vt-adv
+            yvr                 = xp.swapaxes(yvr, 1, 2) # (Nx, Nr, Nvt)
+            yvt                 = xp.zeros_like(yvr)
+
+            yvt[idx_lr_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_lr_vt],
+                                                            vt_sdiag[idx_lr_vt], yvr[idx_lr_vt], lower=False)
+
+            yvt[idx_rl_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_rl_vt],
+                                                            vt_sdiag[idx_rl_vt], yvr[idx_rl_vt], lower=True)
+            
+            # x-adv
+            yvt                 = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
+            yvt[:, idx_np, 0]   = 0.0
+            yvt[:, idx_sp, -1]  = 0.0
+
+            yx                  = xp.zeros_like(yvt)
+            yx[:, idx_np]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_np],
+                                                            self.bte_x_shift_sdiag[:, idx_np], yvt[:, idx_np], lower=True)
+            
+            yx[:, idx_sp]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_sp],
+                                                            self.bte_x_shift_sdiag[:, idx_sp], yvt[:, idx_sp], lower=False)
+            
+            
+            return yx.reshape((dof_v, Nx))
+        elif (type == pc_type.CXVTVR_STRANG):
+            # adv-half step
+            y                   = xp.swapaxes(v.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
+            yvr                 = xp.zeros_like(y)
+            yvr[idx_lr_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_lr_vr],
+                                                            vr_sdiag[idx_lr_vr], y[idx_lr_vr], lower=True)
+            
+            yvr[idx_rl_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_rl_vr],
+                                                            vr_sdiag[idx_rl_vr], y[idx_rl_vr], lower=False)
+            
+            # vt-adv
+            yvr                 = xp.swapaxes(yvr, 1, 2) # (Nx, Nr, Nvt)
+            yvt                 = xp.zeros_like(yvr)
+
+            yvt[idx_lr_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_lr_vt],
+                                                            vt_sdiag[idx_lr_vt], yvr[idx_lr_vt], lower=False)
+
+            yvt[idx_rl_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_rl_vt],
+                                                            vt_sdiag[idx_rl_vt], yvr[idx_rl_vt], lower=True)
+            
+            # x-adv
+            yvt                 = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
+            yvt[:, idx_np, 0]   = 0.0
+            yvt[:, idx_sp, -1]  = 0.0
+
+            yx                  = xp.zeros_like(yvt)
+            yx[:, idx_np]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_np],
+                                                            self.bte_x_shift_sdiag[:, idx_np], yvt[:, idx_np], lower=True)
+            
+            yx[:, idx_sp]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_sp],
+                                                            self.bte_x_shift_sdiag[:, idx_sp], yvt[:, idx_sp], lower=False)
+            
+
+            ## collisions full step
+            yx                  = (self.PmatC @ yx.reshape(dof_v, Nx))
+
+            y                   = xp.swapaxes(yx.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
+            yvr                 = xp.zeros_like(y)
+            yvr[idx_lr_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_lr_vr],
+                                                            vr_sdiag[idx_lr_vr], y[idx_lr_vr], lower=True)
+            
+            yvr[idx_rl_vr]      = cp_rk.bidiagonal_solve_batched(vr_diag [idx_rl_vr],
+                                                            vr_sdiag[idx_rl_vr], y[idx_rl_vr], lower=False)
+            
+            # vt-adv
+            yvr                 = xp.swapaxes(yvr, 1, 2) # (Nx, Nr, Nvt)
+            yvt                 = xp.zeros_like(yvr)
+
+            yvt[idx_lr_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_lr_vt],
+                                                            vt_sdiag[idx_lr_vt], yvr[idx_lr_vt], lower=False)
+
+            yvt[idx_rl_vt]      = cp_rk.bidiagonal_solve_batched(vt_diag [idx_rl_vt],
+                                                            vt_sdiag[idx_rl_vt], yvr[idx_rl_vt], lower=True)
+            
+            # x-adv
+            yvt                 = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
+            yvt[:, idx_np, 0]   = 0.0
+            yvt[:, idx_sp, -1]  = 0.0
+
+            yx                  = xp.zeros_like(yvt)
+            yx[:, idx_np]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_np],
+                                                            self.bte_x_shift_sdiag[:, idx_np], yvt[:, idx_np], lower=True)
+            
+            yx[:, idx_sp]       = cp_rk.bidiagonal_solve_batched(self.bte_x_shift_diag [:, idx_sp],
+                                                            self.bte_x_shift_sdiag[:, idx_sp], yvt[:, idx_sp], lower=False)
+            
+            return yx.reshape((dof_v, Nx))
+
+
+        else:
+            raise NotImplementedError("preconditioner type not implemented")
+
+
     def step(self, E, v, dv, time, dt, verbose=0):
         xp     = self.xp_module
+        
+        dof_v  = self.dof_v
+        Nx     = self.dof_x
+        Nr     = self.dof_vr
+        Nvt    = self.dof_vt
         
         #if PROFILE_SOLVERS==1:
         if xp == cp:
             cp.cuda.runtime.deviceSynchronize()
         t1     = perf_counter()
-        num_sh = len(self.op_spec_sp._sph_harm_lm)
-        # Strang-Splitting
-        v           = self.step_bte_x(v, time, dt * 0.5, verbose)
-        v           = self.step_bte_v(E, v, None, time, dt, verbose)
-        v           = self.step_bte_x(v, time + 0.5 * dt, dt * 0.5, verbose)
+
+        if( self.params.solver_type == solver_type.XVX_STRANG_SPLIT):
+            # Strang-Splitting
+            v           = self.step_bte_x(v, time, dt * 0.5, verbose)
+            v           = self.step_bte_v(E, v, None, time, dt, verbose)
+            v           = self.step_bte_x(v, time + 0.5 * dt, dt * 0.5, verbose)
+        elif(self.params.solver_type == solver_type.FULLY_IMPLICIT):
+            assert self.params.vspace_type == vspace_discretization.FVM, "Fully-implicit solver is only implemented for FVM v-space discretization"
+            
+            xp_vt       = self.grid_info["vt"]
+            xp_vr       = self.grid_info["vr"]
+            
+            idx_np      = xp_vt <= 0.5 * xp.pi
+            idx_sp      = xp_vt  > 0.5 * xp.pi
+
+            idxEp       = E >=0
+            idxEn       = E < 0 
+            
+            Ndof        = dof_v * Nx
+            rtol        = self.params.rtol
+            atol        = self.params.atol
+            step        = int(time/dt)
+            
+            
+            brhs                  = xp.copy(v.reshape((Nr, Nvt, Nx)))
+            brhs[:, idx_np, 0]    = 0.0
+            brhs[:, idx_sp, -1]   = 0.0
+            brhs                  = brhs.reshape((-1))
+            norm_b                = xp.linalg.norm(brhs)
+
+            ### --------------------------------------------------------------------------------------------
+
+            def rhs_mvec(x):
+                x      = x.reshape((dof_v, Nx))
+                
+                # v-space advection and collisions
+                yE     = xp.zeros_like(x)
+                            
+                yE[:, idxEp]         = self.op_adv_v_Ep @ x[:, idxEp]
+                yE[:, idxEn]         = self.op_adv_v_En @ x[:, idxEn]
+                yv                   = dt * self.params.tau * (self.params.n0 * self.params.np0 * (xp.dot(self.op_col_en, x) + self.params.Tg * xp.dot(self.op_col_gT, x))  + E * yE)
+
+                yv                   = yv.reshape((Nr, Nvt, Nx))
+                yv[:, idx_np, 0]     = 0.0
+                yv[:, idx_sp, -1]    = 0.0
+                yv                   = yv.reshape((Nr * Nvt, Nx))
+
+
+                z                    = x.reshape((Nr, Nvt, Nx))
+                yx                   = xp.zeros_like(z)
+
+                # note: Identity part is included in the final y = yx - yv
+
+                yx[:, idx_np,  :]    = self.bte_x_shift_diag [:, idx_np, :]  * z[:  , idx_np, :  ]
+                yx[:, idx_np, 1:]   += self.bte_x_shift_sdiag[:, idx_np, :]  * z[:  , idx_np, :-1]
+
+                yx[: , idx_sp ,: ]   = self.bte_x_shift_diag [:, idx_sp, :]  * z[:  , idx_sp,  :]
+                yx[: , idx_sp,:-1]  += self.bte_x_shift_sdiag[:, idx_sp, :]  * z[:  , idx_sp, 1:]
+
+                yx                   = yx.reshape((dof_v, Nx))
+                y                    = yx -yv
+                return y.reshape((-1))
+            
+
+            if (self.params.pc_type == pc_type.CXVTVR or self.params.pc_type == pc_type.XCVTVR or self.params.pc_type == pc_type.XVTVRC):
+                self.step_op_split_init(E, time, self.params.gmres_pc_omega * dt, verbose=0)
+                
+                def pre_mvec(x):
+                    return self.step_op_split(E, x.reshape((dof_v, Nx)), None, time, dt, self.params.pc_type, verbose=0).reshape((-1))
+                
+            elif (self.params.pc_type == pc_type.CXVTVR_STRANG):
+                
+                self.step_op_split_init(E, time, 0.5 * dt, verbose=0)
+                def pre_mvec(x):
+                    return self.step_op_split(E, x.reshape((dof_v, Nx)), None, time, dt, self.params.pc_type, verbose=0).reshape((-1))
+
+            
+            elif (self.params.pc_type == pc_type.XVX_SOLVE):
+                
+                def pre_mvec(x):
+                    y = x.reshape((dof_v, Nx))
+                    y = self.step_bte_x(y, time, 0.5 * dt, verbose=0)
+                    y = self.step_bte_v(E, y, None, time, dt, verbose=0, rtol= self.params.rtol * 1e-2, max_iter=self.params.gmres_rsrt * 10)
+                    y = self.step_bte_x(y, time + 0.5 * dt, 0.5 * dt, verbose=0)
+                    return y.reshape((-1))
+            
+            elif (self.params.pc_type == pc_type.NONE):
+
+                def pre_mvec(x):
+                    return x
+            
+            else:
+                raise NotImplementedError("preconditioner type not implemented")
+
+            if (self.params.use_gpu == 1):
+                Lmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=rhs_mvec)
+                Mmat_op   = cupyx.scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=pre_mvec)
+                gmres_c   = bte_utils.gmres_counter(disp=False, store_residuals=True)
+                #v, status = cupyx.scipy.sparse.linalg.gmres(Lmat_op, brhs.reshape((-1)), x0=v.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_maxiter, callback=gmres_c)
+                v, status = bte_utils.gmres(self.xp_module, Lmat_op, brhs.reshape((-1)), x0=v.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_maxiter, callback=gmres_c)
+                
+            else:
+                Lmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=rhs_mvec)
+                Mmat_op   = scipy.sparse.linalg.LinearOperator((Ndof, Ndof), matvec=pre_mvec)
+                gmres_c   = bte_utils.gmres_counter(disp=False, store_residuals=True)
+                #v, status = scipy.sparse.linalg.gmres(Lmat_op, brhs.reshape((-1)), x0=v.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_maxiter, callback=gmres_c)
+                v, status = bte_utils.gmres(self.xp_module, Lmat_op, brhs.reshape((-1)), x0=v.reshape((-1)), rtol=rtol, atol=atol, M=Mmat_op, restart=self.params.gmres_rsrt, maxiter=self.params.gmres_maxiter, callback=gmres_c)
+
+            norm_res_abs  = xp.linalg.norm(rhs_mvec(v) -  brhs.reshape((-1)))
+            norm_res_rel  = xp.linalg.norm(rhs_mvec(v) -  brhs.reshape((-1))) / norm_b
+
+            self.gmres_info = {"status": status, "residual_abs": norm_res_abs, "residual_rel":norm_res_rel, "gmres_callback": gmres_c}
+            
+            if (status !=0) :
+                raise RuntimeError("%08d GMRES solver failed! iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(step, status, norm_res_abs, norm_res_rel))
+            else:
+                if (verbose==1):
+                    print("%08d iterations =%d  ||res|| = %.4E ||res||/||b|| = %.4E"%(step, gmres_c.niter, norm_res_abs, norm_res_rel))
+                v               = v.reshape((dof_v, Nx))
+            
+            
+        elif(self.params.solver_type == solver_type.SEMILAGRANGIAN_IMPLICIT):
+            assert self.params.vspace_type == vspace_discretization.FVM, "Semi-Lagrangian implicit solver is only implemented for FVM v-space discretization"
+            v_sl        = self.step_adv_vx_sl(E, v, time, dt, verbose)
+            v           = self.PmatC @ v_sl
+            
+        else:
+            raise NotImplementedError("solver type not implemented")
+        
         
         #if PROFILE_SOLVERS==1:
         if xp == cp:
@@ -1249,7 +1768,7 @@ class bte_1d3v():
         t2 = perf_counter()
         
         if (verbose==1):
-            print("BTE(vx-op-split) solver cost = %.4E (s)" %(t2-t1), flush=True)
+            print("BTE step cost = %.4E (s)" %(t2-t1), flush=True)
             
         return v
     
@@ -1447,18 +1966,79 @@ class bte_1d3v():
           assert type(x) == np.ndarray
           return x
     
+    def step_adv_vx_sl(self, E, v, time, dt, verbose=0):
+        """
+        sl-semi-lagrangian advection in (v,x) space
+        """
+
+        xp      = self.xp_module
+        Nr      = self.dof_vr
+        Nvt     = self.dof_vt
+        Nx      = self.dof_x
+
+        if self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH:
+            raise NotImplementedError
+        
+        x   = self.grid_info["x"]
+        vr  = self.grid_info["vr"]
+        vt  = self.grid_info["vt"]
+
+        tau = self.params.tau
+        L   = self.params.L
+        vth = self.bs_vth
+        qe  = self.params.qe
+        me  = self.params.me
+        
+        vrcosvt = xp.einsum("k,l,i->kli", vr, xp.cos(vt), xp.ones_like(x))
+        dtE     = (dt * tau * qe /me /vth) * xp.einsum("k,l,i->kli", xp.ones_like(vr), xp.ones_like(vt), E)
+
+        x_ap    = xp.einsum("k,l,i->kli", xp.ones_like(vr), xp.ones_like(vt), x) \
+                - (dt * tau * vth / L) * vrcosvt
+        
+        vr_ap   = xp.sqrt(xp.einsum("k,l,i->kli", vr**2, xp.ones_like(vt), xp.ones_like(x)) \
+                + 2 * vrcosvt * dtE + dtE**2)
+        
+
+        cosvtap = (vrcosvt + dtE)/ vr_ap
+        vt_ap   = xp.arccos(cosvtap)
+
+        
+        vr_domain        = self.op_spec_sp._basis_p._kdomain
+        yip              = xp.zeros((Nr+2, Nvt+2, Nx))
+        v                = v.reshape((Nr, Nvt, Nx))
+        yip[1:-1,1:-1,:] = v 
+        
+        # Taylor expansion for boundary 
+        yip[0, 1:-1, :]  = v[0]       -  (vr[0] - vr_domain[0]) * ((v[1] - v[0]) / (vr[1] - vr[0]))
+        
+        yip[0, 0, :]     = v[0,0]     -  (vr[0] - vr_domain[0]) * ((v[1,0] - v[0,0]) / (vr[1] - vr[0])) \
+                                      +  (xp.pi        - vt[0]) * ((v[0,1] - v[0,0]) / (vt[1] - vt[0]))   
+        
+        yip[0, -1, :]    = v[0,-1]    -  (vr[0] - vr_domain[0]) * ((v[1,-1] - v[0,-1]) / (vr[1] - vr[0])) \
+                                      -  (vt[-1]      - 0.0)    * ((v[0,-1] - v[0,-2]) / (vt[-1] - vt[-2]))
+
+        yip[1:-1,  0, :] = v[:, 0,:]  +  (xp.pi-vt[0]) * ((v[:,1,:]  - v[:,0,:] ) / (vt[1]  - vt[0]))
+        yip[1:-1, -1, :] = v[:,-1,:]  -  (vt[-1] -0.0) * ((v[:,-1,:] - v[:,-2,:]) / (vt[-1] - vt[-2]))
+        
+        vrp              = xp.zeros(Nr+2)
+        vtp              = xp.zeros(Nvt+2)
+        vrp[1:-1]        = vr
+        vtp[1:-1]        = vt
+
+        vrp[0]           = xp.float64(vr_domain[0])
+        vrp[-1]          = xp.float64(vr_domain[-1])
+        vtp[0]           = xp.pi
+        vtp[-1]          = 0.0
+        
+        if(xp == cp):
+            vip = cupyx.scipy.interpolate.interpn((vrp, vtp, x), yip, (vr_ap.reshape((-1)), vt_ap.reshape((-1)), x_ap.reshape((-1))), method='linear', bounds_error=False, fill_value=0.0)
+        else:
+            vip = scipy.interpolate.interpn((vrp, vtp, x), yip, (vr_ap.reshape((-1)), vt_ap.reshape((-1)), x_ap.reshape((-1))), method='linear', bounds_error=False, fill_value=0.0)
+
+
+        return vip.reshape((Nr * Nvt, Nx))
+        
     
-
-        
-
-            
-        
-       
-
-
-
-
-
     
     
 

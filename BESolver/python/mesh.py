@@ -29,9 +29,12 @@ def upwinded_dx(x, dorder, sw, dir):
     Dx = xp.zeros((Np, Np))
         
     if (dir == "L"):
-        m  = fd_coefficients(x[0:sw], dorder)
-        for i in range(sw):
-            Dx[i, 0:sw] = m[i]
+        # m  = fd_coefficients(x[0:sw], dorder)
+        # for i in range(sw):
+        #     Dx[i, 0:sw] = m[i]
+
+        for i in range(1, sw):
+            Dx[i, 0:(i+1)] = fd_coefficients(x[0:(i+1)], dorder)[-1]
 
         for i in range(sw, Np):
             Dx[i, (i-(sw-1)):(i+1)] = fd_coefficients(x[(i-(sw-1)):(i+1)], dorder)[-1]
@@ -41,9 +44,14 @@ def upwinded_dx(x, dorder, sw, dir):
         for i in range(0, Np-(sw-1)):
             Dx[i, i:(i+sw)] = fd_coefficients(x[i:(i+sw)], dorder)[0]
 
-        m  = fd_coefficients(x[-sw:], dorder)
-        for i in range(sw):
-            Dx[-(i+1), -sw:] = m[-(i+1)]
+        # m  = fd_coefficients(x[-sw:], dorder)
+        # for i in range(sw):
+        #     Dx[-(i+1), -sw:] = m[-(i+1)]
+
+        for i in range(1, sw):
+            Dx[-(i+1), -(i+1):] = fd_coefficients(x[-(i+1):], dorder)[0]
+
+
 
     return Dx
 
@@ -167,8 +175,12 @@ class mesh():
                 D1 = (1/dx)     * D1
                 D2 = (1/dx**2)  * D2
 
-                self.D1.append(scipy.sparse.csr_matrix(D1))
-                self.D2.append(scipy.sparse.csr_matrix(D2))
+                # self.D1.append(scipy.sparse.csr_matrix(D1))
+                # self.D2.append(scipy.sparse.csr_matrix(D2))
+
+                self.D1.append(D1)
+                self.D2.append(D2)
+                
                 self.xcoord  = [np.linspace(-1, 1, N[i]) for i in range(dim)]
                 self.dx      = [np.min(self.xcoord[i][1:] - self.xcoord[i][0:-1]) for i in range(dim)]
                 

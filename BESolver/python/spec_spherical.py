@@ -6,7 +6,7 @@ import numpy as np
 import scipy
 import basis 
 import enum
-from scipy.special import sph_harm
+import scipy.special
 import enum
 from advection_operator_spherical_polys import *
 import mesh 
@@ -56,7 +56,8 @@ class SpectralExpansionSpherical:
         # theta = np.array(theta)
         # phi   = np.array(phi)
         # assert theta.shape == phi.shape, "theta and phi must have the same shape"
-        Y = sph_harm(abs(m), l, phi, theta)
+        #Y = sph_harm(abs(m), l, phi, theta)
+        Y  = scipy.special.sph_harm_y(l, abs(m), theta, phi)
         if m < 0:
             Y = np.sqrt(2) * (-1)**m * Y.imag
         elif m > 0:
@@ -874,8 +875,7 @@ class SpectralExpansionSpherical:
 
     def compute_advection_matrix_vrvt_fv(self, xp_vr, xp_vt, sw_vr=2, sw_vt=2, use_upwinding=True):
         """
-        0-th order upwinded flux reconstruction is equivalent for 1st order FDs
-        This ensures monotonicity
+        This is a FD upwinded discretization of the advection operator in (vr, vt) coordinates.
         """
         
         xp                = np
@@ -913,11 +913,23 @@ class SpectralExpansionSpherical:
             Dvr_LtoR          = xp.asarray(mesh.upwinded_dx(xp_vr,1 , sw_vr, "L"))
             Dvr_RtoL          = xp.asarray(mesh.upwinded_dx(xp_vr,1 , sw_vr, "R"))
 
-            # Dvr_LtoR[0,:]     = 0.0
-            # Dvr_LtoR[0,0]     = 1/(xp_vr[0] - k_domain[0])
-
+            # #zero-gradient inflow at r=rmin
+            Dvr_LtoR[0,:]     = 0.0
+            
+            #zero-inflow at r=rmax
             Dvr_RtoL[-1 , :]  = 0.0
             Dvr_RtoL[-1 ,-1]  = -1/(k_domain[1] - xp_vr[-1])
+
+            # these are coordinate boundaries, not physical boundaries, 
+            # enforce \partial_\theta f =0 at poles,  for regularity. 
+            Dvt_LtoR[0 , :]   = 0.0
+            Dvt_RtoL[-1, :]   = 0.0
+
+            # print("Dvr_LtoR\n", Dvr_LtoR)
+            # print("Dvr_RtoL\n", Dvr_RtoL)
+
+            # print("Dvt_LtoR\n", Dvt_LtoR)
+            # print("Dvt_RtoL\n", Dvt_RtoL)
 
 
             Ep   = xp.zeros((num_vr, num_vt, num_vr, num_vt))

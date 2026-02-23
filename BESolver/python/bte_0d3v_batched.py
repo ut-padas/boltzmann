@@ -25,6 +25,7 @@ from multiprocessing.pool import ThreadPool as WorkerPool
 import enum
 from os import environ
 from profile_t import profile_t
+from mpi4py import MPI
 
 try:
     import cupy as cp
@@ -695,6 +696,7 @@ class bte_0d3v_batched():
                 
                 n0           = self._par_bte_params[grid_idx]["n0"]
                 ne           = self._par_bte_params[grid_idx]["ne"]
+                ne[ne/n0 <= 1e-7] = 1
                 Tg           = self._par_bte_params[grid_idx]["Tg"]
                 E            = self._par_bte_params[grid_idx]["E"]
                 ns_by_n0     = self._par_bte_params[grid_idx]["ns_by_n0"]
@@ -705,8 +707,9 @@ class bte_0d3v_batched():
                 y1           = (n0 * ( xp.einsum("sx,svx->vx", ns_by_n0, xp.dot(QT_Cen, x))
                                 + Tg * xp.dot(QT_Cgt, x) ) 
                                 + E * xp.dot(QT_A, x) 
-                                - n0 * xp.einsum("sx,sx->x", ns_by_n0, xp.dot(Wmat, x)) * xp.dot(QTmat, x) 
+                                - n0 * xp.einsum("sx,sx->x", ns_by_n0, xp.dot(Wmat, x)) * xp.dot(QTmat, x)
                                 + ne * gamma_a(x) * xp.dot(QTmat, c_ee_xx))
+
                 if xp == cp:
                     xp.cuda.runtime.deviceSynchronize()
                 profile_tt[pp.RHS_EVAL].stop()
@@ -880,6 +883,10 @@ class bte_0d3v_batched():
         return Jmat_inv
             
     def steady_state_solve(self, grid_idx : int, f0 : np.array, atol, rtol, max_iter, alpha_min = 1e-16, alpha_rho=0.01, line_search_c = 1e-3):
+        comm = MPI.COMM_WORLD
+        rank_ = comm.Get_rank()
+        size_ = comm.Get_size()
+        
         xp           = self.xp_module
         profile_tt   = self.profile_tt_all[grid_idx]
         
@@ -968,7 +975,7 @@ class bte_0d3v_batched():
 
         abs_error = xp.linalg.norm(res_func(h_curr, 0, 0), axis=0)
         rel_error = abs_error/ r0
-        print("grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        print("rank ", rank_, ", grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
         profile_tt[pp.SOLVE].stop()

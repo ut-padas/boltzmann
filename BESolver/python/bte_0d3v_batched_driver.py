@@ -90,8 +90,6 @@ if (read_input_from_file):
         ne            = np.array(dat["ne/n0"]) * n0
         E             = np.array(dat["E"])
         ni            = ne
-
-
         ns_by_n0      = np.zeros((len(all_species), len(Tg)))
         
         for i in range(len(all_species)):
@@ -189,6 +187,18 @@ if args.profile==1:
     bte_solver.profile_stats()
     sys.exit(0)
 ls_c     = 1e-4 #min(0.9, np.exp(-(np.min(np.abs(ef))/2)**2))
+f0       = bte_solver.get_boltzmann_parameter(grid_idx,"f0")
+
+if args.ee_collisions == 1:
+    # disabling ee-collisions temporary by force to get a good initial guess. 
+    args.ee_collisions = 0  
+    ff , qoi = bte_solver.solve(grid_idx, f0, args.atol, args.rtol, args.max_iter, args.solver_type,
+                                alpha_min = 1e-16, alpha_rho=0.5, line_search_c = ls_c)
+    bte_solver.set_boltzmann_parameter(grid_idx, "f0"       , ff)
+
+    # enable ee-collisions
+    args.ee_collisions = 1
+  
 f0       = bte_solver.get_boltzmann_parameter(grid_idx,"f0")
 ff , qoi = bte_solver.solve(grid_idx, f0, args.atol, args.rtol, args.max_iter, args.solver_type,
                             alpha_min = 1e-16, alpha_rho=0.5, line_search_c = ls_c)

@@ -105,7 +105,7 @@ def trapz_w(qx):
     qw   = np.array([(dx[i-1] + dx[i]) * 0.5 for i in range(1, nx-1)])
     qw   = np.append(np.array([0.5 * dx[0]]), qw)
     qw   = np.append(qw, np.array([0.5 * dx[-1]]))
-    assert np.abs((qx[-1] - qx[0])-np.sum(qw)) < 1e-12
+    assert np.abs((qx[-1] - qx[0])-np.sum(qw))/np.abs(qx[-1]-qx[0]) < 1e-12
     return qw
 
 def quad_on_grid(vr, vt, qoi):

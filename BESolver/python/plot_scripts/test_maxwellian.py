@@ -1,5 +1,12 @@
 import numpy as np
 import scipy.constants
+import sys
+sys.path.append("../.")
+
+import collisions
+import cross_section
+cross_section.CROSS_SECTION_DATA = cross_section.read_cross_section_data("../lxcat_data/eAr_crs.Biagi.3sp2r")
+cs_data = cross_section.CROSS_SECTION_DATA
 
 def get_maxwellian_3d(vth,n_scale=1):
     M = lambda x: (n_scale / ((vth * np.sqrt(np.pi))**3) ) * np.exp(-x**2)
@@ -16,28 +23,34 @@ def synthetic_tcs(ev, mode):
         """
         G0 cross section data fit with analytical function
         """
-        ev =     ev+1e-13
-        a0 =    0.008787
-        b0 =     0.07243
-        c  =    0.007048
-        d  =      0.9737
-        a1 =        3.27
-        b1 =       3.679
-        x0 =      0.2347
-        x1 =       11.71
-        y=9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
-        assert len(y[y<0]) == 0 , "g0 cross section is negative" 
-        return  y
+        #for col_str, col_data in self.cross_section_data.items():
+        
+        g = collisions.electron_heavy_binary_collision("E + Ar -> E + Ar", "ELASTIC")
+        return g.total_cross_section(ev)
+        # ev =     ev+1e-13
+        # a0 =    0.008787
+        # b0 =     0.07243
+        # c  =    0.007048
+        # d  =      0.9737
+        # a1 =        3.27
+        # b1 =       3.679
+        # x0 =      0.2347
+        # x1 =       11.71
+        # y=9.900000e-20*(a1+b1*(np.log(ev/x1))**2)/(1+b1*(np.log(ev/x1))**2)*(a0+b0*(np.log(ev/x0))**2)/(1+b0*(np.log(ev/x0))**2)/(1+c*ev**d)
+        # assert len(y[y<0]) == 0 , "g0 cross section is negative" 
+        # return  y
     
     elif mode == "g2":
         """
         G2 cross section data fit with analytical function (ionization)
         """
-        y               = np.zeros_like(ev)
-        threshold_value = 15.76
-        y[ev>threshold_value] = (2.860000e-20/np.log(90-threshold_value)) * np.log((ev[ev>threshold_value]-threshold_value + 1)) * np.exp(-1e-2*((ev[ev>threshold_value]-90)/90)**2)
-        y[ev>=10000]=0
-        return  y
+        g = collisions.electron_heavy_binary_collision("E + Ar -> E + E + Ar+", "IONIZATION")
+        return g.total_cross_section(ev)
+        # y               = np.zeros_like(ev)
+        # threshold_value = 15.76
+        # y[ev>threshold_value] = (2.860000e-20/np.log(90-threshold_value)) * np.log((ev[ev>threshold_value]-threshold_value + 1)) * np.exp(-1e-2*((ev[ev>threshold_value]-90)/90)**2)
+        # y[ev>=10000]=0
+        # return  y
     else:
         raise NotImplementedError
 
@@ -52,7 +65,7 @@ Te         = 0.5 # ev
 vth        = VTH(Te)
 mw         = get_maxwellian_3d(vth, 1)
 
-vr         = np.linspace(0, 5, 10000)
+vr         = np.linspace(0, 10, 10000)
 ev_grid    = (vr * vth/c_gamma)**2
 f0         = 4* np.pi * mw(vr)
 mass       = vth**3      * np.trapz(vr**2 * f0 , vr, dx=(vr[1]-vr[0]))

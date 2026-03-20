@@ -13,7 +13,7 @@ import spec_spherical as sp
 import collisions
 
 class op():
-    def __init__(self,Np):
+    def __init__(self, Np, use_tab_data=1):
       self.Np  = Np
       self.deg = self.Np-1
       self.xp  = -np.cos(np.pi*np.linspace(0,self.deg,self.Np)/self.deg)
@@ -78,7 +78,7 @@ class op():
       self.eps0  = scipy.constants.epsilon_0 # eps_0 
       self.alpha = self.np0 * self.L**2 * self.qe / (self.eps0 * self.V0)
       
-      self.use_tab_data=1
+      self.use_tab_data=use_tab_data
       
       self.n0 = self.n0/self.np0
       
@@ -167,7 +167,7 @@ class op():
 
         #p0    = np.dot(np.polynomial.chebyshev.chebvander(qx, self.Np-1), self.V0pinv)
         Q     = np.einsum("ik,k->ik", v0, qw)
-        print(v0.shape, Q.shape, p0.shape)
+        #print(v0.shape, Q.shape, p0.shape)
         P     = np.linalg.solve(M, Q @ p0)
 
         q0    = np.polynomial.chebyshev.chebvander(xx_grid, Np-1)

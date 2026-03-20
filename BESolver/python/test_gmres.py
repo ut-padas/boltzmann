@@ -12,19 +12,19 @@ if __name__ == "__main__":
     n = 1000
     np.random.seed(0)
     A = np.eye(n) + 1e-1 * np.random.rand(n, n)#diags([1, 2, 3], [0, 1, 2], shape=(n, n)).toarray()
-    M = None#np.diag(1/np.diag(A))
+    M = np.diag(1/np.diag(A))
     b = np.random.rand(n)
 
 
     #### Note scipy gmres uses left preconditioning, while our gmres uses right preconditioning. 
-    xp       = cp
+    xp       = np
     counter1 = gmres_counter(disp=True, store_residuals=True)
-    x,  info = gmres(xp, xp.asarray(A), xp.asarray(b), x0=xp.zeros_like(b), atol=1e-20, rtol=1e-12, maxiter=100, restart=20, callback=counter1, M=M)
+    x,  info = gmres(xp, xp.asarray(A), xp.asarray(b), x0=xp.zeros_like(b), atol=1e-20, rtol=1e-12, maxiter=500, restart=20, callback=counter1, M=M, pc_left=True)
     
     print("\n\n")
 
     counter2= gmres_counter(disp=True, store_residuals=True)
-    x1, info= scipy.sparse.linalg.gmres(A, b, x0=np.zeros_like(b), atol=1e-20, rtol=1e-12, maxiter=100, restart=20,  callback=counter2, M=M)
+    x1, info= scipy.sparse.linalg.gmres(A, b, x0=np.zeros_like(b), atol=1e-20, rtol=1e-12, maxiter=500, restart=20,  callback=counter2, M=M)
 
     # print("GMRES info : ", info)
     # print("GMRES iter : ", counter.niter)

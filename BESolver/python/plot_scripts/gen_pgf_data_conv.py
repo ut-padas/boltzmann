@@ -70,19 +70,21 @@ idx_range   = range(0, 11, 10)
 d1          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l2_400x256x16"     , idx_range , None, read_cycle_avg=True)
 d2          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l4_400x256x16"     , idx_range , None, read_cycle_avg=True)
 d3          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l8_400x256x16"     , idx_range , None, read_cycle_avg=True)
+d7          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l4_200x128x32_dt2.5e-5"     , idx_range , None, read_cycle_avg=True)
 d4          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l8_400x256x16_dt2.5e-5"     , idx_range , None, read_cycle_avg=True)
-#d5          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l8_400x256x16_dt1.25e-5"    , idx_range , None, read_cycle_avg=True)
+d5          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l8_400x256x16_dt1.25e-5"    , idx_range , None, read_cycle_avg=True)
 d6          = plot_utils.load_data_bte("./../1dglow_hybrid_Nx400/1Torr300K_100V_Ar_3sp2r_l8_400x256x32_dt2.5e-5"     , idx_range , None, read_cycle_avg=True)
 
-data        = [d1, d2, d3, d4, d6]
+data        = [d1, d2, d3, d7,  d4, d6, d5]
 lbl         = [r"$N_x$=%d $N_r$=%d,$N_\theta$=%d,$l_{max}=%d,dt=%.2E$"%(int(data[i][0]["Np"]), int(data[i][0]["Nr"]), int(data[i][0]["Nvt"]), int(data[i][0]["l_max"]), float(data[i][0]["cfl"])) for i in range(len(data))]
 
 fnames      = ["/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l2_400x256x16", 
                "/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l4_400x256x16", 
                "/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l8_400x256x16",
+               "/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l8_200x256x32_dt2.5e-5",
                "/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l8_400x256x16_dt2.5e-5",
-               #"/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l8_400x256x16_dt1.25e-5",
-               "/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l8_400x256x32_dt2.5e-5"]
+               "/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l8_400x256x32_dt2.5e-5",
+               "/home/mfernando/research/papers/boltzmann1d-paper/dat/1Torr_300K_100V_conv/1Torr300K_100V_Ar_3sp2r_l8_400x256x16_dt1.25e-5"]
 
 #xx_grid    = np.linspace(-1, 1, 100)
 xx_grid     = plot_utils.op(400).xp

@@ -45,9 +45,140 @@ extern "C" __global__ void upper_bidiagonal_batched(const double* diag, const do
 }
 '''
 
+lower_banded_tri_batched_code = r'''
+extern "C" __global__ void lower_banded_tri_batched(const double* diags, const double* b, double* out, int bsz, int ndiags, int N) {
+    
+    const unsigned int gid = blockDim.x * blockIdx.x + threadIdx.x;
+    if (gid >= bsz) 
+        return;
+    
+    const unsigned int idx  = gid * ndiags * N;
+    const unsigned int rdx  = gid * N;
+
+    out[rdx] = b[rdx]/diags[idx];
+    
+    //printf("blockIdx.x = %d, threadIdx.x = %d, idx = %d\n", blockIdx.x, threadIdx.x, idx);
+    for (int i = 1; i < N; i++)
+    {
+        double s = 0.0;
+        for (int d = 0; d < ndiags; d++)
+        {
+            if ((i-d) < 0)
+                break;
+            
+            s+= diags[idx + d * N + i] * out[rdx + i - d];
+        }
+
+        out[rdx + i] = (b[rdx+i] -s)/diags[idx+i];
+
+    }
+    
+    return;
+}
+'''
+
+
+
+upper_banded_tri_batched_code = r'''
+extern "C" __global__ void upper_banded_tri_batched(const double* diags, const double* b, double* out, int bsz, int ndiags, int N) {
+    
+    const unsigned int gid = blockDim.x * blockIdx.x + threadIdx.x;
+    if (gid >= bsz) 
+        return;
+    
+    const unsigned int idx  = gid * ndiags * N;
+    const unsigned int rdx  = gid * N;
+    
+    out[rdx + N-1] = b[rdx + N-1]/diags[idx + N-1];
+    
+    //printf("blockIdx.x = %d, threadIdx.x = %d, idx = %d\n", blockIdx.x, threadIdx.x, idx);
+    for (unsigned int i = 1; i < N; i ++)
+    {
+        double s = 0.0;
+        for (int d = 0; d < ndiags; d++)
+        {
+            if((N-1-i+d) >= N)
+                break;
+            
+            s+= diags[idx + d * N + (N-1-i)] * out[rdx + (N-1-i) + d];
+        }
+        
+        out[rdx + (N-1-i)] = (b[rdx + (N-1-i)] - s)/diags[idx + (N-1-i)];
+    }
+    return;
+    
+}
+'''
+
+lower_banded_tri_batched_mv_code = r'''
+extern "C" __global__ void lower_banded_tri_batched_mv(const double* diags, const double* b, double* out, int bsz, int ndiags, int N) {
+    
+    const unsigned int gid = blockDim.x * blockIdx.x + threadIdx.x;
+    if (gid >= bsz) 
+        return;
+    
+    const unsigned int idx  = gid * ndiags * N;
+    const unsigned int rdx  = gid * N;
+
+    //printf("blockIdx.x = %d, threadIdx.x = %d, idx = %d\n", blockIdx.x, threadIdx.x, idx);
+    for (int i = 0; i < N; i++)
+    {
+        double s = 0.0;
+        for (int d = 0; d < ndiags; d++)
+        {
+            if ((i-d) < 0)
+                break;
+            
+            s+= diags[idx + d * N + i] * b[rdx + i - d];
+        }
+
+        out[rdx + i] = s;
+    }
+    return;
+}
+'''
+
+
+
+upper_banded_tri_batched_mv_code = r'''
+extern "C" __global__ void upper_banded_tri_batched_mv(const double* diags, const double* b, double* out, int bsz, int ndiags, int N) {
+    
+    const unsigned int gid = blockDim.x * blockIdx.x + threadIdx.x;
+    if (gid >= bsz) 
+        return;
+    
+    const unsigned int idx  = gid * ndiags * N;
+    const unsigned int rdx  = gid * N;
+    
+    //printf("blockIdx.x = %d, threadIdx.x = %d, idx = %d\n", blockIdx.x, threadIdx.x, idx);
+    for (unsigned int i = 0; i < N; i ++)
+    {
+        double s = 0.0;
+        for (int d = 0; d < ndiags; d++)
+        {
+            if((N-1-i+d) >= N)
+                break;
+            
+            s+= diags[idx + d * N + (N-1-i)] * b[rdx + (N-1-i) + d];
+        }
+        
+        out[rdx + (N-1-i)] = s;
+    }
+    return;
+    
+}
+'''
+
+
+
 
 __lower_bidiagonal_batched = cp.RawKernel(lower_bidiagonal_batched_code, 'lower_bidiagonal_batched')
+__lower_banded_tri_batched = cp.RawKernel(lower_banded_tri_batched_code, 'lower_banded_tri_batched')
+__upper_banded_tri_batched = cp.RawKernel(upper_banded_tri_batched_code, 'upper_banded_tri_batched')
 __upper_bidiagonal_batched = cp.RawKernel(upper_bidiagonal_batched_code, 'upper_bidiagonal_batched')
+
+__lower_banded_tri_batched_mv = cp.RawKernel(lower_banded_tri_batched_mv_code, 'lower_banded_tri_batched_mv')
+__upper_banded_tri_batched_mv = cp.RawKernel(upper_banded_tri_batched_mv_code, 'upper_banded_tri_batched_mv')
 
 def bidiagonal_solve_batched(diag, sdiag, b, lower, xp=cp):
     _diag  =  diag.reshape((-1,  diag.shape[-1]))
@@ -75,6 +206,57 @@ def bidiagonal_solve_batched(diag, sdiag, b, lower, xp=cp):
     
     return _out.reshape(diag.shape)
 
+def banded_tri_solve_batched(diags, b, lower, xp=cp):
+    _diags = diags.reshape((-1, diags.shape[-2], diags.shape[-1]))
+    _b     = b.reshape((-1, b.shape[-1]))
+
+    assert _diags.shape[0] == _b.shape[0]
+    
+    
+    
+    bsz    = _diags.shape[0]
+    ndiags = _diags.shape[1]
+    N      = _diags.shape[2]
+
+    _out   = xp.zeros_like(_b)
+    
+    threads_per_block = 256
+    blocks_per_grid   = (bsz // threads_per_block) + 1
+    
+    assert blocks_per_grid * threads_per_block >= bsz
+
+    if(lower == True):
+        __lower_banded_tri_batched((blocks_per_grid,), (threads_per_block,), (_diags, _b, _out, bsz, ndiags, N))
+    else:
+        __upper_banded_tri_batched((blocks_per_grid,), (threads_per_block,), (_diags, _b, _out, bsz, ndiags, N))
+    
+    return _out.reshape(b.shape)
+
+def banded_tri_mv_batched(diags, b, lower, xp=cp):
+    _diags = diags.reshape((-1, diags.shape[-2], diags.shape[-1]))
+    _b     = b.reshape((-1, b.shape[-1]))
+
+    assert _diags.shape[0] == _b.shape[0]
+    
+    
+    
+    bsz    = _diags.shape[0]
+    ndiags = _diags.shape[1]
+    N      = _diags.shape[2]
+
+    _out   = xp.zeros_like(_b)
+    
+    threads_per_block = 256
+    blocks_per_grid   = (bsz // threads_per_block) + 1
+    
+    assert blocks_per_grid * threads_per_block >= bsz
+
+    if(lower == True):
+        __lower_banded_tri_batched_mv((blocks_per_grid,), (threads_per_block,), (_diags, _b, _out, bsz, ndiags, N))
+    else:
+        __upper_banded_tri_batched_mv((blocks_per_grid,), (threads_per_block,), (_diags, _b, _out, bsz, ndiags, N))
+    
+    return _out.reshape(b.shape)
         
 if __name__ == "__main__":
     xp    = cp
@@ -100,4 +282,32 @@ if __name__ == "__main__":
     xp.linalg.norm(xp.einsum("ijl,il->ij", Atru, c) - b)/xp.linalg.norm(b)
     print("rel error (upper) = %.8E"%(xp.linalg.norm(xp.einsum("ijl,il->ij", Atru, c) - b)/xp.linalg.norm(b)))
     
+    ndiags = 30
+    diags  = xp.random.rand(bsz, ndiags, N)
+    diags[:, 0, :] += 1.0
+    b      = xp.random.rand(bsz, N)
+
+    Atrl  = xp.zeros((bsz, N, N))
+    for i in range(ndiags):
+        xp.diagonal(Atrl, offset=-i , axis1=1, axis2=2)[:] = diags[:, i, i:]
+
+    c = banded_tri_solve_batched(diags, b, lower=True)
+    print("rel error (banded lower trigular) = %.8E"%(xp.linalg.norm(xp.einsum("ijl,il->ij", Atrl, c) - b)/xp.linalg.norm(b)))
+
+    Atru  = xp.zeros((bsz, N, N))
+    for i in range(ndiags):
+        xp.diagonal(Atru, offset=i , axis1=1, axis2=2)[:] = diags[:, i, :N-i]
+    
+    c = banded_tri_solve_batched(diags, b, lower=False)
+    print("rel error (banded upper trigular) = %.8E"%(xp.linalg.norm(xp.einsum("ijl,il->ij", Atru, c) - b)/xp.linalg.norm(b)))
+
+
+    c  = banded_tri_mv_batched(diags, b, lower=True)
+    c1 = xp.einsum("ijl,il->ij", Atrl, b)
+    print("rel error (banded upper trigular mv) = %.8E"%(xp.linalg.norm(c1 - c)/xp.linalg.norm(c1)))
+
+    c  = banded_tri_mv_batched(diags, b, lower=False)
+    c1 = xp.einsum("ijl,il->ij", Atru, b)
+    print("rel error (banded upper trigular mv) = %.8E"%(xp.linalg.norm(c1 - c)/xp.linalg.norm(c1)))
+
     print("done")

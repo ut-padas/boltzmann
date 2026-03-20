@@ -381,9 +381,10 @@ for run_id in range(len(run_params)):
                 plt.ylabel(r"radial component")
                 plt.title(r"$f_%d$"%(l_idx))
                 plt.grid(visible=True)
-                if l_idx == 0 or l_idx==2:
+                #if l_idx == 0 or l_idx==2:
                     #plt.legend(prop={'size': 16})
-                    plt.legend()
+                    #plt.legend()
+                plt.legend()
                 
                 plt_idx+=1
 

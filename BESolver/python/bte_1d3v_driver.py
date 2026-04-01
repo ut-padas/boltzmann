@@ -4,6 +4,9 @@ import bte_1d3v_solver
 import enum
 import sys
 import matplotlib.pyplot as plt
+import utils as bte_utils
+import matplotlib as mpl
+bte_utils.use_pgfplots_style(mpl)
 
 try:
     import cupy as cp
@@ -293,7 +296,7 @@ if __name__ == "__main__":
             plt.subplot(1, ndt, i+1)
             y0 = bte.asnumpy(bte.xp_module.array(gmres_info[i * (1+ len(relax_params)) + 0][-1].residuals))
             x0 = np.arange(1, len(y0)+1)
-            plt.semilogy(x0, y0, '-', label=r"none")
+            plt.semilogy(x0, y0, '-', label=r"None")
             for idx, rp in enumerate(relax_params):
                 yi = bte.asnumpy(bte.xp_module.array(gmres_info[i * (1+ len(relax_params)) + idx+1][-1].residuals))
                 xi = np.arange(1, len(yi)+1)
@@ -303,13 +306,13 @@ if __name__ == "__main__":
                 assert gmres_info[i * (1+ len(relax_params)) + idx+1][-4] == dt_info[i]
 
                 #plt.semilogy(xi, yi, '--', label=r"($R_x=%.4f$, $R_{vr}=%.4f$, $R_{vt}=%.4f$, $R_c=%.4f$)"%(rp[0], rp[1], rp[2], rp[3]))
-                plt.semilogy(xi, yi, '--', label=r"1/$2^{%d}, 1.0$"%(idx))
+                plt.semilogy(xi, yi, '--', label=r"$\alpha = %.2f$ $\beta = %.2f$"%(rp[0], rp[3]))
 
-            plt.xlabel(r"iteration")
-            plt.ylabel(r"residual")
+            plt.xlabel(r"Iteration")
+            plt.ylabel(r"Residual")
             plt.title(r"$\frac{\Delta t}{\tau}$ = %.2E"%(dt_info[i]))
             plt.grid(visible=True, which='both', axis='both', linestyle='--', linewidth=0.25)
-            plt.legend(fontsize=10)
+            plt.legend(fontsize=8)
             
         plt.tight_layout()
         plt.savefig("%s_gmres_benchmark_rp_pcl%d.png"%(params.fname, pc_left))
@@ -501,6 +504,12 @@ if __name__ == "__main__":
         r_vt        = 1.0
 
     bte.init(dt, 1, r_ax)
+    # vn  = bte.normalize_edf(v)
+    # mn  = xp.dot(bte.op_mass, v)
+    # a1  = xp.dot(bte.op_mass, xp.dot(bte.op_col_en, v/mn))
+    # a2  = xp.dot(bte.op_rate[1], vn)
+    # print(a1,"\n",  a2)
+    #print()
     for ts_idx in range(ts_idx_b, steps):
         tt   = ts_idx * params.dt
         

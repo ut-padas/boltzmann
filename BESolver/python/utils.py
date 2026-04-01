@@ -1362,3 +1362,61 @@ def gmres(xp, A, b, x0=None, atol=1e-20, rtol=1e-10, maxiter=None, restart=None,
     else:
         return gmres_pcr(xp, A, b, x0, atol, rtol, maxiter, restart, M, callback)
 
+
+def use_pgfplots_style(mpl):
+    try:
+        mpl.rcParams.update({
+            # Font (LaTeX-like but no LaTeX dependency)
+            "font.family": "serif",
+            "font.serif": ["DejaVu Serif", "Times New Roman", "Computer Modern Roman"],
+            "mathtext.fontset": "cm",   # Computer Modern math look
+            "font.size": 11,
+
+            # Axes
+            "axes.labelsize": 11,
+            "axes.titlesize": 11,
+            "axes.linewidth": 0.8,
+            "axes.edgecolor": "black",
+
+            # Ticks
+            "xtick.direction": "in",
+            "ytick.direction": "in",
+            "xtick.major.size": 4,
+            "ytick.major.size": 4,
+            "xtick.minor.size": 2,
+            "ytick.minor.size": 2,
+            "xtick.major.width": 0.6,
+            "ytick.major.width": 0.6,
+            "xtick.minor.width": 0.5,
+            "ytick.minor.width": 0.5,
+
+            # Grid (pgfplots-like subtle grid)
+            "axes.grid": True,
+            "grid.color": "0.85",
+            "grid.linewidth": 0.5,
+            "grid.linestyle": "-",
+
+            # Lines
+            "lines.linewidth": 1.2,
+            "lines.markersize": 4,
+
+            # Legend
+            "legend.frameon": False,
+            "legend.fontsize": 10,
+
+            # Figure
+            "figure.figsize": (4.5, 3.0),  # typical LaTeX column width
+            "figure.dpi": 150,
+
+            # Savefig
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.02,
+
+            # Minor ticks ON (important for pgfplots feel)
+            "xtick.minor.visible": True,
+            "ytick.minor.visible": True,
+        })
+    except Exception as e:
+        print("matplotlib initialization failed : %s"%(e))
+

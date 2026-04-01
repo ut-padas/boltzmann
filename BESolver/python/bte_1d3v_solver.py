@@ -127,8 +127,11 @@ class params():
         self.vts_type      = tp["vspace_ts_type"]
 
         self.restore       = tp["restore"]
-        self.rs_idx        = tp["rs_idx"] 
-        self.xgrid_type    = "uniform"#"chebyshev-collocation"
+        self.rs_idx        = tp["rs_idx"]
+        
+        self.ic_file       = tp["ic_file"]
+        self.xgrid_type    = "chebyshev-collocation"
+        
         self.dim           = 1
         self.ee_collisions = 0
         self.verbose       = tp["verbose"]
@@ -1194,8 +1197,20 @@ class bte_1d3v():
             
         elif (self.params.vspace_type == vspace_discretization.FVM):
             if (type == 0):
-                ne  = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
-                Te  = xp.ones_like(ne) * self.params.Te
+
+                if self.params.ic_file == "":
+                    ne  = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
+                    Te  = xp.ones_like(ne) * self.params.Te
+                else:
+                    print("reading IC file : %s"%self.params.ic_file)
+                    import h5py
+                    import scipy.interpolate
+                    ff   = h5py.File("%s"%(self.params.ic_file), 'r')
+                    xg   = np.array(ff["x[-1,1]"][()])
+                    ne   = xp.array(scipy.interpolate.interp1d(xg, np.array(ff["avg_ne[m^-3]"][()])/self.params.np0, kind="linear")(self.asnumpy(self.xp)))
+                    Te   = xp.array(scipy.interpolate.interp1d(xg, np.array(ff["avg_Te[eV]"][()]), kind="linear")(self.asnumpy(self.xp)))
+
+
                 Nr  = self.dof_vr
                 Nvt = self.dof_vt
                 Nx  = self.params.Np

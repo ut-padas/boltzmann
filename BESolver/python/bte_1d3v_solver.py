@@ -32,6 +32,7 @@ try:
     import cupy as cp
     import cupyx.scipy.sparse.linalg
     import cupyx.scipy.interpolate
+    import nvtx
 except:
     print("Cupy module not found !")
     #raise ModuleNotFoundError
@@ -199,6 +200,14 @@ class params():
 class bte_1d3v():
 
     def __init__(self, args):
+
+        self._nvtx = False
+        if "BOLTZSIM_NVTX_ENABLE" in os.environ:
+            if os.environ["BOLTZSIM_NVTX_ENABLE"] == "1":
+                print("Enabling NVTX selective profiling")
+                self._nvtx = True
+
+
         self.is_op_split_init = False
         self.params           = params(args.par_file)
 
@@ -1577,8 +1586,11 @@ class bte_1d3v():
             norm_b                = xp.linalg.norm(brhs)
 
             ### --------------------------------------------------------------------------------------------
-
             def rhs_mvec(x):
+                
+                if(self._nvtx):
+                    nvtx.push_range("rhs_mvec")
+
                 x      = x.reshape((dof_v, Nx))
                 
                 # v-space advection and collisions
@@ -1610,8 +1622,13 @@ class bte_1d3v():
 
                 yx                   = yx.reshape((dof_v, Nx))
                 y                    = yx -yv
+
+                if(self._nvtx):
+                    nvtx.pop_range()
+
                 return y.reshape((-1))
             
+
 
             if (self.params.pc_type == pc_type.CXVTVR or self.params.pc_type == pc_type.XCVTVR or self.params.pc_type == pc_type.XVTVRC):
                 # dh  = min(np.min(self.xp_vr[1:]-self.xp_vr[0:-1]), np.min(-(self.xp_vt[1:]-self.xp_vt[0:-1])))
@@ -1667,8 +1684,15 @@ class bte_1d3v():
 
         elif(self.params.solver_type == pc_type.CXVTVR or self.params.solver_type == pc_type.XCVTVR or self.params.solver_type == pc_type.XVTVRC):
             self.step_op_split_init(E, time, dt, verbose)
+            
+            if(self._nvtx):
+                nvtx.push_range("step_op_split")
+
             v = self.step_op_split(E, v, None, time, dt, self.params.solver_type, verbose)
             
+            if(self._nvtx):
+                nvtx.pop_range()
+
         elif(self.params.solver_type == solver_type.SEMILAGRANGIAN_IMPLICIT):
             assert self.params.vspace_type == vspace_discretization.FVM, "Semi-Lagrangian implicit solver is only implemented for FVM v-space discretization"
             v_sl        = self.step_adv_vx_sl(E, v, time, dt, verbose)

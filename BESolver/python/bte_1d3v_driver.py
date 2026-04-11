@@ -5,6 +5,7 @@ import enum
 import sys
 import matplotlib.pyplot as plt
 import utils as bte_utils
+from time import perf_counter, sleep
 import matplotlib as mpl
 bte_utils.use_pgfplots_style(mpl)
 
@@ -81,6 +82,9 @@ if __name__ == "__main__":
     
     if args.benchmark == 1:
         ## benchmark the fully-implicit solver
+        """
+        GMRES pre-conditioner with different op. split orderings
+        """
 
         _rtol   = params.rtol
         _dt     = params.dt
@@ -215,6 +219,9 @@ if __name__ == "__main__":
         plt.savefig("%s_gmres_benchmark.png"%(params.fname))
         sys.exit(0)
     elif args.benchmark==2:
+        """
+        fully-implicit scheme GMRES iteration test
+        """
         _dt  = bte.params.dt
         Emax = bte.params.tau * bte.params.qe * 4e4 / bte.params.me/ bte.bs_vth
         dtx  = np.min(bte.xp[1:] - bte.xp[0:-1]) / (bte.op_spec_sp._basis_p._kdomain[1] * bte.bs_vth  * bte.params.tau/bte.params.L)
@@ -234,7 +241,7 @@ if __name__ == "__main__":
 
         dt_info      = np.array([2e-3, 5e-3])
         rtol_info    = np.array([1e-12])
-        relax_params = [(1/2**i, 1/2**i, 1/2**i, 1) for i in range(4)]
+        relax_params = [(1/2**i, 1/2**i, 1/2**i, 1) for i in range(6)]
         
 
         ndt        = dt_info.shape[0]
@@ -312,12 +319,17 @@ if __name__ == "__main__":
             plt.ylabel(r"Residual")
             plt.title(r"$\frac{\Delta t}{\tau}$ = %.2E"%(dt_info[i]))
             plt.grid(visible=True, which='both', axis='both', linestyle='--', linewidth=0.25)
-            plt.legend(fontsize=8)
+            
+            if (i==0):
+                plt.legend(fontsize=8)
             
         plt.tight_layout()
         plt.savefig("%s_gmres_benchmark_rp_pcl%d.png"%(params.fname, pc_left))
         sys.exit(0)
     elif args.benchmark==3:
+        """
+        convergence test in time
+        """
         _dt  = bte.params.dt
         Emax = bte.params.tau * bte.params.qe * 4e4 / bte.params.me/ bte.bs_vth
         dtx  = np.min(bte.xp[1:] - bte.xp[0:-1]) / (bte.op_spec_sp._basis_p._kdomain[1] * bte.bs_vth  * bte.params.tau/bte.params.L)
@@ -447,8 +459,69 @@ if __name__ == "__main__":
         
         # plt.xlabel(r"$\hat{x}$")
         # plt.ylabel(r"")
+    elif args.benchmark==4:
+        """
+        Use this mode for CUDA roofline profiling
+        """
+        _dt  = bte.params.dt
+        Emax = bte.params.tau * bte.params.qe * 4e4 / bte.params.me/ bte.bs_vth
+        dx          = np.min(bte.xp[1:] - bte.xp[0:-1])
+        dvr         = np.min(bte.xp_vr[1:] - bte.xp_vr[0:-1])
+        dvt         = np.min((-bte.xp_vt[1:] + bte.xp_vt[0:-1]))
 
-    
+        dtx  = np.min(bte.xp[1:] - bte.xp[0:-1]) / (bte.op_spec_sp._basis_p._kdomain[1] * bte.bs_vth  * bte.params.tau/bte.params.L)
+        dtvr = np.min(bte.xp_vr[1:] - bte.xp_vr[0:-1]) / Emax
+        dtvt = np.min(bte.xp_vt[0:-1]- bte.xp_vt[1:]) * np.min(bte.xp_vr) / Emax
+        dtex = min(dtx, min(dtvr, dtvt))
+
+        if bte.params.solver_type == bte_1d3v_solver.solver_type.FULLY_IMPLICIT:
+            r_ax        = 1/(1 + (bte.bs_vth * bte.params.tau/bte.params.L) *(bte.op_spec_sp._basis_p._kdomain[1] * dt) / dx )
+            r_vr        = r_ax #1/(1 + Emax * dt/dvr)
+            r_vt        = r_ax #1/(1 + Emax * dt/dvt/bte.xp_vr[0])
+        else:
+            r_ax        = 1.0
+            r_vr        = 1.0
+            r_vt        = 1.0
+        
+        bte.init(dt,1, r_ax)
+        bte.params.pc_type = bte_1d3v_solver.pc_type.XVTVRC
+        u      = xp.copy(v)
+        ts_idx = 0
+        u      = bte.step(Ext(0.25 + ts_idx * dt), u, None, ts_idx * dt, dt, (ts_idx % 100 == 0))
+        sys.exit(0)
+    elif args.benchmark==5:
+        steps       = 3
+        dx          = np.min(bte.xp[1:] - bte.xp[0:-1])
+        dvr         = np.min(bte.xp_vr[1:] - bte.xp_vr[0:-1])
+        dvt         = np.min((-bte.xp_vt[1:] + bte.xp_vt[0:-1]))
+        if bte.params.solver_type == bte_1d3v_solver.solver_type.FULLY_IMPLICIT:
+            r_ax        = 1/(1 + (bte.bs_vth * bte.params.tau/bte.params.L) *(bte.op_spec_sp._basis_p._kdomain[1] * dt) / dx )
+            r_vr        = r_ax #1/(1 + Emax * dt/dvr)
+            r_vt        = r_ax #1/(1 + Emax * dt/dvt/bte.xp_vr[0])
+        else:
+            r_ax        = 1.0
+            r_vr        = 1.0
+            r_vt        = 1.0
+
+        dt  = bte.params.dt
+        bte.init(dt, 1, r_ax)
+        
+        rt  = list()
+        for ts_idx in range(0, steps):
+            tt = ts_idx * dt
+            t1 = perf_counter()
+            v  = bte.step(Ext(tt), v, None, tt, dt, (ts_idx % 1 == 0),r_vr, r_vt, pc_left = False)
+            t2 = perf_counter()
+            if ts_idx ==0:
+                # discard the first run
+                continue
+            rt.append(t2-t1)
+        
+        rt = np.array(rt)
+        print(bte.params , "\n")
+        print(bte.params.Nr*bte.params.spline_qpts, " & ", bte.params.Nvt, " & ", bte.params.Np, " & ", "%.2E"%bte.params.dt, " & ", "%.3E"%np.mean(rt))
+        sys.exit(0)
+
     dt    = params.dt
     steps = int(params.T / params.dt)+1
 

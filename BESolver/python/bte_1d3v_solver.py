@@ -26,7 +26,7 @@ import h5py
 import scipy.optimize
 import rawkernel as cp_rk
 import cusparse_spsolve
-
+import profile_t
 PROFILE_SOLVERS=1
 
 try:
@@ -64,6 +64,15 @@ class pc_type():
     XVTVRC            = 3
     NONE              = 4
 
+class p_stage():
+    step    = 0
+    coll    = 1
+    adv_vr  = 2
+    adv_vt  = 3
+    adv_x   = 4
+    last    = 5
+    names   = ["step", "collision", "adv_vr", "adv_vt", "adv_x"]
+    
     
 class params():
     def __init__(self, par_file):
@@ -208,6 +217,8 @@ class bte_1d3v():
             if os.environ["BOLTZSIM_NVTX_ENABLE"] == "1":
                 print("Enabling NVTX selective profiling")
                 self._nvtx = True
+
+        self.p_counters = [profile_t.profile_t(p_stage.names[i]) for i in range(p_stage.last)]
 
         self.sp_fmt= "csr"
         self.is_op_split_init = False
@@ -640,7 +651,20 @@ class bte_1d3v():
         #     xp.save("%s_bte_cmat.npy"   %(self.params.fname), self.op_col_en + self.params.Tg * self.op_col_gT)
         #     xp.save("%s_bte_emat.npy"   %(self.params.fname), self.op_adv_v)
         #     xp.save("%s_bte_xmat.npy"   %(self.params.fname), self.op_adv_x)
+
+    def reset_p_counters(self):
         
+        for p in self.p_counters:
+            p.reset()
+        return
+
+    def dump_p_counters(self, f):
+        h = "\t".join([p.name for p in self.p_counters])
+        s = "\t".join(["%.4E"%(p.seconds/p.iter) for p in self.p_counters])
+        print(h,file=f)
+        print(s,file=f)
+        return 
+
     def ords_to_sph(self, x):
         num_p   = self.dof_vr
         num_sh  = len(self.op_spec_sp._sph_harm_lm)
@@ -1720,6 +1744,11 @@ class bte_1d3v():
         # idx_lr_vt   = self.idx_lr_vt
         # idx_rl_vt   = self.idx_rl_vt
 
+        if(self._nvtx):
+            cp.cuda.runtime.deviceSynchronize()
+            self.p_counters[p_stage.step].start()
+
+
         xp          = self.xp_module
         dof_v       = self.dof_v
         Nx          = self.dof_x
@@ -1749,6 +1778,11 @@ class bte_1d3v():
             raise NotImplementedError
         
         elif(type == pc_type.XVTVRC):
+
+            if(self._nvtx):
+                cp.cuda.runtime.deviceSynchronize()
+                self.p_counters[p_stage.coll].start()
+
             # collisions
             #yc                   = (self.PmatC @ v.reshape(dof_v, Nx))
             if(self.PmatC is not None):
@@ -1758,6 +1792,12 @@ class bte_1d3v():
                 # yc1                  = (self.PmatC @ v.reshape(dof_v, Nx))
                 # print("|yc -yc1|=%.8E"%(xp.linalg.norm(yc-yc1)/xp.linalg.norm(yc1)))
             
+            if(self._nvtx):
+                cp.cuda.runtime.deviceSynchronize()
+                self.p_counters[p_stage.coll].stop()
+                self.p_counters[p_stage.adv_vr].start()
+
+
             # y                   = xp.swapaxes(yc.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
             # yvr                 = xp.zeros_like(y)
 
@@ -1770,6 +1810,12 @@ class bte_1d3v():
             cp_rk.adv_vr_BE(self.vr_diag_l2r, self.vr_diag_r2l, aE, self.xp_cos_vt_d, alpha * dt, yc, yvr, pvr+1, Nr, Nvt, Nx)
             yvr                   = yvr.reshape((Nx, Nvt, Nr))
             
+
+            if(self._nvtx):
+                cp.cuda.runtime.deviceSynchronize()
+                self.p_counters[p_stage.adv_vr].stop()
+                self.p_counters[p_stage.adv_vt].start()
+
             # # vt-adv
             # yvr                 = xp.swapaxes(yvr, 1, 2) # (Nx, Nr, Nvt)
             # yvt                 = xp.zeros_like(yvr)
@@ -1782,6 +1828,11 @@ class bte_1d3v():
             cp_rk.adv_vt_BE(self.vt_diag_l2r, self.vt_diag_r2l, aE, self.xp_vr_d, alpha * dt, yvr, yvt, pvt+1, Nr, Nvt, Nx)
             yvt                 = yvt.reshape((Nx, Nr, Nvt))
             
+            if(self._nvtx):
+                cp.cuda.runtime.deviceSynchronize()
+                self.p_counters[p_stage.adv_vt].stop()
+                self.p_counters[p_stage.adv_x].start()
+
             # x-adv
             yvt                         = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
             yvt[:, self.idx_np_vt, 0]   = 0.0
@@ -1797,6 +1848,12 @@ class bte_1d3v():
             
             cp_rk.adv_x_BE(self.x_diag_l2r, self.x_diag_r2l, ax * self.xp_vr_d, self.xp_cos_vt_d, alpha * dt, yvt, yx, px+1, Nr, Nvt, Nx)
             yx                          = yx.reshape((Nr*Nvt, Nx))
+
+            if(self._nvtx):
+                cp.cuda.runtime.deviceSynchronize()
+                self.p_counters[p_stage.adv_x].stop()
+                self.p_counters[p_stage.step].stop()
+
             return yx
         
         else:

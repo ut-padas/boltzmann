@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import utils as bte_utils
 from time import perf_counter, sleep
 import matplotlib as mpl
+from datetime import datetime
 bte_utils.use_pgfplots_style(mpl)
 
 try:
@@ -490,7 +491,8 @@ if __name__ == "__main__":
         u      = bte.step(Ext(0.25 + ts_idx * dt), u, None, ts_idx * dt, dt, (ts_idx % 100 == 0))
         sys.exit(0)
     elif args.benchmark==5:
-        steps       = 3
+        warmup      = 3
+        steps       = 10 + warmup
         dx          = np.min(bte.xp[1:] - bte.xp[0:-1])
         dvr         = np.min(bte.xp_vr[1:] - bte.xp_vr[0:-1])
         dvt         = np.min((-bte.xp_vt[1:] + bte.xp_vt[0:-1]))
@@ -512,14 +514,19 @@ if __name__ == "__main__":
             t1 = perf_counter()
             v  = bte.step(Ext(tt), v, None, tt, dt, (ts_idx % 1 == 0),r_vr, r_vt, pc_left = False)
             t2 = perf_counter()
-            if ts_idx ==0:
+            if ts_idx <warmup:
                 # discard the first run
+                bte.reset_p_counters()
                 continue
             rt.append(t2-t1)
         
         rt = np.array(rt)
-        print(bte.params , "\n")
-        print(bte.params.Nr*bte.params.spline_qpts, " & ", bte.params.Nvt, " & ", bte.params.Np, " & ", "%.2E"%bte.params.dt, " & ", "%.3E"%np.mean(rt))
+        #print(bte.params.Nr*bte.params.spline_qpts, " & ", bte.params.Nvt, " & ", bte.params.Np, " & ", "%.2E"%bte.params.dt, " & ", "%.3E"%np.mean(rt))
+        with open("bte1d2v_profile.txt", "a") as f:
+            print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", file=f)
+            print(bte.params , "\n", file=f)
+            bte.dump_p_counters(f)
+            print("\n", file=f)
         sys.exit(0)
 
     dt    = params.dt

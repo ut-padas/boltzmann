@@ -1392,29 +1392,58 @@ class CollisionOpSP():
         dcs         = (1/(4 * xp.pi)) * vr**1     * vth * xp.asarray(g.total_cross_section(asnumpy((vr * vth / c_gamma)**2)))
         dcs_pre     = (1/(4 * xp.pi)) * vr_pre**1 * vth * xp.asarray(g.total_cross_section(asnumpy((vr_pre * vth / c_gamma)**2)))
 
-        
-        cminus      = 4 * xp.pi * xp.kron(xp.diag(dcs), xp.eye(num_vt))
-        Lvr         = lin_ip(vr, xp.eye(num_vr), kind="linear", axis=0, bounds_error=False, fill_value=0.0)(vr_pre)
-        bidx        = xp.arange(num_vr)[xp.logical_and(vr_pre>vr[-1], vr_pre<=rmax)]
+        # computing the f0 - isotropic mode
+        f0_op       = xp.repeat(vt_qw * np.pi* 2, repeats=num_vt, axis=0).reshape((num_vt, num_vt)).T
+        assert (xp.abs(xp.sum(f0_op, axis=1) - 4 * xp.pi) < 1e-12).all() == True
+
+        if (xp == cp):
+            sp    = cupyx.scipy.sparse
+            splg  = cupyx.scipy.sparse.linalg 
+            spfmt = "csr"
+        else:
+            sp    = scipy.sparse
+            splg  = scipy.sparse.linalg
+            spfmt = "csr"
+
+        cminus   = 4 * xp.pi * sp.kron(sp.csr_matrix(xp.diag(dcs)), sp.identity(num_vt, format=spfmt, dtype='d'), format=spfmt)
+        Lvr      = lin_ip(vr, xp.eye(num_vr), kind="linear", axis=0, bounds_error=False, fill_value=0.0)(vr_pre)
+        bidx     = xp.arange(num_vr)[xp.logical_and(vr_pre>vr[-1], vr_pre<=rmax)]
         
         if len(bidx)>0:
             assert (Lvr[bidx,:]==0).all()==True
             Lvr[bidx, -1] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
         
-        #print(bidx, num_vr)
-        #print(Lvr)
-        #print(vr)
-        #print(vpre(vr))
-        #np.savetxt("Lvr.txt", Lvr)
-        # if(g._type == collisions.CollisionType.EAR_G0):
-        #     bidx = [vr_pre>vr[-1]]
+        Lvr      = sp.csr_matrix(Lvr)
+        cplus    = sp.kron((sp.csr_matrix(xp.diag(dcs_pre * detJ)) @ Lvr), f0_op, format=spfmt)
+        cmat     = (cplus - cminus)
+        return  cmat.get() if (xp == cp)  else cmat 
+
+
+        
+        # cmat     = (cplus - cminus).toarray()
+        # cminus      = 4 * xp.pi * xp.kron(xp.diag(dcs), xp.eye(num_vt))
+        # Lvr         = lin_ip(vr, xp.eye(num_vr), kind="linear", axis=0, bounds_error=False, fill_value=0.0)(vr_pre)
+        # bidx        = xp.arange(num_vr)[xp.logical_and(vr_pre>vr[-1], vr_pre<=rmax)]
+        
+        # if len(bidx)>0:
         #     assert (Lvr[bidx,:]==0).all()==True
-        #     Lvr[bidx, bidx] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
-            
-        f0_op       = xp.repeat(vt_qw * np.pi* 2, repeats=num_vt, axis=0).reshape((num_vt, num_vt)).T
-        assert (xp.abs(xp.sum(f0_op, axis=1) - 4 * xp.pi) < 1e-12).all() == True
-        cplus       = xp.kron(xp.diag(dcs_pre * detJ) @ Lvr, f0_op) 
-        return asnumpy(cplus - cminus)
+        #     Lvr[bidx, -1] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
+        
+        # #print(bidx, num_vr)
+        # #print(Lvr)
+        # #print(vr)
+        # #print(vpre(vr))
+        # #np.savetxt("Lvr.txt", Lvr)
+        # # if(g._type == collisions.CollisionType.EAR_G0):
+        # #     bidx = [vr_pre>vr[-1]]
+        # #     assert (Lvr[bidx,:]==0).all()==True
+        # #     Lvr[bidx, bidx] = (rmax - vr_pre[bidx])/(rmax-vr[-1])
+        # cplus       = xp.kron(xp.diag(dcs_pre * detJ) @ Lvr, f0_op) 
+        # cmat1       = asnumpy(cplus - cminus)
+        # print(cmat1 - cmat)
+        # print(xp.linalg.norm(cmat1-cmat)/xp.linalg.norm(cmat1))
+
+        # return asnumpy(cplus - cminus)
         
 
 

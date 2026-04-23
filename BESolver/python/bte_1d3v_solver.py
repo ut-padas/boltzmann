@@ -10,14 +10,14 @@ import basis
 import collisions
 import utils as bte_utils
 import basis
-import spec_spherical as sp
+import spec_spherical
 import collision_operator_spherical as collOpSp
 import scipy.constants
 import os
-import scipy.sparse.linalg
+import scipy.sparse as sp
+import scipy.sparse.linalg as sp_lg
 import cross_section
 from time import perf_counter, sleep
-import spec_spherical
 import numpy as np
 import mesh
 import toml
@@ -25,13 +25,15 @@ import argparse
 import h5py
 import scipy.optimize
 import rawkernel as cp_rk
+import cusparse_spsolve
 
 PROFILE_SOLVERS=1
 
 try:
     import cupy as cp
-    import cupyx.scipy.sparse.linalg
+    import cupyx.scipy.sparse.linalg as cusp_lg
     import cupyx.scipy.interpolate
+    import cupyx.scipy.sparse as cusp
     import nvtx
 except:
     print("Cupy module not found !")
@@ -207,7 +209,7 @@ class bte_1d3v():
                 print("Enabling NVTX selective profiling")
                 self._nvtx = True
 
-
+        self.sp_fmt= "csr"
         self.is_op_split_init = False
         self.params           = params(args.par_file)
 
@@ -224,16 +226,27 @@ class bte_1d3v():
         self.c_gamma       = np.sqrt(2 * (self.qe/ self.me))
         Nvt                = self.params.Nvt
         
-        if (self.params.xgrid_type == "chebyshev-collocation"):
-            self.mesh          = mesh.mesh([self.params.Np], self.params.dim, mesh.grid_type.CHEBYSHEV_COLLOC)
-        elif(self.params.xgrid_type == "uniform"):
-            self.mesh          = mesh.mesh([self.params.Np], self.params.dim, mesh.grid_type.REGULAR_GRID)
-        else:
-            raise NotImplementedError
         
-        self.xp            = self.mesh.xcoord[0]
-        self.Dp            = self.mesh.D1[0]
-        self.DpT           = self.mesh.D1[0].T
+        if (self.params.xspace_type == xspace_discretization.BE_CHEB):
+            # spectral discretization in space -- DO NOT USE THIS !!!!
+            if (self.params.xgrid_type == "chebyshev-collocation"):
+                self.mesh          = mesh.mesh([self.params.Np], self.params.dim, mesh.grid_type.CHEBYSHEV_COLLOC)
+            elif(self.params.xgrid_type == "uniform"):
+                self.mesh          = mesh.mesh([self.params.Np], self.params.dim, mesh.grid_type.REGULAR_GRID)
+            else:
+                raise NotImplementedError
+            
+            self.xp            = self.mesh.xcoord[0]
+            self.Dp            = self.mesh.D1[0]
+            self.DpT           = self.mesh.D1[0].T
+
+        else:
+            self.xp            = -np.cos(np.pi*np.linspace(0,(self.params.Np-1), self.params.Np)/(self.params.Np-1))
+            self.Dp            = np.array([0])
+            self.DpT           = np.array([0])
+
+
+
         self.bs_Te         = self.params.Te 
         self.bs_nr         = self.params.Nr
         self.bs_lm         = [[l,0] for l in range(self.params.l_max+1)]
@@ -326,7 +339,7 @@ class bte_1d3v():
             print("using log spaced grid extention")
             bb                     = basis.BSpline(k_domain, self.params.sp_order, self.bs_nr + 1, sig_pts=dg_nodes, knots_vec=None, dg_splines=self.bs_use_dg, verbose = self.params.verbose, extend_domain_with_log=True)
         
-        spec_sp                = sp.SpectralExpansionSpherical(self.bs_nr, bb, self.bs_lm)
+        spec_sp                = spec_spherical.SpectralExpansionSpherical(self.bs_nr, bb, self.bs_lm)
         spec_sp._num_q_radial  = bb._num_knot_intervals * self.params.spline_qpts
         collision_op           = collOpSp.CollisionOpSP(spec_sp)
         self.op_spec_sp        = spec_sp
@@ -348,10 +361,9 @@ class bte_1d3v():
             self.dof_x         = self.params.Np
             self.dof_v         = dof_v
 
-        self.I_Nx              = np.eye(self.params.Np)
-        self.I_Nv              = np.eye(dof_v)
-        self.I_Nxv_stacked     = np.eye(dof_v)
-
+        self.I_Nx              = sp.identity(self.params.Np, dtype='d', format=self.sp_fmt)
+        self.I_Nv              = sp.identity(dof_v, dtype='d', format=self.sp_fmt)
+        
         num_p                  = spec_sp._p + 1
         num_sh                 = len(self.bs_lm)
         num_vt                 = self.params.Nvt
@@ -365,19 +377,19 @@ class bte_1d3v():
         self.xp_vt_l              = np.array([i * Nvt + j for i in range(self.params.Nr + 1) for j in list(np.where(self.xp_vt <= 0.5 * np.pi)[0])])
         self.xp_vt_r              = np.array([i * Nvt + j for i in range(self.params.Nr + 1) for j in list(np.where(self.xp_vt > 0.5 * np.pi)[0])])
 
-        mm_mat                    = spec_sp.compute_mass_matrix()
-        inv_mm_mat                = spec_sp.inverse_mass_mat(Mmat = mm_mat)
-        mm_mat                    = mm_mat[0::num_sh, 0::num_sh]
-        inv_mm_mat                = inv_mm_mat[0::num_sh, 0::num_sh]
-        
-        self.op_inv_mm            = inv_mm_mat
-        self.op_inv_mm_full       = np.kron(self.op_inv_mm, np.eye(num_vt))
-        
-        self.op_psh2o, self.op_po2sh = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "sph")
-        #self.op_po_hsph, self.op_ps_hsph = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "hsph")
-        
-
         if (self.params.vspace_type == vspace_discretization.FVM):
+
+            mm_mat                    = spec_sp.compute_mass_matrix()
+            inv_mm_mat                = spec_sp.inverse_mass_mat(Mmat = mm_mat)
+            mm_mat                    = mm_mat[0::num_sh, 0::num_sh]
+            inv_mm_mat                = inv_mm_mat[0::num_sh, 0::num_sh]
+            
+            self.op_inv_mm            = inv_mm_mat
+            self.op_inv_mm_full       = sp.kron(self.op_inv_mm, sp.identity(num_vt, format=self.sp_fmt), format=self.sp_fmt)
+            
+            self.op_psh2o, self.op_po2sh = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "sph")
+            #self.op_po_hsph, self.op_ps_hsph = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "hsph")
+
             self.xp_vr, self.xp_vr_qw   = spec_sp.gl_vr(self.params.spline_qpts, use_bspline_qgrid=True)
             num_vr                      = len(self.xp_vr)
             num_vt                      = len(self.xp_vt)
@@ -393,11 +405,11 @@ class bte_1d3v():
                                        "vr": np.asarray(self.xp_vr), "vr_qw": np.asarray(self.xp_vr_qw)}
         
 
-            self.Po, self.Ps            = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, mode="sph")
-            self.Pr, self.Pb            = spec_sp.radial_to_vr_projection_ops(self.xp_vr, self.xp_vr_qw)
+            # self.Po, self.Ps            = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, mode="sph")
+            # self.Pr, self.Pb            = spec_sp.radial_to_vr_projection_ops(self.xp_vr, self.xp_vr_qw)
 
-            self.PbPs                   = np.kron(self.Pb, self.Ps)
-            self.PrPo                   = np.kron(self.Pr, self.Po)
+            # self.PbPs                   = np.kron(self.Pb, self.Ps)
+            # self.PrPo                   = np.kron(self.Pr, self.Po)
 
             vth                         = self.bs_vth
             maxwellian                  = bte_utils.get_maxwellian_3d(vth, 1)
@@ -416,13 +428,17 @@ class bte_1d3v():
                 sigma_m  += g.total_cross_section(gx_ev)
                 FOp       = FOp + cmat
 
-            FOp_g         = np.zeros_like(FOp)
+            FOp_g         = scipy.sparse.csr_matrix((FOp.shape[0], FOp.shape[1])) #np.zeros_like(FOp)
             t2 = perf_counter()
             print("Assembled the collision op. for Vth : ", vth)
             print("Collision Operator assembly time (s): ",(t2-t1))
 
             t1 = perf_counter()
-            advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self.xp_vr, self.xp_vt, sw_vr=self.params.pvr+1, sw_vt=self.params.pvt+1, use_upwinding=True)
+            if (self.params.solver_type == solver_type.FULLY_IMPLICIT):
+                advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self.xp_vr, self.xp_vt, sw_vr=self.params.pvr+1, sw_vt=self.params.pvt+1, use_upwinding=True)
+                advmatEp, advmatEn       = advmatEp, advmatEn#sp.csr_matrix(advmatEp), sp.csr_matrix(advmatEn)
+            else:
+                advmatEp, advmatEn       = np.array([0]) , np.array([0])
             t2 = perf_counter()
             print("Advection Operator assembly time (s): ",(t2-t1))
 
@@ -438,6 +454,21 @@ class bte_1d3v():
             self.op_col_en            = FOp
             self.op_col_gT            = FOp_g
 
+
+            # plt.subplot(1, 2, 1)
+            # plt.spy(FOp.toarray())
+            # plt.subplot(1, 2, 2)
+            # plt.spy((self.I_Nv - self.params.dt * self.params.tau * self.params.n0 * self.params.np0 * FOp).toarray())
+            # plt.show()
+            # plt.close()
+
+            #np.save("p.npy", (self.I_Nv - self.params.dt * self.params.tau * self.params.n0 * self.params.np0 * FOp).toarray())
+            # sp.save_npz("q.npz", self.params.dt * self.params.tau * self.params.n0 * self.params.np0 * FOp)
+            # sp.save_npz("p.npz", self.I_Nv - self.params.dt * self.params.tau * self.params.n0 * self.params.np0 * FOp)
+            # sys.exit(0)
+            # print("nnz: %d outof %d "%(np.count_nonzero(FOp), FOp.shape[0] * FOp.shape[1]))
+
+
             ev_fac                    = 0.5 * scipy.constants.electron_mass * (2/3/scipy.constants.Boltzmann) / collisions.TEMP_K_1EV
             self.op_mass              = 2 * np.pi          * np.kron(self.xp_vr**2 * self.xp_vr_qw , self.xp_vt_qw)
             self.op_temp              = 2 * np.pi * vth**2 * np.kron(self.xp_vr**4 * self.xp_vr_qw , self.xp_vt_qw) * ev_fac
@@ -452,6 +483,18 @@ class bte_1d3v():
             self.op_diffusion = np.zeros_like(self.op_mass)
             
         elif(self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
+
+            mm_mat                    = spec_sp.compute_mass_matrix()
+            inv_mm_mat                = spec_sp.inverse_mass_mat(Mmat = mm_mat)
+            mm_mat                    = mm_mat[0::num_sh, 0::num_sh]
+            inv_mm_mat                = inv_mm_mat[0::num_sh, 0::num_sh]
+            
+            self.op_inv_mm            = inv_mm_mat
+            self.op_inv_mm_full       = np.kron(self.op_inv_mm, np.eye(num_vt))
+            
+            self.op_psh2o, self.op_po2sh = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "sph")
+            #self.op_po_hsph, self.op_ps_hsph = spec_sp.sph_ords_projections_ops(self.xp_vt, self.xp_vt_qw, "hsph")
+
             gx, gw                  = spec_sp._basis_p.Gauss_Pn(spec_sp._num_q_radial)
             sigma_m                 = np.zeros(len(gx))
             c_gamma                 = self.c_gamma
@@ -623,16 +666,16 @@ class bte_1d3v():
         
         with cp.cuda.Device(dev_id):
             self.xp_cos_vt      = cp.asarray(self.xp_cos_vt)
-            self.I_Nx           = cp.asarray(self.I_Nx)
-            self.I_Nv           = cp.asarray(self.I_Nv)
+            self.I_Nx           = cusp.csr_matrix(self.I_Nx) if sp.issparse(self.I_Nx) else cp.asarray(self.I_Nx)
+            self.I_Nv           = cusp.csr_matrix(self.I_Nv) if sp.issparse(self.I_Nv) else cp.asarray(self.I_Nv)
             
             self.Dp             = cp.asarray(self.Dp)
             self.DpT            = cp.asarray(self.DpT)
             self.op_adv_v       = cp.asarray(self.op_adv_v)
 
             if (self.params.vspace_type == vspace_discretization.FVM):
-                self.op_adv_v_Ep = cp.asarray(self.op_adv_v_Ep)
-                self.op_adv_v_En = cp.asarray(self.op_adv_v_En)
+                self.op_adv_v_Ep = cusp.csr_matrix(self.op_adv_v_Ep) if sp.issparse(self.op_adv_v_Ep) else cp.asarray(self.op_adv_v_Ep)
+                self.op_adv_v_En = cusp.csr_matrix(self.op_adv_v_En) if sp.issparse(self.op_adv_v_En) else cp.asarray(self.op_adv_v_En)
 
                 self.grid_info      = {"x" : cp.asarray(self.xp), "x_qw": cp.asarray(basis.trapz_w(self.xp)),
                                        "vt": cp.asarray(self.xp_vt), "vt_qw": cp.asarray(self.xp_vt_qw),
@@ -646,8 +689,8 @@ class bte_1d3v():
             
             self.op_psh2o       = cp.asarray(self.op_psh2o)
             self.op_po2sh       = cp.asarray(self.op_po2sh)
-            self.op_col_en      = cp.asarray(self.op_col_en)
-            self.op_col_gT      = cp.asarray(self.op_col_gT)
+            self.op_col_en      = cusp.csr_matrix(self.op_col_en) if sp.issparse(self.op_col_en) else cp.asarray(self.op_col_en)
+            self.op_col_gT      = cusp.csr_matrix(self.op_col_gT) if sp.issparse(self.op_col_gT) else cp.asarray(self.op_col_gT)
             
             self.op_mass        = cp.asarray(self.op_mass)
             self.op_temp        = cp.asarray(self.op_temp)
@@ -664,47 +707,50 @@ class bte_1d3v():
             return
       
         with cp.cuda.Device(dev_id):
-            self.xp_cos_vt      = cp.asnumpy(self.xp_cos_vt)
-            self.I_Nx           = cp.asnumpy(self.I_Nx)
-            self.I_Nv           = cp.asnumpy(self.I_Nv)
+            self.xp_cos_vt      = self.asnumpy(self.xp_cos_vt)
+            self.I_Nx           = self.asnumpy(self.I_Nx)
+            self.I_Nv           = self.asnumpy(self.I_Nv)
             
-            self.Dp             = cp.asnumpy(self.Dp)
-            self.DpT            = cp.asnumpy(self.DpT)
+            self.Dp             = self.asnumpy(self.Dp)
+            self.DpT            = self.asnumpy(self.DpT)
             
-            self.op_adv_v       = cp.asnumpy(self.op_adv_v)
+            self.op_adv_v       = self.asnumpy(self.op_adv_v)
 
             if (self.params.vspace_type == vspace_discretization.FVM):
-                self.op_adv_v_Ep = cp.asnumpy(self.op_adv_v_Ep)
-                self.op_adv_v_En = cp.asnumpy(self.op_adv_v_En)
+                self.op_adv_v_Ep = self.asnumpy(self.op_adv_v_Ep)
+                self.op_adv_v_En = self.asnumpy(self.op_adv_v_En)
             
-            self.op_adv_x       = cp.asnumpy(self.op_adv_x)
-            self.op_adv_x_d     = cp.asnumpy(self.op_adv_x_d)
-            self.op_adv_x_q     = cp.asnumpy(self.op_adv_x_q)
-            self.op_adv_x_qinv  = cp.asnumpy(self.op_adv_x_qinv)
+            self.op_adv_x       = self.asnumpy(self.op_adv_x)
+            self.op_adv_x_d     = self.asnumpy(self.op_adv_x_d)
+            self.op_adv_x_q     = self.asnumpy(self.op_adv_x_q)
+            self.op_adv_x_qinv  = self.asnumpy(self.op_adv_x_qinv)
             
-            self.op_psh2o       = cp.asnumpy(self.op_psh2o)
-            self.op_po2sh       = cp.asnumpy(self.op_po2sh)
-            self.op_col_en      = cp.asnumpy(self.op_col_en)
-            self.op_col_gT      = cp.asnumpy(self.op_col_gT)
+            self.op_psh2o       = self.asnumpy(self.op_psh2o)
+            self.op_po2sh       = self.asnumpy(self.op_po2sh)
+            self.op_col_en      = self.asnumpy(self.op_col_en)
+            self.op_col_gT      = self.asnumpy(self.op_col_gT)
             
             if self.params.ee_collisions==1:
-                self.op_col_ee   = cp.asnumpy(self.op_col_ee)
+                self.op_col_ee   = self.asnumpy(self.op_col_ee)
             
-            self.op_mass        = cp.asnumpy(self.op_mass)
-            self.op_temp        = cp.asnumpy(self.op_temp)
+            self.op_mass        = self.asnumpy(self.op_mass)
+            self.op_temp        = self.asnumpy(self.op_temp)
             #self.op_vz_ords     = cp.asnumpy(self.op_vz_ords)
             
-            self.op_rate        = [cp.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
-            self.op_mobility    = cp.asnumpy(self.op_mobility)
-            self.op_diffusion   = cp.asnumpy(self.op_diffusion)
+            self.op_rate        = [self.asnumpy(self.op_rate[i]) for i in range(len(self.op_rate))]
+            self.op_mobility    = self.asnumpy(self.op_mobility)
+            self.op_diffusion   = self.asnumpy(self.op_diffusion)
             
         return  
     
     def __initialize_bte_adv_x__(self, dt):
-        
         """initialize spatial advection operator"""
         xp                = self.xp_module
         self.adv_setup_dt = dt 
+
+        if (self.params.solver_type != solver_type.FULLY_IMPLICIT):
+            return
+        ## below code is depreciated. 
         #assert xp == np
         
         Nr  = self.dof_vr
@@ -736,7 +782,8 @@ class bte_1d3v():
                     DpL[i,      0:(i+1)] = xp.array(mesh.fd_coefficients(self.xp[0:(i+1)], 1)[-1])
                     DpR[-(i+1), -(i+1):] = xp.array(mesh.fd_coefficients(self.xp[-(i+1):], 1)[0 ])
                 
-
+            # print("DpL\n", DpL)
+            # print("DpR\n", DpR)
         
         else:
             raise NotImplementedError
@@ -1263,15 +1310,55 @@ class bte_1d3v():
             self.PmatC    = xp.linalg.inv(Iv - gmres_pc_cv * dt * vmat)
         elif (self.params.vspace_type == vspace_discretization.FVM):
             vmat          = self.params.tau * self.params.n0 * self.params.np0 * (self.op_col_en + self.params.Tg * self.op_col_gT)
-            Iv            = xp.eye(self.op_adv_v.shape[0])
-            self.PmatE    = xp.zeros((num_pc_evals, self.dof_v, self.dof_v))
-            self.PmatC    = xp.linalg.inv(Iv - gmres_pc_cv * dt * vmat)
+            Iv            = self.I_Nv #xp.eye(self.op_adv_v.shape[0])
 
-            for i in range(num_pc_evals):
-                if self.Evals[i] >=0:
-                    self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v_Ep - dt * self.params.tau * vmat)
-                else:
-                    self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v_En - dt * self.params.tau * vmat)
+            #self.PmatC    = xp.linalg.inv(Iv - gmres_pc_cv * dt * vmat)
+            if (xp == cp):
+                xsp    = cusp
+                xsp_lg = cusp_lg
+            else:
+                xsp    = sp
+                xsp_lg = sp_lg
+            
+            Nvt  = self.dof_vt
+            Nr   = self.dof_vr
+            ImC  = xsp.csr_matrix(Iv - gmres_pc_cv * dt * vmat)
+            Dinv = xp.linalg.inv(xp.array([ImC[i * Nvt: (i+1) * Nvt, i * Nvt: (i+1) * Nvt].toarray() for i in range(Nr)]))
+            
+            Lsp  = xsp.csr_matrix((Nr*Nvt, Nr * Nvt), dtype=xp.float64)
+            for i in range(Nr):
+                Lsp[i * Nvt : (i+1)* Nvt, i * Nvt : (i+1)* Nvt] = Dinv[i]
+
+            Lsp  = Lsp.tocsr()
+            Mu   = xsp.triu(Lsp @ ImC).tocsr()
+
+            # b     = Lsp @ Iv
+            # bsz   = 5000
+            # p     = max(1, (Nr * Nvt) // bsz)
+
+            # PmatC = list()
+            # for i in range(0, p):
+            #     print("coll op sp tri solve batch id %d/%d"%(i, p))
+            #     PmatC.append(xsp.csr_matrix(xsp_lg.spsolve_triangular(Mu, b[:, ((i * Nr * Nvt) // p):(((i+1) * Nr *Nvt) // p)].toarray(), lower=False)))
+            
+            # PmatC = xsp.hstack(PmatC) 
+            self.PmatC      = None #xp.linalg.inv(ImC.toarray())
+            if (self.dof_v <= 960 * 64):
+                print("==== using direct collision solve======")
+                self.PmatC      = xp.linalg.inv(ImC.toarray())
+
+            self.PmatC_triu = cusparse_spsolve.SpSMSolver(Mu, nrhs=self.dof_x, lower=False)
+            self.PmatC_Dinv = Dinv#Lsp
+
+            
+            if (self.params.pc_type == pc_type.XVX_SOLVE or self.params.solver_type == solver_type.XVX_STRANG_SPLIT):
+
+                self.PmatE    = xp.zeros((num_pc_evals, self.dof_v, self.dof_v))
+                for i in range(num_pc_evals):
+                    if self.Evals[i] >=0:
+                        self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v_Ep - dt * self.params.tau * vmat)
+                    else:
+                        self.PmatE[i] = xp.linalg.inv(Iv - dt * self.params.tau * self.Evals[i] * self.op_adv_v_En - dt * self.params.tau * vmat)
             
         print("v-space advection mat preconditioner gird : \n", self.Evals)
         # Cnorm = xp.linalg.norm(vmat)
@@ -1284,8 +1371,14 @@ class bte_1d3v():
         Dvt_LtoR             = xp.asarray(mesh.upwinded_dvt(self.xp_vt,1, self.params.pvt+1, "L", use_cdx_internal=False))
         Dvt_RtoL             = xp.asarray(mesh.upwinded_dvt(self.xp_vt,1, self.params.pvt+1, "R", use_cdx_internal=False))
 
-        Dvr_LtoR             = xp.asarray(mesh.upwinded_dx(self.xp_vr,1 , self.params.pvr+1, "L"))
-        Dvr_RtoL             = xp.asarray(mesh.upwinded_dx(self.xp_vr,1 , self.params.pvr+1, "R"))
+        Dvr_LtoR             = xp.asarray(mesh.upwinded_dx(self.xp_vr , 1 , self.params.pvr+1, "L"))
+        Dvr_RtoL             = xp.asarray(mesh.upwinded_dx(self.xp_vr , 1 , self.params.pvr+1, "R"))
+
+        Dx_LtoR              = xp.asarray(mesh.upwinded_dx(self.xp,     1 , self.params.px+1, "L"))
+        Dx_RtoL              = xp.asarray(mesh.upwinded_dx(self.xp,     1 , self.params.px+1, "R"))
+
+        # print("DxLR\n", Dx_LtoR)
+        # print("DxRL\n", Dx_RtoL)
 
         k_domain             = self.op_spec_sp._basis_p._kdomain
 
@@ -1298,16 +1391,84 @@ class bte_1d3v():
         Dvt_LtoR[0 , :]      = 0.0
         Dvt_RtoL[-1, :]      = 0.0
 
-        self.Dvt_LtoR        = Dvt_LtoR
-        self.Dvt_RtoL        = Dvt_RtoL
+        Dx_LtoR[0 , :]       = 0.0
+        Dx_RtoL[-1, :]       = 0.0
 
-        self.Dvr_LtoR        = Dvr_LtoR
-        self.Dvr_RtoL        = Dvr_RtoL
+        # self.Dvt_LtoR        = Dvt_LtoR
+        # self.Dvt_RtoL        = Dvt_RtoL
+
+        # self.Dvr_LtoR        = Dvr_LtoR
+        # self.Dvr_RtoL        = Dvr_RtoL
+
+        vr_diag_l2r = xp.zeros((self.params.pvr+1, self.dof_vr))
+        vr_diag_r2l = xp.zeros((self.params.pvr+1, self.dof_vr))
+
+        vt_diag_l2r = xp.zeros((self.params.pvt+1, self.dof_vt))
+        vt_diag_r2l = xp.zeros((self.params.pvt+1, self.dof_vt))
+
+        x_diag_l2r  = xp.zeros((self.params.px+1 , self.dof_x))
+        x_diag_r2l  = xp.zeros((self.params.px+1 , self.dof_x))
+
+        Nr  = self.dof_vr
+        Nvt = self.dof_vt
+        Nx  = self.dof_x 
+
+        Dvt_LtoR   = xp.diag(xp.sin(self.grid_info["vt"])) @ Dvt_LtoR
+        Dvt_RtoL   = xp.diag(xp.sin(self.grid_info["vt"])) @ Dvt_RtoL
+
+        for k in range(self.params.pvr+1):
+            vr_diag_l2r[k, 0:(Nr-k)] = xp.diagonal(Dvr_LtoR, offset=-k)
+            vr_diag_r2l[k, k:]       = xp.diagonal(Dvr_RtoL, offset=k)
+
+        for k in range(self.params.pvt+1):
+            vt_diag_l2r[k, 0:(Nvt-k)] = xp.diagonal(Dvt_LtoR, offset=-k)
+            vt_diag_r2l[k, k:]        = xp.diagonal(Dvt_RtoL, offset=k)
+
+        for k in range(self.params.px+1):
+            x_diag_l2r[k, 0:(Nx-k)]  = xp.diagonal(Dx_LtoR, offset=-k)
+            x_diag_r2l[k, k:]        = xp.diagonal(Dx_RtoL, offset=k)
+
+        self.vr_diag_l2r = vr_diag_l2r
+        self.vr_diag_r2l = vr_diag_r2l
+
+        self.vt_diag_l2r = vt_diag_l2r
+        self.vt_diag_r2l = vt_diag_r2l
+
+        self.x_diag_l2r  = x_diag_l2r
+        self.x_diag_r2l  = x_diag_r2l
+
+        # print(self.x_diag_l2r)
+        # print(self.x_diag_r2l)
+
+        # print("LtoR x\n", Dx_LtoR)
+        # print("RtoL x\n", Dx_RtoL)
+
+        # print("LtoR vr\n", Dvr_LtoR)
+        # print("RtoL vr\n", Dvr_RtoL)
+
+        
+        self.xp_cos_vt_d = xp.cos(self.grid_info["vt"])
+        self.xp_sin_vt_d = xp.sin(self.grid_info["vt"])
+        self.xp_vr_d     = xp.asarray(self.grid_info["vr"])
+
+
+        self.idx_np_vt   = self.grid_info["vt"] <= 0.5 * xp.pi
+        self.idx_sp_vt   = self.grid_info["vt"]  > 0.5 * xp.pi
+
+
+        # release all unused memory
+        if (xp == cp):
+            mempool        = cp.get_default_memory_pool()
+            mempool_pinned = cp.get_default_pinned_memory_pool()
+            mempool.free_all_blocks()
+            mempool_pinned.free_all_blocks()
+
 
         
         return 
     
-    def step_op_split_init(self, E, time, dt, verbose=0, gmres_pc_vr=1.0, gmres_pc_vt=1.0):
+    # depreciated
+    def _step_op_split_init_v1(self, E, time, dt, verbose=0, gmres_pc_vr=1.0, gmres_pc_vt=1.0):
         xp                  = self.xp_module
         dof_v               = self.dof_v
         Nx                  = self.dof_x
@@ -1418,7 +1579,8 @@ class bte_1d3v():
 
         return
 
-    def step_op_split(self, E, v, dv, time, dt, type, verbose=0):
+    # depreciated
+    def _step_op_split_v1(self, E, v, dv, time, dt, type, verbose=0):
 
         vr_diag     = self.vr_diag
         vt_diag     = self.vt_diag
@@ -1449,6 +1611,8 @@ class bte_1d3v():
         atol        = self.params.atol
         step        = int(time/dt)
 
+        xsp         = cusp if xp==cp else sp
+        xsp_lg      = cusp_lg if xp==cp else sp_lg
 
         if (type == pc_type.CXVTVR):
             y                   = xp.swapaxes(v.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
@@ -1500,6 +1664,7 @@ class bte_1d3v():
             # collisions
             yvt                 = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
             yvt                 = (self.PmatC @ yvt.reshape(dof_v, Nx)).reshape((Nr, Nvt, Nx))
+                        
             
             # x-adv
             yvt[:, idx_np, 0]   = 0.0
@@ -1539,6 +1704,100 @@ class bte_1d3v():
             yx[:, idx_sp]       = cp_rk.banded_tri_solve_batched(self.bte_x_shift_diag [:, idx_sp], yvt[:, idx_sp], lower=False)
 
             return yx.reshape((dof_v, Nx))
+        
+        else:
+            raise NotImplementedError("preconditioner type not implemented")
+
+    def step_op_split(self, E, v, dv, time, dt, type, verbose=0, alpha = 1.0):
+
+        #self._step_op_split_init_v1(E, time, dt)
+        # vr_diag     = self.vr_diag
+        # vt_diag     = self.vt_diag
+        
+        # idx_lr_vr   = self.idx_lr_vr
+        # idx_rl_vr   = self.idx_rl_vr
+        
+        # idx_lr_vt   = self.idx_lr_vt
+        # idx_rl_vt   = self.idx_rl_vt
+
+        xp          = self.xp_module
+        dof_v       = self.dof_v
+        Nx          = self.dof_x
+        Nr          = self.dof_vr
+        Nvt         = self.dof_vt
+
+        pvr         = self.params.pvr
+        pvt         = self.params.pvt
+        px          = self.params.px
+
+        Ndof        = dof_v * Nx
+        rtol        = self.params.rtol
+        atol        = self.params.atol
+        step        = int(time/dt)
+        
+        aE          = (self.params.tau * self.params.qe/self.params.me/self.bs_vth) * E
+        ax          = self.bs_vth  * (self.params.tau/self.params.L)
+
+
+        xsp         = cusp if xp==cp else sp
+        xsp_lg      = cusp_lg if xp==cp else sp_lg
+
+        if (type == pc_type.CXVTVR):
+            raise NotImplementedError
+        
+        elif (type == pc_type.XCVTVR):
+            raise NotImplementedError
+        
+        elif(type == pc_type.XVTVRC):
+            # collisions
+            #yc                   = (self.PmatC @ v.reshape(dof_v, Nx))
+            if(self.PmatC is not None):
+                yc                   = (self.PmatC @ v.reshape(dof_v, Nx))
+            else:
+                yc                   = self.PmatC_triu.solve(xp.einsum("iml,ilx->imx", self.PmatC_Dinv, v.reshape((Nr, Nvt, Nx))).reshape((Nr*Nvt, Nx)))
+                # yc1                  = (self.PmatC @ v.reshape(dof_v, Nx))
+                # print("|yc -yc1|=%.8E"%(xp.linalg.norm(yc-yc1)/xp.linalg.norm(yc1)))
+            
+            # y                   = xp.swapaxes(yc.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
+            # yvr                 = xp.zeros_like(y)
+
+            # yvr[idx_lr_vr]      = cp_rk.banded_tri_solve_batched(vr_diag [idx_lr_vr], y[idx_lr_vr], lower=True)
+            # yvr[idx_rl_vr]      = cp_rk.banded_tri_solve_batched(vr_diag [idx_rl_vr], y[idx_rl_vr], lower=False)
+
+            yc                    = xp.swapaxes(yc.reshape(Nr, Nvt, Nx), 0, 2) # (Nx, Nvt, Nr)
+            yc                    = yc.reshape((-1))
+            yvr                   = xp.zeros_like(yc)
+            cp_rk.adv_vr_BE(self.vr_diag_l2r, self.vr_diag_r2l, aE, self.xp_cos_vt_d, alpha * dt, yc, yvr, pvr+1, Nr, Nvt, Nx)
+            yvr                   = yvr.reshape((Nx, Nvt, Nr))
+            
+            # # vt-adv
+            # yvr                 = xp.swapaxes(yvr, 1, 2) # (Nx, Nr, Nvt)
+            # yvt                 = xp.zeros_like(yvr)
+
+            # yvt[idx_lr_vt]      = cp_rk.banded_tri_solve_batched(vt_diag [idx_lr_vt], yvr[idx_lr_vt], lower=False)
+            # yvt[idx_rl_vt]      = cp_rk.banded_tri_solve_batched(vt_diag [idx_rl_vt], yvr[idx_rl_vt], lower=True)
+
+            yvr                 = xp.swapaxes(yvr, 1, 2).reshape((-1)) # (Nx, Nr, Nvt)
+            yvt                 = xp.zeros_like(yvr)
+            cp_rk.adv_vt_BE(self.vt_diag_l2r, self.vt_diag_r2l, aE, self.xp_vr_d, alpha * dt, yvr, yvt, pvt+1, Nr, Nvt, Nx)
+            yvt                 = yvt.reshape((Nx, Nr, Nvt))
+            
+            # x-adv
+            yvt                         = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
+            yvt[:, self.idx_np_vt, 0]   = 0.0
+            yvt[:, self.idx_sp_vt, -1]  = 0.0
+            
+            # yx                          = xp.zeros_like(yvt)
+            # yx[:, self.idx_np_vt]       = cp_rk.banded_tri_solve_batched(self.bte_x_shift_diag [:, self.idx_np_vt], yvt[:, self.idx_np_vt], lower=True)
+            # yx[:, self.idx_sp_vt]       = cp_rk.banded_tri_solve_batched(self.bte_x_shift_diag [:, self.idx_sp_vt], yvt[:, self.idx_sp_vt], lower=False)
+            # yx                          = yx.reshape((Nr * Nvt, Nx))
+
+            yvt                         = yvt.reshape((-1))
+            yx                          = xp.zeros_like(yvt)
+            
+            cp_rk.adv_x_BE(self.x_diag_l2r, self.x_diag_r2l, ax * self.xp_vr_d, self.xp_cos_vt_d, alpha * dt, yvt, yx, px+1, Nr, Nvt, Nx)
+            yx                          = yx.reshape((Nr*Nvt, Nx))
+            return yx
         
         else:
             raise NotImplementedError("preconditioner type not implemented")
@@ -1598,7 +1857,7 @@ class bte_1d3v():
                             
                 yE[:, idxEp]         = self.op_adv_v_Ep @ x[:, idxEp]
                 yE[:, idxEn]         = self.op_adv_v_En @ x[:, idxEn]
-                yv                   = dt * self.params.tau * (self.params.n0 * self.params.np0 * (xp.dot(self.op_col_en, x) + self.params.Tg * xp.dot(self.op_col_gT, x))  + E * yE)
+                yv                   = dt * self.params.tau * (self.params.n0 * self.params.np0 * (self.op_col_en @ x + self.params.Tg * (self.op_col_gT @ x))  + E * yE)
 
                 yv                   = yv.reshape((Nr, Nvt, Nx))
                 yv[:, idx_np, 0]     = 0.0
@@ -1634,10 +1893,10 @@ class bte_1d3v():
                 # dh  = min(np.min(self.xp_vr[1:]-self.xp_vr[0:-1]), np.min(-(self.xp_vt[1:]-self.xp_vt[0:-1])))
                 # r1  = 1/np.min(self.xp_vr)/dh
                 #self.step_op_split_init(E, time, (1/r1) * dt, verbose=0)
-                self.step_op_split_init(E, time, dt, verbose, gmres_pc_vr, gmres_pc_vt)
+                #self.step_op_split_init(E, time, dt, verbose, gmres_pc_vr, gmres_pc_vt)
                 
                 def pre_mvec(x):
-                    return self.step_op_split(E, x.reshape((dof_v, Nx)), None, time, dt, self.params.pc_type, verbose=0).reshape((-1))
+                    return self.step_op_split(E, x.reshape((dof_v, Nx)), None, time, dt, self.params.pc_type, verbose=0, alpha=gmres_pc_vr).reshape((-1))
                 
             elif (self.params.pc_type == pc_type.XVX_SOLVE):
                 
@@ -1683,10 +1942,11 @@ class bte_1d3v():
                 v               = v.reshape((dof_v, Nx))
 
         elif(self.params.solver_type == pc_type.CXVTVR or self.params.solver_type == pc_type.XCVTVR or self.params.solver_type == pc_type.XVTVRC):
-            self.step_op_split_init(E, time, dt, verbose)
             
             if(self._nvtx):
                 nvtx.push_range("step_op_split")
+            # self._step_op_split_init_v1(E, time, dt)
+            # v = self._step_op_split_v1(E, v, None, time, dt, self.params.solver_type, verbose)
 
             v = self.step_op_split(E, v, None, time, dt, self.params.solver_type, verbose)
             
@@ -1901,6 +2161,13 @@ class bte_1d3v():
         plt.close()
     
     def asnumpy(self, x):
+       
+       if sp.issparse(x):
+        return x
+       
+    #    if cusp.issparse(x):
+    #        return x.get()
+       
        if type(x) == cp.ndarray:
           return cp.asnumpy(x)
        else:
@@ -1978,8 +2245,6 @@ class bte_1d3v():
 
 
         return vip.reshape((Nr * Nvt, Nx))
-        
-    
     
     
 

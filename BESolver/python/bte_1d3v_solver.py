@@ -25,7 +25,6 @@ import argparse
 import h5py
 import scipy.optimize
 import rawkernel as cp_rk
-import cusparse_spsolve
 import profile_t
 PROFILE_SOLVERS=1
 
@@ -35,6 +34,7 @@ try:
     import cupyx.scipy.interpolate
     import cupyx.scipy.sparse as cusp
     import nvtx
+    import cusparse_spsolve
 except:
     print("Cupy module not found !")
     #raise ModuleNotFoundError
@@ -98,7 +98,7 @@ class params():
         if self.Tg !=0: 
             self.n0    = self.p0 * scipy.constants.torr / (scipy.constants.Boltzmann * self.Tg) #3.22e22                   #m^{-3}
         else:
-            self.n0    = 3.22e22                   #m^{-3}
+            self.n0    = 3.22e22 * self.p0                  #m^{-3}
         
         self.np0   = 8e16                          #"nominal" electron density [1/m^3]
         self.n0    = self.n0/self.np0
@@ -142,7 +142,7 @@ class params():
         self.rs_idx        = tp["rs_idx"]
         
         self.ic_file       = tp["ic_file"]
-        self.xgrid_type    = "chebyshev-collocation"
+        self.adaptive_grid = 1
         
         self.dim           = 1
         self.ee_collisions = 0
@@ -174,6 +174,13 @@ class params():
         self.px         = tp["px"]  if "px"  in tp.keys()  else 1
 
         self.pc_type    = pc_type.XVTVRC
+
+        if "adaptive_grid" in tp.keys():
+            self.adaptive_grid = tp["adaptive_grid"]
+        
+        self.adaptive_grid = bool(self.adaptive_grid)
+        if(self.adaptive_grid):
+            print("using adaptive phase space discretization")
 
         if "pc_type" in tp.keys():
             if tp["pc_type"] == "cxvtvr_solve":
@@ -240,19 +247,22 @@ class bte_1d3v():
         
         if (self.params.xspace_type == xspace_discretization.BE_CHEB):
             # spectral discretization in space -- DO NOT USE THIS !!!!
-            if (self.params.xgrid_type == "chebyshev-collocation"):
+            if (self.params.adaptive_grid):
                 self.mesh          = mesh.mesh([self.params.Np], self.params.dim, mesh.grid_type.CHEBYSHEV_COLLOC)
-            elif(self.params.xgrid_type == "uniform"):
-                self.mesh          = mesh.mesh([self.params.Np], self.params.dim, mesh.grid_type.REGULAR_GRID)
             else:
-                raise NotImplementedError
+                self.mesh          = mesh.mesh([self.params.Np], self.params.dim, mesh.grid_type.REGULAR_GRID)
             
             self.xp            = self.mesh.xcoord[0]
             self.Dp            = self.mesh.D1[0]
             self.DpT           = self.mesh.D1[0].T
 
         else:
-            self.xp            = -np.cos(np.pi*np.linspace(0,(self.params.Np-1), self.params.Np)/(self.params.Np-1))
+            if (self.params.adaptive_grid):
+                self.xp            = -np.cos(np.pi*np.linspace(0,(self.params.Np-1), self.params.Np)/(self.params.Np-1))
+            else:
+                self.xp            = np.linspace(-1, 1, self.params.Np)
+                #self.xp            = -np.cos(np.pi*np.linspace(0,(self.params.Np-1), self.params.Np)/(self.params.Np-1))
+
             self.Dp            = np.array([0])
             self.DpT           = np.array([0])
 
@@ -1367,7 +1377,7 @@ class bte_1d3v():
             
             # PmatC = xsp.hstack(PmatC) 
             self.PmatC      = None #xp.linalg.inv(ImC.toarray())
-            if (self.dof_v <= 960 * 64):
+            if (self.dof_v <= 1024 * 64):
                 print("==== using direct collision solve======")
                 self.PmatC      = xp.linalg.inv(ImC.toarray())
 

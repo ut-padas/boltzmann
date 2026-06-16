@@ -102,100 +102,101 @@ class SpSMSolver:
         self._mat_desc = ctypes.c_void_p()
         # ── SpSM descriptor 
         self._spsm_desc = ctypes.c_void_p()
-        self._b        = cp.zeros((n, nrhs), dtype=np.float64)
-        self._x        = cp.zeros((n, nrhs), dtype=np.float64)
         
         if(A_sp.format == 'csr'):
             self.bsz = 1
+            self._b        = cp.zeros((n, nrhs), dtype=np.float64)
+            self._x        = cp.zeros((n, nrhs), dtype=np.float64)
             
-            _check(_lib.cusparseCreateCsr(
-                ctypes.byref(self._mat_desc),
-                ctypes.c_int64(n), ctypes.c_int64(n), ctypes.c_int64(nnz),
-                ctypes.c_void_p(self._indptr.data.ptr),
-                ctypes.c_void_p(self._indices.data.ptr),
-                ctypes.c_void_p(self._data.data.ptr),
-                ctypes.c_int(CUSPARSE_INDEX_32I),   # row-offsets type
-                ctypes.c_int(CUSPARSE_INDEX_32I),   # col-indices type
-                ctypes.c_int(CUSPARSE_INDEX_BASE_ZERO),
-                ctypes.c_int(CUDA_R_64F),
-            ))
+            if (self.stype == solver_type.CUSPARSE_SPSM):
+                _check(_lib.cusparseCreateCsr(
+                    ctypes.byref(self._mat_desc),
+                    ctypes.c_int64(n), ctypes.c_int64(n), ctypes.c_int64(nnz),
+                    ctypes.c_void_p(self._indptr.data.ptr),
+                    ctypes.c_void_p(self._indices.data.ptr),
+                    ctypes.c_void_p(self._data.data.ptr),
+                    ctypes.c_int(CUSPARSE_INDEX_32I),   # row-offsets type
+                    ctypes.c_int(CUSPARSE_INDEX_32I),   # col-indices type
+                    ctypes.c_int(CUSPARSE_INDEX_BASE_ZERO),
+                    ctypes.c_int(CUDA_R_64F),
+                ))
 
 
-            # Set fill mode and diag type on the matrix descriptor
-            _check(_lib.cusparseSpMatSetAttribute(
-                self._mat_desc,
-                ctypes.c_int(CUSPARSE_SPMAT_FILL_MODE),
-                ctypes.byref(ctypes.c_int(
-                    CUSPARSE_FILL_MODE_LOWER if lower else CUSPARSE_FILL_MODE_UPPER)),
-                ctypes.c_size_t(ctypes.sizeof(ctypes.c_int)),
-            ))
-
-            _check(_lib.cusparseSpMatSetAttribute(
+                # Set fill mode and diag type on the matrix descriptor
+                _check(_lib.cusparseSpMatSetAttribute(
                     self._mat_desc,
-                    ctypes.c_int(CUSPARSE_SPMAT_DIAG_TYPE),
-                    ctypes.byref(ctypes.c_int(CUSPARSE_DIAG_TYPE_UNIT if unit_diagonal else CUSPARSE_DIAG_TYPE_NON_UNIT)),
+                    ctypes.c_int(CUSPARSE_SPMAT_FILL_MODE),
+                    ctypes.byref(ctypes.c_int(
+                        CUSPARSE_FILL_MODE_LOWER if lower else CUSPARSE_FILL_MODE_UPPER)),
                     ctypes.c_size_t(ctypes.sizeof(ctypes.c_int)),
                 ))
-            
-            # ── allocate RHS/solution dense-vector descriptors (shape n×1) ────────
-            # These are placeholders; we'll update their data pointers in solve()
-            self._b_desc = ctypes.c_void_p()
-            self._x_desc = ctypes.c_void_p()
-            
-            _check(_lib.cusparseCreateDnMat(
-                ctypes.byref(self._b_desc),
-                ctypes.c_int64(n),
-                ctypes.c_int64(nrhs),
-                ctypes.c_int64(nrhs),
-                ctypes.c_void_p(self._b.data.ptr),
-                ctypes.c_int(CUDA_R_64F),
-                ctypes.c_int(CUSPARSE_ORDER_ROW),
-            ))
 
-            _check(_lib.cusparseCreateDnMat(
-                ctypes.byref(self._x_desc),
-                ctypes.c_int64(n),
-                ctypes.c_int64(nrhs),
-                ctypes.c_int64(nrhs),
-                ctypes.c_void_p(self._x.data.ptr),
-                ctypes.c_int(CUDA_R_64F),
-                ctypes.c_int(CUSPARSE_ORDER_ROW),
-            ))
+                _check(_lib.cusparseSpMatSetAttribute(
+                        self._mat_desc,
+                        ctypes.c_int(CUSPARSE_SPMAT_DIAG_TYPE),
+                        ctypes.byref(ctypes.c_int(CUSPARSE_DIAG_TYPE_UNIT if unit_diagonal else CUSPARSE_DIAG_TYPE_NON_UNIT)),
+                        ctypes.c_size_t(ctypes.sizeof(ctypes.c_int)),
+                    ))
+                
+                # ── allocate RHS/solution dense-vector descriptors (shape n×1) ────────
+                # These are placeholders; we'll update their data pointers in solve()
+                self._b_desc = ctypes.c_void_p()
+                self._x_desc = ctypes.c_void_p()
+                
+                _check(_lib.cusparseCreateDnMat(
+                    ctypes.byref(self._b_desc),
+                    ctypes.c_int64(n),
+                    ctypes.c_int64(nrhs),
+                    ctypes.c_int64(nrhs),
+                    ctypes.c_void_p(self._b.data.ptr),
+                    ctypes.c_int(CUDA_R_64F),
+                    ctypes.c_int(CUSPARSE_ORDER_ROW),
+                ))
 
-            alpha = ctypes.c_double(1.0)
-            buf_size = ctypes.c_size_t(0)
+                _check(_lib.cusparseCreateDnMat(
+                    ctypes.byref(self._x_desc),
+                    ctypes.c_int64(n),
+                    ctypes.c_int64(nrhs),
+                    ctypes.c_int64(nrhs),
+                    ctypes.c_void_p(self._x.data.ptr),
+                    ctypes.c_int(CUDA_R_64F),
+                    ctypes.c_int(CUSPARSE_ORDER_ROW),
+                ))
 
-            _check(_lib.cusparseSpSM_createDescr(ctypes.byref(self._spsm_desc)))
+                alpha = ctypes.c_double(1.0)
+                buf_size = ctypes.c_size_t(0)
 
-            _check(_lib.cusparseSpSM_bufferSize(
-                self._handle,
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.byref(alpha),
-                self._mat_desc,
-                self._b_desc,
-                self._x_desc,
-                ctypes.c_int(CUDA_R_64F),
-                ctypes.c_int(CUSPARSE_SPSM_ALG_DEFAULT),
-                self._spsm_desc,
-                ctypes.byref(buf_size),
-            ))
+                _check(_lib.cusparseSpSM_createDescr(ctypes.byref(self._spsm_desc)))
 
-            self._buf = cp.empty(int(buf_size.value) or 1, dtype=np.uint8)
-            print(int(buf_size.value), "bytes for SpSM (CSR) analysis buffer")
-            _check(_lib.cusparseSpSM_analysis(
-                self._handle,
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.byref(alpha),
-                self._mat_desc,
-                self._b_desc,
-                self._x_desc,
-                ctypes.c_int(CUDA_R_64F),
-                ctypes.c_int(CUSPARSE_SPSM_ALG_DEFAULT),
-                self._spsm_desc,
-                ctypes.c_void_p(self._buf.data.ptr),
-            ))
+                _check(_lib.cusparseSpSM_bufferSize(
+                    self._handle,
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.byref(alpha),
+                    self._mat_desc,
+                    self._b_desc,
+                    self._x_desc,
+                    ctypes.c_int(CUDA_R_64F),
+                    ctypes.c_int(CUSPARSE_SPSM_ALG_DEFAULT),
+                    self._spsm_desc,
+                    ctypes.byref(buf_size),
+                ))
+
+                self._buf = cp.empty(int(buf_size.value) or 1, dtype=np.uint8)
+                print(int(buf_size.value), "bytes for SpSM (CSR) analysis buffer")
+                _check(_lib.cusparseSpSM_analysis(
+                    self._handle,
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.byref(alpha),
+                    self._mat_desc,
+                    self._b_desc,
+                    self._x_desc,
+                    ctypes.c_int(CUDA_R_64F),
+                    ctypes.c_int(CUSPARSE_SPSM_ALG_DEFAULT),
+                    self._spsm_desc,
+                    ctypes.c_void_p(self._buf.data.ptr),
+                ))
             
         elif(A_sp.format == 'bsr'):
             blk_sz   = A_sp.blocksize
@@ -203,62 +204,65 @@ class SpSMSolver:
             bsz      = blk_sz[0]
             self.bsz = bsz
 
-            
-            _check(_lib.cusparseCreateMatDescr(ctypes.byref(self._mat_desc)))
-            _check(_lib.cusparseSetMatType     (self._mat_desc, CUSPARSE_MATRIX_TYPE_GENERAL))
-            _check(_lib.cusparseSetMatIndexBase(self._mat_desc, CUSPARSE_INDEX_BASE_ZERO))
-            _check(_lib.cusparseSetMatFillMode (self._mat_desc, CUSPARSE_FILL_MODE_UPPER if not lower else CUSPARSE_FILL_MODE_LOWER))
-            _check(_lib.cusparseSetMatDiagType (self._mat_desc, CUSPARSE_DIAG_TYPE_UNIT if unit_diagonal else CUSPARSE_DIAG_TYPE_NON_UNIT))
+            if (self.stype == solver_type.CUSPARSE_BSRSM2):
+                _check(_lib.cusparseCreateMatDescr(ctypes.byref(self._mat_desc)))
+                _check(_lib.cusparseSetMatType     (self._mat_desc, CUSPARSE_MATRIX_TYPE_GENERAL))
+                _check(_lib.cusparseSetMatIndexBase(self._mat_desc, CUSPARSE_INDEX_BASE_ZERO))
+                _check(_lib.cusparseSetMatFillMode (self._mat_desc, CUSPARSE_FILL_MODE_UPPER if not lower else CUSPARSE_FILL_MODE_LOWER))
+                _check(_lib.cusparseSetMatDiagType (self._mat_desc, CUSPARSE_DIAG_TYPE_UNIT if unit_diagonal else CUSPARSE_DIAG_TYPE_NON_UNIT))
 
-            buf_size = ctypes.c_int(0)
-            alpha    = ctypes.c_double(1.0)
-            _check(_lib.cusparseCreateBsrsm2Info(ctypes.byref(self._spsm_desc)))
+                buf_size = ctypes.c_int(0)
+                alpha    = ctypes.c_double(1.0)
+                _check(_lib.cusparseCreateBsrsm2Info(ctypes.byref(self._spsm_desc)))
 
-            _check(_lib.cusparseDbsrsm2_bufferSize(
-                self._handle,
-                ctypes.c_int(CUSPARSE_DIRECTION_ROW),
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.c_int(n//bsz),
-                ctypes.c_int(nrhs),
-                ctypes.c_int(nnz//(bsz*bsz)),
-                self._mat_desc,
-                ctypes.c_void_p(self._data.data.ptr),
-                ctypes.c_void_p(self._indptr.data.ptr),
-                ctypes.c_void_p(self._indices.data.ptr),
-                ctypes.c_int(bsz),
-                self._spsm_desc,
-                ctypes.byref(buf_size)
-            ))
+                _check(_lib.cusparseDbsrsm2_bufferSize(
+                    self._handle,
+                    ctypes.c_int(CUSPARSE_DIRECTION_ROW),
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.c_int(n//bsz),
+                    ctypes.c_int(nrhs),
+                    ctypes.c_int(nnz//(bsz*bsz)),
+                    self._mat_desc,
+                    ctypes.c_void_p(self._data.data.ptr),
+                    ctypes.c_void_p(self._indptr.data.ptr),
+                    ctypes.c_void_p(self._indices.data.ptr),
+                    ctypes.c_int(bsz),
+                    self._spsm_desc,
+                    ctypes.byref(buf_size)
+                ))
 
-            self._buf = cp.empty(int(buf_size.value) or 1, dtype=np.uint8)
-            print(int(buf_size.value), "bytes for SpSM (BSR) analysis buffer")
-            
-            _check(_lib.cusparseDbsrsm2_analysis(
-                self._handle,
-                ctypes.c_int(CUSPARSE_DIRECTION_ROW),
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
-                ctypes.c_int(n//bsz),
-                ctypes.c_int(nrhs),
-                ctypes.c_int(nnz//(bsz*bsz)),
-                self._mat_desc,
-                ctypes.c_void_p(self._data.data.ptr),
-                ctypes.c_void_p(self._indptr.data.ptr),
-                ctypes.c_void_p(self._indices.data.ptr),
-                ctypes.c_int(bsz),
-                self._spsm_desc,
-                ctypes.c_int(CUSPARSE_SOLVE_POLICY_USE_LEVEL), 
-                ctypes.c_void_p(self._buf.data.ptr),
-            ))
+                self._buf = cp.empty(int(buf_size.value) or 1, dtype=np.uint8)
+                print(int(buf_size.value), "bytes for SpSM (BSR) analysis buffer")
+                
+                _check(_lib.cusparseDbsrsm2_analysis(
+                    self._handle,
+                    ctypes.c_int(CUSPARSE_DIRECTION_ROW),
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.c_int(CUSPARSE_OPERATION_NON_TRANSPOSE),
+                    ctypes.c_int(n//bsz),
+                    ctypes.c_int(nrhs),
+                    ctypes.c_int(nnz//(bsz*bsz)),
+                    self._mat_desc,
+                    ctypes.c_void_p(self._data.data.ptr),
+                    ctypes.c_void_p(self._indptr.data.ptr),
+                    ctypes.c_void_p(self._indices.data.ptr),
+                    ctypes.c_int(bsz),
+                    self._spsm_desc,
+                    ctypes.c_int(CUSPARSE_SOLVE_POLICY_USE_LEVEL), 
+                    ctypes.c_void_p(self._buf.data.ptr),
+                ))
 
 
         else:
             raise ValueError(f"Unsupported sparse format: {A_sp.format}")
 
+        
+
+            
+
         self.cp_stream = [cp.cuda.Stream(non_blocking=True)]  
         self.cp_ys     = cp.empty((len(self.cp_stream), self.bsz, nrhs), dtype=np.float64)
-
         cp.cuda.Device().synchronize()
 
         
@@ -269,7 +273,6 @@ class SpSMSolver:
             spsm_cuda_code = f.read()
         
         self._spsm_cuda = cp.RawKernel(spsm_cuda_code, 'spsm_bsr_upper_tri_solve')
-
 
 
     def solve(self, b: cp.ndarray) -> cp.ndarray:
@@ -294,7 +297,7 @@ class SpSMSolver:
 
             return x
         elif (self.stype == solver_type.CUSPARSE_BSRSM2):
-            bc = cp.array(b, order="F", copy=True)
+            b  = cp.array(b, order="F", copy=True)
             x  = cp.empty_like(b, order="F")
             _check(_lib.cusparseDbsrsm2_solve(
                 self._handle,
@@ -311,8 +314,8 @@ class SpSMSolver:
                 ctypes.c_void_p(self._indices.data.ptr),
                 ctypes.c_int(self.bsz),
                 self._spsm_desc,
-                ctypes.c_void_p(bc.data.ptr),
-                ctypes.c_int(bc.shape[0]),
+                ctypes.c_void_p(b.data.ptr),
+                ctypes.c_int(b.shape[0]),
                 ctypes.c_void_p(x.data.ptr),
                 ctypes.c_int(x.shape[0]),
                 ctypes.c_int(CUSPARSE_SOLVE_POLICY_USE_LEVEL),
@@ -366,10 +369,10 @@ class SpSMSolver:
             pass
         elif (self.stype == solver_type.CUDA_CODE):
             #print("executing code code solve")
-            bc = cp.array(b, order="F", copy=True)
+            b  = cp.array(b, order="F", copy=True)
             x  = cp.empty_like(b, order="F")
-            self._spsm_cuda((bc.shape[1], ), (self.bsz, ), (self._data, self._indptr, self._indices,
-                             np.int32(self.n//self.bsz), np.int32(bc.shape[1]), np.int32(self.bsz), bc, x), shared_mem=self.bsz * 8)
+            self._spsm_cuda((b.shape[1], ), (self.bsz, ), (self._data, self._indptr, self._indices,
+                             np.int32(self.n//self.bsz), np.int32(b.shape[1]), np.int32(self.bsz), b, x), shared_mem=self.bsz * 8)
             return cp.array(x, order="C", copy=True)  # convert back to C order
         else:
             raise ValueError(f"Unsupported sparse format: {self.format}")

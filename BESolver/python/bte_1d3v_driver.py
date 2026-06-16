@@ -51,7 +51,14 @@ if __name__ == "__main__":
     elif (args.ef_mode == 2):
         import h5py
         import scipy.interpolate
-        ff        = h5py.File("1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+
+        if(bte.params.p0 == 1):
+            ff        = h5py.File("1dglow_fluid_Nx400/1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+        elif(bte.params.p0 == 0.5):
+            ff        = h5py.File("1dglow_fluid_Nx400/0.5Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+        elif(bte.params.p0 == 0.1):
+            ff        = h5py.File("1dglow_fluid_Nx400/0.1Torr300K_100V_Ar_3sp2r_tab_cycle/macro.h5", 'r')
+
         tt_sp     = np.array(ff["time[T]"][()])
         E_sp      = np.array(ff['E[Vm^-1]'][()])
         xx_sp     = np.array(ff['x[-1,1]'][()])

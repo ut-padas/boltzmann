@@ -331,7 +331,7 @@ class bte_0d3v():
             g         = self._coll_list[col_idx]
             g.reset_scattering_direction_sp_mat()
             mole_idx  = self._avail_species.index(col_data["species"]) 
-            cmat      = collOp._Lop_eulerian_strong_form((self._xp_vr, self._xp_vr_qw), (self._xp_vt, self._xp_vt_qw), g, maxwellian, vth, tgK=args.Tg, Nvts=64, Nvps=64)
+            cmat      = collOp._Lop_eulerian_strong_form((self._xp_vr, self._xp_vr_qw), (self._xp_vt, self._xp_vt_qw), g, maxwellian, vth, tgK=args.Tg, Nvts=64, Nvps=64).toarray()
             
             print("collision %d: type=%s, ||C||=%.8E"%(col_idx, col_data["type"], np.linalg.norm(cmat)))
             print("min/max C diag: %.8E / %.8E"%(np.min(np.diag(cmat)), np.max(np.diag(cmat))))
@@ -351,7 +351,7 @@ class bte_0d3v():
         print("Collision Operator assembly time (s): ",(t2-t1))
 
         t1 = time()
-        advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self._xp_vr, self._xp_vt, sw_vr=3, sw_vt=2, use_upwinding=True)
+        advmatEp, advmatEn       = spec_sp.compute_advection_matrix_vrvt_fv(self._xp_vr, self._xp_vt, sw_vr=3, sw_vt=3, use_upwinding=True)
         advmat                   = advmatEp
         #advmat                    = spec_sp.compute_advection_matrix_vrvt_fv(self._xp_vr, self._xp_vt, sw_vr=5, sw_vt=3, use_upwinding=False)
 

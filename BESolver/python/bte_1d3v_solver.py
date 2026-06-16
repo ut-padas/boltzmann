@@ -1366,22 +1366,17 @@ class bte_1d3v():
             Lsp  = Lsp.tocsr()
             Mu   = xsp.triu(Lsp @ ImC).tocsr()
 
-            # b     = Lsp @ Iv
-            # bsz   = 5000
-            # p     = max(1, (Nr * Nvt) // bsz)
-
-            # PmatC = list()
-            # for i in range(0, p):
-            #     print("coll op sp tri solve batch id %d/%d"%(i, p))
-            #     PmatC.append(xsp.csr_matrix(xsp_lg.spsolve_triangular(Mu, b[:, ((i * Nr * Nvt) // p):(((i+1) * Nr *Nvt) // p)].toarray(), lower=False)))
-            
-            # PmatC = xsp.hstack(PmatC) 
             self.PmatC      = None #xp.linalg.inv(ImC.toarray())
-            if (self.dof_v <= 1024 * 64):
-                print("==== using direct collision solve======")
-                self.PmatC      = xp.linalg.inv(ImC.toarray())
+            # if (self.dof_v <= 1024 * 64):
+            #     print("==== using direct collision solve======")
+            #     self.PmatC      = xp.linalg.inv(ImC.toarray())
 
-            self.PmatC_triu = cusparse_spsolve.SpSMSolver(Mu, nrhs=self.dof_x, lower=False)
+            if (xp == cp):
+                Mu = Mu.get()
+                Mu = Mu.tobsr(blocksize=(Nvt, Nvt), copy=True)
+                Mu.sort_indices()
+                
+            self.PmatC_triu = cusparse_spsolve.SpSMSolver(Mu, nrhs=self.dof_x, lower=False, unit_diagonal=True, stype=cusparse_spsolve.solver_type.CUDA_CODE)
             self.PmatC_Dinv = Dinv#Lsp
 
             

@@ -420,88 +420,110 @@ if __name__ == "__main__":
         def __init__(self, par_file, ef_mode):
             self.par_file = par_file
             self.ef_mode  = ef_mode
-    
-    bte = bte_1d3v_solver.bte_1d3v(args("bte1d2v/r3_efm_2_conv.toml", 2))
-    
-    Nx  = bte.dof_x
-    Nvt = bte.dof_vt
-    Nr  = bte.dof_vr
-    n   = Nr * Nvt
-    
-    dt   = bte.params.dt
-    Lop  = sp.csr_matrix(sp.identity(n) - dt * bte.params.np0 * bte.params.n0 * bte.params.tau * bte.op_col_en)
-    Dinv = np.linalg.inv(np.array([Lop[i * Nvt: (i+1) * Nvt, i * Nvt: (i+1) * Nvt].toarray() for i in range(Nr)]))
-            
-    Lsp  = sp.csr_matrix((Nr*Nvt, Nr * Nvt), dtype=np.float64)
-    for i in range(Nr):
-        Lsp[i * Nvt : (i+1)* Nvt, i * Nvt : (i+1)* Nvt] = Dinv[i]
 
-    Lsp    = Lsp.tocsr()
-    Mu     = (Lsp @ Lop).tocsr()
-    #Mu.sort_indices()
+    par_names =["bte1d2v/r%d_efm_2_conv.toml"%(i) for i in range(1, 4)]
+    tlist     = list()
+    for fname in par_names:
+        print(f"Processing {fname}")
+        bte = bte_1d3v_solver.bte_1d3v(args(fname, 2))
+        
+        Nx  = bte.dof_x
+        Nvt = bte.dof_vt
+        Nr  = bte.dof_vr
+        n   = Nr * Nvt
+        
+        dt   = bte.params.dt
+        Lop  = sp.csr_matrix(sp.identity(n) - dt * bte.params.np0 * bte.params.n0 * bte.params.tau * bte.op_col_en)
+        Dinv = np.linalg.inv(np.array([Lop[i * Nvt: (i+1) * Nvt, i * Nvt: (i+1) * Nvt].toarray() for i in range(Nr)]))
+                
+        Lsp  = sp.csr_matrix((Nr*Nvt, Nr * Nvt), dtype=np.float64)
+        for i in range(Nr):
+            Lsp[i * Nvt : (i+1)* Nvt, i * Nvt : (i+1)* Nvt] = Dinv[i]
 
-    Mu_bsr = Mu.tobsr(blocksize=(Nvt, Nvt), copy=True)
-    Mu_bsr.sort_indices()
+        Lsp    = Lsp.tocsr()
+        Mu     = (Lsp @ Lop).tocsr()
+        #Mu.sort_indices()
 
-    
-    csr          = SpSMSolver(Mu, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUSPARSE_SPSM)
-    bsr          = SpSMSolver(Mu_bsr, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUSPARSE_BSRSM2)
-    cp_seq_bsr   = SpSMSolver(Mu_bsr, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUPY_SPSM_SEQ)
-    cuda_seq_bsr = SpSMSolver(Mu_bsr, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUDA_CODE)
-    Mu  = cpsp.csr_matrix(Mu)
-    
-    n_steps = 3
-    for t in range(n_steps):
+        Mu_bsr = Mu.tobsr(blocksize=(Nvt, Nvt), copy=True)
+        Mu_bsr.sort_indices()
+
+        
+        csr          = SpSMSolver(Mu, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUSPARSE_SPSM)
+        bsr          = SpSMSolver(Mu_bsr, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUSPARSE_BSRSM2)
+        cp_seq_bsr   = SpSMSolver(Mu_bsr, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUPY_SPSM_SEQ)
+        cuda_seq_bsr = SpSMSolver(Mu_bsr, lower=False, nrhs=Nx, unit_diagonal=True, stype=solver_type.CUDA_CODE)
+        Mu  = cpsp.csr_matrix(Mu)
+        
+        
         b      = cp.random.rand(n, Nx)
-        cp.cuda.Device().synchronize()
-
-        t1     = perf_counter()
         x1     = bsr.solve(b)
-        cp.cuda.Device().synchronize()
-        t2     = perf_counter()
-
-        print("cusparse solve time (bsr) = %.4E"%(t2-t1))
-
-        t1     = perf_counter()
         x2     = csr.solve(b)
-        cp.cuda.Device().synchronize()
-        t2     = perf_counter()
-        
-        print("cusparse solve time (csr) = %.4E"%(t2-t1))
-
-        t1     = perf_counter()
         x3     = cp_seq_bsr.solve(b)
-        cp.cuda.Device().synchronize()
-        t2     = perf_counter()
-        
-        print("cp seq solve time (cp_seq) = %.4E"%(t2-t1))
-
-        t1     = perf_counter()
         x4     = cuda_seq_bsr.solve(b)
-        cp.cuda.Device().synchronize()
-        t2     = perf_counter()
-        
-        print("cp seq solve time (cuda_code) = %.4E"%(t2-t1))
-
-        t1     = perf_counter()
         x_ref  = cpsp_lg.spsolve_triangular(Mu, b, lower=False, unit_diagonal=True)
-        cp.cuda.Device().synchronize()
-        t2     = perf_counter()
 
-        print("cupyx.scipy.sparse.linalg solve time = %.4E"%(t2-t1))
+        t_dict ={"cusp_bsr": 0, "cusp_csr": 0, "cp_seq": 0, "cuda_seq": 0, "cupyx": 0}
+        t_dict["bte"] = bte
 
-        print("\n\n\n")
-        err    = float(cp.max(cp.abs(x2 - cp.asarray(x_ref))))
-        print(f"Max error (csr solve) vs scipy: {err:.2e}")
+        n_steps = 3
+        for t in range(n_steps):
+            b      = cp.random.rand(n, Nx)
+            cp.cuda.Device().synchronize()
 
-        err    = float(cp.max(cp.abs(x1 - cp.asarray(x_ref))))
-        print(f"Max error (bsr solve) vs scipy: {err:.2e}")
+            t1     = perf_counter()
+            x1     = bsr.solve(b)
+            cp.cuda.Device().synchronize()
+            t2     = perf_counter()
+            t_dict["cusp_bsr"] += (t2-t1)/n_steps
 
-        err    = float(cp.max(cp.abs(x3 - cp.asarray(x_ref))))
-        print(f"Max error (cp seq) vs scipy: {err:.2e}")
+            print("cusparse solve time (bsr) = %.4E"%(t2-t1))
 
-        err    = float(cp.max(cp.abs(x4[:, 0] - cp.asarray(x_ref[:, 0]))))
-        print(f"Max error (cuda seq) vs scipy: {err:.2e}")
+            t1     = perf_counter()
+            x2     = csr.solve(b)
+            cp.cuda.Device().synchronize()
+            t2     = perf_counter()
+            t_dict["cusp_csr"] += (t2-t1)/n_steps
+            
+            print("cusparse solve time (csr) = %.4E"%(t2-t1))
+
+            t1     = perf_counter()
+            x3     = cp_seq_bsr.solve(b)
+            cp.cuda.Device().synchronize()
+            t2     = perf_counter()
+            t_dict["cp_seq"] += (t2-t1)/n_steps
+            
+            print("cp seq solve time (cp_seq) = %.4E"%(t2-t1))
+
+            t1     = perf_counter()
+            x4     = cuda_seq_bsr.solve(b)
+            cp.cuda.Device().synchronize()
+            t2     = perf_counter()
+            t_dict["cuda_seq"] += (t2-t1)/n_steps
+            
+            print("cp seq solve time (cuda_code) = %.4E"%(t2-t1))
+
+            t1     = perf_counter()
+            x_ref  = cpsp_lg.spsolve_triangular(Mu, b, lower=False, unit_diagonal=True)
+            cp.cuda.Device().synchronize()
+            t2     = perf_counter()
+            t_dict["cupyx"] += (t2-t1)/n_steps
+
+            print("cupyx.scipy.sparse.linalg solve time = %.4E"%(t2-t1))
+
+            print("\n\n\n")
+            err    = float(cp.max(cp.abs(x2 - cp.asarray(x_ref))))
+            print(f"Max error (csr solve) vs scipy: {err:.2e}")
+
+            err    = float(cp.max(cp.abs(x1 - cp.asarray(x_ref))))
+            print(f"Max error (bsr solve) vs scipy: {err:.2e}")
+
+            err    = float(cp.max(cp.abs(x3 - cp.asarray(x_ref))))
+            print(f"Max error (cp seq) vs scipy: {err:.2e}")
+
+            err    = float(cp.max(cp.abs(x4[:, 0] - cp.asarray(x_ref[:, 0]))))
+            print(f"Max error (cuda seq) vs scipy: {err:.2e}")
+
+        tlist.append(t_dict)
 
         # print(b,"\n")
         # print(x,"\n")
@@ -518,3 +540,10 @@ if __name__ == "__main__":
         #     print(x_ref[i*Nvt:(i+1)*Nvt, :5])
         
         # sys.exit(0)
+
+    print("Nv\tNvt\tNx\tcusp_bsr\tcusp_csr\tcupy_seq\tcuda_seq\tcupyx")
+    for i in range(len(tlist)):
+        bte = tlist[i]["bte"]
+        print(f"{bte.dof_vr}\t{bte.dof_vt}\t{bte.dof_x}\t{tlist[i]['cusp_bsr']}\t{tlist[i]['cusp_csr']}\t{tlist[i]['cp_seq']}\t{tlist[i]['cuda_seq']}\t{tlist[i]['cupyx']}")
+    
+

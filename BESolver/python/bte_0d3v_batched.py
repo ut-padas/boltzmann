@@ -25,6 +25,8 @@ from multiprocessing.pool import ThreadPool as WorkerPool
 import enum
 from os import environ
 from profile_t import profile_t
+from mpi4py import MPI
+import traceback
 
 try:
     import cupy as cp
@@ -145,6 +147,10 @@ class bte_0d3v_batched():
         collision model : collision string detailing which collisions to perform
         """
         
+        comm = MPI.COMM_WORLD
+        rank_ = comm.Get_rank()
+        size_ = comm.Get_size()
+
         self.profile_nn     = ["all","setup", "e-n c_op", "e-e c_op", "adv op", "initialize", "solve", "rhs", "jac", "jac_solve", "H2D", "D2H", "last"]
         self.profile_tt_all = list()
         for i in range(n_vspace_grids):
@@ -195,6 +201,8 @@ class bte_0d3v_batched():
         self._cross_section_data           = list()
 
         if (len(self._par_col_model)==1):
+            print("Rank 0, col_file = %s" %(self._par_col_model[i]), flush=True)
+            print("Nr = ", self._par_nr[0], ", Te =  ", self._par_ap_Te[0], ", ev_max = ", self._par_ev_range[0], ", vth = ", self._par_vth[0], ", col_cs = ", self._par_col_model[0], flush=True)
             avail_species = cross_section.read_available_species(self._par_col_model[0])
             cs_data_all   = cross_section.read_cross_section_data(self._par_col_model[0])
             
@@ -230,17 +238,20 @@ class bte_0d3v_batched():
                 self._avail_species.append(avail_species)
                 self._cross_section_data.append(cs_data_all)
 
+                print("Rank [", rank_, "/", size_, "], grid_idx = ", i, ", collisionFile = ",  self._par_col_model[i], flush=True)
+
                 collision_count = 0
                 coll_names      = list()
                 coll_list       = list()
                 for col_str, col_data in cs_data_all.items():
-                    print(col_str, col_data["type"])
+                    if (rank_ == 0 and i == 0): 
+                        print(col_str, col_data["type"], flush=True)
                     g = collisions.electron_heavy_binary_collision(col_str, collision_type=col_data["type"])
                     coll_list.append(g)
                     coll_names.append("C%d"%(collision_count)) 
                     collision_count+=1
-
-                print("number of total collisions = %d " %(len(coll_list)))
+                if (rank_ == 0 and i == 0): 
+                    print("number of total collisions = %d " %(len(coll_list)))
                 self.num_collisions = len(coll_list)
                 self._coll_list.append(coll_list)
                 self._collision_names.append(coll_names)
@@ -880,6 +891,10 @@ class bte_0d3v_batched():
         return Jmat_inv
             
     def steady_state_solve(self, grid_idx : int, f0 : np.array, atol, rtol, max_iter, alpha_min = 1e-16, alpha_rho=0.01, line_search_c = 1e-3):
+        comm = MPI.COMM_WORLD
+        rank_ = comm.Get_rank()
+        size_ = comm.Get_size()
+
         xp           = self.xp_module
         profile_tt   = self.profile_tt_all[grid_idx]
         
@@ -952,7 +967,7 @@ class bte_0d3v_batched():
                 
             
             if(is_diverged):
-                print("grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small")
+                print("Rank [", rank_, "/", size_, "], grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": Residual =", abs_error, "line search step size becomes too small", flush=True)
                 break
             
             h_curr      = h_prev + alpha * p
@@ -960,7 +975,7 @@ class bte_0d3v_batched():
             if iteration_steps % 10 == 0:
                 abs_error = xp.linalg.norm(res_func(h_curr, 0, 0), axis=0)
                 rel_error = abs_error/ r0
-                print("grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))))
+                # print("Rank [", rank_, "/", size_, "], grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))), flush=True)
             
             #fb_prev      = np.dot(Rmat,h_curr)
             h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
@@ -968,7 +983,9 @@ class bte_0d3v_batched():
 
         abs_error = xp.linalg.norm(res_func(h_curr, 0, 0), axis=0)
         rel_error = abs_error/ r0
-        print("grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)))
+        print("Rank [", rank_, "/", size_, "], grid_idx ", " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)), flush=True)
+        if (xp.max(rel_error) > rtol):
+            print("ISSUE: Rank [", rank_, "/", size_, "], grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E > %.8E , rtol=%.8E > %.8E"%(xp.max(abs_error), atol, xp.max(rel_error), rtol), flush=True)
         if xp==cp:
             xp.cuda.runtime.deviceSynchronize()
         profile_tt[pp.SOLVE].stop()

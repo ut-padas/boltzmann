@@ -27,6 +27,12 @@ import scipy.cluster
 from itertools import cycle
 import cross_section
 
+path = os.path.abspath(os.path.dirname(sys.argv[0]))
+print("path = ", path)
+sys.path.append(path)
+sys.path.append("/scratch/10565/ashwathsv/tps-venv/vista/tps/torch-chemistry/")
+import argon.scripts.synthetic_cs as synthetic_cs
+
 plt.rcParams.update({
     "text.usetex": False,
     "font.size": 24,
@@ -41,12 +47,12 @@ parser.add_argument("-threads", "--threads"                       , help="number
 parser.add_argument("-out_fname", "--out_fname"                   , help="output file name for the qois", type=str, default="bte")
 parser.add_argument("-solver_type", "--solver_type"               , help="solver type", type=str, default="steady-state")
 parser.add_argument("-l_max", "--l_max"                           , help="max polar modes in SH expansion", type=int, default=1)
-parser.add_argument("-c", "--collisions"                          , help="collisions model", type=str, default="lxcat_data/eAr_crs.nominal.Biagi.3sp")
+parser.add_argument("-c", "--collisions"                          , help="collisions model", type=str, default="lxcat_data/fully_lumped_argon_mechanism_cs_recomb.lxcat")
 parser.add_argument("-sp_order", "--sp_order"                     , help="b-spline order", type=int, default=3)
 parser.add_argument("-spline_qpts", "--spline_qpts"               , help="q points per knots", type=int, default=5)
 parser.add_argument("-atol", "--atol"                             , help="absolute tolerance", type=float, default=1e-10)
 parser.add_argument("-rtol", "--rtol"                             , help="relative tolerance", type=float, default=1e-10)
-parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=30)
+parser.add_argument("-max_iter", "--max_iter"                     , help="max number of iterations for newton solve", type=int, default=50)
 parser.add_argument("-Te", "--Te"                                 , help="approximate electron temperature (eV)" , type=float, default=1.0)
 parser.add_argument("-n0"    , "--n0"                             , help="heavy density (1/m^3)" , type=float, default=3.22e22)
 parser.add_argument("-ev_max", "--ev_max"                         , help="max energy in the v-space grid" , type=float, default=30)
@@ -69,6 +75,11 @@ parser.add_argument("-input", "--input"                           , help="tps cs
 args                  = parser.parse_args()
 read_input_from_file  = 1
 
+use_Ei = 1
+neg_thresh = 1e2
+
+N_Avo                 = scipy.constants.Avogadro
+
 if (args.input==""):
     read_input_from_file = 0
 
@@ -88,12 +99,19 @@ if (read_input_from_file):
         n0            = np.array(dat["n0"])
         n_pts         = len(Tg)
         ne            = np.array(dat["ne/n0"]) * n0
+        eRe           = np.array(dat["eRe"])
+        eIm           = np.array(dat["eIm"])
         E             = np.array(dat["E"])
+        # if use_Ei == 0:
+        #     eIm = 0.0*eIm
+        #     E = eRe
         ni            = ne
         ns_by_n0      = np.zeros((len(all_species), len(Tg)))
         
         for i in range(len(all_species)):
             ns_by_n0[i] = np.array(dat["(%s)/n0"%(all_species[i])])
+            # if all_species[i] == "Ar+":
+            #     ns_by_n0[i] = ni / n0
 
         # enforce mixture mass is normalized
         ns_by_n0 = ns_by_n0/np.sum(ns_by_n0, axis=0)
@@ -112,12 +130,18 @@ if (read_input_from_file):
     Te_mean       = max(1e-1, np.mean(Tg/ev_to_K)) #[ev] #np.mean(Te/ev_to_K)
     vth           = np.sqrt(Te_mean) * c_gamma
 
-    print("ns_by_n0=\n", ns_by_n0, "\nEbyN=\n", EbyN, "\nN=\n", n0, "\nne=\n", ne, "\nTg=\n", Tg)
+    # print("ns_by_n0=\n", ns_by_n0, "\nEbyN=\n", EbyN, "\nN=\n", n0, "\nne=\n", ne, "\nTg=\n", Tg)
+    print("all_species = ", all_species, len(all_species))
 
 
     args.Te       = Te_mean
     args.n_pts    = len(Tg)
     args.ev_max   = 36 * np.mean(Tg/ev_to_K) #(6 * vth / c_gamma)**2
+    if np.mean(Tg) > 8000:
+        # Set higher truncation energy for higher temperature
+        args.ev_max   = 54 * np.mean(Tg/ev_to_K) #(6 * vth / c_gamma)**2
+    if args.ee_collisions == 1:
+        args.ev_max   = 100 * np.mean(Tg/ev_to_K) #(6 * vth / c_gamma)**2
     
     ef            = EbyN * n0 * Td_fac
 
@@ -148,7 +172,36 @@ lm_modes    = [[[l,0] for l in range(args.l_max+1)] for i in range(n_grids)]
 n_pts       = args.n_pts
 nr          = np.ones(n_grids, dtype=np.int32) * args.Nr
 
-bte_solver  = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, [args.collisions])
+# generate crs Tg depended crs data 
+crs_folder = "lxcat_data/argon/crs_lxcat"
+if not os.path.exists(crs_folder):
+    os.makedirs(crs_folder)
+col_cs = list()
+for idx in range(n_grids):
+    # cs_fname = "%s/crs_gid_%06d.txt"%(crs_folder, idx) 
+    cs_fname = args.collisions
+    print("cs_fname = ", cs_fname, ", Te = ", Te * ev_to_K)
+    # synthetic_cs.gen_lxcat_file_coupledsolve(cs_fname, Te * ev_to_K, ev_max[idx], 1)
+    # synthetic_cs.gen_lxcat_file(cs_fname, Te * ev_to_K, 1)
+    col_cs.append(cs_fname)
+
+cs_data_all   = cross_section.read_cross_section_data(args.collisions)
+coll_type_list = list()
+for col_str, col_data in cs_data_all.items():
+    coll_type_list.append(col_data["type"])
+
+print("col_cs = ", col_cs, [args.collisions], ", col_count = ", col_count)
+print("ev_max = ", ev_max, ", Te = ", Te, ", n_grids = ", n_grids, ", tol = ", args.rtol, args.atol, ", Nr = ", nr)
+print("coll_type_list = ", coll_type_list, len(coll_type_list))
+
+is_recomb = np.zeros(len(coll_type_list))
+for idx in range(len(is_recomb)):
+    if coll_type_list[idx] == "ATTACHMENT":
+        is_recomb[idx] = 1
+        
+print("is_recomb = ", is_recomb)
+
+bte_solver  = bte_0d3v_batched(args,ev_max, Te, nr, lm_modes, n_grids, col_cs)
 
 bte_solver.assemble_operators(grid_idx)
 f0         = bte_solver.initialize(grid_idx, n_pts,"maxwellian")
@@ -157,8 +210,8 @@ bte_solver.set_boltzmann_parameter(grid_idx, "n0"       , n0)
 bte_solver.set_boltzmann_parameter(grid_idx, "ne"       , ne)
 bte_solver.set_boltzmann_parameter(grid_idx, "ns_by_n0" , ns_by_n0)
 bte_solver.set_boltzmann_parameter(grid_idx, "Tg"       , Tg)
-bte_solver.set_boltzmann_parameter(grid_idx, "eRe"      , 0*ef)
-bte_solver.set_boltzmann_parameter(grid_idx, "eIm"      , ef)
+bte_solver.set_boltzmann_parameter(grid_idx, "eRe"      , eRe)
+bte_solver.set_boltzmann_parameter(grid_idx, "eIm"      , eIm)
 bte_solver.set_boltzmann_parameter(grid_idx, "f0"       , f0)
 bte_solver.set_boltzmann_parameter(grid_idx,  "E"       , ef)
 
@@ -226,8 +279,47 @@ if csv_write:
         writer.writerow(header)
         
         data = np.concatenate((n0.reshape(-1,1), ne.reshape(-1,1), ni.reshape(-1,1), Tg.reshape(-1,1), ef.reshape(-1,1), qoi["energy"].reshape(-1,1), qoi["mobility"].reshape(-1,1), qoi["diffusion"].reshape(-1,1)), axis=1)
-        for col_idx, g in enumerate(collision_names):
-            data = np.concatenate((data, qoi["rates"][col_idx].reshape(-1,1)), axis=1)
+        for col_idx, g in enumerate(collision_names[0]):
+            # The rate coefficients may have negative values in some points
+            # If these negative values are small, they can be fixed by setting to zero
+            # If not, separate the negative values and set them to be the mean of the positive values
+            # We assume here that the state variables at the points with negative coefficients are
+            # not very different from other points in the batch that have positive values
+            # This is only a hack and might work if the number of negative rate coefficients
+            # is only a fraction of the total batch
+            ratearr = qoi["rates"][col_idx].reshape(-1,1) # numpy array
+            typ = cp.get_array_module(ratearr)
+            if typ is cp:
+                print("CuPy array shape(ratearr) = ", ratearr.shape)
+            elif typ is np:
+                print("NumPy array shape(ratearr) = ", ratearr.shape)
+            else:
+                print("FATAL: ratearr is neither Numpy or Cupy. This is problematic.")
+            
+            # Find out is the maximum of ratearr is positive or negative
+            if not typ.any(ratearr > 0.0):
+                print(f"FATAL: Reaction {col_idx} failed. All rate coefficients are negative")
+                print(f"min = {typ.amin(ratearr)}")
+                print(f"max = {typ.amax(ratearr)}")
+                print(f"mean = {typ.mean(rates)}")
+                raise RuntimeError("Boltzmann solver produced no positive rate coefficients.")
+            
+            if not typ.all(ratearr > 0.0):
+                print(f"Some negative rate coefficients found for col_idx = {col_idx}. Will be correcting them to the mean of the remaining positive values.")
+                prefac = N_Avo
+                if is_recomb[col_idx] == 1:
+                    prefac = N_Avo**2
+                positive_values = ratearr[ratearr > 0]
+                positive_mean = typ.mean(positive_values)
+
+                # The negative values are replaced with positive_mean
+                neg_cutoff = neg_thresh / prefac
+                small_neg = (ratearr < 0.0) & (ratearr >= -neg_cutoff)
+                large_neg = ratearr < -neg_cutoff
+                ratearr[small_neg] *= -1
+                ratearr[large_neg] = positive_mean
+            
+            data = np.concatenate((data, ratearr), axis=1)
         
         writer.writerows(data)
 

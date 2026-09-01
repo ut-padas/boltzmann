@@ -70,6 +70,8 @@ def newton_solve(spec_sp, h0, res_func, jac_func, f1, Qmat, Rmat, mass_op, rtol 
         iteration_steps+=1
 
     print("Nonlinear solver (1) atol=%.8E , rtol=%.8E"%(abs_error, rel_error))
+    # if ((abs_error > atol) or (rel_error > rtol)):
+
     return h_curr, abs_error, rel_error
     
 class bte_0d3v():

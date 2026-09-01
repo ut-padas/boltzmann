@@ -57,7 +57,6 @@ class vspace_grid_extension(enum.IntEnum):
     LINEAR = 1, # ev truncation energy is k * ev_max
     LOG    = 2, # log space ev extension
 
-
 def newton_solver_batched(x, n_pts, residual, jacobian, jacobian_inv, atol, rtol, iter_max, xp=np):
     jac      = jacobian(x)
     assert jac.shape[0] == n_pts
@@ -135,6 +134,10 @@ def set_os_envthreads(threads):
     environ['VECLIB_MAXIMUM_THREADS'] = N_THREADS
     environ['NUMEXPR_NUM_THREADS'] = N_THREADS
 
+comm = MPI.COMM_WORLD
+rank_ = comm.Get_rank()
+size_ = comm.Get_size()
+
 class bte_0d3v_batched():
     
     def __init__(self, args, ev_max:np.array, Te: np.array, nr: np.array, lm: list, n_vspace_grids : int, collision_model: list) -> None:
@@ -146,10 +149,6 @@ class bte_0d3v_batched():
         n_vspace_grids  : number of v-space grids to use
         collision model : collision string detailing which collisions to perform
         """
-        
-        comm = MPI.COMM_WORLD
-        rank_ = comm.Get_rank()
-        size_ = comm.Get_size()
 
         self.profile_nn     = ["all","setup", "e-n c_op", "e-e c_op", "adv op", "initialize", "solve", "rhs", "jac", "jac_solve", "H2D", "D2H", "last"]
         self.profile_tt_all = list()
@@ -238,7 +237,8 @@ class bte_0d3v_batched():
                 self._avail_species.append(avail_species)
                 self._cross_section_data.append(cs_data_all)
 
-                print("Rank [", rank_, "/", size_, "], grid_idx = ", i, ", collisionFile = ",  self._par_col_model[i], flush=True)
+                if rank_ == 0 and i == 0:
+                    print("Rank [", rank_, "/", size_, "], grid_idx = ", i, ", collisionFile = ",  self._par_col_model[i], flush=True)
 
                 collision_count = 0
                 coll_names      = list()
@@ -891,9 +891,9 @@ class bte_0d3v_batched():
         return Jmat_inv
             
     def steady_state_solve(self, grid_idx : int, f0 : np.array, atol, rtol, max_iter, alpha_min = 1e-16, alpha_rho=0.01, line_search_c = 1e-3):
-        comm = MPI.COMM_WORLD
-        rank_ = comm.Get_rank()
-        size_ = comm.Get_size()
+        # comm = MPI.COMM_WORLD
+        # rank_ = comm.Get_rank()
+        # size_ = comm.Get_size()
 
         xp           = self.xp_module
         profile_tt   = self.profile_tt_all[grid_idx]
@@ -975,7 +975,7 @@ class bte_0d3v_batched():
             if iteration_steps % 10 == 0:
                 abs_error = xp.linalg.norm(res_func(h_curr, 0, 0), axis=0)
                 rel_error = abs_error/ r0
-                # print("Rank [", rank_, "/", size_, "], grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))), flush=True)
+                print("Rank [", rank_, "/", size_, "], grid_idx ", grid_idx, " [steady-state] iteration ", iteration_steps, ": abs residual = %.8E rel residual=%.8E mass =%.8E"%(xp.max(abs_error), xp.max(rel_error), xp.max(xp.dot(u, h_prev))), flush=True)
             
             #fb_prev      = np.dot(Rmat,h_curr)
             h_prev       = h_curr #f1p + np.dot(Qmat,fb_prev)
@@ -983,7 +983,7 @@ class bte_0d3v_batched():
 
         abs_error = xp.linalg.norm(res_func(h_curr, 0, 0), axis=0)
         rel_error = abs_error/ r0
-        print("Rank [", rank_, "/", size_, "], grid_idx ", " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)), flush=True)
+        print("Rank [", rank_, "/", size_, "], grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E , rtol=%.8E"%(xp.max(abs_error), xp.max(rel_error)), flush=True)
         if (xp.max(rel_error) > rtol):
             print("ISSUE: Rank [", rank_, "/", size_, "], grid_idx ", grid_idx, " [steady-state] nonlinear solver (1) atol=%.8E > %.8E , rtol=%.8E > %.8E"%(xp.max(abs_error), atol, xp.max(rel_error), rtol), flush=True)
         if xp==cp:
@@ -1200,9 +1200,36 @@ class bte_0d3v_batched():
         
         xp  = cp.get_array_module(ff) 
 
+        # print("ff.shape = ", ff.shape, "num_sh = ", num_sh, "shape(op_temp) = ",  self._op_temp[grid_idx].shape, ", shape(op_mobility) = ", self._op_mobility[grid_idx].shape) # shape(ff) is ((Nr+1)*2, n_pts)
+        # Since there are Nr+1 elements in the radial direction, 
+        # ff[0,:] -> f0 of the 0th radial element across all points
+        # ff[1,:] -> f1 of the 0th radial element across all points
+        # To obtain f0, take slice ff[0::num_sh, :] (only obtain the even indexed rows)
+        #  For f1, take ff[1::num_sh, :] (only obtain the odd indexed rows)
+        # shape(_op_temp[grid_idx]) = (2*(Nr+1)). Need to know why dot product is taken with both f0, f1
+        # The components of the energy operator dotted with f1 are all zero. So it doesnt matter if dot is taken over both f0, f1
+
+        # Enforce f0 >= 0 for all energies (ensures positivity of EEDF)
+        # If f0, f1 < eps, set f0, f1 = 0 (to eliminate numerical noise)
+        # eps = 1e-12
+        ftemp = ff[0::num_sh, :]
+        ftemp[ftemp < 0.0] = 0.0
+        ff[0::num_sh, :] = ftemp
+
+        # Get the maximum of ftemp (f0)
+        f0max = np.amax(ftemp)
+        eps = 1e-8 * f0max
+        f0min = np.amin(ftemp[ftemp > 0.0])
+        if f0min/(1e-100 + f0max) > eps:
+            print(f"WARNING: Rank {rank_}, gid {grid_idx}, f0max = {f0max}, f0min = {f0min}, min(f0)/max(f0) = {f0min/(1e-100 + f0max)} > {eps}. Increase truncation energy for EEDF.")
+        ff[np.abs(ff) < eps] = 0.0
+
         mm  = xp.dot(self._op_mass[grid_idx], ff) * mw(0) * vth**3
         mu  = 1.5 * xp.dot(self._op_temp[grid_idx], ff) * mw(0) * vth**5  / mm
-
+        if np.amin(mu) < 0.0:
+            print(f"FATAL: Negative minimum of electron energy {np.amin(mu)} in rank {rank_}, gid {grid_idx}. Aborting")
+            comm.Abort(1)
+        
         if effective_mobility:
             M   = xp.dot(self._op_mobility[grid_idx], xp.sqrt(3) * ff[1::num_sh, :])  * (-(c_gamma / (3 * ( E / n0))))
         else:
@@ -1212,6 +1239,14 @@ class bte_0d3v_batched():
         
         rr  = list()
         for col_idx, g in enumerate(self._coll_list[grid_idx]):
+            # Enforce positivity of the rate coefficients when EEDF has negative undershoots
+            ftemp = ff[0::num_sh, :]
+            ftemp[ftemp < 0.0] = 0.0
+            ff[0::num_sh, :] = ftemp
+            ff[np.abs(ff) < eps] = 0.0
+            if (np.amin(ff[0::num_sh, :]) < 0.0):
+                negarr = ff[0::num_sh, :]
+                print(f"col_idx = {col_idx}, negative ff, min = {np.amin(negarr)}, max = {np.amax(negarr)}, shape = {negarr.shape}")
             reaction_rate = xp.dot(self._op_rate[grid_idx][col_idx], ff[0::num_sh, :])
             rr.append(reaction_rate)
             

@@ -140,7 +140,7 @@ size_ = comm.Get_size()
 
 class bte_0d3v_batched():
     
-    def __init__(self, args, ev_max:np.array, Te: np.array, nr: np.array, lm: list, n_vspace_grids : int, collision_model: list) -> None:
+    def __init__(self, args, ev_max:np.array, Te: np.array, nr: np.array, lm: list, n_vspace_grids : int, collision_model: list, ee_interactions: np.array) -> None:
         """
         ev_max          : maximum grid energy (eV)
         Te              : approximate electron temperature (eV)
@@ -148,6 +148,7 @@ class bte_0d3v_batched():
         lm              : lm modes for each grid
         n_vspace_grids  : number of v-space grids to use
         collision model : collision string detailing which collisions to perform
+        ee_interactions : are coulombic interactions enabled for v-space grid?
         """
 
         self.profile_nn     = ["all","setup", "e-n c_op", "e-e c_op", "adv op", "initialize", "solve", "rhs", "jac", "jac_solve", "H2D", "D2H", "last"]
@@ -164,6 +165,7 @@ class bte_0d3v_batched():
         self._par_ev_range   = [(0, ev_max[i]) for i in range(self._par_nvgrids)]
         self._par_lm         = [lm[i] for i in range(self._par_nvgrids)]    
         self._par_col_model  = collision_model
+        self._par_ee_interactions = ee_interactions
         
         self._c_gamma        = np.sqrt(2*collisions.ELECTRON_CHARGE_MASS_RATIO)
         
@@ -345,7 +347,8 @@ class bte_0d3v_batched():
         dg_nodes               = np.sqrt(np.array(sig_pts)) * self._c_gamma / vth
         ev_range               = self._par_ev_range[idx]    #(0, self._args.ev_max) #((0 * vth /self._c_gamma)**2, (6 * vth /self._c_gamma)**2)
         k_domain               = (np.sqrt(ev_range[0]) * self._c_gamma / vth, np.sqrt(ev_range[1]) * self._c_gamma / vth)
-        use_ee                 = args.ee_collisions
+        use_ee                 = self._par_ee_interactions[grid_idx]
+        do_ee_cols             = args.ee_collisions
         
         # at the moment we don't have flux conditions for the elliptic operator that depends on the Gas temperature, hence disable DG for now. 
         # the DG code should at the limit of advection dominated Tg is low, and E is large. 
@@ -452,8 +455,8 @@ class bte_0d3v_batched():
         self._op_qmat[idx] = Qmat
         self._op_rmat[idx] = Rmat
         
-        if(use_ee == 1):
-            print("e-e collision assembly begin")
+        if(do_ee_cols == 1 and use_ee == 1):
+            print(f"Rank {rank_}, gidx {idx}, e-e collision assembly begin")
             profile_tt[pp.C_EE_SETUP].start()
             
             hl_op, gl_op         = collision_op.compute_rosenbluth_potentials_op(maxwellian, vth, 1, mmat_inv, mp_pool_sz=args.threads)
@@ -484,7 +487,7 @@ class bte_0d3v_batched():
                 
             self._op_col_ee[idx] = cc_op
             profile_tt[pp.C_EE_SETUP].stop()
-            print("e-e collision assembly end")
+            print(f"Rank {rank_}, gidx {idx}, e-e collision assembly end")
         
         profile_tt[pp.SETUP].stop()
         return
@@ -567,7 +570,8 @@ class bte_0d3v_batched():
             for col_idx, col in enumerate(self._coll_list[idx]):
                 self._op_rate[idx][col_idx] = cp.asarray(self._op_rate[idx][col_idx])
                     
-        if self._args.ee_collisions==1:
+        # if self._args.ee_collisions==1:
+        if self._args.ee_collisions==1 and self._par_ee_interactions[idx]==1:
             with cp.cuda.Device(dev_id):
                 self._op_col_ee[idx]   = cp.asarray(self._op_col_ee[idx])
         
@@ -602,7 +606,8 @@ class bte_0d3v_batched():
             for col_idx, col in enumerate(self._coll_list[idx]):
                 self._op_rate[idx][col_idx] = cp.asnumpy(self._op_rate[idx][col_idx])
                     
-        if self._args.ee_collisions==1:
+        # if self._args.ee_collisions==1:
+        if self._args.ee_collisions==1 and self._par_ee_interactions[idx]==1:
             with cp.cuda.Device(dev_id):
                 self._op_col_ee[idx]   = cp.asnumpy(self._op_col_ee[idx])
 
@@ -636,6 +641,8 @@ class bte_0d3v_batched():
         mm_op        = self._op_mass[grid_idx] * mw(0) * vth**3
         u            = mm_op
         u            = xp.dot(xp.transpose(mm_op),qA)
+
+        use_ee       = self._par_ee_interactions[grid_idx] 
         
         """
         following tensor index notation used. 
@@ -655,7 +662,8 @@ class bte_0d3v_batched():
         QT_A_Q       = xp.dot(QTmat, xp.dot(adv_mat, Qmat))
         Imat         = xp.eye(QTmat.shape[0])
         
-        if args.ee_collisions==1:
+        # if args.ee_collisions==1:
+        if args.ee_collisions==1 and use_ee==1:
             assert self._args.use_dg==0, "Coulombic collisoins are not permited in the DG formulation"
             cc_op_l1     = c_ee
             cc_op_l2     = xp.swapaxes(c_ee,1,2)
@@ -1220,8 +1228,8 @@ class bte_0d3v_batched():
         f0max = np.amax(ftemp)
         eps = 1e-8 * f0max
         f0min = np.amin(ftemp[ftemp > 0.0])
-        if f0min/(1e-100 + f0max) > eps:
-            print(f"WARNING: Rank {rank_}, gid {grid_idx}, f0max = {f0max}, f0min = {f0min}, min(f0)/max(f0) = {f0min/(1e-100 + f0max)} > {eps}. Increase truncation energy for EEDF.")
+        if f0min > eps:
+            print(f"WARNING: Rank {rank_}, gid {grid_idx}, f0max = {f0max}, f0min = {f0min}, min(f0)/max(f0) = {f0min/(1e-100 + f0max)} > {eps/f0max}. Increase truncation energy for EEDF.")
         ff[np.abs(ff) < eps] = 0.0
 
         mm  = xp.dot(self._op_mass[grid_idx], ff) * mw(0) * vth**3

@@ -1271,13 +1271,14 @@ class bte_1d3v():
         Vin = Vin * ne
         return xp.array(Vin)
         
-    def initial_condition(self, type=0):
+    def initial_condition(self, type=0, eta=0.0):
         xp = self.xp_module
         xx = self.params.L * (self.xp + 1)
         
         if (self.params.vspace_type == vspace_discretization.SPECTRAL_BSPH):
 
             if (type == 0):
+                assert eta == 0.0
                 ne = 1e6 * (1e7 + 1e9 * (1-0.5 * xx/self.params.L)**2 * (0.5 * xx/self.params.L)**2) / self.params.np0
                 Te = xp.ones_like(ne) * self.params.Te
                 v  = self.maxwellian_eedf(self.asnumpy(ne), self.asnumpy(Te))
@@ -1310,7 +1311,7 @@ class bte_1d3v():
                 for i in range(Nx):
                     v_ratio = (self.c_gamma * np.sqrt(Te[i])/vth)
                     hv      = lambda v : (1/np.sqrt(np.pi)**3) * np.exp(-((v/v_ratio)**2)) / v_ratio**3
-                    v[:,i]  = xp.kron(hv(self.xp_vr), xp.ones(Nvt))
+                    v[:,i]  = xp.kron(hv(self.xp_vr), xp.ones(Nvt) + eta * self.xp_cos_vt)
             
                     op_rate = self.op_rate
                     mass_op = self.op_mass
@@ -1737,7 +1738,7 @@ class bte_1d3v():
         else:
             raise NotImplementedError("preconditioner type not implemented")
 
-    def step_op_split(self, E, v, dv, time, dt, type, verbose=0, alpha = 1.0):
+    def step_op_split(self, E, v, dv, time, dt, type, fb_L=0, fb_R=0, verbose=0, alpha = 1.0):
 
         #self._step_op_split_init_v1(E, time, dt)
         # vr_diag     = self.vr_diag
@@ -1840,8 +1841,8 @@ class bte_1d3v():
 
             # x-adv
             yvt                         = xp.swapaxes(xp.swapaxes(yvt, 0, 2), 0, 1) # (Nr, Nvt, Nx)
-            yvt[:, self.idx_np_vt, 0]   = 0.0
-            yvt[:, self.idx_sp_vt, -1]  = 0.0
+            yvt[:, self.idx_np_vt, 0]   = fb_L
+            yvt[:, self.idx_sp_vt, -1]  = fb_R
             
             # yx                          = xp.zeros_like(yvt)
             # yx[:, self.idx_np_vt]       = cp_rk.banded_tri_solve_batched(self.bte_x_shift_diag [:, self.idx_np_vt], yvt[:, self.idx_np_vt], lower=True)
@@ -1864,7 +1865,7 @@ class bte_1d3v():
         else:
             raise NotImplementedError("preconditioner type not implemented")
 
-    def step(self, E, v, dv, time, dt, verbose=0, gmres_pc_vr=1.0, gmres_pc_vt=1.0, pc_left=False):
+    def step(self, E, v, dv, time, dt, fb_L=0, fb_R=0, verbose=0, gmres_pc_vr=1.0, gmres_pc_vt=1.0, pc_left=False):
         xp     = self.xp_module
         
         dof_v  = self.dof_v
@@ -1901,8 +1902,8 @@ class bte_1d3v():
             
             
             brhs                  = xp.copy(v.reshape((Nr, Nvt, Nx)))
-            brhs[:, idx_np, 0]    = 0.0
-            brhs[:, idx_sp, -1]   = 0.0
+            brhs[:, idx_np, 0]    = fb_L
+            brhs[:, idx_sp, -1]   = fb_R
             brhs                  = brhs.reshape((-1))
             norm_b                = xp.linalg.norm(brhs)
 
@@ -1958,7 +1959,7 @@ class bte_1d3v():
                 #self.step_op_split_init(E, time, dt, verbose, gmres_pc_vr, gmres_pc_vt)
                 
                 def pre_mvec(x):
-                    return self.step_op_split(E, x.reshape((dof_v, Nx)), None, time, dt, self.params.pc_type, verbose=0, alpha=gmres_pc_vr).reshape((-1))
+                    return self.step_op_split(E, x.reshape((dof_v, Nx)), None, time, dt, self.params.pc_type,fb_L,fb_R, verbose=0, alpha=gmres_pc_vr).reshape((-1))
                 
             elif (self.params.pc_type == pc_type.XVX_SOLVE):
                 
@@ -2010,7 +2011,7 @@ class bte_1d3v():
             # self._step_op_split_init_v1(E, time, dt)
             # v = self._step_op_split_v1(E, v, None, time, dt, self.params.solver_type, verbose)
 
-            v = self.step_op_split(E, v, None, time, dt, self.params.solver_type, verbose)
+            v = self.step_op_split(E, v, None, time, dt, self.params.solver_type, fb_L, fb_R, verbose)
             
             if(self._nvtx):
                 nvtx.pop_range()
